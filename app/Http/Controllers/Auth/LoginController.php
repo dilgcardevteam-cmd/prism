@@ -1,0 +1,121 @@
+<?php
+
+namespace App\Http\Controllers\Auth;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Foundation\Auth\AuthenticatesUsers;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+
+class LoginController extends Controller
+{
+    /*
+    |--------------------------------------------------------------------------
+    | Login Controller
+    |--------------------------------------------------------------------------
+    |
+    | This controller handles authenticating users for the application and
+    | redirecting them to your home screen. The controller uses a trait
+    | to conveniently provide its functionality to your applications.
+    |
+    */
+
+    use AuthenticatesUsers;
+
+    /**
+     * Where to redirect users after login.
+     *
+     * @var string
+     */
+    protected $redirectTo = '/dashboard';
+
+    /**
+     * Create a new controller instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        $this->middleware('guest')->except('logout');
+        $this->middleware('auth')->only('logout');
+    }
+
+    /**
+     * Get the login username to be used by the controller.
+     *
+     * @return string
+     */
+    public function username()
+    {
+        return 'username';
+    }
+
+    /**
+     * Attempt to log the user into the application.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return bool
+     */
+    protected function attemptLogin(Request $request)
+    {
+        // Get credentials
+        $username = $request->input('username');
+        $password = $request->input('password');
+        
+        // Find user by username
+        $user = User::where('username', $username)->first();
+        
+        // Check all conditions
+        if (!$user) {
+            return false;
+        }
+        
+        if (strtolower($user->status) !== 'active') {
+            return false;
+        }
+        
+        if (!Hash::check($password, $user->password)) {
+            return false;
+        }
+        
+        // All checks passed - login the user
+        Auth::login($user, $request->filled('remember'));
+        return true;
+    }
+
+    /**
+     * The user has been authenticated.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  mixed  $user
+     * @return mixed
+     */
+    protected function authenticated(Request $request, $user)
+    {
+        return redirect('/dashboard');
+    }
+
+    /**
+     * Get the failed login response instance.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Symfony\Component\HttpFoundation\Response
+     */
+    protected function sendFailedLoginResponse(Request $request)
+    {
+        $user = User::where('username', $request->input('username'))->first();
+        
+        if ($user && strtolower($user->status) !== 'active') {
+            return redirect('/login')->withErrors([
+                'login_error' => 'Your account is inactive. Please contact an administrator.',
+            ])->withInput($request->only('username', 'remember'));
+        }
+        
+        return redirect('/login')->withErrors([
+            'login_error' => 'The username or password is incorrect.',
+        ])->withInput($request->only('username', 'remember'));
+    }
+}
+

@@ -1,0 +1,1392 @@
+@extends('layouts.dashboard')
+
+@section('title', 'Fund Utilization')
+@section('page-title', 'Fund Utilization')
+
+@section('content')
+    <div class="content-header">
+        <h1>Welcome back, {{ Auth::user()->fname ?? 'User' }}! 👋</h1>
+        <p>Fund utilization summary for {{ $statusMonthLabel }}.</p>
+    </div>
+
+    @php
+        $statusIconMap = [
+            'Completed' => ['icon' => 'fa-circle-check', 'color' => '#16a34a', 'bg' => '#dcfce7', 'tileBg' => '#f0fdf4', 'tileBorder' => '#bbf7d0', 'labelColor' => '#14532d'],
+            'On-going' => ['icon' => 'fa-spinner', 'color' => '#2563eb', 'bg' => '#dbeafe', 'tileBg' => '#eff6ff', 'tileBorder' => '#bfdbfe', 'labelColor' => '#1e3a8a'],
+            'Bid Evaluation/Opening' => ['icon' => 'fa-gavel', 'color' => '#b45309', 'bg' => '#ffedd5', 'tileBg' => '#fffbeb', 'tileBorder' => '#fde68a', 'labelColor' => '#92400e'],
+            'NOA Issuance' => ['icon' => 'fa-file-signature', 'color' => '#0ea5e9', 'bg' => '#e0f2fe', 'tileBg' => '#ecfeff', 'tileBorder' => '#a5f3fc', 'labelColor' => '#155e75'],
+            'DED Preparation' => ['icon' => 'fa-drafting-compass', 'color' => '#7c3aed', 'bg' => '#ede9fe', 'tileBg' => '#f5f3ff', 'tileBorder' => '#ddd6fe', 'labelColor' => '#5b21b6'],
+            'Not Yet Started' => ['icon' => 'fa-hourglass-start', 'color' => '#6b7280', 'bg' => '#f3f4f6', 'tileBg' => '#f8fafc', 'tileBorder' => '#cbd5e1', 'labelColor' => '#334155'],
+            'ITB/AD Posted' => ['icon' => 'fa-bullhorn', 'color' => '#ea580c', 'bg' => '#fff7ed', 'tileBg' => '#fff7ed', 'tileBorder' => '#fed7aa', 'labelColor' => '#9a3412'],
+            'Terminated' => ['icon' => 'fa-circle-xmark', 'color' => '#ef4444', 'bg' => '#fee2e2', 'tileBg' => '#fef2f2', 'tileBorder' => '#fecaca', 'labelColor' => '#991b1b'],
+            'Cancelled' => ['icon' => 'fa-ban', 'color' => '#e11d48', 'bg' => '#ffe4e6', 'tileBg' => '#fff1f2', 'tileBorder' => '#fecdd3', 'labelColor' => '#9f1239'],
+        ];
+
+        $fundSourceIconMap = [
+            'SBDP' => 'fa-shield-halved',
+            'FALGU' => 'fa-hand-holding-dollar',
+            'CMGP' => 'fa-people-group',
+            'GEF' => 'fa-leaf',
+            'SAFPB' => 'fa-bridge',
+            'SGLGIF' => 'fa-city',
+        ];
+
+        $fundSourceStyleMap = [
+            'SBDP' => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'iconBg' => '#dbeafe', 'iconColor' => '#1d4ed8', 'labelColor' => '#1e3a8a'],   // blue
+            'FALGU' => ['bg' => '#f0fdf4', 'border' => '#bbf7d0', 'iconBg' => '#dcfce7', 'iconColor' => '#15803d', 'labelColor' => '#14532d'], // green
+            'CMGP' => ['bg' => '#fff7ed', 'border' => '#fed7aa', 'iconBg' => '#ffedd5', 'iconColor' => '#c2410c', 'labelColor' => '#7c2d12'],  // orange
+            'GEF' => ['bg' => '#ecfeff', 'border' => '#a5f3fc', 'iconBg' => '#cffafe', 'iconColor' => '#0e7490', 'labelColor' => '#164e63'],   // cyan
+            'SAFPB' => ['bg' => '#fef2f2', 'border' => '#fecaca', 'iconBg' => '#fee2e2', 'iconColor' => '#dc2626', 'labelColor' => '#7f1d1d'], // red
+            'SGLGIF' => ['bg' => '#fdf4ff', 'border' => '#e9d5ff', 'iconBg' => '#f3e8ff', 'iconColor' => '#7e22ce', 'labelColor' => '#581c87'], // purple
+        ];
+
+        $financialMetricStyleMap = [
+            'percentage' => ['bg' => '#eff6ff', 'border' => '#bfdbfe', 'iconBg' => '#dbeafe', 'iconColor' => '#1d4ed8', 'labelColor' => '#1e3a8a', 'valueColor' => '#1e3a8a'],
+            'obligation' => ['bg' => '#fffbeb', 'border' => '#fde68a', 'iconBg' => '#fef3c7', 'iconColor' => '#b45309', 'labelColor' => '#92400e', 'valueColor' => '#92400e'],
+            'disbursement' => ['bg' => '#f0fdf4', 'border' => '#bbf7d0', 'iconBg' => '#dcfce7', 'iconColor' => '#15803d', 'labelColor' => '#14532d', 'valueColor' => '#14532d'],
+            'balance' => ['bg' => '#f5f3ff', 'border' => '#ddd6fe', 'iconBg' => '#ede9fe', 'iconColor' => '#6d28d9', 'labelColor' => '#5b21b6', 'valueColor' => '#5b21b6'],
+        ];
+    @endphp
+
+    <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form collapsed" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
+        <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="false" aria-controls="project-filter-body">
+            <span style="font-size: 20px;">&#128269;</span>
+            <span>PROJECT FILTER</span>
+            <span class="project-filter-chevron">
+                <i class="fas fa-chevron-up"></i>
+            </span>
+        </button>
+
+        <div id="project-filter-body" class="project-filter-body">
+            <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px 22px; align-items: end;">
+            <div>
+                <label for="province" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Province</label>
+                <select id="province" name="province" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                    <option value="">All</option>
+                    @foreach (($filterOptions['provinces'] ?? collect()) as $option)
+                        <option value="{{ $option }}" @selected(($filters['province'] ?? '') === (string) $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label for="city_municipality" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">City/Municipality</label>
+                <select id="city_municipality" name="city_municipality" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                    <option value="">All</option>
+                    @foreach (($filterOptions['cities'] ?? collect()) as $option)
+                        <option value="{{ $option }}" @selected(($filters['city_municipality'] ?? '') === (string) $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label for="barangay" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Barangay</label>
+                <select id="barangay" name="barangay" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                    <option value="">All</option>
+                    @foreach (($filterOptions['barangays'] ?? collect()) as $option)
+                        <option value="{{ $option }}" @selected(($filters['barangay'] ?? '') === (string) $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label for="program" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Program</label>
+                <select id="program" name="program" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                    <option value="">All</option>
+                    @foreach (($filterOptions['programs'] ?? collect()) as $option)
+                        <option value="{{ $option }}" @selected(($filters['program'] ?? '') === (string) $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year</label>
+                <select id="funding_year" name="funding_year" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                    <option value="">All</option>
+                    @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
+                        <option value="{{ $option }}" @selected(($filters['funding_year'] ?? '') === (string) $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label for="project_type" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Type</label>
+                <select id="project_type" name="project_type" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                    <option value="">All</option>
+                    @foreach (($filterOptions['project_types'] ?? collect()) as $option)
+                        <option value="{{ $option }}" @selected(($filters['project_type'] ?? '') === (string) $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div>
+                <label for="project_status" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Status</label>
+                <select id="project_status" name="project_status" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                    <option value="">All</option>
+                    @foreach (($filterOptions['project_statuses'] ?? collect()) as $option)
+                        <option value="{{ $option }}" @selected(($filters['project_status'] ?? '') === (string) $option)>{{ $option }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="dashboard-filter-reset" style="display: flex; align-items: end; justify-content: flex-end;">
+                <a href="{{ route('dashboard') }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
+                    Reset Filter
+                </a>
+            </div>
+        </div>
+        </div>
+    </form>
+
+    <div class="dashboard-top-cards" style="display: grid; gap: 20px; margin-bottom: 24px;">
+        <div class="dashboard-card total-projects-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #002C76; font-size: 16px; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;">
+                <span style="width: 22px; height: 22px; border-radius: 999px; background-color: #e0f2fe; color: #0ea5e9; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
+                    <i class="fas fa-project-diagram"></i>
+                </span>
+                TOTAL PROJECTS
+            </h2>
+            <div class="dashboard-tile clickable-dashboard-card" data-card-url="{{ route('projects.locally-funded') }}" style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; background-color: #f9fafb; text-align: center;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: #6b7280; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                    <span style="width: 20px; height: 20px; border-radius: 999px; background-color: #e5e7eb; color: #4b5563; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;">
+                        <i class="fas fa-hashtag"></i>
+                    </span>
+                    Total Number of Projects
+                </div>
+                <div style="font-size: 36px; font-weight: 700; color: #002C76; text-align: center;">{{ $totalProjects }}</div>
+            </div>
+        </div>
+        <div class="dashboard-card financial-status-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #002C76; font-size: 16px; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;">
+                <span style="width: 22px; height: 22px; border-radius: 999px; background-color: #e0f2fe; color: #0ea5e9; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
+                    <i class="fas fa-chart-line"></i>
+                </span>
+                FINANCIAL ACCOMPLISHMENT STATUS
+            </h2>
+
+            <div class="financial-metrics-layout" style="display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 12px;">
+                @php
+                    $percentageStyle = $financialMetricStyleMap['percentage'];
+                    $obligationStyle = $financialMetricStyleMap['obligation'];
+                    $disbursementStyle = $financialMetricStyleMap['disbursement'];
+                    $balanceStyle = $financialMetricStyleMap['balance'];
+                @endphp
+                <div class="dashboard-tile financial-percentage-tile clickable-dashboard-card" data-card-url="{{ route('fund-utilization.index') }}" style="padding: 12px; border: 1px solid {{ $percentageStyle['border'] }}; border-radius: 6px; background-color: {{ $percentageStyle['bg'] }}; text-align: center;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: {{ $percentageStyle['labelColor'] }}; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <span style="width: 20px; height: 20px; border-radius: 999px; background-color: {{ $percentageStyle['iconBg'] }}; color: {{ $percentageStyle['iconColor'] }}; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;">
+                            <i class="fas fa-chart-pie"></i>
+                        </span>
+                        Percentage
+                    </div>
+                    <div style="font-size: 22px; font-weight: 700; color: {{ $percentageStyle['valueColor'] }};">{{ number_format((float) ($utilizationPercentage ?? 0), 2) }}%</div>
+                </div>
+
+                <div class="dashboard-tile financial-obligation-tile clickable-dashboard-card" data-card-url="{{ route('fund-utilization.index') }}" style="padding: 12px; border: 1px solid {{ $obligationStyle['border'] }}; border-radius: 6px; background-color: {{ $obligationStyle['bg'] }}; text-align: center;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: {{ $obligationStyle['labelColor'] }}; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <span style="width: 20px; height: 20px; border-radius: 999px; background-color: {{ $obligationStyle['iconBg'] }}; color: {{ $obligationStyle['iconColor'] }}; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;">
+                            <i class="fas fa-receipt"></i>
+                        </span>
+                        Obligation
+                    </div>
+                    <div class="financial-amount-value" style="font-weight: 700; color: {{ $obligationStyle['valueColor'] }};">{{ number_format((float) ($totalObligationAmount ?? 0), 2) }}</div>
+                </div>
+
+                <div class="dashboard-tile financial-disbursement-tile clickable-dashboard-card" data-card-url="{{ route('fund-utilization.index') }}" style="padding: 12px; border: 1px solid {{ $disbursementStyle['border'] }}; border-radius: 6px; background-color: {{ $disbursementStyle['bg'] }}; text-align: center;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: {{ $disbursementStyle['labelColor'] }}; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <span style="width: 20px; height: 20px; border-radius: 999px; background-color: {{ $disbursementStyle['iconBg'] }}; color: {{ $disbursementStyle['iconColor'] }}; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;">
+                            <i class="fas fa-money-check-dollar"></i>
+                        </span>
+                        Disbursement
+                    </div>
+                    <div class="financial-amount-value" style="font-weight: 700; color: {{ $disbursementStyle['valueColor'] }};">{{ number_format((float) ($totalDisbursementAmount ?? 0), 2) }}</div>
+                </div>
+
+                <div class="dashboard-tile financial-balance-tile clickable-dashboard-card" data-card-url="{{ route('fund-utilization.index') }}" style="padding: 12px; border: 1px solid {{ $balanceStyle['border'] }}; border-radius: 6px; background-color: {{ $balanceStyle['bg'] }}; text-align: center;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: {{ $balanceStyle['labelColor'] }}; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                        <span style="width: 20px; height: 20px; border-radius: 999px; background-color: {{ $balanceStyle['iconBg'] }}; color: {{ $balanceStyle['iconColor'] }}; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;">
+                            <i class="fas fa-wallet"></i>
+                        </span>
+                        Balance
+                    </div>
+                    <div class="financial-amount-value" style="font-weight: 700; color: {{ $balanceStyle['valueColor'] }};">{{ number_format((float) ($totalBalanceAmount ?? 0), 2) }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-card status-subaybayan-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #002C76; font-size: 16px; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;">
+                <span style="width: 22px; height: 22px; border-radius: 999px; background-color: #e0f2fe; color: #0ea5e9; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
+                    <i class="fas fa-list-check"></i>
+                </span>
+                STATUS OF PROJECT (SUBAYBAYAN STATUS)
+            </h2>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 12px;">
+                @foreach($statusSubaybayanCounts as $status => $count)
+                    @php
+                        $iconConfig = $statusIconMap[$status] ?? ['icon' => 'fa-circle-info', 'color' => '#6b7280', 'bg' => '#f3f4f6', 'tileBg' => '#f9fafb', 'tileBorder' => '#e5e7eb', 'labelColor' => '#6b7280'];
+                        $statusFilterUrl = route('projects.locally-funded', [
+                            'status' => $status,
+                        ]);
+                    @endphp
+                    <div class="dashboard-tile clickable-dashboard-card" data-card-url="{{ $statusFilterUrl }}" style="padding: 12px; border: 1px solid {{ $iconConfig['tileBorder'] }}; border-radius: 6px; background-color: {{ $iconConfig['tileBg'] }}; text-align: center;">
+                        <div style="font-size: 13px; font-weight: 600; color: {{ $iconConfig['labelColor'] }}; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span style="width: 20px; height: 20px; border-radius: 999px; background-color: {{ $iconConfig['bg'] }}; color: {{ $iconConfig['color'] }}; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; border: 1px solid rgba(0,0,0,0.05);">
+                                <i class="fas {{ $iconConfig['icon'] }}"></i>
+                            </span>
+                            <span>{{ $status }}</span>
+                        </div>
+                        <div style="font-size: 20px; font-weight: 700; color: #002C76;">{{ $count }}</div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
+        @if (!empty($fundSourceCounts) && $fundSourceCounts->count() > 0)
+            @php
+                $fundSourceColumns = max(1, (int) ceil($fundSourceCounts->count() / 2));
+            @endphp
+            <div class="dashboard-card fund-source-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="color: #002C76; font-size: 16px; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 22px; height: 22px; border-radius: 999px; background-color: #e0f2fe; color: #0ea5e9; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
+                        <i class="fas fa-layer-group"></i>
+                    </span>
+                    PROJECTS BY FUND SOURCE
+                </h2>
+                <div class="fund-source-grid" style="display: grid; grid-template-columns: repeat({{ $fundSourceColumns }}, minmax(120px, 1fr)); gap: 12px;">
+                    @foreach ($fundSourceCounts as $fundSource => $count)
+                        @php
+                            $fundSourceIcon = $fundSourceIconMap[$fundSource] ?? 'fa-coins';
+                            $fundSourceStyles = $fundSourceStyleMap[$fundSource] ?? ['bg' => '#f9fafb', 'border' => '#e5e7eb', 'iconBg' => '#e5e7eb', 'iconColor' => '#4b5563', 'labelColor' => '#6b7280'];
+                            $projectCodeKeyword = strtoupper(trim((string) $fundSource)) === 'FALGU'
+                                ? 'FA'
+                                : $fundSource;
+                            $fundSourceFilterUrl = route('projects.locally-funded', [
+                                'search' => $fundSource,
+                                'fund_source' => $fundSource,
+                                'project_code' => $projectCodeKeyword,
+                            ]);
+                        @endphp
+                        <a href="{{ $fundSourceFilterUrl }}" class="dashboard-tile fund-source-link-tile" style="padding: 12px; border: 1px solid {{ $fundSourceStyles['border'] }}; border-radius: 6px; background-color: {{ $fundSourceStyles['bg'] }}; text-align: center; text-decoration: none; color: inherit; display: block;">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: {{ $fundSourceStyles['labelColor'] }}; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+                                <span style="width: 20px; height: 20px; border-radius: 999px; background-color: {{ $fundSourceStyles['iconBg'] }}; color: {{ $fundSourceStyles['iconColor'] }}; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;">
+                                    <i class="fas {{ $fundSourceIcon }}"></i>
+                                </span>
+                                {{ $fundSource }}
+                            </div>
+                            <div style="font-size: 20px; font-weight: 700; color: #002C76;">{{ $count }}</div>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+    </div>
+
+    @php
+        $projectAtRiskChartOrder = ['Ahead', 'No Risk', 'On Schedule', 'High Risk', 'Moderate Risk', 'Low Risk'];
+        $projectAtRiskSummaryOrder = ['Ahead', 'High Risk', 'Moderate Risk', 'Low Risk', 'No Risk', 'On Schedule'];
+        $projectAtRiskLegendOrder = ['Ahead', 'On Schedule', 'No Risk', 'Low Risk', 'Moderate Risk', 'High Risk'];
+        $projectAtRiskStyles = [
+            'Ahead' => ['bg' => '#3f9142', 'badgeBg' => '#dcfce7', 'badgeColor' => '#166534'],
+            'No Risk' => ['bg' => '#2f84cf', 'badgeBg' => '#dbeafe', 'badgeColor' => '#1d4ed8'],
+            'On Schedule' => ['bg' => '#a3a3a3', 'badgeBg' => '#f3f4f6', 'badgeColor' => '#4b5563'],
+            'High Risk' => ['bg' => '#c81d1d', 'badgeBg' => '#fee2e2', 'badgeColor' => '#b91c1c'],
+            'Moderate Risk' => ['bg' => '#fb6f41', 'badgeBg' => '#ffedd5', 'badgeColor' => '#c2410c'],
+            'Low Risk' => ['bg' => '#f6c000', 'badgeBg' => '#fef3c7', 'badgeColor' => '#b45309'],
+        ];
+        $projectAtRiskCriteria = [
+            'Ahead' => 'Slippage is greater than 0%',
+            'On Schedule' => 'Slippage is exactly 0%',
+            'No Risk' => 'Slippage is from -0.01% to -4.99%',
+            'Low Risk' => 'Slippage is from -5% to -9.99%',
+            'Moderate Risk' => 'Slippage is from -10% to -14.99%',
+            'High Risk' => 'Slippage is at or below -15%',
+        ];
+        $projectAtRiskAgingChartOrder = ['High Risk', 'Moderate Risk', 'Low Risk'];
+        $projectAtRiskAgingSummaryOrder = ['High Risk', 'Moderate Risk', 'Low Risk'];
+        $projectAtRiskAgingLegendOrder = ['High Risk', 'Moderate Risk', 'Low Risk'];
+        $projectAtRiskAgingStyles = [
+            'High Risk' => ['bg' => '#c81d1d', 'badgeBg' => '#fee2e2', 'badgeColor' => '#b91c1c'],
+            'Moderate Risk' => ['bg' => '#fb6f41', 'badgeBg' => '#ffedd5', 'badgeColor' => '#c2410c'],
+            'Low Risk' => ['bg' => '#f6c000', 'badgeBg' => '#fef3c7', 'badgeColor' => '#b45309'],
+        ];
+        $projectAtRiskAgingCriteria = [
+            'High Risk' => 'Aging is greater than 30 days',
+            'Moderate Risk' => 'Aging is from 11 to 30 days',
+            'Low Risk' => 'Aging is 10 days or below',
+        ];
+        $projectUpdateStatusOrder = ['High Risk', 'Low Risk', 'No Risk'];
+        $projectUpdateStatusStyles = [
+            'High Risk' => ['bg' => '#dc2626', 'badgeBg' => '#fee2e2', 'badgeColor' => '#b91c1c'],
+            'Low Risk' => ['bg' => '#f59e0b', 'badgeBg' => '#fef3c7', 'badgeColor' => '#b45309'],
+            'No Risk' => ['bg' => '#16a34a', 'badgeBg' => '#dcfce7', 'badgeColor' => '#15803d'],
+        ];
+        $projectUpdateStatusCriteria = [
+            'High Risk' => 'Aging is greater than or equal to 60 days',
+            'Low Risk' => 'Aging is greater than 30 days but less than 60 days',
+            'No Risk' => 'Aging is less than or equal to 30 days',
+        ];
+<<<<<<< ours
+        $projectUpdateStatusTotal = 0;
+        foreach ($projectUpdateStatusOrder as $riskLabel) {
+            $projectUpdateStatusTotal += (int) ($projectUpdateStatusCounts[$riskLabel] ?? 0);
+=======
+        $projectUpdateStatusMax = 0;
+        foreach ($projectUpdateStatusOrder as $riskLabel) {
+            $projectUpdateStatusMax = max($projectUpdateStatusMax, (int) ($projectUpdateStatusCounts[$riskLabel] ?? 0));
+        }
+        if ($projectUpdateStatusMax < 1) {
+            $projectUpdateStatusMax = 1;
+<<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+        }
+        $projectAtRiskMax = 0;
+        foreach ($projectAtRiskChartOrder as $riskLabel) {
+            $projectAtRiskMax = max($projectAtRiskMax, (int) ($projectAtRiskCounts[$riskLabel] ?? 0));
+        }
+        if ($projectAtRiskMax < 1) {
+            $projectAtRiskMax = 1;
+        }
+
+        $projectAtRiskAgingMax = 0;
+        foreach ($projectAtRiskAgingChartOrder as $riskLabel) {
+            $projectAtRiskAgingMax = max($projectAtRiskAgingMax, (int) ($projectAtRiskAgingCounts[$riskLabel] ?? 0));
+        }
+        if ($projectAtRiskAgingMax < 1) {
+            $projectAtRiskAgingMax = 1;
+        }
+    @endphp
+
+    <div class="dashboard-status-row" style="display: grid; gap: 20px;">
+        <div class="dashboard-status-stack">
+            <div class="dashboard-card project-update-status-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="color: #065f46; font-size: 16px; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 22px; height: 22px; border-radius: 999px; background-color: #d1fae5; color: #047857; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
+                        <i class="fas fa-calendar-check"></i>
+                    </span>
+                    PROJECT UPDATE STATUS DASHBOARD
+                </h2>
+                <div class="project-update-status-chart">
+<<<<<<< ours
+<<<<<<< ours
+                    @php
+                        $projectUpdateStatusSegmentCount = count($projectUpdateStatusOrder);
+                        $projectUpdateStatusRunningPercent = 0.0;
+                        $projectUpdateStatusPieParts = [];
+                        $projectUpdateStatusPieItems = [];
+
+                        if ($projectUpdateStatusTotal > 0) {
+                            foreach ($projectUpdateStatusOrder as $segmentIndex => $riskLabel) {
+                                $riskCount = (int) ($projectUpdateStatusCounts[$riskLabel] ?? 0);
+                                $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['bg' => '#6b7280'];
+                                $rawPercent = ($riskCount / $projectUpdateStatusTotal) * 100;
+                                $startPercent = $projectUpdateStatusRunningPercent;
+                                $endPercent = ($segmentIndex === $projectUpdateStatusSegmentCount - 1)
+                                    ? 100.0
+                                    : ($startPercent + $rawPercent);
+                                $projectUpdateStatusRunningPercent = $endPercent;
+
+                                $projectUpdateStatusPieParts[] = sprintf(
+                                    '%s %.4f%% %.4f%%',
+                                    $riskStyle['bg'],
+                                    $startPercent,
+                                    $endPercent
+                                );
+
+                                $projectUpdateStatusPieItems[] = [
+                                    'label' => $riskLabel,
+                                    'count' => $riskCount,
+                                    'percent' => (int) round($rawPercent),
+                                    'color' => $riskStyle['bg'],
+                                ];
+                            }
+
+                            $projectUpdateStatusPieGradient = implode(', ', $projectUpdateStatusPieParts);
+                        } else {
+                            foreach ($projectUpdateStatusOrder as $riskLabel) {
+                                $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['bg' => '#6b7280'];
+                                $projectUpdateStatusPieItems[] = [
+                                    'label' => $riskLabel,
+                                    'count' => 0,
+                                    'percent' => 0,
+                                    'color' => $riskStyle['bg'],
+                                ];
+                            }
+
+                            $projectUpdateStatusPieGradient = '#d1d5db 0% 100%';
+                        }
+                    @endphp
+                    <div class="project-update-status-pie-layout">
+                        <div
+                            class="project-update-status-pie"
+                            style="--update-pie-gradient: conic-gradient({{ $projectUpdateStatusPieGradient }});"
+                            aria-label="Project update status pie chart"
+                        ></div>
+                        <div class="project-update-status-pie-labels">
+                            @foreach ($projectUpdateStatusPieItems as $pieItem)
+                                <div class="project-update-status-pie-item">
+                                    <span class="project-update-status-pie-dot" style="background-color: {{ $pieItem['color'] }};"></span>
+                                    <span class="project-update-status-pie-name">{{ $pieItem['label'] }}</span>
+                                    <span class="project-update-status-pie-count">{{ $pieItem['count'] }}</span>
+                                    <span class="project-update-status-pie-percent">{{ $pieItem['percent'] }}%</span>
+                                </div>
+                            @endforeach
+=======
+=======
+>>>>>>> theirs
+                    @foreach ($projectUpdateStatusOrder as $riskLabel)
+                        @php
+                            $riskCount = (int) ($projectUpdateStatusCounts[$riskLabel] ?? 0);
+                            $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['bg' => '#6b7280', 'badgeBg' => '#f3f4f6', 'badgeColor' => '#374151'];
+                            $barHeight = $riskCount > 0
+                                ? max(4, (int) round(($riskCount / $projectUpdateStatusMax) * 78))
+                                : 2;
+                        @endphp
+                        <div class="project-update-status-chart-item">
+                            <span class="project-update-status-chart-count">{{ $riskCount }}</span>
+                            <div class="project-update-status-chart-track">
+                                <div class="project-update-status-chart-bar" style="height: {{ $barHeight }}px; background-color: {{ $riskStyle['bg'] }};"></div>
+                            </div>
+                            <span class="project-update-status-chart-label">{{ $riskLabel }}</span>
+<<<<<<< ours
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+                        </div>
+                    @endforeach
+                </div>
+                <div class="project-update-status-grid">
+                    @foreach ($projectUpdateStatusOrder as $riskLabel)
+                        @php
+                            $riskCount = (int) ($projectUpdateStatusCounts[$riskLabel] ?? 0);
+                            $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['bg' => '#6b7280', 'badgeBg' => '#f3f4f6', 'badgeColor' => '#374151'];
+                        @endphp
+                        <div class="dashboard-tile project-update-status-tile clickable-dashboard-card" data-card-url="{{ route('projects.locally-funded') }}">
+                            <div class="project-update-status-label">
+                                <span class="project-update-status-badge" style="background-color: {{ $riskStyle['badgeBg'] }}; color: {{ $riskStyle['badgeColor'] }};">
+                                    {{ $riskLabel }}
+                                </span>
+                            </div>
+                            <div class="project-update-status-value" style="background-color: {{ $riskStyle['bg'] }};">
+                                {{ $riskCount }}
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="project-update-status-legend">
+                    @foreach ($projectUpdateStatusOrder as $riskLabel)
+                        @php
+                            $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['bg' => '#6b7280', 'badgeColor' => '#374151'];
+                            $criteriaText = $projectUpdateStatusCriteria[$riskLabel] ?? '';
+                        @endphp
+                        <div class="project-update-status-legend-item">
+                            <span class="project-update-status-legend-dot" style="background-color: {{ $riskStyle['bg'] }};"></span>
+                            <div class="project-update-status-legend-text">
+                                <strong style="color: {{ $riskStyle['badgeColor'] }};">{{ $riskLabel }}:</strong> {{ $criteriaText }}
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-card project-risk-card project-risk-slippage-card" style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #b91c1c; font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px;">
+                <span style="width: 18px; height: 18px; border-radius: 999px; background-color: #fee2e2; color: #dc2626; display: inline-flex; align-items: center; justify-content: center; font-size: 9px;">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </span>
+                PROJECT AT RISK AS TO SLIPPAGE
+            </h2>
+
+            <div class="project-risk-chart">
+                @foreach ($projectAtRiskChartOrder as $riskLabel)
+                    @php
+                        $riskCount = (int) ($projectAtRiskCounts[$riskLabel] ?? 0);
+                        $barHeight = $riskCount > 0
+                            ? max(4, (int) round(($riskCount / $projectAtRiskMax) * 72))
+                            : 2;
+                        $projectAtRiskFilterUrl = route('projects.at-risk', [
+                            'risk_level' => $riskLabel,
+                        ]);
+                    @endphp
+                    <div class="project-risk-chart-item clickable-dashboard-card" data-card-url="{{ $projectAtRiskFilterUrl }}">
+                        <span class="project-risk-chart-count">{{ $riskCount }}</span>
+                        <div class="project-risk-chart-track">
+                            <div class="project-risk-chart-bar" style="height: {{ $barHeight }}px;"></div>
+                        </div>
+                        <span class="project-risk-chart-label">{{ $riskLabel }}</span>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="project-risk-summary-grid">
+                @foreach ($projectAtRiskSummaryOrder as $riskLabel)
+                    @php
+                        $riskCount = (int) ($projectAtRiskCounts[$riskLabel] ?? 0);
+                        $riskStyle = $projectAtRiskStyles[$riskLabel] ?? ['bg' => '#6b7280', 'badgeBg' => '#f3f4f6', 'badgeColor' => '#374151'];
+                        $projectAtRiskFilterUrl = route('projects.at-risk', [
+                            'risk_level' => $riskLabel,
+                        ]);
+                    @endphp
+                    <div class="dashboard-tile clickable-dashboard-card project-update-status-tile project-risk-status-tile" data-card-url="{{ $projectAtRiskFilterUrl }}">
+                        <div class="project-update-status-label project-risk-summary-label">
+                            <span class="project-update-status-badge project-risk-summary-badge" style="background-color: {{ $riskStyle['badgeBg'] }}; color: {{ $riskStyle['badgeColor'] }};">
+                                {{ $riskLabel }}
+                            </span>
+                        </div>
+                        <div class="project-update-status-value project-risk-summary-value" style="background-color: {{ $riskStyle['bg'] }};">
+                            {{ $riskCount }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="project-risk-legend">
+                @foreach ($projectAtRiskLegendOrder as $riskLabel)
+                    @php
+                        $riskStyle = $projectAtRiskStyles[$riskLabel] ?? ['bg' => '#6b7280'];
+                        $criteriaText = $projectAtRiskCriteria[$riskLabel] ?? '';
+                    @endphp
+                    <div class="project-risk-legend-item">
+                        <span class="project-risk-legend-dot" style="background-color: {{ $riskStyle['bg'] }};"></span>
+                        <div class="project-risk-legend-text">
+                            <strong>{{ $riskLabel }}:</strong> {{ $criteriaText }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
+        <div class="dashboard-card project-risk-card project-risk-aging-card" style="background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #b45309; font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px;">
+                <span style="width: 18px; height: 18px; border-radius: 999px; background-color: #ffedd5; color: #b45309; display: inline-flex; align-items: center; justify-content: center; font-size: 9px;">
+                    <i class="fas fa-hourglass-half"></i>
+                </span>
+                AGING OF THE PROJECTS WITH SLIPPAGE
+            </h2>
+
+            <div class="project-risk-chart project-risk-chart-aging">
+                @foreach ($projectAtRiskAgingChartOrder as $riskLabel)
+                    @php
+                        $riskCount = (int) ($projectAtRiskAgingCounts[$riskLabel] ?? 0);
+                        $barHeight = $riskCount > 0
+                            ? max(4, (int) round(($riskCount / $projectAtRiskAgingMax) * 72))
+                            : 2;
+                    @endphp
+                    <div class="project-risk-chart-item">
+                        <span class="project-risk-chart-count">{{ $riskCount }}</span>
+                        <div class="project-risk-chart-track">
+                            <div class="project-risk-chart-bar" style="height: {{ $barHeight }}px;"></div>
+                        </div>
+                        <span class="project-risk-chart-label">{{ $riskLabel }}</span>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="project-risk-summary-grid">
+                @foreach ($projectAtRiskAgingSummaryOrder as $riskLabel)
+                    @php
+                        $riskCount = (int) ($projectAtRiskAgingCounts[$riskLabel] ?? 0);
+                        $riskStyle = $projectAtRiskAgingStyles[$riskLabel] ?? ['bg' => '#6b7280', 'badgeBg' => '#f3f4f6', 'badgeColor' => '#374151'];
+                    @endphp
+                    <div class="dashboard-tile clickable-dashboard-card project-update-status-tile project-risk-status-tile" data-card-url="{{ route('projects.at-risk') }}">
+                        <div class="project-update-status-label project-risk-summary-label">
+                            <span class="project-update-status-badge project-risk-summary-badge" style="background-color: {{ $riskStyle['badgeBg'] }}; color: {{ $riskStyle['badgeColor'] }};">
+                                {{ $riskLabel }}
+                            </span>
+                        </div>
+                        <div class="project-update-status-value project-risk-summary-value" style="background-color: {{ $riskStyle['bg'] }};">
+                            {{ $riskCount }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="project-risk-legend">
+                @foreach ($projectAtRiskAgingLegendOrder as $riskLabel)
+                    @php
+                        $riskStyle = $projectAtRiskAgingStyles[$riskLabel] ?? ['bg' => '#6b7280'];
+                        $criteriaText = $projectAtRiskAgingCriteria[$riskLabel] ?? '';
+                    @endphp
+                    <div class="project-risk-legend-item">
+                        <span class="project-risk-legend-dot" style="background-color: {{ $riskStyle['bg'] }};"></span>
+                        <div class="project-risk-legend-text">
+                            <strong>{{ $riskLabel }}:</strong> {{ $criteriaText }}
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .project-filter-toggle {
+            width: 100%;
+            border: 0;
+            background: transparent;
+            color: #002C76;
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0 0 16px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .project-filter-chevron {
+            margin-left: auto;
+            color: #6b7280;
+            font-size: 14px;
+            transition: transform 0.2s ease;
+        }
+
+        .project-filter-body {
+            overflow: hidden;
+            max-height: 1200px;
+            opacity: 1;
+            transform: translateY(0);
+            transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.25s ease;
+            will-change: max-height, opacity, transform;
+        }
+
+        .project-filter-form.collapsed .project-filter-body {
+            max-height: 0;
+            opacity: 0;
+            transform: translateY(-6px);
+            pointer-events: none;
+        }
+
+        .project-filter-form.collapsed .project-filter-chevron {
+            transform: rotate(180deg);
+        }
+
+        .dashboard-top-cards {
+            grid-template-columns: minmax(220px, 0.8fr) minmax(460px, 1.2fr);
+        }
+
+        .dashboard-top-cards .total-projects-card {
+            order: 1;
+        }
+
+        .dashboard-top-cards .fund-source-card {
+            order: 2;
+        }
+
+        .dashboard-top-cards .financial-status-card {
+            order: 3;
+        }
+
+        .dashboard-top-cards .status-subaybayan-card {
+            order: 4;
+        }
+
+        .dashboard-status-row {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .dashboard-status-stack {
+            display: grid;
+            gap: 20px;
+            align-content: start;
+        }
+
+        .dashboard-status-stack .project-update-status-card {
+            order: 1;
+        }
+
+        .project-risk-card {
+            max-width: none;
+            width: 100%;
+            justify-self: stretch;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .project-update-status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .project-update-status-chart {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            align-items: end;
+            border: 1px solid #e5e7eb;
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
+            border-radius: 12px;
+            background-color: #f9fafb;
+            padding: 14px 14px 12px;
+            margin-bottom: 12px;
+        }
+
+        .project-update-status-pie-layout {
+            display: grid;
+            grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+            align-items: center;
+            gap: 14px;
+        }
+
+        .project-update-status-pie {
+            width: min(220px, 100%);
+            aspect-ratio: 1 / 1;
+            border-radius: 50%;
+            background: var(--update-pie-gradient);
+            justify-self: center;
+            border: 1px solid #e5e7eb;
+            box-shadow: none;
+        }
+
+        .project-update-status-pie-labels {
+=======
+            border-radius: 8px;
+            background-color: #f9fafb;
+            padding: 10px 8px;
+            margin-bottom: 12px;
+=======
+            border-radius: 8px;
+            background-color: #f9fafb;
+            padding: 10px 8px;
+            margin-bottom: 12px;
+>>>>>>> theirs
+        }
+
+        .project-update-status-chart-item {
+>>>>>>> theirs
+=======
+            border-radius: 8px;
+            background-color: #f9fafb;
+            padding: 10px 8px;
+            margin-bottom: 12px;
+        }
+
+        .project-update-status-chart-item {
+>>>>>>> theirs
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+<<<<<<< ours
+<<<<<<< ours
+        .project-update-status-pie-item {
+            display: grid;
+            grid-template-columns: 12px minmax(0, 1fr) auto auto;
+            align-items: center;
+            gap: 8px;
+=======
+=======
+>>>>>>> theirs
+        .project-update-status-chart-count {
+            font-size: 11px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1;
+<<<<<<< ours
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+        }
+
+        .project-update-status-chart-track {
+            width: 100%;
+            height: 80px;
+            border-bottom: 1px solid #cfd4dd;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+<<<<<<< ours
+        .project-update-status-pie-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1f2937;
+            line-height: 1.2;
+        }
+
+        .project-update-status-pie-count {
+            font-size: 12px;
+            font-weight: 700;
+            color: #111827;
+=======
+        .project-update-status-chart-bar {
+            width: min(18px, 100%);
+            border-radius: 4px 4px 0 0;
+        }
+
+        .project-update-status-chart-label {
+            min-height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 10px;
+            color: #374151;
+            line-height: 1.1;
+            font-weight: 600;
+>>>>>>> theirs
+        }
+
+        .project-update-status-pie-percent {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .project-update-status-tile {
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background-color: #f9fafb;
+            text-align: center;
+        }
+
+        .project-update-status-label {
+            margin-bottom: 8px;
+        }
+
+        .project-update-status-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 24px;
+            border-radius: 999px;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .project-update-status-value {
+            height: 40px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+        }
+
+        .project-update-status-legend {
+            margin-top: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            padding: 10px 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .project-update-status-legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 12px;
+            color: #374151;
+            line-height: 1.35;
+        }
+
+        .project-update-status-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            margin-top: 3px;
+            flex: 0 0 10px;
+        }
+
+        .project-update-status-legend-text {
+            flex: 1;
+        }
+
+        .project-risk-chart {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 4px;
+            align-items: end;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            padding: 8px 6px;
+            margin-bottom: 8px;
+        }
+
+        .project-risk-chart.project-risk-chart-aging {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .project-risk-chart-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .project-risk-chart-count {
+            font-size: 11px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1;
+        }
+
+        .project-risk-chart-track {
+            width: 100%;
+            height: 74px;
+            border-bottom: 1px solid #cfd4dd;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .project-risk-chart-bar {
+            width: min(12px, 100%);
+            border-radius: 4px 4px 0 0;
+            background-color: #111827;
+        }
+
+        .project-risk-chart-label {
+            min-height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 10px;
+            color: #374151;
+            line-height: 1.1;
+        }
+
+        .project-risk-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(84px, 1fr));
+            gap: 8px;
+        }
+
+        .project-risk-status-tile {
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background-color: #f9fafb;
+            text-align: center;
+        }
+
+        .project-risk-summary-label {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .project-risk-summary-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 24px;
+            border-radius: 999px;
+            padding: 0 10px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .project-risk-summary-value {
+            height: 40px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+        }
+
+        .project-risk-legend {
+            margin-top: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            padding: 10px 12px;
+            display: grid;
+            gap: 6px;
+        }
+
+        .project-risk-legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 12px;
+            color: #374151;
+            line-height: 1.35;
+        }
+
+        .project-risk-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            margin-top: 3px;
+            flex: 0 0 10px;
+        }
+
+        .project-risk-legend-text {
+            flex: 1;
+        }
+
+        .project-risk-slippage-card .project-risk-legend {
+            margin-top: 5px;
+        }
+
+        .financial-percentage-tile {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .financial-amount-value {
+            font-size: clamp(11px, 0.9vw, 18px);
+            line-height: 1.2;
+            max-width: 100%;
+            white-space: nowrap;
+            letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .financial-obligation-tile {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .financial-disbursement-tile {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .financial-balance-tile {
+            grid-column: 3;
+            grid-row: 2;
+        }
+
+        @media (max-width: 900px) {
+            .financial-metrics-layout {
+                grid-template-columns: 1fr !important;
+            }
+
+            .financial-percentage-tile,
+            .financial-obligation-tile,
+            .financial-disbursement-tile,
+            .financial-balance-tile {
+                grid-column: auto;
+                grid-row: auto;
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-top-cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .dashboard-status-row {
+                grid-template-columns: 1fr;
+            }
+
+            .project-risk-card {
+                max-width: none;
+                justify-self: stretch;
+            }
+
+            .financial-status-card {
+                grid-column: 1 / -1;
+            }
+
+            .dashboard-filter-grid {
+                grid-template-columns: repeat(2, minmax(220px, 1fr)) !important;
+            }
+
+            .dashboard-filter-reset {
+                grid-column: auto !important;
+                justify-content: flex-start !important;
+            }
+        }
+
+        @media (max-width: 1450px) and (min-width: 1101px) {
+            .dashboard-status-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .dashboard-status-row > :first-child {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .dashboard-top-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .financial-status-card {
+                grid-column: auto;
+            }
+
+            .project-risk-chart {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .project-risk-chart-track {
+                height: 68px;
+            }
+
+            .project-risk-summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .project-risk-summary-value {
+                font-size: 22px;
+                height: 38px;
+            }
+
+            .project-update-status-grid {
+                grid-template-columns: 1fr;
+            }
+
+<<<<<<< ours
+<<<<<<< ours
+<<<<<<< ours
+            .project-update-status-pie-layout {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .project-update-status-pie {
+                width: min(190px, 72vw);
+            }
+
+            .project-update-status-pie-item {
+                gap: 6px;
+            }
+
+            .project-update-status-pie-name,
+            .project-update-status-pie-count,
+            .project-update-status-pie-percent {
+                font-size: 11px;
+            }
+
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+            .financial-amount-value {
+                font-size: clamp(14px, 4.2vw, 18px);
+            }
+
+            .dashboard-filter-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            .dashboard-filter-reset a {
+                width: 100%;
+            }
+        }
+
+        .dashboard-filter-reset {
+            grid-column: 3;
+        }
+
+        .clickable-dashboard-card {
+            cursor: pointer;
+        }
+
+        .clickable-dashboard-card:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+        }
+
+        .dashboard-card,
+        .dashboard-tile {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .dashboard-tile:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+        }
+    </style>
+
+    <script>
+        const PROJECT_FILTER_STATE_KEY = 'dashboard.project_filter_collapsed';
+
+        function readProjectFilterCollapsedState() {
+            try {
+                const storedState = window.localStorage.getItem(PROJECT_FILTER_STATE_KEY);
+                if (storedState === null) {
+                    return true;
+                }
+
+                return storedState === '1';
+            } catch (error) {
+                return true;
+            }
+        }
+
+        function writeProjectFilterCollapsedState(isCollapsed) {
+            try {
+                window.localStorage.setItem(PROJECT_FILTER_STATE_KEY, isCollapsed ? '1' : '0');
+            } catch (error) {
+                // Ignore storage errors and keep UI behavior functional.
+            }
+        }
+
+        function setProjectFilterBodyHeight(form) {
+            const body = form.querySelector('.project-filter-body');
+            if (!body) {
+                return;
+            }
+
+            if (form.classList.contains('collapsed')) {
+                body.style.maxHeight = '0px';
+                return;
+            }
+
+            body.style.maxHeight = `${body.scrollHeight}px`;
+        }
+
+        function toggleProjectFilter(button) {
+            const form = button.closest('.project-filter-form');
+            if (!form) {
+                return;
+            }
+
+            const body = form.querySelector('.project-filter-body');
+            if (!body) {
+                return;
+            }
+
+            const isCollapsed = form.classList.contains('collapsed');
+            if (isCollapsed) {
+                form.classList.remove('collapsed');
+                requestAnimationFrame(() => {
+                    body.style.maxHeight = `${body.scrollHeight}px`;
+                });
+            } else {
+                body.style.maxHeight = `${body.scrollHeight}px`;
+                requestAnimationFrame(() => {
+                    form.classList.add('collapsed');
+                    body.style.maxHeight = '0px';
+                });
+            }
+
+            const nextCollapsed = !isCollapsed;
+            button.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+            writeProjectFilterCollapsedState(nextCollapsed);
+        }
+
+        function syncRiskCardHeightsWithStatusCard() {
+            const projectUpdateCard = document.querySelector('.project-update-status-card');
+            const slippageCard = document.querySelector('.project-risk-slippage-card');
+            const agingCard = document.querySelector('.project-risk-aging-card');
+            const shouldSkipSync = window.matchMedia('(max-width: 1100px)').matches;
+            const cardsToSync = [projectUpdateCard, slippageCard, agingCard].filter(Boolean);
+            const minimumCardHeight = 465;
+
+            cardsToSync.forEach((card) => {
+                card.style.height = '';
+                card.style.minHeight = '';
+            });
+
+            if (cardsToSync.length < 3 || shouldSkipSync) {
+                return;
+            }
+
+            const tallestContentHeight = Math.max(...cardsToSync.map((card) => card.scrollHeight));
+            const targetHeight = Math.max(minimumCardHeight, tallestContentHeight);
+
+            cardsToSync.forEach((card) => {
+                card.style.height = `${targetHeight}px`;
+                card.style.minHeight = `${targetHeight}px`;
+            });
+        }
+
+        function initializeClickableDashboardCards() {
+            const clickableCards = document.querySelectorAll('.clickable-dashboard-card[data-card-url]');
+            clickableCards.forEach((card) => {
+                if (card.dataset.cardLinkInitialized === '1') {
+                    return;
+                }
+
+                card.dataset.cardLinkInitialized = '1';
+                card.setAttribute('role', 'link');
+                card.setAttribute('tabindex', '0');
+
+                card.addEventListener('click', (event) => {
+                    if (event.target.closest('a, button, input, select, textarea, label, summary, [role="button"]')) {
+                        return;
+                    }
+
+                    const destinationUrl = card.dataset.cardUrl;
+                    if (destinationUrl) {
+                        window.location.href = destinationUrl;
+                    }
+                });
+
+                card.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    const destinationUrl = card.dataset.cardUrl;
+                    if (destinationUrl) {
+                        window.location.href = destinationUrl;
+                    }
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const forms = document.querySelectorAll('.project-filter-form');
+            forms.forEach((form) => {
+                const shouldStartCollapsed = readProjectFilterCollapsedState();
+                const toggleButton = form.querySelector('.project-filter-toggle');
+
+                form.classList.toggle('collapsed', shouldStartCollapsed);
+                if (toggleButton) {
+                    toggleButton.setAttribute('aria-expanded', shouldStartCollapsed ? 'false' : 'true');
+                }
+
+                setProjectFilterBodyHeight(form);
+            });
+
+            initializeClickableDashboardCards();
+            syncRiskCardHeightsWithStatusCard();
+
+            window.addEventListener('resize', () => {
+                forms.forEach((form) => {
+                    if (!form.classList.contains('collapsed')) {
+                        setProjectFilterBodyHeight(form);
+                    }
+                });
+
+                syncRiskCardHeightsWithStatusCard();
+            });
+        });
+    </script>
+@endsection

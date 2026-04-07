@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>DILG-CAR Project Development and Management Unit</title>
+    <link rel="icon" type="image/png" href="/DILG-Logo.png">
+    @include('partials.google-sans-font')
+    <style>
+        body {
+            font-family: var(--app-font-sans);
+            background-color: #f4f4f4;
+            background-image: url('/background.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background-color: white;
+            padding: 28px 24px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 420px;
+        }
+        .logo {
+            display: block;
+            margin: 0 auto 12px;
+            width: 110px;
+            height: auto;
+        }
+
+        h2 {
+            text-align: center;
+            margin: 2px 0 4px;
+            color: #002C76;
+            font-size: 18px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        h3 {
+            text-align: center;
+            font-weight: normal;
+            font-size: 14px;
+            margin: 2px 0 18px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Field styles (username and password share same properties) */
+        .field {
+            position: relative;
+            margin-bottom: 14px;
+        }
+        .field input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 44px 12px 40px;
+            border-radius: 8px;
+            border: 1px solid #e6eef8;
+            background: #fff;
+            font-size: 14px;
+            color: #111827;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .invalid { border-color:#dc2626 !important; box-shadow:0 0 0 4px rgba(220,38,38,0.06); }
+        .error { color:#dc2626; font-size:13px; margin-top:6px; }
+        .field input::placeholder { color: #9ca3af; }
+        /* input icons removed; plain inputs used */
+        label {
+            margin-bottom: 6px;
+            font-weight: normal;
+            font-size: 13px;
+            color: #374151;
+        }
+            .sr-only {
+                position: absolute !important;
+                width: 1px !important;
+                height: 1px !important;
+                padding: 0 !important;
+                margin: -1px !important;
+                overflow: hidden !important;
+                clip: rect(0, 0, 0, 0) !important;
+                white-space: nowrap !important;
+                border: 0 !important;
+            }
+            .password-wrapper {
+                position: relative;
+            }
+            .password-icon {
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                display: flex;
+                gap: 6px;
+                color: #9ca3af;
+                cursor: pointer;
+            }
+            .password-icon svg { width: 14px; height: 14px; }
+
+        button {
+            padding: 12px 14px;
+            background-color: #002C76;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+        }
+        button:hover {
+            background-color: #001f59;
+        }
+        .forgot-row { text-align: right; margin-bottom: 8px; font-size: 13px; }
+        .forgot-row a { color: #6b7280; text-decoration: none; }
+        .forgot-row a:hover { text-decoration: underline; }
+        .create-row { text-align: center; margin-top: 12px; font-size: 13px; }
+        .create-row a { color: #002C76; font-weight: 600; text-decoration: none; }
+        .create-row a:hover { text-decoration: underline; }
+
+        /* Responsive tweaks */
+        @media (max-width: 768px) {
+            body {
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            .login-container {
+                margin: 20px auto;
+                max-width: 100%;
+                width: auto;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+                height: auto;
+                min-height: 100vh;
+            }
+
+            .login-container {
+                padding: 20px 15px;
+                margin: 10px auto;
+                width: calc(100% - 30px);
+            }
+
+            .logo { 
+                width: 70px; 
+                margin-bottom: 10px; 
+            }
+
+            h2 { 
+                font-size: 15px; 
+                margin-bottom: 2px;
+            }
+
+            h3 { 
+                font-size: 12px; 
+                margin-bottom: 14px; 
+            }
+
+            .field {
+                margin-bottom: 12px;
+            }
+
+            input[type="text"], input[type="password"] { 
+                font-size: 13px; 
+                padding: 10px 12px; 
+            }
+
+            label {
+                font-size: 12px;
+            }
+
+            button { 
+                padding: 10px 12px;
+                font-size: 14px;
+            }
+
+            .password-wrapper input { 
+                padding-right: 40px; 
+            }
+
+            .forgot-row {
+                font-size: 12px;
+            }
+
+            .create-row {
+                font-size: 12px;
+            }
+
+            .toast {
+                right: 10px;
+                left: 10px;
+                max-width: calc(100% - 20px);
+            }
+        }
+
+        @media (min-width: 769px) {
+            .login-container { 
+                max-width: 480px; 
+                padding: 32px 28px; 
+            }
+
+            h2 { 
+                font-size: 20px; 
+            }
+
+            h3 { 
+                font-size: 15px; 
+            }
+
+            input[type="text"], input[type="password"] { 
+                font-size: 15px; 
+                padding: 12px 14px; 
+            }
+
+            button { 
+                padding: 12px 14px; 
+            }
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            z-index: 1000;
+            display: none;
+            max-width: 300px;
+        }
+        .toast.error {
+            background-color: #dc2626;
+        }
+        .toast.info {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <img src="{{ asset('DILG-Logo.png') }}" alt="DILG Logo" style="display: block; margin: 0 auto 8px; width: 100px;">
+        <h2>Project Development and Management Unit</h2>
+        <h3>Reporting, Inspection and Monitoring System (PRISM)</h3>
+        
+        @if ($errors->any())
+            <div style="background-color: #fee; border: 1px solid #fcc; color: #c33; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 14px;">
+                @if ($errors->has('login_error'))
+                    {{ $errors->first('login_error') }}
+                @else
+                    {{ $errors->first() }}
+                @endif
+            </div>
+        @endif
+        
+        <form action="{{ route('login') }}" method="POST">
+            @csrf
+            <div class="field">
+                <input type="text" id="username" name="username" placeholder="Username" required>
+            </div>
+
+            <div class="field">
+                <div class="password-wrapper">
+                    <input type="password" id="password" name="password" placeholder="Password" required>
+                    <div class="password-icon">
+                        <svg class="feather-eye" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        <svg class="feather-eye-off" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                    </div>
+                </div>
+            </div>
+            <div class="forgot-row">
+                <a href="{{ route('forgot-password') }}">Forgot password?</a>
+            </div>
+            <button type="submit">Login</button>
+            <div class="create-row">
+                <a href="{{ route('register') }}" class="create-account">No account? Create one!</a>
+            </div>
+        </form>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 5000);
+        }
+
+        document.addEventListener('DOMContentLoaded', function(){
+            function initPasswordToggle(wrapper){
+                if(!wrapper) return;
+                const eye = wrapper.querySelector('.feather-eye');
+                const eyeoff = wrapper.querySelector('.feather-eye-off');
+                const input = wrapper.parentElement.querySelector('input');
+                if(!input) return;
+                if(!eye || !eyeoff){ setTimeout(()=>initPasswordToggle(wrapper),50); return; }
+                eyeoff.style.display = 'none';
+                eye.addEventListener('click', ()=>{ eye.style.display='none'; eyeoff.style.display='block'; input.type='text'; });
+                eyeoff.addEventListener('click', ()=>{ eye.style.display='block'; eyeoff.style.display='none'; input.type='password'; });
+            }
+            document.querySelectorAll('.password-icon').forEach(initPasswordToggle);
+        });
+
+        // Live validation for login form: username (email-aware) and password
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.querySelector('form[action*="login"]');
+            if(!form) return;
+            const username = form.querySelector('#username');
+            const password = form.querySelector('#password');
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            function setFieldError(el, msg){
+                if(!el) return;
+                clearFieldError(el);
+                const div = document.createElement('div');
+                div.className = 'error';
+                div.textContent = msg;
+                if(el.parentNode.classList.contains('password-wrapper')){
+                    el.parentNode.after(div);
+                } else {
+                    el.after(div);
+                }
+                el.classList.add('invalid');
+            }
+
+            function clearFieldError(el){
+                if(!el) return;
+                el.classList.remove('invalid');
+                const ex = el.closest('.field').querySelector('.error'); if(ex) ex.remove();
+            }
+
+            if(username){
+                username.addEventListener('blur', function(){
+                    const v = username.value.trim();
+                    if(!v){ setFieldError(username, 'Please enter your username or email.'); return; }
+                    if(v.includes('@')){
+                        if(!emailRegex.test(v)) setFieldError(username, 'Please enter a valid email address.');
+                        else clearFieldError(username);
+                    } else {
+                        if(v.length < 3) setFieldError(username, 'Username must be at least 3 characters.');
+                        else clearFieldError(username);
+                    }
+                });
+                username.addEventListener('input', function(){
+                    const v = username.value.trim();
+                    if(!v){ return; }
+                    if(v.includes('@')){ if(emailRegex.test(v)) clearFieldError(username); }
+                    else { if(v.length >=3) clearFieldError(username); }
+                });
+            }
+
+            if(password){
+                password.addEventListener('blur', function(){
+                    const v = password.value || '';
+                    if(v.length < 1) setFieldError(password, 'Please enter your password.');
+                    else clearFieldError(password);
+                });
+                password.addEventListener('input', function(){ if(password.value.length > 0) clearFieldError(password); });
+            }
+
+            form.addEventListener('submit', function(e){
+                let msgs = [];
+                clearFieldError(username); clearFieldError(password);
+                if(username){ const v = username.value.trim(); if(!v) { msgs.push('Enter username or email'); setFieldError(username,'Please enter your username or email.'); } else if(v.includes('@') && !emailRegex.test(v)) { msgs.push('Invalid email'); setFieldError(username,'Please enter a valid email address.'); } }
+                if(password){ if(password.value.length < 1){ msgs.push('Enter password'); setFieldError(password,'Please enter your password.'); } }
+                if(msgs.length){ e.preventDefault(); alert(msgs.join('\n')); const first = form.querySelector('.invalid'); if(first) first.focus(); return false; }
+            });
+        });
+
+        // Check for error or success message from server and show toast
+        @if(session('toast_message'))
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    showToast('{{ session('toast_message') }}', 'error');
+                });
+            </script>
+        @endif
+
+
+    </script>
+</body>
+</html>
