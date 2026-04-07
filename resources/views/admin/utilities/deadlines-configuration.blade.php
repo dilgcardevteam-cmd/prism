@@ -46,16 +46,6 @@
                 </div>
             </div>
 
-            <div class="deadline-hero__meta">
-                <div class="deadline-hero__meta-item">
-                    <span class="deadline-hero__meta-label">Configuration Areas</span>
-                    <strong>{{ count($deadlineCards) }}</strong>
-                </div>
-                <div class="deadline-hero__meta-item">
-                    <span class="deadline-hero__meta-label">Status</span>
-                    <strong>Ready</strong>
-                </div>
-            </div>
         </div>
 
         <div class="deadline-grid">
@@ -170,38 +160,6 @@
             font-size: 13px;
             line-height: 1.7;
             max-width: 720px;
-        }
-
-        .deadline-hero__meta {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(110px, 1fr));
-            gap: 10px;
-            align-self: center;
-        }
-
-        .deadline-hero__meta-item {
-            border-radius: 12px;
-            border: 1px solid #bfdbfe;
-            background: #ffffff;
-            padding: 10px 12px;
-            text-align: center;
-            min-width: 110px;
-        }
-
-        .deadline-hero__meta-label {
-            display: block;
-            font-size: 10px;
-            font-weight: 700;
-            color: #64748b;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .deadline-hero__meta-item strong {
-            color: #0f172a;
-            font-size: 18px;
-            line-height: 1.2;
         }
 
         .deadline-grid {
@@ -332,11 +290,6 @@
 
             .deadline-hero {
                 flex-direction: column;
-            }
-
-            .deadline-hero__meta {
-                width: 100%;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
