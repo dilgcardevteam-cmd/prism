@@ -9,17 +9,26 @@
         <p>Manage LGU-specific reportorial requirement settings and future workflow controls.</p>
     </div>
 
+    <div class="reportorial-shell-actions">
+        <a href="{{ route('utilities.deadlines-configuration.index') }}" class="reportorial-back-link">
+            <i class="fas fa-arrow-left"></i>
+            <span>Back to Deadlines Configuration</span>
+        </a>
+    </div>
+
     <section class="reportorial-shell reportorial-shell--lgu">
         <div class="reportorial-header">
-            <div class="reportorial-icon" aria-hidden="true">
-                <i class="fas fa-landmark"></i>
-            </div>
-            <div>
-                <h2>LGU Configuration Workspace</h2>
-                <p>
-                    Review LGU reportorial requirements by reporting timeline so annual, quarterly, and monthly
-                    requirement groups are easier to manage from one place.
-                </p>
+            <div class="reportorial-header__intro">
+                <div class="reportorial-icon" aria-hidden="true">
+                    <i class="fas fa-landmark"></i>
+                </div>
+                <div>
+                    <h2>LGU Configuration Workspace</h2>
+                    <p>
+                        Review LGU reportorial requirements by reporting timeline so annual, quarterly, and monthly
+                        requirement groups are easier to manage from one place.
+                    </p>
+                </div>
             </div>
         </div>
 
@@ -85,11 +94,6 @@
                 </article>
             @endforeach
         </div>
-
-        <a href="{{ route('utilities.deadlines-configuration.index') }}" class="reportorial-back-link">
-            <i class="fas fa-arrow-left"></i>
-            <span>Back to Deadlines Configuration</span>
-        </a>
     </section>
 
     <div class="deadline-modal" id="deadlineDraftModal" hidden>
@@ -185,11 +189,23 @@
             border-color: #93b7f3;
         }
 
+        .reportorial-shell-actions {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
         .reportorial-header {
             display: flex;
             align-items: flex-start;
             gap: 14px;
             margin-bottom: 18px;
+        }
+
+        .reportorial-header__intro {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            min-width: 0;
         }
 
         .reportorial-icon {
@@ -361,16 +377,21 @@
             gap: 8px;
             padding: 10px 14px;
             border-radius: 10px;
-            border: 1px solid #93b7f3;
-            background: #ffffff;
-            color: #002c76;
+            border: 1px solid #0a47a3;
+            background: linear-gradient(135deg, #002c76 0%, #0f4fb8 100%);
+            color: #ffffff;
             text-decoration: none;
             font-weight: 700;
             font-size: 13px;
+            box-shadow: 0 10px 22px rgba(0, 44, 118, 0.22);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
         }
 
         .reportorial-back-link:hover {
-            background: #eef4ff;
+            color: #ffffff;
+            filter: brightness(1.05);
+            transform: translateY(-1px);
+            box-shadow: 0 14px 28px rgba(0, 44, 118, 0.28);
         }
 
         .deadline-modal[hidden] {
@@ -759,6 +780,14 @@
 
             .reportorial-header {
                 flex-direction: column;
+            }
+
+            .reportorial-header__intro {
+                width: 100%;
+            }
+
+            .reportorial-shell-actions {
+                margin-bottom: 8px;
             }
 
             .deadline-modal__dialog {

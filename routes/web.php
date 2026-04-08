@@ -463,10 +463,13 @@ Route::middleware(['auth'])->group(function () {
             };
 
             $statusDisplayOrder = array_values($statusLabels);
+            $statusDisplayOrderPositions = array_flip($statusDisplayOrder);
             $statusActualCounts = array_fill_keys($statusDisplayOrder, 0);
             $statusSubaybayanCounts = array_fill_keys($statusDisplayOrder, 0);
             $statusSubaybayanProjectsMap = [];
             $statusSubaybayanLocationReport = [];
+            $provinceFundingYearProgramStatusReport = [];
+            $provinceFundingYearProgramStatusSourceRows = [];
             foreach ($statusDisplayOrder as $statusLabel) {
                 $statusSubaybayanProjectsMap[$statusLabel] = [];
             }
@@ -840,15 +843,17 @@ Route::middleware(['auth'])->group(function () {
 
             $computeProjectUpdateStatusCountsFromSubay = function ($subayQuery, array &$targetCounts) use ($projectUpdateStatusParsedDateExpression) {
 
-                $latestProjectDatesQuery = (clone $subayQuery)
+                $projectUpdateRowsQuery = (clone $subayQuery)
                     ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
-                    ->selectRaw("MAX(CASE WHEN LOWER(TRIM(COALESCE(spp.status, ''))) = 'completed' THEN 1 ELSE 0 END) as has_completed_status")
-                    ->selectRaw("MAX({$projectUpdateStatusParsedDateExpression}) as latest_update_date")
-                    ->groupBy(DB::raw('UPPER(TRIM(spp.project_code))'));
+                    ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
+                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
+                    ->selectRaw("LOWER(TRIM(COALESCE(spp.status, ''))) as status_raw")
+                    ->selectRaw("{$projectUpdateStatusParsedDateExpression} as latest_update_date");
 
                 $counts = DB::query()
-                    ->fromSub($latestProjectDatesQuery, 'project_updates')
-                    ->where('project_updates.has_completed_status', '=', 0)
+                    ->fromSub($projectUpdateRowsQuery, 'project_updates')
+                    ->where('project_updates.status_raw', '!=', 'completed')
                     ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) >= 60 THEN 1 ELSE 0 END) as high_risk_total')
                     ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) > 30 AND DATEDIFF(CURDATE(), project_updates.latest_update_date) < 60 THEN 1 ELSE 0 END) as low_risk_total')
                     ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) <= 30 THEN 1 ELSE 0 END) as no_risk_total')
@@ -860,17 +865,16 @@ Route::middleware(['auth'])->group(function () {
             };
 
             $fetchProjectUpdateProjectsFromSubay = function ($subayQuery, string $riskLabel) use ($projectUpdateStatusParsedDateExpression) {
-                $latestProjectDatesQuery = (clone $subayQuery)
+                $projectUpdateRowsQuery = (clone $subayQuery)
                     ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.project_title, ""))) as project_title')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.province, ""))) as province')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.city_municipality, ""))) as city_municipality')
-                    ->selectRaw("MAX(CASE WHEN LOWER(TRIM(COALESCE(spp.status, ''))) = 'completed' THEN 1 ELSE 0 END) as has_completed_status")
-                    ->selectRaw("MAX({$projectUpdateStatusParsedDateExpression}) as latest_update_date")
-                    ->groupBy(DB::raw('UPPER(TRIM(spp.project_code))'));
+                    ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
+                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
+                    ->selectRaw("LOWER(TRIM(COALESCE(spp.status, ''))) as status_raw")
+                    ->selectRaw("{$projectUpdateStatusParsedDateExpression} as latest_update_date");
 
                 $statusRowsQuery = DB::query()
-                    ->fromSub($latestProjectDatesQuery, 'project_updates')
+                    ->fromSub($projectUpdateRowsQuery, 'project_updates')
                     ->select(
                         'project_updates.project_code',
                         'project_updates.project_title',
@@ -879,7 +883,7 @@ Route::middleware(['auth'])->group(function () {
                         'project_updates.latest_update_date'
                     )
                     ->selectRaw('DATEDIFF(CURDATE(), project_updates.latest_update_date) as aging_days')
-                    ->where('project_updates.has_completed_status', '=', 0)
+                    ->where('project_updates.status_raw', '!=', 'completed')
                     ->whereNotNull('project_updates.latest_update_date');
 
                 if ($riskLabel === 'High Risk') {
@@ -895,6 +899,7 @@ Route::middleware(['auth'])->group(function () {
                 return $statusRowsQuery
                     ->orderByDesc('aging_days')
                     ->orderBy('project_updates.project_code')
+                    ->orderBy('project_updates.project_title')
                     ->get();
             };
 
@@ -974,13 +979,11 @@ Route::middleware(['auth'])->group(function () {
                 $subayDashboardQuery = clone $subayBaseQuery;
                 $applyDashboardFiltersToSubay($subayDashboardQuery);
 
-                $totalProjects = (int) ((clone $subayDashboardQuery)
-                    ->selectRaw('COUNT(DISTINCT UPPER(TRIM(spp.project_code))) as total_projects')
-                    ->value('total_projects') ?? 0);
+                $totalProjects = (int) (clone $subayDashboardQuery)->count();
 
                 $subayProvinceProjectRows = (clone $subayDashboardQuery)
                     ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
-                    ->selectRaw('COUNT(DISTINCT UPPER(TRIM(spp.project_code))) as total')
+                    ->selectRaw('COUNT(*) as total')
                     ->groupBy(DB::raw('TRIM(COALESCE(spp.province, ""))'))
                     ->get();
 
@@ -1051,11 +1054,10 @@ Route::middleware(['auth'])->group(function () {
 
                 $projectsExpectedCompletionBaseQuery = (clone $subayDashboardQuery)
                     ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.project_title, ""))) as project_title')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.province, ""))) as province')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.city_municipality, ""))) as city_municipality')
-                    ->selectRaw("MAX({$expectedCompletionParsedDateExpression}) as expected_completion_date")
-                    ->groupBy(DB::raw('UPPER(TRIM(spp.project_code))'));
+                    ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
+                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
+                    ->selectRaw("{$expectedCompletionParsedDateExpression} as expected_completion_date");
 
                 $projectsExpectedCompletionThisMonth = DB::query()
                     ->fromSub($projectsExpectedCompletionBaseQuery, 'due_projects')
@@ -1064,6 +1066,7 @@ Route::middleware(['auth'])->group(function () {
                     ->whereMonth('due_projects.expected_completion_date', $currentMonth)
                     ->orderBy('due_projects.expected_completion_date')
                     ->orderBy('due_projects.project_code')
+                    ->orderBy('due_projects.project_title')
                     ->get();
 
                 $fundSourceFromProjectCodeExpr = "
@@ -1082,7 +1085,7 @@ Route::middleware(['auth'])->group(function () {
 
                 $fundSourceCountsMap = (clone $subayDashboardQuery)
                     ->selectRaw("{$fundSourceFromProjectCodeExpr} as fund_source")
-                    ->selectRaw('COUNT(DISTINCT UPPER(TRIM(spp.project_code))) as total')
+                    ->selectRaw('COUNT(*) as total')
                     ->groupBy(DB::raw($fundSourceFromProjectCodeExpr))
                     ->get()
                     ->reduce(function ($carry, $row) {
@@ -1095,13 +1098,13 @@ Route::middleware(['auth'])->group(function () {
                 $fundSourceProjectRows = (clone $subayDashboardQuery)
                     ->selectRaw("{$fundSourceFromProjectCodeExpr} as fund_source")
                     ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.project_title, ""))) as project_title')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.province, ""))) as province')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.city_municipality, ""))) as city_municipality')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.status, ""))) as status')
-                    ->groupBy(DB::raw($fundSourceFromProjectCodeExpr), DB::raw('UPPER(TRIM(spp.project_code))'))
+                    ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
+                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
+                    ->selectRaw('TRIM(COALESCE(spp.status, "")) as status')
                     ->orderByRaw("{$fundSourceFromProjectCodeExpr}")
                     ->orderByRaw('UPPER(TRIM(spp.project_code))')
+                    ->orderByRaw('TRIM(COALESCE(spp.project_title, ""))')
                     ->get();
 
                 foreach ($fundSourceProjectRows as $row) {
@@ -1134,18 +1137,25 @@ Route::middleware(['auth'])->group(function () {
                             $leftCode = strtoupper(trim((string) ($leftRow->project_code ?? '')));
                             $rightCode = strtoupper(trim((string) ($rightRow->project_code ?? '')));
 
-                            if ($leftCode === $rightCode) {
+                            if ($leftCode !== $rightCode) {
+                                return $leftCode < $rightCode ? -1 : 1;
+                            }
+
+                            $leftTitle = strtoupper(trim((string) ($leftRow->project_title ?? '')));
+                            $rightTitle = strtoupper(trim((string) ($rightRow->project_title ?? '')));
+
+                            if ($leftTitle === $rightTitle) {
                                 return 0;
                             }
 
-                            return $leftCode < $rightCode ? -1 : 1;
+                            return $leftTitle < $rightTitle ? -1 : 1;
                         })
                         ->values();
                 }
 
                 $subayStatusRows = (clone $subayDashboardQuery)
                     ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
-                    ->selectRaw('COUNT(DISTINCT UPPER(TRIM(spp.project_code))) as total')
+                    ->selectRaw('COUNT(*) as total')
                     ->groupBy(DB::raw('UPPER(TRIM(COALESCE(spp.status, "")))'))
                     ->get();
 
@@ -1160,7 +1170,7 @@ Route::middleware(['auth'])->group(function () {
                     ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
                     ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
                     ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
-                    ->selectRaw('COUNT(DISTINCT UPPER(TRIM(spp.project_code))) as total')
+                    ->selectRaw('COUNT(*) as total')
                     ->groupBy(
                         DB::raw('TRIM(COALESCE(spp.province, ""))'),
                         DB::raw('TRIM(COALESCE(spp.city_municipality, ""))'),
@@ -1224,19 +1234,96 @@ Route::middleware(['auth'])->group(function () {
                     }
                 }
 
+                $subayProvinceFundingYearProgramStatusRows = (clone $subayDashboardQuery)
+                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(spp.funding_year, "")) as funding_year')
+                    ->selectRaw('TRIM(COALESCE(spp.program, "")) as program')
+                    ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
+                    ->selectRaw('COUNT(*) as total')
+                    ->groupBy(
+                        DB::raw('TRIM(COALESCE(spp.province, ""))'),
+                        DB::raw('TRIM(COALESCE(spp.funding_year, ""))'),
+                        DB::raw('TRIM(COALESCE(spp.program, ""))'),
+                        DB::raw('UPPER(TRIM(COALESCE(spp.status, "")))')
+                    )
+                    ->get();
+
+                $provinceFundingYearProgramStatusRows = [];
+                foreach ($subayProvinceFundingYearProgramStatusRows as $row) {
+                    $statusLabel = $labelForStatus($normalizeStatus($row->status_raw));
+                    if ($statusLabel === null) {
+                        continue;
+                    }
+
+                    $provinceLabel = trim((string) ($row->province ?? ''));
+                    $provinceLabel = $provinceLabel !== '' ? $provinceLabel : 'Unspecified Province';
+                    $fundingYearLabel = trim((string) ($row->funding_year ?? ''));
+                    $fundingYearLabel = $fundingYearLabel !== '' ? $fundingYearLabel : 'Unspecified Funding Year';
+                    $programLabel = trim((string) ($row->program ?? ''));
+                    $programLabel = $programLabel !== '' ? $programLabel : 'Unspecified Program';
+                    $groupKey = implode('||', [$provinceLabel, $fundingYearLabel, $programLabel, $statusLabel]);
+
+                    if (!array_key_exists($groupKey, $provinceFundingYearProgramStatusRows)) {
+                        $provinceFundingYearProgramStatusRows[$groupKey] = [
+                            'province' => $provinceLabel,
+                            'funding_year' => $fundingYearLabel,
+                            'program' => $programLabel,
+                            'project_status' => $statusLabel,
+                            'total' => 0,
+                        ];
+                    }
+
+                    $provinceFundingYearProgramStatusRows[$groupKey]['total'] += (int) ($row->total ?? 0);
+                }
+
+                $provinceFundingYearProgramStatusReport = array_values($provinceFundingYearProgramStatusRows);
+                usort($provinceFundingYearProgramStatusReport, function (array $leftRow, array $rightRow) use ($statusDisplayOrderPositions) {
+                    $provinceCompare = strnatcasecmp((string) ($leftRow['province'] ?? ''), (string) ($rightRow['province'] ?? ''));
+                    if ($provinceCompare !== 0) {
+                        return $provinceCompare;
+                    }
+
+                    $leftFundingYear = trim((string) ($leftRow['funding_year'] ?? ''));
+                    $rightFundingYear = trim((string) ($rightRow['funding_year'] ?? ''));
+                    $leftFundingYearIsNumeric = is_numeric($leftFundingYear);
+                    $rightFundingYearIsNumeric = is_numeric($rightFundingYear);
+                    if ($leftFundingYearIsNumeric && $rightFundingYearIsNumeric) {
+                        $fundingYearCompare = (int) $rightFundingYear <=> (int) $leftFundingYear;
+                    } else {
+                        $fundingYearCompare = strnatcasecmp($leftFundingYear, $rightFundingYear);
+                    }
+                    if ($fundingYearCompare !== 0) {
+                        return $fundingYearCompare;
+                    }
+
+                    $programCompare = strnatcasecmp((string) ($leftRow['program'] ?? ''), (string) ($rightRow['program'] ?? ''));
+                    if ($programCompare !== 0) {
+                        return $programCompare;
+                    }
+
+                    $leftStatus = (string) ($leftRow['project_status'] ?? '');
+                    $rightStatus = (string) ($rightRow['project_status'] ?? '');
+                    $leftStatusPosition = $statusDisplayOrderPositions[$leftStatus] ?? PHP_INT_MAX;
+                    $rightStatusPosition = $statusDisplayOrderPositions[$rightStatus] ?? PHP_INT_MAX;
+
+                    if ($leftStatusPosition !== $rightStatusPosition) {
+                        return $leftStatusPosition <=> $rightStatusPosition;
+                    }
+
+                    return strnatcasecmp($leftStatus, $rightStatus);
+                });
+
                 $subayStatusProjectRows = (clone $subayDashboardQuery)
                     ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
                     ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.project_title, ""))) as project_title')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.province, ""))) as province')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.city_municipality, ""))) as city_municipality')
-                    ->selectRaw('MAX(TRIM(COALESCE(spp.funding_year, ""))) as funding_year')
-                    ->groupBy(
-                        DB::raw('UPPER(TRIM(COALESCE(spp.status, "")))'),
-                        DB::raw('UPPER(TRIM(spp.project_code))')
-                    )
+                    ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
+                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
+                    ->selectRaw('TRIM(COALESCE(spp.funding_year, "")) as funding_year')
+                    ->selectRaw('TRIM(COALESCE(spp.program, "")) as program')
                     ->orderByRaw('UPPER(TRIM(COALESCE(spp.status, "")))')
                     ->orderByRaw('UPPER(TRIM(spp.project_code))')
+                    ->orderByRaw('TRIM(COALESCE(spp.project_title, ""))')
                     ->get();
 
                 foreach ($subayStatusProjectRows as $row) {
@@ -1255,7 +1342,15 @@ Route::middleware(['auth'])->group(function () {
                         'province' => $row->province ?? null,
                         'city_municipality' => $row->city_municipality ?? null,
                         'funding_year' => $row->funding_year ?? null,
+                        'program' => $row->program ?? null,
                         'status' => $statusLabel,
+                    ];
+
+                    $provinceFundingYearProgramStatusSourceRows[] = [
+                        'province' => trim((string) ($row->province ?? '')) ?: 'Unspecified Province',
+                        'funding_year' => trim((string) ($row->funding_year ?? '')) ?: 'Unspecified Funding Year',
+                        'program' => trim((string) ($row->program ?? '')) ?: 'Unspecified Program',
+                        'project_status' => $statusLabel,
                     ];
                 }
 
@@ -1350,6 +1445,9 @@ Route::middleware(['auth'])->group(function () {
                 }
                 if ($filters['project_type'] !== '') {
                     $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(project_type, ""))) = ?', [strtolower($filters['project_type'])]);
+                }
+                if ($filters['project_status'] !== '') {
+                    $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(status, ""))) = ?', [strtolower($filters['project_status'])]);
                 }
 
                 $totalProjects = (int) (clone $fallbackQuery)->count();
@@ -1492,6 +1590,27 @@ Route::middleware(['auth'])->group(function () {
                 $computeProjectAtRiskCounts(clone $fallbackProjectCodesQuery, 'risk_level', $projectAtRiskCounts);
                 $computeProjectAtRiskAgingCounts(clone $fallbackProjectCodesQuery, $projectAtRiskAgingCounts);
                 $projectAtRiskAgingProjects = $fetchProjectAtRiskAgingProjects(clone $fallbackProjectCodesQuery);
+
+                $fallbackProvinceFundingYearProgramStatusRows = (clone $fallbackQuery)
+                    ->selectRaw('TRIM(COALESCE(province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(funding_year, "")) as funding_year')
+                    ->selectRaw('COALESCE(NULLIF(TRIM(fund_source), ""), "Unspecified Program") as program')
+                    ->selectRaw('TRIM(COALESCE(status, "")) as status_raw')
+                    ->get();
+
+                foreach ($fallbackProvinceFundingYearProgramStatusRows as $row) {
+                    $statusLabel = $labelForStatus($normalizeStatus($row->status_raw));
+                    if ($statusLabel === null) {
+                        continue;
+                    }
+
+                    $provinceFundingYearProgramStatusSourceRows[] = [
+                        'province' => trim((string) ($row->province ?? '')) ?: 'Unspecified Province',
+                        'funding_year' => trim((string) ($row->funding_year ?? '')) ?: 'Unspecified Funding Year',
+                        'program' => trim((string) ($row->program ?? '')) ?: 'Unspecified Program',
+                        'project_status' => $statusLabel,
+                    ];
+                }
             }
 
             $fundSourceCounts = collect();
@@ -1511,11 +1630,18 @@ Route::middleware(['auth'])->group(function () {
                         $leftCode = strtoupper(trim((string) ($leftRow->project_code ?? '')));
                         $rightCode = strtoupper(trim((string) ($rightRow->project_code ?? '')));
 
-                        if ($leftCode === $rightCode) {
+                        if ($leftCode !== $rightCode) {
+                            return $leftCode < $rightCode ? -1 : 1;
+                        }
+
+                        $leftTitle = strtoupper(trim((string) ($leftRow->project_title ?? '')));
+                        $rightTitle = strtoupper(trim((string) ($rightRow->project_title ?? '')));
+
+                        if ($leftTitle === $rightTitle) {
                             return 0;
                         }
 
-                        return $leftCode < $rightCode ? -1 : 1;
+                        return $leftTitle < $rightTitle ? -1 : 1;
                     })
                     ->values();
             }
@@ -1530,6 +1656,8 @@ Route::middleware(['auth'])->group(function () {
                 'statusSubaybayanCounts',
                 'statusSubaybayanProjectsMap',
                 'statusSubaybayanLocationReport',
+                'provinceFundingYearProgramStatusReport',
+                'provinceFundingYearProgramStatusSourceRows',
                 'statusDisplayOrder',
                 'subayUploadDateLabel',
                 'fundSourceCounts',
@@ -1622,12 +1750,6 @@ Route::middleware(['auth'])->group(function () {
             ->name('users.block');
         Route::put('users/{user}/access', [App\Http\Controllers\UserManagementController::class, 'updateAccess'])
             ->name('users.access.update');
-        Route::get('/utilities/system-setup', [App\Http\Controllers\DatabaseUtilityController::class, 'systemSetup'])
-            ->name('utilities.system-setup.index');
-        Route::get('/utilities/notifications', [App\Http\Controllers\DatabaseUtilityController::class, 'notifications'])
-            ->name('utilities.notifications.index');
-        Route::post('/utilities/notifications', [App\Http\Controllers\DatabaseUtilityController::class, 'sendBulkNotification'])
-            ->name('utilities.notifications.broadcast');
         Route::get('/utilities/role-configuration', [App\Http\Controllers\DatabaseUtilityController::class, 'roleConfiguration'])
             ->name('utilities.role-configuration.index');
         Route::post('/utilities/role-configuration/role-definitions', [App\Http\Controllers\DatabaseUtilityController::class, 'storeRoleDefinition'])
@@ -1640,41 +1762,67 @@ Route::middleware(['auth'])->group(function () {
             ->name('utilities.role-configuration.roles.update');
         Route::delete('/utilities/role-configuration/roles/{role}', [App\Http\Controllers\DatabaseUtilityController::class, 'resetRoleConfiguration'])
             ->name('utilities.role-configuration.roles.reset');
-        Route::get('/utilities/deadlines-configuration', [App\Http\Controllers\DatabaseUtilityController::class, 'deadlinesConfiguration'])
-            ->name('utilities.deadlines-configuration.index');
-        Route::get('/utilities/deadlines-configuration/lgu-reportorial-requirements', [App\Http\Controllers\DatabaseUtilityController::class, 'lguReportorialRequirements'])
-            ->name('utilities.deadlines-configuration.lgu-reportorial');
-        Route::post('/utilities/deadlines-configuration/lgu-reportorial-requirements', [App\Http\Controllers\DatabaseUtilityController::class, 'storeLguReportorialDeadline'])
-            ->name('utilities.deadlines-configuration.lgu-reportorial.store');
-        Route::get('/utilities/deadlines-configuration/dilg-reportorial-requirements', [App\Http\Controllers\DatabaseUtilityController::class, 'dilgReportorialRequirements'])
-            ->name('utilities.deadlines-configuration.dilg-reportorial');
-        Route::get('/utilities/location-configuration', [App\Http\Controllers\DatabaseUtilityController::class, 'locationConfiguration'])
-            ->name('utilities.location-configuration.index');
-        Route::post('/utilities/location-configuration/import/{dataset}', [App\Http\Controllers\DatabaseUtilityController::class, 'importLocationDataset'])
+    });
+
+    Route::prefix('utilities')->name('utilities.')->group(function () {
+        Route::get('/system-setup', [App\Http\Controllers\DatabaseUtilityController::class, 'systemSetup'])
+            ->middleware('crud_permission:utilities_system_setup,view')
+            ->name('system-setup.index');
+        Route::get('/notifications', [App\Http\Controllers\DatabaseUtilityController::class, 'notifications'])
+            ->middleware('crud_permission:utilities_bulk_notifications,view')
+            ->name('notifications.index');
+        Route::post('/notifications', [App\Http\Controllers\DatabaseUtilityController::class, 'sendBulkNotification'])
+            ->middleware('crud_permission:utilities_bulk_notifications,add')
+            ->name('notifications.broadcast');
+        Route::get('/deadlines-configuration', [App\Http\Controllers\DatabaseUtilityController::class, 'deadlinesConfiguration'])
+            ->middleware('crud_permission:utilities_deadlines_configuration,view')
+            ->name('deadlines-configuration.index');
+        Route::get('/deadlines-configuration/lgu-reportorial-requirements', [App\Http\Controllers\DatabaseUtilityController::class, 'lguReportorialRequirements'])
+            ->middleware('crud_permission:utilities_deadlines_configuration,view')
+            ->name('deadlines-configuration.lgu-reportorial');
+        Route::post('/deadlines-configuration/lgu-reportorial-requirements', [App\Http\Controllers\DatabaseUtilityController::class, 'storeLguReportorialDeadline'])
+            ->middleware('crud_permission:utilities_deadlines_configuration,update')
+            ->name('deadlines-configuration.lgu-reportorial.store');
+        Route::get('/deadlines-configuration/dilg-reportorial-requirements', [App\Http\Controllers\DatabaseUtilityController::class, 'dilgReportorialRequirements'])
+            ->middleware('crud_permission:utilities_deadlines_configuration,view')
+            ->name('deadlines-configuration.dilg-reportorial');
+        Route::get('/location-configuration', [App\Http\Controllers\DatabaseUtilityController::class, 'locationConfiguration'])
+            ->middleware('crud_permission:utilities_location_configuration,view')
+            ->name('location-configuration.index');
+        Route::post('/location-configuration/import/{dataset}', [App\Http\Controllers\DatabaseUtilityController::class, 'importLocationDataset'])
+            ->middleware('crud_permission:utilities_location_configuration,add')
             ->whereIn('dataset', ['regions', 'provinces', 'city-municipalities'])
-            ->name('utilities.location-configuration.import');
-        Route::post('/utilities/location-configuration/import/{dataset}/{importId}/load', [App\Http\Controllers\DatabaseUtilityController::class, 'loadLocationDatasetImport'])
+            ->name('location-configuration.import');
+        Route::post('/location-configuration/import/{dataset}/{importId}/load', [App\Http\Controllers\DatabaseUtilityController::class, 'loadLocationDatasetImport'])
+            ->middleware('crud_permission:utilities_location_configuration,update')
             ->whereIn('dataset', ['regions', 'provinces', 'city-municipalities'])
             ->whereNumber('importId')
-            ->name('utilities.location-configuration.load');
-        Route::get('/utilities/location-configuration/import/{dataset}/{importId}/download', [App\Http\Controllers\DatabaseUtilityController::class, 'downloadLocationDatasetImport'])
+            ->name('location-configuration.load');
+        Route::get('/location-configuration/import/{dataset}/{importId}/download', [App\Http\Controllers\DatabaseUtilityController::class, 'downloadLocationDatasetImport'])
+            ->middleware('crud_permission:utilities_location_configuration,view')
             ->whereIn('dataset', ['regions', 'provinces', 'city-municipalities'])
             ->whereNumber('importId')
-            ->name('utilities.location-configuration.download');
-        Route::delete('/utilities/location-configuration/import/{dataset}/{importId}', [App\Http\Controllers\DatabaseUtilityController::class, 'deleteLocationDatasetImport'])
+            ->name('location-configuration.download');
+        Route::delete('/location-configuration/import/{dataset}/{importId}', [App\Http\Controllers\DatabaseUtilityController::class, 'deleteLocationDatasetImport'])
+            ->middleware('crud_permission:utilities_location_configuration,delete')
             ->whereIn('dataset', ['regions', 'provinces', 'city-municipalities'])
             ->whereNumber('importId')
-            ->name('utilities.location-configuration.delete');
-        Route::get('/utilities/backup-and-restore', [App\Http\Controllers\DatabaseUtilityController::class, 'index'])
-            ->name('utilities.backup-and-restore.index');
-        Route::get('/utilities/backup-and-restore/download', [App\Http\Controllers\DatabaseUtilityController::class, 'downloadBackup'])
-            ->name('utilities.backup-and-restore.download');
-        Route::post('/utilities/backup-and-restore/restore', [App\Http\Controllers\DatabaseUtilityController::class, 'restore'])
-            ->name('utilities.backup-and-restore.restore');
-        Route::post('/utilities/backup-and-restore/schedule', [App\Http\Controllers\DatabaseUtilityController::class, 'saveSchedule'])
-            ->name('utilities.backup-and-restore.schedule');
-        Route::post('/utilities/backup-and-restore/test-now', [App\Http\Controllers\DatabaseUtilityController::class, 'sendTestBackupNow'])
-            ->name('utilities.backup-and-restore.test-now');
+            ->name('location-configuration.delete');
+        Route::get('/backup-and-restore', [App\Http\Controllers\DatabaseUtilityController::class, 'index'])
+            ->middleware('crud_permission:utilities_backup_restore,view')
+            ->name('backup-and-restore.index');
+        Route::get('/backup-and-restore/download', [App\Http\Controllers\DatabaseUtilityController::class, 'downloadBackup'])
+            ->middleware('crud_permission:utilities_backup_restore,view')
+            ->name('backup-and-restore.download');
+        Route::post('/backup-and-restore/restore', [App\Http\Controllers\DatabaseUtilityController::class, 'restore'])
+            ->middleware('crud_permission:utilities_backup_restore,update')
+            ->name('backup-and-restore.restore');
+        Route::post('/backup-and-restore/schedule', [App\Http\Controllers\DatabaseUtilityController::class, 'saveSchedule'])
+            ->middleware('crud_permission:utilities_backup_restore,update')
+            ->name('backup-and-restore.schedule');
+        Route::post('/backup-and-restore/test-now', [App\Http\Controllers\DatabaseUtilityController::class, 'sendTestBackupNow'])
+            ->middleware('crud_permission:utilities_backup_restore,update')
+            ->name('backup-and-restore.test-now');
     });
 
     // Fund Utilization Report routes
@@ -1892,6 +2040,17 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.monthly.pd-no-pbbm-2025-1572-1573.approve');
     Route::get('/reports/monthly/pd-no-pbbm-2025-1572-1573/{office}/document/{docId}', [App\Http\Controllers\PdNoPbbmMonthlyReportController::class, 'viewDocument'])
         ->name('reports.monthly.pd-no-pbbm-2025-1572-1573.document');
+
+    Route::get('/reports/monthly/swa-annex-f', [App\Http\Controllers\SwaAnnexFReportController::class, 'index'])
+        ->name('reports.monthly.swa-annex-f');
+    Route::get('/reports/monthly/swa-annex-f/{office}/edit', [App\Http\Controllers\SwaAnnexFReportController::class, 'edit'])
+        ->name('reports.monthly.swa-annex-f.edit');
+    Route::post('/reports/monthly/swa-annex-f/{office}/upload', [App\Http\Controllers\SwaAnnexFReportController::class, 'upload'])
+        ->name('reports.monthly.swa-annex-f.upload');
+    Route::post('/reports/monthly/swa-annex-f/{office}/approve/{docId}', [App\Http\Controllers\SwaAnnexFReportController::class, 'approveDocument'])
+        ->name('reports.monthly.swa-annex-f.approve');
+    Route::get('/reports/monthly/swa-annex-f/{office}/document/{docId}', [App\Http\Controllers\SwaAnnexFReportController::class, 'viewDocument'])
+        ->name('reports.monthly.swa-annex-f.document');
 
     Route::get('/reports/rbis-annual-certification', [App\Http\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');
