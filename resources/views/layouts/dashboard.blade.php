@@ -1680,6 +1680,7 @@
                 $canViewPreImplementationDocuments = Auth::user()->hasCrudPermission('pre_implementation_documents', 'view');
                 $canViewRbisAnnualCertification = Auth::user()->hasCrudPermission('rbis_annual_certification', 'view');
                 $canViewPdNoPbbmMonthlyReports = Auth::user()->hasCrudPermission('pd_no_pbbm_monthly_reports', 'view');
+                $canViewSwaAnnexFMonthlyReports = Auth::user()->hasCrudPermission('swa_annex_f_monthly_reports', 'view');
                 $canViewFundUtilizationReports = Auth::user()->hasCrudPermission('fund_utilization_reports', 'view');
                 $canViewLpmcReports = Auth::user()->hasCrudPermission('local_project_monitoring_committee', 'view');
                 $canViewRoadMaintenanceReports = Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'view');
@@ -1690,15 +1691,27 @@
                 $canViewRssaUploads = $canViewRssaLgsfUploads || $canViewRlipLimeUploads;
                 $canViewProjectAtRiskUploads = Auth::user()->hasCrudPermission('project_at_risk_data_uploads', 'view');
                 $canViewSglgifUploads = Auth::user()->hasCrudPermission('sglgif_data_uploads', 'view');
+                $canViewUtilitiesSystemSetup = Auth::user()->hasCrudPermission('utilities_system_setup', 'view');
+                $canViewUtilitiesNotifications = Auth::user()->hasCrudPermission('utilities_bulk_notifications', 'view');
+                $canViewUtilitiesDeadlines = Auth::user()->hasCrudPermission('utilities_deadlines_configuration', 'view');
+                $canViewUtilitiesLocation = Auth::user()->hasCrudPermission('utilities_location_configuration', 'view');
+                $canViewUtilitiesBackup = Auth::user()->hasCrudPermission('utilities_backup_restore', 'view');
                 $hasAnyProjectMonitoringAccess = $canViewLocallyFundedProjects
                     || $canViewRlipLimeProjects
                     || $canViewProjectAtRiskProjects
                     || $canViewSglgifPortal;
                 $hasAnyReportorialAccess = $canViewRbisAnnualCertification
                     || $canViewPdNoPbbmMonthlyReports
+                    || $canViewSwaAnnexFMonthlyReports
                     || $canViewFundUtilizationReports
                     || $canViewLpmcReports
                     || $canViewRoadMaintenanceReports;
+                $hasAnyUtilitiesAccess = $canViewUtilitiesSystemSetup
+                    || $canViewUtilitiesNotifications
+                    || $canViewUtilitiesDeadlines
+                    || $canViewUtilitiesLocation
+                    || $canViewUtilitiesBackup
+                    || Auth::user()->isSuperAdmin();
             @endphp
             @if($hasAnyProjectMonitoringAccess)
                 <li>
@@ -1788,7 +1801,9 @@
                     $reportsQuarterlyActive = request()->routeIs('fund-utilization.*')
                         || request()->routeIs('local-project-monitoring-committee.*')
                         || request()->routeIs('road-maintenance-status.*');
-                    $reportsMonthlyActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
+                    $reportsSwaAnnexFActive = request()->routeIs('reports.monthly.swa-annex-f*');
+                    $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
+                    $reportsMonthlyActive = $reportsMonthlyReportActive || $reportsSwaAnnexFActive;
                     $reportsMenuActive = Route::currentRouteName() == 'reports'
                         || $reportsAnnualActive
                         || $reportsQuarterlyActive
@@ -1852,7 +1867,7 @@
                             </ul>
                         </li>
                     @endif
-                    @if($canViewPdNoPbbmMonthlyReports)
+                    @if($canViewPdNoPbbmMonthlyReports || $canViewSwaAnnexFMonthlyReports)
                         <li>
                             <a href="#" class="@if($reportsMonthlyActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsMonthlyMenu')">
                                 <i class="fas fa-calendar-day"></i>
@@ -1860,12 +1875,31 @@
                                 <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
                             </a>
                             <ul id="reportsMonthlyMenu" class="submenu" style="display: {{ $reportsMonthlyActive ? 'block' : 'none' }};">
-                                <li>
-                                    <a href="{{ route('reports.monthly.pd-no-pbbm-2025-1572-1573') }}" class="@if(request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*')) active @endif">
-                                        <i class="fas fa-file-alt"></i>
-                                        <span>Report on PD No. PBBM-2025-1572-1573</span>
-                                    </a>
-                                </li>
+                                @if($canViewPdNoPbbmMonthlyReports)
+                                    <li>
+                                        <a href="{{ route('reports.monthly.pd-no-pbbm-2025-1572-1573') }}" class="@if($reportsMonthlyReportActive) active @endif">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>Report on PD No. PBBM-2025-1572-1573</span>
+                                        </a>
+                                    </li>
+                                @endif
+                                @if($canViewSwaAnnexFMonthlyReports)
+                                    <li>
+                                        <a href="#" class="@if($reportsSwaAnnexFActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsSglgifMenu')">
+                                            <i class="fas fa-award"></i>
+                                            <span>SGLGIF</span>
+                                            <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                        </a>
+                                        <ul id="reportsSglgifMenu" class="submenu" style="display: {{ $reportsSwaAnnexFActive ? 'block' : 'none' }};">
+                                            <li>
+                                                <a href="{{ route('reports.monthly.swa-annex-f') }}" class="@if($reportsSwaAnnexFActive) active @endif">
+                                                    <i class="fas fa-table"></i>
+                                                    <span>SWA- Annex F</span>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </li>
+                                @endif
                             </ul>
                         </li>
                     @endif
@@ -2037,7 +2071,9 @@
                     <span>User Management</span>
                 </a>
             </li>
-            <li>
+            @endif
+            @if($hasAnyUtilitiesAccess)
+                <li>
                 @php
                     $utilitiesMenuActive = request()->routeIs('utilities.*');
                 @endphp
@@ -2047,26 +2083,56 @@
                     <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                 </a>
                 <ul id="utilitiesMenu" class="submenu" style="display: {{ $utilitiesMenuActive ? 'block' : 'none' }};">
-                    <li>
-                        <a href="{{ route('utilities.system-setup.index') }}" class="@if(request()->routeIs('utilities.system-setup.*')) active @endif">
-                            <i class="fas fa-sliders-h"></i>
-                            <span>System Setup</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="{{ route('utilities.notifications.index') }}" class="@if(request()->routeIs('utilities.notifications.*')) active @endif">
-                            <i class="fas fa-bell"></i>
-                            <span>Bulk Notification</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="{{ route('utilities.backup-and-restore.index') }}" class="@if(request()->routeIs('utilities.backup-and-restore.*')) active @endif">
-                            <i class="fas fa-server"></i>
-                            <span>Backup and Restore</span>
-                        </a>
-                    </li>
+                    @if($canViewUtilitiesSystemSetup)
+                        <li>
+                            <a href="{{ route('utilities.system-setup.index') }}" class="@if(request()->routeIs('utilities.system-setup.*')) active @endif">
+                                <i class="fas fa-sliders-h"></i>
+                                <span>System Setup</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if(Auth::user()->isSuperAdmin())
+                        <li>
+                            <a href="{{ route('utilities.role-configuration.index') }}" class="@if(request()->routeIs('utilities.role-configuration.*')) active @endif">
+                                <i class="fas fa-user-shield"></i>
+                                <span>Role Configuration</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if($canViewUtilitiesLocation)
+                        <li>
+                            <a href="{{ route('utilities.location-configuration.index') }}" class="@if(request()->routeIs('utilities.location-configuration.*')) active @endif">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>Location Configuration</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if($canViewUtilitiesDeadlines)
+                        <li>
+                            <a href="{{ route('utilities.deadlines-configuration.index') }}" class="@if(request()->routeIs('utilities.deadlines-configuration.*')) active @endif">
+                                <i class="fas fa-calendar-alt"></i>
+                                <span>Deadlines Configuration</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if($canViewUtilitiesNotifications)
+                        <li>
+                            <a href="{{ route('utilities.notifications.index') }}" class="@if(request()->routeIs('utilities.notifications.*')) active @endif">
+                                <i class="fas fa-bell"></i>
+                                <span>Bulk Notification</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if($canViewUtilitiesBackup)
+                        <li>
+                            <a href="{{ route('utilities.backup-and-restore.index') }}" class="@if(request()->routeIs('utilities.backup-and-restore.*')) active @endif">
+                                <i class="fas fa-server"></i>
+                                <span>Backup and Restore</span>
+                            </a>
+                        </li>
+                    @endif
                 </ul>
-            </li>
+                </li>
             @endif
         </ul>
     </aside>

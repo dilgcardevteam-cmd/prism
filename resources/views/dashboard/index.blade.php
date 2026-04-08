@@ -23,11 +23,31 @@
         ];
 
         $fundSourceIconMap = [
-            'SBDP' => 'fa-shield-halved',
-            'FALGU' => 'fa-hand-holding-dollar',
-            'CMGP' => 'fa-people-group',
-            'GEF' => 'fa-leaf',
-            'SAFPB' => 'fa-bridge',
+            'SBDP' => 'fa-shield-halved',                  // Subukan Barangay Development Program
+            'FALGU' => 'fa-hand-holding-dollar',           // Fund for Agricultural and Livelihood Generation Unit
+            'CMGP' => 'fa-people-group',                   // Cooperative Management Growth Program
+            'GEF' => 'fa-leaf',                            // Global Environment Facility
+            'SAFPB' => 'fa-bridge',                        // Single Arch Footbridge Program
+            'ADM-LA' => 'fa-file-invoice-dollar',          // Administrative - Local Assistance
+            'ADM-OT' => 'fa-folder',                       // Administrative - Other
+            'ADM-PW' => 'fa-hammer',                       // Administrative - Public Works
+            'AM-DRR' => 'fa-shield-exclamation',           // Assistance to Municipalities - Disaster Risk Reduction
+            'AM-LA' => 'fa-handshake',                     // Assistance to Municipalities - Local Assistance
+            'AM-PW' => 'fa-hammer',                        // Assistance to Municipalities - Public Works
+            'DILG-BLDGS' => 'fa-building',                 // DILG Buildings
+            'DRRAP' => 'fa-megaphone',                     // Disaster Risk Reduction Advocacy Program
+            'DTEAP' => 'fa-computer',                      // Disaster Technology Enhancement and Advancement Program
+            'KA' => 'fa-heart',                            // Kapatiran (Community Fellowship)
+            'LA' => 'fa-handshake',                        // Local Assistance
+            'LGSF' => 'fa-landmark',                       // Local Government Support Fund
+            'LO' => 'fa-store',                            // Livelihood Operation
+            'LR' => 'fa-water',                            // Land Reclamation
+            'OT' => 'fa-box',                              // Other
+            'PA' => 'fa-hands-praying',                    // Pastoral/Provincial Assistance
+            'PM' => 'fa-clipboard-list',                   // Program Management
+            'PW' => 'fa-hammer',                           // Public Works
+            'SA' => 'fa-hand-holding-heart',               // Social Assistance
+            'SF' => 'fa-piggy-bank',                       // Special Fund
         ];
 
         $fundSourceStyleMap = [
@@ -36,6 +56,26 @@
             'CMGP' => ['bg' => 'linear-gradient(180deg, #fffaf4 0%, #fff7ed 100%)', 'border' => '#fed7aa', 'iconBg' => 'linear-gradient(180deg, #fff4e5 0%, #ffedd5 100%)', 'iconColor' => '#c2410c', 'labelColor' => '#7c2d12'],  // orange
             'GEF' => ['bg' => 'linear-gradient(180deg, #f4feff 0%, #ecfeff 100%)', 'border' => '#a5f3fc', 'iconBg' => 'linear-gradient(180deg, #e6fcff 0%, #cffafe 100%)', 'iconColor' => '#0e7490', 'labelColor' => '#164e63'],   // cyan
             'SAFPB' => ['bg' => 'linear-gradient(180deg, #fff8f8 0%, #fef2f2 100%)', 'border' => '#fecaca', 'iconBg' => 'linear-gradient(180deg, #fff1f1 0%, #fee2e2 100%)', 'iconColor' => '#dc2626', 'labelColor' => '#7f1d1d'], // red
+            'ADM-LA' => ['bg' => 'linear-gradient(180deg, #fafafa 0%, #f3f4f6 100%)', 'border' => '#d1d5db', 'iconBg' => 'linear-gradient(180deg, #f9fafb 0%, #e5e7eb 100%)', 'iconColor' => '#4b5563', 'labelColor' => '#374151'], // slate
+            'ADM-OT' => ['bg' => 'linear-gradient(180deg, #fafafa 0%, #f3f4f6 100%)', 'border' => '#d1d5db', 'iconBg' => 'linear-gradient(180deg, #f9fafb 0%, #e5e7eb 100%)', 'iconColor' => '#4b5563', 'labelColor' => '#374151'], // slate
+            'ADM-PW' => ['bg' => 'linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)', 'border' => '#fdba74', 'iconBg' => 'linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%)', 'iconColor' => '#c2410c', 'labelColor' => '#9a3412'], // amber
+            'AM-DRR' => ['bg' => 'linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)', 'border' => '#fda4af', 'iconBg' => 'linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%)', 'iconColor' => '#e11d48', 'labelColor' => '#9f1239'], // rose
+            'AM-LA' => ['bg' => 'linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%)', 'border' => '#86efac', 'iconBg' => 'linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)', 'iconColor' => '#15803d', 'labelColor' => '#166534'], // green
+            'AM-PW' => ['bg' => 'linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)', 'border' => '#fdba74', 'iconBg' => 'linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%)', 'iconColor' => '#c2410c', 'labelColor' => '#9a3412'], // amber
+            'DILG-BLDGS' => ['bg' => 'linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)', 'border' => '#93c5fd', 'iconBg' => 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)', 'iconColor' => '#2563eb', 'labelColor' => '#1e3a8a'], // blue
+            'DRRAP' => ['bg' => 'linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)', 'border' => '#fdba74', 'iconBg' => 'linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%)', 'iconColor' => '#ea580c', 'labelColor' => '#9a3412'], // orange
+            'DTEAP' => ['bg' => 'linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%)', 'border' => '#c4b5fd', 'iconBg' => 'linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)', 'iconColor' => '#7c3aed', 'labelColor' => '#5b21b6'], // violet
+            'KA' => ['bg' => 'linear-gradient(180deg, #fdf2f8 0%, #fce7f3 100%)', 'border' => '#f9a8d4', 'iconBg' => 'linear-gradient(180deg, #fce7f3 0%, #fbcfe8 100%)', 'iconColor' => '#db2777', 'labelColor' => '#9d174d'], // pink
+            'LA' => ['bg' => 'linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%)', 'border' => '#86efac', 'iconBg' => 'linear-gradient(180deg, #dcfce7 0%, #bbf7d0 100%)', 'iconColor' => '#15803d', 'labelColor' => '#166534'], // green
+            'LGSF' => ['bg' => 'linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%)', 'border' => '#c4b5fd', 'iconBg' => 'linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)', 'iconColor' => '#6d28d9', 'labelColor' => '#5b21b6'], // violet
+            'LO' => ['bg' => 'linear-gradient(180deg, #ecfeff 0%, #cffafe 100%)', 'border' => '#67e8f9', 'iconBg' => 'linear-gradient(180deg, #cffafe 0%, #a5f3fc 100%)', 'iconColor' => '#0891b2', 'labelColor' => '#155e75'], // cyan
+            'LR' => ['bg' => 'linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)', 'border' => '#93c5fd', 'iconBg' => 'linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%)', 'iconColor' => '#2563eb', 'labelColor' => '#1e3a8a'], // blue
+            'OT' => ['bg' => 'linear-gradient(180deg, #fafafa 0%, #f3f4f6 100%)', 'border' => '#d1d5db', 'iconBg' => 'linear-gradient(180deg, #f9fafb 0%, #e5e7eb 100%)', 'iconColor' => '#4b5563', 'labelColor' => '#374151'], // slate
+            'PA' => ['bg' => 'linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%)', 'border' => '#fcd34d', 'iconBg' => 'linear-gradient(180deg, #fef3c7 0%, #fde68a 100%)', 'iconColor' => '#b45309', 'labelColor' => '#92400e'], // gold
+            'PM' => ['bg' => 'linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%)', 'border' => '#7dd3fc', 'iconBg' => 'linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%)', 'iconColor' => '#0284c7', 'labelColor' => '#0c4a6e'], // sky
+            'PW' => ['bg' => 'linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)', 'border' => '#fdba74', 'iconBg' => 'linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%)', 'iconColor' => '#c2410c', 'labelColor' => '#9a3412'], // amber
+            'SA' => ['bg' => 'linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)', 'border' => '#fda4af', 'iconBg' => 'linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%)', 'iconColor' => '#e11d48', 'labelColor' => '#9f1239'], // rose
+            'SF' => ['bg' => 'linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%)', 'border' => '#c4b5fd', 'iconBg' => 'linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%)', 'iconColor' => '#6d28d9', 'labelColor' => '#5b21b6'], // violet
         ];
 
         $financialMetricStyleMap = [
@@ -63,9 +103,40 @@
 
             <div id="project-filter-body" class="project-filter-body">
                 <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px 16px; align-items: end;">
-                <div>
-                    <label for="province" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Province</label>
-                    <select id="province" name="province" onchange="this.form.submit()" style="width: 100%; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background-color: #ffffff; color: #111827; padding: 0 8px; font-size: 12px;">
+                <div
+                    class="dashboard-stacked-filter"
+                    data-stacked-filter
+                    data-source-select-id="province"
+                    data-badge-container-id="province_badges"
+                    data-dropdown-toggle-id="province_dropdown_toggle"
+                    data-dropdown-menu-id="province_dropdown_menu"
+                    data-empty-badge-text="All"
+                >
+                    <label for="province_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Province</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div
+                            id="province_dropdown_toggle"
+                            class="dashboard-stacked-filter-toggle"
+                            role="button"
+                            tabindex="0"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="province_dropdown_menu"
+                        >
+                            <div id="province_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                        <div id="province_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                    </div>
+                    <select
+                        id="province"
+                        name="province"
+                        class="dashboard-stacked-filter-source"
+                        data-filter-label="Province"
+                        aria-hidden="true"
+                    >
                         <option value="">All</option>
                         @foreach (($filterOptions['provinces'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(($filters['province'] ?? '') === (string) $option)>{{ $option }}</option>
@@ -73,9 +144,40 @@
                     </select>
                 </div>
 
-                <div>
-                    <label for="city_municipality" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
-                    <select id="city_municipality" name="city_municipality" onchange="this.form.submit()" style="width: 100%; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background-color: #ffffff; color: #111827; padding: 0 8px; font-size: 12px;">
+                <div
+                    class="dashboard-stacked-filter"
+                    data-stacked-filter
+                    data-source-select-id="city_municipality"
+                    data-badge-container-id="city_municipality_badges"
+                    data-dropdown-toggle-id="city_municipality_dropdown_toggle"
+                    data-dropdown-menu-id="city_municipality_dropdown_menu"
+                    data-empty-badge-text="All"
+                >
+                    <label for="city_municipality_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div
+                            id="city_municipality_dropdown_toggle"
+                            class="dashboard-stacked-filter-toggle"
+                            role="button"
+                            tabindex="0"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="city_municipality_dropdown_menu"
+                        >
+                            <div id="city_municipality_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                        <div id="city_municipality_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                    </div>
+                    <select
+                        id="city_municipality"
+                        name="city_municipality"
+                        class="dashboard-stacked-filter-source"
+                        data-filter-label="City/Municipality"
+                        aria-hidden="true"
+                    >
                         <option value="">All</option>
                         @foreach (($filterOptions['cities'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(($filters['city_municipality'] ?? '') === (string) $option)>{{ $option }}</option>
@@ -83,9 +185,40 @@
                     </select>
                 </div>
 
-                <div>
-                    <label for="barangay" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
-                    <select id="barangay" name="barangay" onchange="this.form.submit()" style="width: 100%; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background-color: #ffffff; color: #111827; padding: 0 8px; font-size: 12px;">
+                <div
+                    class="dashboard-stacked-filter"
+                    data-stacked-filter
+                    data-source-select-id="barangay"
+                    data-badge-container-id="barangay_badges"
+                    data-dropdown-toggle-id="barangay_dropdown_toggle"
+                    data-dropdown-menu-id="barangay_dropdown_menu"
+                    data-empty-badge-text="All"
+                >
+                    <label for="barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div
+                            id="barangay_dropdown_toggle"
+                            class="dashboard-stacked-filter-toggle"
+                            role="button"
+                            tabindex="0"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="barangay_dropdown_menu"
+                        >
+                            <div id="barangay_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                        <div id="barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                    </div>
+                    <select
+                        id="barangay"
+                        name="barangay"
+                        class="dashboard-stacked-filter-source"
+                        data-filter-label="Barangay"
+                        aria-hidden="true"
+                    >
                         <option value="">All</option>
                         @foreach (($filterOptions['barangays'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(($filters['barangay'] ?? '') === (string) $option)>{{ $option }}</option>
@@ -100,6 +233,7 @@
                     data-badge-container-id="program_badges"
                     data-dropdown-toggle-id="program_dropdown_toggle"
                     data-dropdown-menu-id="program_dropdown_menu"
+                    data-empty-badge-text="No program selected."
                 >
                     <label for="program_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Program</label>
                     <div class="dashboard-stacked-filter-dropdown">
@@ -133,9 +267,40 @@
                     </select>
                 </div>
 
-                <div>
-                    <label for="funding_year" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Funding Year</label>
-                    <select id="funding_year" name="funding_year" onchange="this.form.submit()" style="width: 100%; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background-color: #ffffff; color: #111827; padding: 0 8px; font-size: 12px;">
+                <div
+                    class="dashboard-stacked-filter"
+                    data-stacked-filter
+                    data-source-select-id="funding_year"
+                    data-badge-container-id="funding_year_badges"
+                    data-dropdown-toggle-id="funding_year_dropdown_toggle"
+                    data-dropdown-menu-id="funding_year_dropdown_menu"
+                    data-empty-badge-text="All"
+                >
+                    <label for="funding_year_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Funding Year</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div
+                            id="funding_year_dropdown_toggle"
+                            class="dashboard-stacked-filter-toggle"
+                            role="button"
+                            tabindex="0"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="funding_year_dropdown_menu"
+                        >
+                            <div id="funding_year_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                        <div id="funding_year_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                    </div>
+                    <select
+                        id="funding_year"
+                        name="funding_year"
+                        class="dashboard-stacked-filter-source"
+                        data-filter-label="Funding Year"
+                        aria-hidden="true"
+                    >
                         <option value="">All</option>
                         @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(($filters['funding_year'] ?? '') === (string) $option)>{{ $option }}</option>
@@ -143,9 +308,40 @@
                     </select>
                 </div>
 
-                <div>
-                    <label for="project_type" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Project Type</label>
-                    <select id="project_type" name="project_type" onchange="this.form.submit()" style="width: 100%; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background-color: #ffffff; color: #111827; padding: 0 8px; font-size: 12px;">
+                <div
+                    class="dashboard-stacked-filter"
+                    data-stacked-filter
+                    data-source-select-id="project_type"
+                    data-badge-container-id="project_type_badges"
+                    data-dropdown-toggle-id="project_type_dropdown_toggle"
+                    data-dropdown-menu-id="project_type_dropdown_menu"
+                    data-empty-badge-text="All"
+                >
+                    <label for="project_type_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Project Type</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div
+                            id="project_type_dropdown_toggle"
+                            class="dashboard-stacked-filter-toggle"
+                            role="button"
+                            tabindex="0"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="project_type_dropdown_menu"
+                        >
+                            <div id="project_type_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                        <div id="project_type_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                    </div>
+                    <select
+                        id="project_type"
+                        name="project_type"
+                        class="dashboard-stacked-filter-source"
+                        data-filter-label="Project Type"
+                        aria-hidden="true"
+                    >
                         <option value="">All</option>
                         @foreach (($filterOptions['project_types'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(($filters['project_type'] ?? '') === (string) $option)>{{ $option }}</option>
@@ -153,9 +349,40 @@
                     </select>
                 </div>
 
-                <div>
-                    <label for="project_status" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Project Status</label>
-                    <select id="project_status" name="project_status" onchange="this.form.submit()" style="width: 100%; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background-color: #ffffff; color: #111827; padding: 0 8px; font-size: 12px;">
+                <div
+                    class="dashboard-stacked-filter"
+                    data-stacked-filter
+                    data-source-select-id="project_status"
+                    data-badge-container-id="project_status_badges"
+                    data-dropdown-toggle-id="project_status_dropdown_toggle"
+                    data-dropdown-menu-id="project_status_dropdown_menu"
+                    data-empty-badge-text="All"
+                >
+                    <label for="project_status_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Project Status</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div
+                            id="project_status_dropdown_toggle"
+                            class="dashboard-stacked-filter-toggle"
+                            role="button"
+                            tabindex="0"
+                            aria-haspopup="listbox"
+                            aria-expanded="false"
+                            aria-controls="project_status_dropdown_menu"
+                        >
+                            <div id="project_status_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                        <div id="project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                    </div>
+                    <select
+                        id="project_status"
+                        name="project_status"
+                        class="dashboard-stacked-filter-source"
+                        data-filter-label="Project Status"
+                        aria-hidden="true"
+                    >
                         <option value="">All</option>
                         @foreach (($filterOptions['project_statuses'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(($filters['project_status'] ?? '') === (string) $option)>{{ $option }}</option>
@@ -168,6 +395,13 @@
                         <i class="fas fa-rotate-left" aria-hidden="true"></i>
                         Reset Filter
                     </a>
+                    <button
+                        type="submit"
+                        class="dashboard-filter-apply-btn"
+                    >
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                        Apply Filter
+                    </button>
                     <button
                         type="button"
                         class="dashboard-filter-export-btn"
@@ -201,9 +435,6 @@
                 </div>
             </div>
         @if (!empty($fundSourceCounts) && $fundSourceCounts->count() > 0)
-            @php
-                $fundSourceColumns = max(1, (int) ceil($fundSourceCounts->count() / 2));
-            @endphp
             <div class="dashboard-card fund-source-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <h2 style="color: #002C76; font-size: 16px; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;">
                     <span style="width: 22px; height: 22px; border-radius: 999px; background-color: #e0f2fe; color: #0ea5e9; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
@@ -215,7 +446,7 @@
                     class="fund-source-grid"
                     @style([
                         'display: grid',
-                        'grid-template-columns: repeat(' . $fundSourceColumns . ', minmax(120px, 1fr))',
+                        'grid-template-columns: repeat(auto-fit, minmax(120px, 1fr))',
                         'gap: 12px',
                     ])
                 >
@@ -659,6 +890,7 @@
         @php
             $statusSubaybayanSorted = collect($statusSubaybayanCounts)->sortDesc();
             $topStatusSubaybayanCount = (int) $statusSubaybayanSorted->max();
+            $statusSubaybayanTotalCount = (int) $statusSubaybayanSorted->sum();
         @endphp
         <section class="dashboard-card sglgif-card status-subaybayan-card">
             <div class="sglgif-card-head">
@@ -678,6 +910,7 @@
                             'status' => $status,
                         ]);
                         $barWidth = $topStatusSubaybayanCount > 0 ? round((((int) $count) / $topStatusSubaybayanCount) * 100, 2) : 0;
+                        $statusPercentage = $statusSubaybayanTotalCount > 0 ? round((((int) $count) / $statusSubaybayanTotalCount) * 100, 2) : 0;
                     @endphp
                     <div
                         class="sglgif-bar-row sglgif-bar-trigger clickable-dashboard-card status-subaybayan-bar-row"
@@ -688,7 +921,10 @@
                     >
                         <div class="sglgif-bar-head">
                             <span>{{ $status }}</span>
-                            <strong data-sg-bar-number data-format="integer" data-value="{{ (int) $count }}">{{ number_format((int) $count) }}</strong>
+                            <strong>
+                                <span class="status-subaybayan-count" data-sg-bar-number data-format="integer" data-value="{{ (int) $count }}">{{ number_format((int) $count) }}</span>
+                                <span class="status-subaybayan-percentage">({{ number_format($statusPercentage, 2) }}%)</span>
+                            </strong>
                         </div>
                         <div class="sglgif-bar-track">
                             <div data-sg-bar-fill data-target-width="{{ $barWidth }}" style="width: {{ $barWidth }}%; background: linear-gradient(90deg, {{ $iconConfig['color'] }}, {{ $iconConfig['labelColor'] }});"></div>
@@ -2116,7 +2352,7 @@
 
         .dashboard-main-layout {
             display: grid;
-            grid-template-columns: minmax(0, 1.8fr) minmax(320px, 1fr);
+            grid-template-columns: minmax(0, 1.7fr) minmax(360px, 1fr);
             gap: 20px;
             align-items: start;
             padding: 24px;
@@ -2129,6 +2365,7 @@
 
         .dashboard-main-layout-filter {
             grid-column: 1 / -1;
+            grid-row: 1;
         }
 
         .dashboard-main-layout > * {
@@ -2136,7 +2373,15 @@
         }
 
         .dashboard-top-cards {
+            grid-column: 1;
+            grid-row: 2;
             grid-template-columns: 1fr;
+        }
+
+        .dashboard-main-layout > .dashboard-status-row {
+            grid-column: 2;
+            grid-row: 2;
+            align-self: start;
         }
 
         .dashboard-top-cards .total-projects-card {
@@ -2167,6 +2412,10 @@
         .status-subaybayan-grid {
             width: 100%;
             min-width: 0;
+        }
+
+        .fund-source-grid {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
         }
 
         .dashboard-status-stack {
@@ -2252,7 +2501,15 @@
             opacity: 0;
             visibility: hidden;
             transform: translateY(-4px);
+            max-height: min(60vh, 420px);
+            overflow: auto;
             transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+        }
+
+        .dashboard-status-row .dashboard-info-tooltip {
+            left: auto;
+            right: 0;
+            transform-origin: top right;
         }
 
         .dashboard-info-tooltip-wrap:hover .dashboard-info-tooltip,
@@ -2940,6 +3197,12 @@
                 padding: 20px;
             }
 
+            .dashboard-top-cards,
+            .dashboard-main-layout > .dashboard-status-row {
+                grid-column: 1;
+                grid-row: auto;
+            }
+
             .dashboard-top-cards {
                 grid-template-columns: 1fr;
             }
@@ -2948,6 +3211,11 @@
                 left: auto;
                 right: 0;
                 width: min(320px, calc(100vw - 28px));
+            }
+
+            .dashboard-status-row .dashboard-info-tooltip {
+                top: auto;
+                bottom: calc(100% + 8px);
             }
 
             .dashboard-status-row {
@@ -2995,6 +3263,10 @@
             .dashboard-main-layout {
                 padding: 16px;
                 border-radius: 12px;
+            }
+
+            .dashboard-info-tooltip {
+                width: min(280px, calc(100vw - 20px));
             }
 
             .dashboard-top-cards {
@@ -3066,6 +3338,7 @@
             }
 
             .dashboard-filter-reset a,
+            .dashboard-filter-apply-btn,
             .dashboard-filter-export-btn {
                 width: 100%;
             }
@@ -3089,6 +3362,37 @@
             outline: 2px solid rgba(96, 165, 250, 0.9);
             outline-offset: 2px;
             box-shadow: 0 6px 14px rgba(0, 44, 118, 0.24);
+        }
+
+        .dashboard-filter-apply-btn {
+            height: 34px;
+            min-width: 150px;
+            border-radius: 7px;
+            border: 0;
+            background: linear-gradient(180deg, #1d4ed8 0%, #1e3a8a 100%);
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 0 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(29, 78, 216, 0.22);
+            transition: box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        .dashboard-filter-apply-btn:hover {
+            background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+            box-shadow: 0 6px 14px rgba(29, 78, 216, 0.28);
+            transform: translateY(-1px);
+        }
+
+        .dashboard-filter-apply-btn:focus-visible {
+            outline: 2px solid rgba(96, 165, 250, 0.9);
+            outline-offset: 2px;
+            box-shadow: 0 6px 14px rgba(29, 78, 216, 0.28);
         }
 
         .dashboard-filter-export-btn {
@@ -3541,6 +3845,21 @@
             color: #0f172a;
             font-size: 13px;
             font-weight: 800;
+            display: inline-flex;
+            align-items: baseline;
+            gap: 4px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .status-subaybayan-card .status-subaybayan-count {
+            display: inline-block;
+        }
+
+        .status-subaybayan-card .status-subaybayan-percentage {
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
         }
 
         .status-subaybayan-card .sglgif-bar-track {
@@ -3577,6 +3896,10 @@
 
             .status-subaybayan-card .sglgif-bar-head {
                 font-size: 11px;
+            }
+
+            .status-subaybayan-card .status-subaybayan-percentage {
+                font-size: 10px;
             }
         }
 
@@ -3673,6 +3996,8 @@
         const PROJECT_FILTER_STATE_KEY = 'dashboard.project_filter_collapsed';
         const DASHBOARD_LEGEND_STATE_PREFIX = 'dashboard.legend_collapsed.';
         const STATUS_LOCATION_EXPORT_ROWS = @json($statusSubaybayanLocationReport ?? []);
+        const PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS = @json($provinceFundingYearProgramStatusReport ?? []);
+        const PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS = @json($provinceFundingYearProgramStatusSourceRows ?? []);
         const STATUS_LOCATION_EXPORT_STATUSES = @json($statusDisplayOrder ?? array_keys($statusSubaybayanCounts ?? []));
         const EXCEL_MAX_CELL_TEXT_LENGTH = 32767;
         const truncateExcelCellText = (rawValue) => {
@@ -3952,6 +4277,193 @@
             return candidate.toLowerCase().endsWith('.xls') ? candidate : `${candidate}.xls`;
         }
 
+        function escapeDashboardExcelXml(rawValue) {
+            return truncateExcelCellText(rawValue)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        function normalizeDashboardWorksheetName(rawName, fallbackName) {
+            const fallback = (fallbackName || 'Sheet1').toString().trim() || 'Sheet1';
+            const candidate = truncateExcelCellText(rawName || fallback)
+                .replace(/[\u0000-\u001F]/g, ' ')
+                .replace(/[\\\/\?\*\[\]:]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/^'+|'+$/g, '');
+
+            return (candidate || fallback).slice(0, 31);
+        }
+
+        function buildDashboardSpreadsheetCellXml(cell = {}) {
+            const styleId = cell?.styleId || 'Cell';
+            const cellType = cell?.type === 'Number' ? 'Number' : 'String';
+            const mergeAcrossValue = Number(cell?.mergeAcross);
+            const mergeAcrossAttribute = Number.isFinite(mergeAcrossValue) && mergeAcrossValue > 0
+                ? ` ss:MergeAcross="${Math.trunc(mergeAcrossValue)}"`
+                : '';
+            const numericValue = Number(cell?.value ?? 0);
+            const serializedValue = cellType === 'Number' && Number.isFinite(numericValue)
+                ? String(numericValue)
+                : String(cell?.value ?? '');
+
+            return `<Cell ss:StyleID="${styleId}"${mergeAcrossAttribute}><Data ss:Type="${cellType}">${escapeDashboardExcelXml(serializedValue)}</Data></Cell>`;
+        }
+
+        function buildDashboardSpreadsheetRowXml(cells = []) {
+            const safeCells = Array.isArray(cells) && cells.length > 0
+                ? cells
+                : [{ value: '', styleId: 'Cell' }];
+
+            return `<Row>${safeCells.map((cell) => buildDashboardSpreadsheetCellXml(cell)).join('')}</Row>`;
+        }
+
+        function buildDashboardSpreadsheetWorksheetXml(worksheet = {}) {
+            const worksheetName = normalizeDashboardWorksheetName(worksheet?.name, 'Sheet1');
+            const columns = Array.isArray(worksheet?.columns) ? worksheet.columns : [];
+            const rows = Array.isArray(worksheet?.rows) ? worksheet.rows : [];
+            const columnsXml = columns.map((width) => {
+                const numericWidth = Number(width);
+                return Number.isFinite(numericWidth) && numericWidth > 0
+                    ? `<Column ss:AutoFitWidth="1" ss:Width="${Math.trunc(numericWidth)}"/>`
+                    : '<Column ss:AutoFitWidth="1"/>';
+            }).join('');
+
+            return `<Worksheet ss:Name="${escapeDashboardExcelXml(worksheetName)}"><Table>${columnsXml}${rows.map((row) => buildDashboardSpreadsheetRowXml(row)).join('')}</Table></Worksheet>`;
+        }
+
+        function buildDashboardSpreadsheetXml(worksheets = []) {
+            const safeWorksheets = Array.isArray(worksheets) && worksheets.length > 0
+                ? worksheets
+                : [{ name: 'Sheet1', rows: [[{ value: 'No data available.', styleId: 'Cell' }]] }];
+
+            return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+    <Styles>
+        <Style ss:ID="Title">
+            <Font ss:Bold="1" ss:Size="14"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+        </Style>
+        <Style ss:ID="SheetTitle">
+            <Font ss:Bold="1" ss:Size="16" ss:Color="#FFFFFF"/>
+            <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#1D4ED8" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="SheetSubtitle">
+            <Font ss:Bold="1" ss:Color="#1E3A8A"/>
+            <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="SheetMeta">
+            <Font ss:Italic="1" ss:Color="#475569"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="Meta">
+            <Font ss:Italic="1" ss:Color="#4B5563"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+        </Style>
+        <Style ss:ID="AnalysisSection">
+            <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#0F766E" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="AnalysisHeader">
+            <Font ss:Bold="1"/>
+            <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#CCFBF1" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="AnalysisCell">
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="AnalysisCellRight">
+            <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>
+            <NumberFormat ss:Format="#,##0"/>
+        </Style>
+        <Style ss:ID="AnalysisTextRight">
+            <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="SectionHeader">
+            <Font ss:Bold="1"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="Header">
+            <Font ss:Bold="1"/>
+            <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F3F4F6" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="PlainHeader">
+            <Font ss:Bold="1"/>
+            <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+        </Style>
+        <Style ss:ID="HierarchyHeader">
+            <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+            <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#2563EB" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="Cell">
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+        </Style>
+        <Style ss:ID="CellRight">
+            <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:WrapText="1"/>
+        </Style>
+        <Style ss:ID="GroupCell">
+            <Font ss:Bold="1"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F9FAFB" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="GroupCellRight">
+            <Font ss:Bold="1"/>
+            <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F9FAFB" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="HierarchyProvince">
+            <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#1E40AF" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="HierarchyProvinceMetric">
+            <Font ss:Bold="1" ss:Color="#FFFFFF"/>
+            <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#1E40AF" ss:Pattern="Solid"/>
+            <NumberFormat ss:Format="#,##0"/>
+        </Style>
+        <Style ss:ID="HierarchyFundingYear">
+            <Font ss:Bold="1" ss:Color="#92400E"/>
+            <Alignment ss:Vertical="Center" ss:WrapText="1" ss:Indent="1"/>
+            <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="HierarchyFundingYearMetric">
+            <Font ss:Bold="1" ss:Color="#92400E"/>
+            <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/>
+            <NumberFormat ss:Format="#,##0"/>
+        </Style>
+        <Style ss:ID="HierarchyProgram">
+            <Alignment ss:Vertical="Center" ss:WrapText="1" ss:Indent="2"/>
+            <Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="HierarchyProgramMetric">
+            <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:WrapText="1"/>
+            <Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>
+            <NumberFormat ss:Format="#,##0"/>
+        </Style>
+    </Styles>
+    ${safeWorksheets.map((worksheet) => buildDashboardSpreadsheetWorksheetXml(worksheet)).join('')}
+</Workbook>`;
+        }
+
         function exportDashboardModalTableToExcel(button) {
             if (!button || button.disabled) {
                 return;
@@ -4009,28 +4521,27 @@
                 const badgeContainer = document.getElementById(badgeContainerId);
                 const dropdownToggle = document.getElementById(dropdownToggleId);
                 const dropdownMenu = document.getElementById(dropdownMenuId);
+                const isMultiple = Boolean(sourceSelect?.multiple);
+                const filterLabel = String(
+                    sourceSelect?.dataset?.filterLabel
+                    || stackedFilter.querySelector('label')?.textContent
+                    || 'Filter'
+                ).trim();
+                const emptyBadgeText = stackedFilter.dataset.emptyBadgeText
+                    || (isMultiple ? `No ${filterLabel.toLowerCase()} selected.` : 'All');
+                const emptyMenuText = stackedFilter.dataset.emptyMenuText
+                    || `No ${filterLabel.toLowerCase()} options available.`;
 
                 if (!sourceSelect || !badgeContainer || !dropdownToggle || !dropdownMenu) {
                     return;
                 }
 
+                dropdownMenu.setAttribute('aria-multiselectable', isMultiple ? 'true' : 'false');
+
                 if (dropdownMenu.dataset.overlayAttached !== '1') {
                     document.body.appendChild(dropdownMenu);
                     dropdownMenu.dataset.overlayAttached = '1';
                 }
-
-                const submitStackedFilterForm = () => {
-                    const parentForm = stackedFilter.closest('.project-filter-form');
-                    if (!parentForm) {
-                        return;
-                    }
-
-                    if (typeof parentForm.requestSubmit === 'function') {
-                        parentForm.requestSubmit();
-                    } else {
-                        parentForm.submit();
-                    }
-                };
 
                 const updateFilterBodyHeight = () => {
                     const parentForm = stackedFilter.closest('.project-filter-form');
@@ -4041,6 +4552,28 @@
                     requestAnimationFrame(() => {
                         setProjectFilterBodyHeight(parentForm);
                     });
+                };
+
+                const getSelectOptions = () => Array.from(sourceSelect.options || []);
+                const getOptionLabel = (optionEl) => String(optionEl?.textContent || '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                const getEmptyOption = () => getSelectOptions().find((optionEl) => String(optionEl.value || '').trim() === '');
+                const resetSingleSelectToDefault = () => {
+                    if (isMultiple) {
+                        return;
+                    }
+
+                    const selectOptions = getSelectOptions();
+                    const emptyOption = getEmptyOption();
+                    if (emptyOption) {
+                        selectOptions.forEach((optionEl) => {
+                            optionEl.selected = optionEl === emptyOption;
+                        });
+                        return;
+                    }
+
+                    sourceSelect.selectedIndex = -1;
                 };
 
                 const positionDropdownMenu = () => {
@@ -4118,14 +4651,14 @@
                 };
 
                 const renderBadges = () => {
-                    const selectedOptions = Array.from(sourceSelect.options || [])
+                    const selectedOptions = getSelectOptions()
                         .filter((optionEl) => optionEl.selected && optionEl.value.trim() !== '');
 
                     badgeContainer.innerHTML = '';
                     if (!selectedOptions.length) {
                         const emptyBadge = document.createElement('span');
                         emptyBadge.className = 'dashboard-filter-badge-empty';
-                        emptyBadge.textContent = 'No program selected.';
+                        emptyBadge.textContent = emptyBadgeText;
                         badgeContainer.appendChild(emptyBadge);
                     } else {
                         selectedOptions.forEach((optionEl) => {
@@ -4134,7 +4667,7 @@
 
                             const badgeLabel = document.createElement('span');
                             badgeLabel.className = 'dashboard-filter-badge-label';
-                            badgeLabel.textContent = optionEl.textContent.replace(/\s+/g, ' ').trim();
+                            badgeLabel.textContent = getOptionLabel(optionEl);
 
                             const removeButton = document.createElement('button');
                             removeButton.type = 'button';
@@ -4154,23 +4687,26 @@
                 };
 
                 const renderDropdownOptions = () => {
-                    const availableOptions = Array.from(sourceSelect.options || [])
-                        .filter((optionEl) => optionEl.value.trim() !== '');
+                    const selectOptions = getSelectOptions();
+                    const availableOptions = isMultiple
+                        ? selectOptions.filter((optionEl) => optionEl.value.trim() !== '')
+                        : selectOptions;
 
                     dropdownMenu.innerHTML = '';
                     if (!availableOptions.length) {
                         const emptyMenuItem = document.createElement('div');
                         emptyMenuItem.className = 'dashboard-stacked-filter-menu-empty';
-                        emptyMenuItem.textContent = 'No program options available.';
+                        emptyMenuItem.textContent = emptyMenuText;
                         dropdownMenu.appendChild(emptyMenuItem);
                         return;
                     }
 
                     availableOptions.forEach((optionEl) => {
+                        const optionIndex = selectOptions.indexOf(optionEl);
                         const optionButton = document.createElement('button');
                         optionButton.type = 'button';
                         optionButton.className = 'dashboard-stacked-filter-option';
-                        optionButton.dataset.optionValue = optionEl.value;
+                        optionButton.dataset.optionIndex = String(optionIndex);
                         optionButton.setAttribute('role', 'option');
                         optionButton.setAttribute('aria-selected', optionEl.selected ? 'true' : 'false');
                         if (optionEl.selected) {
@@ -4179,7 +4715,7 @@
 
                         const optionLabel = document.createElement('span');
                         optionLabel.className = 'dashboard-stacked-filter-option-label';
-                        optionLabel.textContent = optionEl.textContent.replace(/\s+/g, ' ').trim();
+                        optionLabel.textContent = getOptionLabel(optionEl);
 
                         const optionCheck = document.createElement('span');
                         optionCheck.className = 'dashboard-stacked-filter-option-check';
@@ -4218,20 +4754,29 @@
                         return;
                     }
 
-                    const optionValue = optionButton.dataset.optionValue || '';
-                    if (!optionValue) {
+                    const optionIndex = Number(optionButton.dataset.optionIndex);
+                    if (!Number.isInteger(optionIndex) || optionIndex < 0) {
                         return;
                     }
 
-                    const matchingOption = Array.from(sourceSelect.options || []).find((optionEl) => optionEl.value === optionValue);
+                    const matchingOption = sourceSelect.options[optionIndex];
                     if (!matchingOption) {
                         return;
                     }
 
-                    matchingOption.selected = !matchingOption.selected;
+                    if (isMultiple) {
+                        matchingOption.selected = !matchingOption.selected;
+                    } else {
+                        getSelectOptions().forEach((optionEl) => {
+                            optionEl.selected = optionEl === matchingOption;
+                        });
+                    }
+
                     renderBadges();
                     renderDropdownOptions();
-                    submitStackedFilterForm();
+                    if (!isMultiple) {
+                        closeDropdown();
+                    }
                 });
 
                 badgeContainer.addEventListener('click', (event) => {
@@ -4248,15 +4793,18 @@
                         return;
                     }
 
-                    Array.from(sourceSelect.options || []).forEach((optionEl) => {
-                        if (optionEl.value === valueToRemove) {
-                            optionEl.selected = false;
-                        }
-                    });
+                    if (isMultiple) {
+                        getSelectOptions().forEach((optionEl) => {
+                            if (optionEl.value === valueToRemove) {
+                                optionEl.selected = false;
+                            }
+                        });
+                    } else {
+                        resetSingleSelectToDefault();
+                    }
 
                     renderBadges();
                     renderDropdownOptions();
-                    submitStackedFilterForm();
                 });
 
                 document.addEventListener('click', (event) => {
@@ -4327,19 +4875,26 @@
                     .map((statusLabel) => String(statusLabel || '').trim())
                     .filter((statusLabel) => statusLabel !== '');
                 const reportRows = Array.isArray(STATUS_LOCATION_EXPORT_ROWS) ? STATUS_LOCATION_EXPORT_ROWS : [];
+                const groupedStatusRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS)
+                    ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS
+                    : [];
+                const groupedStatusSourceRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS)
+                    ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS
+                    : [];
 
                 const toNumber = (value) => {
                     const numeric = Number(value);
                     return Number.isFinite(numeric) ? numeric : 0;
                 };
-                const toIntString = (value) => String(Math.trunc(toNumber(value)));
-                const escapeHtml = (raw) =>
-                    truncateExcelCellText(raw)
-                        .replace(/&/g, '&amp;')
-                        .replace(/</g, '&lt;')
-                        .replace(/>/g, '&gt;')
-                        .replace(/"/g, '&quot;')
-                        .replace(/'/g, '&#39;');
+                const toInt = (value) => Math.trunc(toNumber(value));
+                const createMergedRow = (value, styleId, columnCount) => ([
+                    {
+                        value,
+                        styleId,
+                        mergeAcross: Math.max(0, Math.trunc(columnCount) - 1),
+                    },
+                ]);
+                const createBlankRow = (columnCount) => createMergedRow('', 'Cell', columnCount);
 
                 const normalizedRows = reportRows.map((row) => ({
                     row_type: String(row?.row_type || '').toLowerCase(),
@@ -4363,117 +4918,392 @@
                     });
                 });
                 const totalProjects = statusColumns.reduce((carry, statusLabel) => carry + toNumber(statusTotals[statusLabel] ?? 0), 0);
+                const normalizedGroupedStatusRows = (() => {
+                    if (groupedStatusSourceRows.length > 0) {
+                        const aggregatedRows = new Map();
 
-                const filtersRowsHtml = selectedFilters.length > 0
-                    ? selectedFilters.map(([label, value]) =>
-                        `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`
-                    ).join('')
-                    : '<tr><td colspan="2">No filters</td></tr>';
+                        groupedStatusSourceRows.forEach((row) => {
+                            const provinceLabel = String(row?.province || '').trim() || 'Unspecified Province';
+                            const fundingYearLabel = String(row?.funding_year || '').trim() || 'Unspecified Funding Year';
+                            const programLabel = String(row?.program || '').trim() || 'Unspecified Program';
+                            const projectStatusLabel = String(row?.project_status || '').trim() || 'Unspecified Status';
+                            const rowKey = [provinceLabel, fundingYearLabel, programLabel, projectStatusLabel].join('||');
 
-                const summaryRowsHtml = statusColumns.length > 0
-                    ? statusColumns.map((statusLabel) => {
+                            if (!aggregatedRows.has(rowKey)) {
+                                aggregatedRows.set(rowKey, {
+                                    province: provinceLabel,
+                                    funding_year: fundingYearLabel,
+                                    program: programLabel,
+                                    project_status: projectStatusLabel,
+                                    total: 0,
+                                });
+                            }
+
+                            aggregatedRows.get(rowKey).total += 1;
+                        });
+
+                        return Array.from(aggregatedRows.values());
+                    }
+
+                    return groupedStatusRows.map((row) => ({
+                        province: String(row?.province || '').trim() || 'Unspecified Province',
+                        funding_year: String(row?.funding_year || '').trim() || 'Unspecified Funding Year',
+                        program: String(row?.program || '').trim() || 'Unspecified Program',
+                        project_status: String(row?.project_status || '').trim() || 'Unspecified Status',
+                        total: toInt(row?.total ?? 0),
+                    }));
+                })();
+                const overviewColumnCount = Math.max(statusColumns.length + 3, 3);
+                const overviewColumnWidths = [
+                    140,
+                    180,
+                    ...Array.from({ length: statusColumns.length }, () => 88),
+                    80,
+                ];
+
+                const filterRows = selectedFilters.length > 0
+                    ? selectedFilters.map(([label, value]) => ([
+                        { value: label, styleId: 'Cell' },
+                        { value: value || 'All', styleId: 'Cell' },
+                    ]))
+                    : [[{ value: 'No filters', styleId: 'Cell', mergeAcross: 1 }]];
+
+                const summarySheetRows = [
+                    createMergedRow('Status Of Projects By Province And City/Municipality', 'Title', overviewColumnCount),
+                    createMergedRow(`Generated at: ${generatedAt}`, 'Meta', overviewColumnCount),
+                    createBlankRow(overviewColumnCount),
+                    createMergedRow('Applied Filters', 'SectionHeader', overviewColumnCount),
+                    [
+                        { value: 'Filter', styleId: 'Header' },
+                        { value: 'Value', styleId: 'Header' },
+                    ],
+                    ...filterRows,
+                    createBlankRow(overviewColumnCount),
+                    createMergedRow('Status Summary (All Projects)', 'SectionHeader', overviewColumnCount),
+                    [
+                        { value: 'Status', styleId: 'Header' },
+                        { value: 'Count', styleId: 'Header' },
+                        { value: '% of Projects', styleId: 'Header' },
+                    ],
+                ];
+
+                if (statusColumns.length > 0) {
+                    statusColumns.forEach((statusLabel) => {
                         const countValue = toNumber(statusTotals[statusLabel] ?? 0);
                         const shareValue = totalProjects > 0 ? `${((countValue / totalProjects) * 100).toFixed(2)}%` : '0.00%';
-                        return `<tr>
-                            <td>${escapeHtml(statusLabel)}</td>
-                            <td style="text-align: right;">${toIntString(countValue)}</td>
-                            <td style="text-align: right;">${escapeHtml(shareValue)}</td>
-                        </tr>`;
-                    }).join('')
-                    : '<tr><td colspan="3">No status data found for the selected filters.</td></tr>';
-
-                const detailsHeaderStatusHtml = statusColumns
-                    .map((statusLabel) => `<th>${escapeHtml(statusLabel)}</th>`)
-                    .join('');
-
-                let detailsRowsHtml = '';
-                normalizedRows.forEach((row) => {
-                    const isProvinceRow = row.row_type === 'province';
-                    let rowTotal = 0;
-                    const statusCells = statusColumns.map((statusLabel) => {
-                        const countValue = toNumber(row.counts?.[statusLabel] ?? 0);
-                        rowTotal += countValue;
-                        return `<td style="text-align: right;">${toIntString(countValue)}</td>`;
-                    }).join('');
-
-                    const provinceText = escapeHtml(row.province || '-');
-                    const cityText = isProvinceRow
-                        ? '<strong>All Cities/Municipalities</strong>'
-                        : escapeHtml(row.city_municipality || '-');
-                    const rowStyle = isProvinceRow
-                        ? ' style="background-color: #f3f4f6; font-weight: 700;"'
-                        : '';
-
-                    detailsRowsHtml += `<tr${rowStyle}>
-                        <td>${provinceText}</td>
-                        <td>${cityText}</td>
-                        ${statusCells}
-                        <td style="text-align: right;">${toIntString(rowTotal)}</td>
-                    </tr>`;
-                });
-
-                if (detailsRowsHtml === '') {
-                    detailsRowsHtml = `<tr><td colspan="${statusColumns.length + 3}" style="text-align: center;">No province/city status rows found for the selected filters.</td></tr>`;
+                        summarySheetRows.push([
+                            { value: statusLabel, styleId: 'Cell' },
+                            { value: toInt(countValue), type: 'Number', styleId: 'CellRight' },
+                            { value: shareValue, styleId: 'CellRight' },
+                        ]);
+                    });
+                } else {
+                    summarySheetRows.push(createMergedRow('No status data found for the selected filters.', 'Cell', 3));
                 }
 
-                const workbookHtml = `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-    <meta charset="UTF-8">
-</head>
-<body>
-    <h3>Status Of Projects By Province And City/Municipality</h3>
-    <p>Generated at: ${escapeHtml(generatedAt)}</p>
-    <h4>Applied Filters</h4>
-    <table border="1" cellspacing="0" cellpadding="4">
-        <thead>
-            <tr>
-                <th>Filter</th>
-                <th>Value</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${filtersRowsHtml}
-        </tbody>
-    </table>
-    <br>
-    <h4>Status Summary (All Projects)</h4>
-    <table border="1" cellspacing="0" cellpadding="4">
-        <thead>
-            <tr>
-                <th>Status</th>
-                <th>Count</th>
-                <th>% of Projects</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${summaryRowsHtml}
-            <tr style="font-weight: 700;">
-                <td>Total Projects</td>
-                <td style="text-align: right;">${toIntString(totalProjects)}</td>
-                <td style="text-align: right;">${totalProjects > 0 ? '100.00%' : '0.00%'}</td>
-            </tr>
-        </tbody>
-    </table>
-    <br>
-    <h4>Province and City/Municipality Breakdown</h4>
-    <table border="1" cellspacing="0" cellpadding="4">
-        <thead>
-            <tr>
-                <th>Province</th>
-                <th>City/Municipality</th>
-                ${detailsHeaderStatusHtml}
-                <th>Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${detailsRowsHtml}
-        </tbody>
-    </table>
-</body>
-</html>`;
+                summarySheetRows.push([
+                    { value: 'Total Projects', styleId: 'GroupCell' },
+                    { value: toInt(totalProjects), type: 'Number', styleId: 'GroupCellRight' },
+                    { value: totalProjects > 0 ? '100.00%' : '0.00%', styleId: 'GroupCellRight' },
+                ]);
+                summarySheetRows.push(createBlankRow(overviewColumnCount));
+                summarySheetRows.push(createMergedRow('Province and City/Municipality Breakdown', 'SectionHeader', overviewColumnCount));
+                summarySheetRows.push([
+                    { value: 'Province', styleId: 'Header' },
+                    { value: 'City/Municipality', styleId: 'Header' },
+                    ...statusColumns.map((statusLabel) => ({ value: statusLabel, styleId: 'Header' })),
+                    { value: 'Total', styleId: 'Header' },
+                ]);
 
-                const blob = new Blob(['\ufeff', workbookHtml], {
+                if (normalizedRows.length > 0) {
+                    normalizedRows.forEach((row) => {
+                        const isProvinceRow = row.row_type === 'province';
+                        let rowTotal = 0;
+                        const leftStyleId = isProvinceRow ? 'GroupCell' : 'Cell';
+                        const rightStyleId = isProvinceRow ? 'GroupCellRight' : 'CellRight';
+                        const detailRow = [
+                            { value: row.province || '-', styleId: leftStyleId },
+                            { value: isProvinceRow ? 'All Cities/Municipalities' : (row.city_municipality || '-'), styleId: leftStyleId },
+                        ];
+
+                        statusColumns.forEach((statusLabel) => {
+                            const countValue = toNumber(row.counts?.[statusLabel] ?? 0);
+                            rowTotal += countValue;
+                            detailRow.push({
+                                value: toInt(countValue),
+                                type: 'Number',
+                                styleId: rightStyleId,
+                            });
+                        });
+
+                        detailRow.push({
+                            value: toInt(rowTotal),
+                            type: 'Number',
+                            styleId: rightStyleId,
+                        });
+                        summarySheetRows.push(detailRow);
+                    });
+                } else {
+                    summarySheetRows.push(createMergedRow('No province/city status rows found for the selected filters.', 'Cell', overviewColumnCount));
+                }
+
+                const hierarchyColumnCount = statusColumns.length + 2;
+                const compareAlphaLabels = (leftValue, rightValue) =>
+                    String(leftValue || '').localeCompare(String(rightValue || ''), undefined, {
+                        numeric: true,
+                        sensitivity: 'base',
+                    });
+                const compareFundingYearLabels = (leftValue, rightValue) => {
+                    const leftLabel = String(leftValue || '').trim();
+                    const rightLabel = String(rightValue || '').trim();
+                    const leftIsNumeric = /^\d+$/.test(leftLabel);
+                    const rightIsNumeric = /^\d+$/.test(rightLabel);
+
+                    if (leftIsNumeric && rightIsNumeric) {
+                        const numericCompare = Number(rightLabel) - Number(leftLabel);
+                        if (numericCompare !== 0) {
+                            return numericCompare;
+                        }
+                    }
+
+                    return compareAlphaLabels(leftLabel, rightLabel);
+                };
+                const createEmptyStatusCounts = () => statusColumns.reduce((carry, statusLabel) => {
+                    carry[statusLabel] = 0;
+                    return carry;
+                }, {});
+                const incrementStatusCounts = (counts, statusLabel, countValue) => {
+                    if (!Object.prototype.hasOwnProperty.call(counts, statusLabel)) {
+                        counts[statusLabel] = 0;
+                    }
+
+                    counts[statusLabel] += toInt(countValue);
+                };
+                const computeCountsTotal = (counts) => statusColumns.reduce(
+                    (carry, statusLabel) => carry + toInt(counts?.[statusLabel] ?? 0),
+                    0
+                );
+                const createHierarchyMetricCells = (counts, metricStyleId) => {
+                    let total = 0;
+                    const metricCells = statusColumns.map((statusLabel) => {
+                        const countValue = toInt(counts?.[statusLabel] ?? 0);
+                        total += countValue;
+
+                        if (countValue > 0) {
+                            return {
+                                value: countValue,
+                                type: 'Number',
+                                styleId: metricStyleId,
+                            };
+                        }
+
+                        return {
+                            value: '',
+                            styleId: metricStyleId,
+                        };
+                    });
+
+                    metricCells.push(total > 0
+                        ? {
+                            value: total,
+                            type: 'Number',
+                            styleId: metricStyleId,
+                        }
+                        : {
+                            value: '',
+                            styleId: metricStyleId,
+                        });
+
+                    return metricCells;
+                };
+                const completedCountLabel = statusColumns.find((statusLabel) => statusLabel.toLowerCase() === 'completed')
+                    || statusColumns[0]
+                    || 'Completed';
+                const activeFiltersText = selectedFilters
+                    .filter(([, value]) => String(value || '').trim() !== '' && String(value || '').trim() !== 'All')
+                    .map(([label, value]) => `${label}: ${value}`)
+                    .join(' | ') || 'All dashboard filters';
+                const hierarchyTree = new Map();
+                const fundingYearSummaryMap = new Map();
+
+                normalizedGroupedStatusRows.forEach((row) => {
+                    const countValue = toInt(row.total ?? 0);
+
+                    if (!hierarchyTree.has(row.province)) {
+                        hierarchyTree.set(row.province, {
+                            counts: createEmptyStatusCounts(),
+                            fundingYears: new Map(),
+                        });
+                    }
+
+                    const provinceData = hierarchyTree.get(row.province);
+                    incrementStatusCounts(provinceData.counts, row.project_status, countValue);
+
+                    if (!provinceData.fundingYears.has(row.funding_year)) {
+                        provinceData.fundingYears.set(row.funding_year, {
+                            counts: createEmptyStatusCounts(),
+                            programs: new Map(),
+                        });
+                    }
+
+                    const fundingYearData = provinceData.fundingYears.get(row.funding_year);
+                    incrementStatusCounts(fundingYearData.counts, row.project_status, countValue);
+
+                    if (!fundingYearData.programs.has(row.program)) {
+                        fundingYearData.programs.set(row.program, createEmptyStatusCounts());
+                    }
+
+                    const programCounts = fundingYearData.programs.get(row.program);
+                    incrementStatusCounts(programCounts, row.project_status, countValue);
+
+                    if (!fundingYearSummaryMap.has(row.funding_year)) {
+                        fundingYearSummaryMap.set(row.funding_year, {
+                            counts: createEmptyStatusCounts(),
+                            programs: new Map(),
+                            provinces: new Set(),
+                        });
+                    }
+
+                    const fundingYearSummary = fundingYearSummaryMap.get(row.funding_year);
+                    incrementStatusCounts(fundingYearSummary.counts, row.project_status, countValue);
+                    fundingYearSummary.provinces.add(row.province);
+
+                    if (!fundingYearSummary.programs.has(row.program)) {
+                        fundingYearSummary.programs.set(row.program, createEmptyStatusCounts());
+                    }
+
+                    const fundingYearProgramCounts = fundingYearSummary.programs.get(row.program);
+                    incrementStatusCounts(fundingYearProgramCounts, row.project_status, countValue);
+                });
+
+                const sortedFundingYearEntries = Array.from(fundingYearSummaryMap.entries())
+                    .sort(([leftFundingYear], [rightFundingYear]) => compareFundingYearLabels(leftFundingYear, rightFundingYear));
+                const hierarchySheetRows = [
+                    createMergedRow('Province, Funding Year, and Program Status Analysis', 'SheetTitle', hierarchyColumnCount),
+                    createMergedRow('Styled matrix with subtotals and funding-year analysis', 'SheetSubtitle', hierarchyColumnCount),
+                    createMergedRow(`Generated at: ${generatedAt} | Filters: ${activeFiltersText}`, 'SheetMeta', hierarchyColumnCount),
+                    createBlankRow(hierarchyColumnCount),
+                    createMergedRow('Funding Year Analysis', 'AnalysisSection', hierarchyColumnCount),
+                    [
+                        { value: 'Funding Year', styleId: 'AnalysisHeader' },
+                        { value: 'Total Projects', styleId: 'AnalysisHeader' },
+                        { value: 'Programs', styleId: 'AnalysisHeader' },
+                        { value: 'Provinces', styleId: 'AnalysisHeader' },
+                        { value: 'Completed', styleId: 'AnalysisHeader' },
+                    ],
+                ];
+
+                if (sortedFundingYearEntries.length > 0) {
+                    sortedFundingYearEntries.forEach(([fundingYearLabel, fundingYearSummary]) => {
+                        const fundingYearTotal = computeCountsTotal(fundingYearSummary.counts);
+                        const completedProjects = toInt(fundingYearSummary.counts?.[completedCountLabel] ?? 0);
+
+                        hierarchySheetRows.push([
+                            { value: fundingYearLabel, styleId: 'AnalysisCell' },
+                            { value: fundingYearTotal, type: 'Number', styleId: 'AnalysisCellRight' },
+                            { value: fundingYearSummary.programs.size, type: 'Number', styleId: 'AnalysisCellRight' },
+                            { value: fundingYearSummary.provinces.size, type: 'Number', styleId: 'AnalysisCellRight' },
+                            { value: completedProjects, type: 'Number', styleId: 'AnalysisCellRight' },
+                        ]);
+                    });
+                } else {
+                    hierarchySheetRows.push(createMergedRow('No funding year analysis rows found for the selected filters.', 'AnalysisCell', hierarchyColumnCount));
+                }
+
+                hierarchySheetRows.push(createBlankRow(hierarchyColumnCount));
+                hierarchySheetRows.push(createMergedRow('Status Summary of All Projects', 'AnalysisSection', hierarchyColumnCount));
+                hierarchySheetRows.push([
+                    { value: 'Status', styleId: 'AnalysisHeader' },
+                    { value: 'Projects', styleId: 'AnalysisHeader' },
+                    { value: '% of Total', styleId: 'AnalysisHeader' },
+                ]);
+
+                if (statusColumns.length > 0) {
+                    statusColumns.forEach((statusLabel) => {
+                        const countValue = toInt(statusTotals[statusLabel] ?? 0);
+                        const shareValue = totalProjects > 0
+                            ? `${((countValue / totalProjects) * 100).toFixed(1)}%`
+                            : '0.0%';
+
+                        hierarchySheetRows.push([
+                            { value: statusLabel, styleId: 'AnalysisCell' },
+                            { value: countValue, type: 'Number', styleId: 'AnalysisCellRight' },
+                            { value: shareValue, styleId: 'AnalysisTextRight' },
+                        ]);
+                    });
+
+                    hierarchySheetRows.push([
+                        { value: 'Total Projects', styleId: 'AnalysisCell' },
+                        { value: toInt(totalProjects), type: 'Number', styleId: 'AnalysisCellRight' },
+                        { value: totalProjects > 0 ? '100.0%' : '0.0%', styleId: 'AnalysisTextRight' },
+                    ]);
+                } else {
+                    hierarchySheetRows.push(createMergedRow('No status summary rows found for the selected filters.', 'AnalysisCell', hierarchyColumnCount));
+                }
+
+                hierarchySheetRows.push(createBlankRow(hierarchyColumnCount));
+                hierarchySheetRows.push(createMergedRow('Province > Funding Year > Program Status Matrix', 'AnalysisSection', hierarchyColumnCount));
+                hierarchySheetRows.push([
+                    { value: 'Province', styleId: 'HierarchyHeader' },
+                    ...statusColumns.map((statusLabel) => ({ value: statusLabel, styleId: 'HierarchyHeader' })),
+                    { value: 'Total', styleId: 'HierarchyHeader' },
+                ]);
+
+                if (hierarchyTree.size > 0) {
+                    Array.from(hierarchyTree.entries())
+                        .sort(([leftProvince], [rightProvince]) => compareAlphaLabels(leftProvince, rightProvince))
+                        .forEach(([provinceLabel, provinceData]) => {
+                            hierarchySheetRows.push([
+                                { value: provinceLabel, styleId: 'HierarchyProvince' },
+                                ...createHierarchyMetricCells(provinceData.counts, 'HierarchyProvinceMetric'),
+                            ]);
+
+                            Array.from(provinceData.fundingYears.entries())
+                                .sort(([leftFundingYear], [rightFundingYear]) => compareFundingYearLabels(leftFundingYear, rightFundingYear))
+                                .forEach(([fundingYearLabel, fundingYearData]) => {
+                                    hierarchySheetRows.push([
+                                        { value: fundingYearLabel, styleId: 'HierarchyFundingYear' },
+                                        ...createHierarchyMetricCells(fundingYearData.counts, 'HierarchyFundingYearMetric'),
+                                    ]);
+
+                                    Array.from(fundingYearData.programs.entries())
+                                        .sort(([leftProgram], [rightProgram]) => compareAlphaLabels(leftProgram, rightProgram))
+                                        .forEach(([programLabel, programCounts]) => {
+                                            hierarchySheetRows.push([
+                                                { value: programLabel, styleId: 'HierarchyProgram' },
+                                                ...createHierarchyMetricCells(programCounts, 'HierarchyProgramMetric'),
+                                            ]);
+                                        });
+                                });
+                        });
+                } else {
+                    hierarchySheetRows.push(createMergedRow('No province, funding year, or program rows found for the selected filters.', 'Cell', hierarchyColumnCount));
+                }
+
+                const workbookXml = buildDashboardSpreadsheetXml([
+                    {
+                        name: 'Status Overview',
+                        columns: overviewColumnWidths,
+                        rows: summarySheetRows,
+                    },
+                    {
+                        name: 'Province FY Program',
+                        columns: [220, ...statusColumns.map((statusLabel) => {
+                            if (statusLabel.length >= 18) {
+                                return 130;
+                            }
+
+                            if (statusLabel.length >= 12) {
+                                return 110;
+                            }
+
+                            return 90;
+                        }), 90],
+                        rows: hierarchySheetRows,
+                    },
+                ]);
+
+                const blob = new Blob([workbookXml], {
                     type: 'application/vnd.ms-excel;charset=utf-8;',
                 });
                 triggerDashboardExcelDownload(blob, filename);

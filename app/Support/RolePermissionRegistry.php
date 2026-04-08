@@ -80,6 +80,11 @@ class RolePermissionRegistry
                         'label' => 'Monthly / PD No. PBBM-2025-1572-1573',
                         'description' => 'Manage monthly report submissions, uploaded files, and document approval actions.',
                     ],
+                    [
+                        'aspect' => 'swa_annex_f_monthly_reports',
+                        'label' => 'Monthly / SWA- Annex F',
+                        'description' => 'Manage monthly SGLGIF SWA- Annex F submissions, uploaded files, and document approval actions.',
+                    ],
                 ],
             ],
             [
@@ -128,6 +133,41 @@ class RolePermissionRegistry
                         'aspect' => 'sglgif_data_uploads',
                         'label' => 'Upload SGLGIF Data',
                         'description' => 'View the SGLGIF upload manager, import new files, load refreshed datasets, and delete old imports.',
+                    ],
+                ],
+            ],
+            [
+                'module' => 'Utilities',
+                'description' => 'Administrative utility pages for configuration, notifications, deadlines, location references, and database maintenance.',
+                'items' => [
+                    [
+                        'aspect' => 'utilities_system_setup',
+                        'label' => 'System Setup',
+                        'description' => 'Open the utilities landing page and browse the configuration workspaces available to the assigned role.',
+                        'actions' => ['view'],
+                    ],
+                    [
+                        'aspect' => 'utilities_bulk_notifications',
+                        'label' => 'Bulk Notification',
+                        'description' => 'Open the bulk notification workspace and send announcement emails to the selected audience.',
+                        'actions' => ['view', 'add'],
+                    ],
+                    [
+                        'aspect' => 'utilities_deadlines_configuration',
+                        'label' => 'Deadlines Configuration',
+                        'description' => 'Review reportorial deadline workspaces and save LGU deadline configuration changes.',
+                        'actions' => ['view', 'update'],
+                    ],
+                    [
+                        'aspect' => 'utilities_location_configuration',
+                        'label' => 'Location Configuration',
+                        'description' => 'Review location reference datasets, import refreshed files, load approved records, and delete stale import history.',
+                    ],
+                    [
+                        'aspect' => 'utilities_backup_restore',
+                        'label' => 'Backup and Restore',
+                        'description' => 'Open the backup workspace, download backups, restore database snapshots, and update automation settings.',
+                        'actions' => ['view', 'update'],
                     ],
                 ],
             ],
@@ -237,6 +277,10 @@ class RolePermissionRegistry
             'pd_no_pbbm_monthly_reports.add',
             'pd_no_pbbm_monthly_reports.update',
             'pd_no_pbbm_monthly_reports.delete',
+            'swa_annex_f_monthly_reports.view',
+            'swa_annex_f_monthly_reports.add',
+            'swa_annex_f_monthly_reports.update',
+            'swa_annex_f_monthly_reports.delete',
         ];
 
         $dataManagementPermissions = [

@@ -45,25 +45,25 @@
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px;">
-            @foreach ($systemSetupItems as $item)
-                @if (!empty($item['route']))
-                    <a href="{{ $item['route'] }}" style="display: block; border: 1px solid #dbe4f0; border-radius: 12px; padding: 20px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); text-decoration: none; transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;">
-                        <div style="width: 42px; height: 42px; border-radius: 12px; background: #eff6ff; color: #1d4ed8; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 14px;">
-                            <i class="{{ $item['icon'] }}"></i>
-                        </div>
-                        <h3 style="margin: 0 0 8px; color: #002C76; font-size: 16px;">{{ $item['title'] }}</h3>
-                        <p style="margin: 0; color: #475569; font-size: 13px; line-height: 1.6;">{{ $item['description'] }}</p>
-                    </a>
-                @else
-                    <article style="border: 1px solid #dbe4f0; border-radius: 12px; padding: 20px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);">
-                        <div style="width: 42px; height: 42px; border-radius: 12px; background: #eff6ff; color: #1d4ed8; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 14px;">
-                            <i class="{{ $item['icon'] }}"></i>
-                        </div>
-                        <h3 style="margin: 0 0 8px; color: #002C76; font-size: 16px;">{{ $item['title'] }}</h3>
-                        <p style="margin: 0; color: #475569; font-size: 13px; line-height: 1.6;">{{ $item['description'] }}</p>
-                    </article>
-                @endif
-            @endforeach
+            @forelse ($systemSetupItems as $item)
+                <a href="{{ $item['route'] }}" style="display: block; border: 1px solid #dbe4f0; border-radius: 12px; padding: 20px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); text-decoration: none; transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;">
+                    <div style="width: 42px; height: 42px; border-radius: 12px; background: #eff6ff; color: #1d4ed8; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 14px;">
+                        <i class="{{ $item['icon'] }}"></i>
+                    </div>
+                    <h3 style="margin: 0 0 8px; color: #002C76; font-size: 16px;">{{ $item['title'] }}</h3>
+                    <p style="margin: 0; color: #475569; font-size: 13px; line-height: 1.6;">{{ $item['description'] }}</p>
+                </a>
+            @empty
+                <article style="border: 1px dashed #cbd5e1; border-radius: 12px; padding: 20px; background: #f8fafc;">
+                    <div style="width: 42px; height: 42px; border-radius: 12px; background: #e2e8f0; color: #475569; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-bottom: 14px;">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <h3 style="margin: 0 0 8px; color: #334155; font-size: 16px;">No Utility Pages Assigned</h3>
+                    <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.6;">
+                        This account can open the utilities workspace, but no individual utility pages are currently assigned through Role Configuration.
+                    </p>
+                </article>
+            @endforelse
         </div>
     </section>
 @endsection

@@ -152,33 +152,56 @@ class DatabaseUtilityController extends Controller
 
     public function systemSetup(): View
     {
-        return view('admin.utilities.system-setup', [
-            'systemSetupItems' => [
-                [
-                    'icon' => 'fas fa-user-shield',
-                    'title' => 'Role Configuration',
-                    'description' => 'Configure CRUD access by hierarchy role and apply it to every assigned user from one place.',
-                    'route' => route('utilities.role-configuration.index'),
-                ],
-                [
-                    'icon' => 'fas fa-map-marker-alt',
-                    'title' => 'Location Configuration',
-                    'description' => 'Review and manage the location-related configuration used across the application.',
-                    'route' => route('utilities.location-configuration.index'),
-                ],
-                [
-                    'icon' => 'fas fa-calendar-alt',
-                    'title' => 'Deadlines Configuration',
-                    'description' => 'Reserved area for deadline-related configuration used across project monitoring and reportorial workflows.',
-                    'route' => route('utilities.deadlines-configuration.index'),
-                ],
-                [
-                    'icon' => 'fas fa-database',
-                    'title' => 'Database and Backups',
-                    'description' => 'Use the backup utility to download SQL backups, restore data, and maintain automated backup routines.',
-                    'route' => null,
-                ],
+        $user = Auth::user();
+
+        $systemSetupItems = collect([
+            [
+                'icon' => 'fas fa-user-shield',
+                'title' => 'Role Configuration',
+                'description' => 'Configure CRUD access by hierarchy role and apply it to every assigned user from one place.',
+                'route' => route('utilities.role-configuration.index'),
+                'visible' => $user?->isSuperAdmin() ?? false,
             ],
+            [
+                'icon' => 'fas fa-map-marker-alt',
+                'title' => 'Location Configuration',
+                'description' => 'Review and manage the location-related configuration used across the application.',
+                'route' => route('utilities.location-configuration.index'),
+                'visible' => $user?->hasCrudPermission('utilities_location_configuration', 'view') ?? false,
+            ],
+            [
+                'icon' => 'fas fa-calendar-alt',
+                'title' => 'Deadlines Configuration',
+                'description' => 'Review and maintain deadline settings used across project monitoring and reportorial workflows.',
+                'route' => route('utilities.deadlines-configuration.index'),
+                'visible' => $user?->hasCrudPermission('utilities_deadlines_configuration', 'view') ?? false,
+            ],
+            [
+                'icon' => 'fas fa-bell',
+                'title' => 'Bulk Notification',
+                'description' => 'Send announcement emails to role-based audiences and review the notification workspace.',
+                'route' => route('utilities.notifications.index'),
+                'visible' => $user?->hasCrudPermission('utilities_bulk_notifications', 'view') ?? false,
+            ],
+            [
+                'icon' => 'fas fa-database',
+                'title' => 'Database and Backups',
+                'description' => 'Download SQL backups, restore data, and maintain automated backup routines.',
+                'route' => route('utilities.backup-and-restore.index'),
+                'visible' => $user?->hasCrudPermission('utilities_backup_restore', 'view') ?? false,
+            ],
+        ])
+            ->filter(fn (array $item): bool => $item['visible'])
+            ->map(function (array $item): array {
+                unset($item['visible']);
+
+                return $item;
+            })
+            ->values()
+            ->all();
+
+        return view('admin.utilities.system-setup', [
+            'systemSetupItems' => $systemSetupItems,
         ]);
     }
 
@@ -437,6 +460,10 @@ class DatabaseUtilityController extends Controller
             'pd_no_pbbm_monthly_reports' => [
                 'route' => route('reports.monthly.pd-no-pbbm-2025-1572-1573'),
                 'icon' => 'fas fa-file-alt',
+            ],
+            'swa_annex_f_monthly_reports' => [
+                'route' => route('reports.monthly.swa-annex-f'),
+                'icon' => 'fas fa-award',
             ],
         ];
 
