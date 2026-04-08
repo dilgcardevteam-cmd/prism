@@ -252,10 +252,21 @@
     </style>
 </head>
 <body>
+    @php
+        $maintenanceState = app(\App\Support\SystemMaintenanceState::class)->state();
+        $isMaintenanceEnabled = (bool) ($maintenanceState['enabled'] ?? false);
+    @endphp
+
     <div class="login-container">
         <img src="{{ asset('DILG-Logo.png') }}" alt="DILG Logo" style="display: block; margin: 0 auto 8px; width: 100px;">
         <h2>Project Development and Management Unit</h2>
         <h3>Reporting, Inspection and Monitoring System (PRISM)</h3>
+
+        @if ($isMaintenanceEnabled)
+            <div style="background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; line-height: 1.6;">
+                System maintenance mode is active. Only superadmin accounts can sign in right now.
+            </div>
+        @endif
         
         @if ($errors->any())
             <div style="background-color: #fee; border: 1px solid #fcc; color: #c33; padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 14px;">
@@ -282,13 +293,19 @@
                     </div>
                 </div>
             </div>
-            <div class="forgot-row">
-                <a href="{{ route('forgot-password') }}">Forgot password?</a>
-            </div>
+            @if (!$isMaintenanceEnabled)
+                <div class="forgot-row">
+                    <a href="{{ route('forgot-password') }}">Forgot password?</a>
+                </div>
+            @endif
+
             <button type="submit">Login</button>
-            <div class="create-row">
-                <a href="{{ route('register') }}" class="create-account">No account? Create one!</a>
-            </div>
+
+            @if (!$isMaintenanceEnabled)
+                <div class="create-row">
+                    <a href="{{ route('register') }}" class="create-account">No account? Create one!</a>
+                </div>
+            @endif
         </form>
     </div>
 

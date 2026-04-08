@@ -33,6 +33,16 @@ Route::get('/', function () {
     return view('landing');
 })->name('landing');
 
+Route::get('/system-under-maintenance', function (\App\Support\SystemMaintenanceState $systemMaintenanceState) {
+    if (!$systemMaintenanceState->isEnabled()) {
+        return redirect()->route('landing');
+    }
+
+    return response()->view('errors.maintenance', [
+        'maintenanceState' => $systemMaintenanceState->state(),
+    ], 503);
+})->name('maintenance.notice');
+
 // Public API endpoint for municipality projects
 Route::get('/api/municipality-projects', function () {
     try {
@@ -1771,6 +1781,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/system-maintenance', [App\Http\Controllers\DatabaseUtilityController::class, 'systemMaintenance'])
             ->middleware('superadmin')
             ->name('system-maintenance.index');
+        Route::post('/system-maintenance/toggle', [App\Http\Controllers\DatabaseUtilityController::class, 'toggleSystemMaintenance'])
+            ->middleware('superadmin')
+            ->name('system-maintenance.toggle');
         Route::get('/notifications', [App\Http\Controllers\DatabaseUtilityController::class, 'notifications'])
             ->middleware('crud_permission:utilities_bulk_notifications,view')
             ->name('notifications.index');

@@ -14,6 +14,7 @@ use App\Services\DatabaseBackupService;
 use App\Support\InputSanitizer;
 use App\Support\NotificationUrl;
 use App\Support\RolePermissionRegistry;
+use App\Support\SystemMaintenanceState;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -119,6 +120,7 @@ class DatabaseUtilityController extends Controller
 
     public function __construct(
         private readonly DatabaseBackupService $backupService,
+        private readonly SystemMaintenanceState $systemMaintenanceState,
     ) {
         $this->middleware('auth');
         $this->middleware('superadmin');
@@ -214,7 +216,28 @@ class DatabaseUtilityController extends Controller
 
     public function systemMaintenance(): View
     {
-        return view('admin.utilities.system-maintenance');
+        return view('admin.utilities.system-maintenance', [
+            'maintenanceState' => $this->systemMaintenanceState->state(),
+        ]);
+    }
+
+    public function toggleSystemMaintenance(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $enabled = (bool) $validated['enabled'];
+        $this->systemMaintenanceState->setEnabled($enabled, $request->user());
+
+        return redirect()
+            ->route('utilities.system-maintenance.index')
+            ->with(
+                'success',
+                $enabled
+                    ? 'Maintenance mode enabled. Non-superadmin users are now limited to the landing page, login page, and maintenance notice.'
+                    : 'Maintenance mode disabled. Normal system access has been restored.'
+            );
     }
 
     public function notifications(): View

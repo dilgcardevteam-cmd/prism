@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Support\SystemMaintenanceState;
 
 class LoginController extends Controller
 {
@@ -31,12 +32,9 @@ class LoginController extends Controller
      */
     protected $redirectTo = '/dashboard';
 
-    /**
-     * Create a new controller instance.
-     *
-     * @return void
-     */
-    public function __construct()
+    public function __construct(
+        private readonly SystemMaintenanceState $systemMaintenanceState,
+    )
     {
         $this->middleware('guest')->except('logout');
         $this->middleware('auth')->only('logout');
@@ -79,6 +77,10 @@ class LoginController extends Controller
         if (!Hash::check($password, $user->password)) {
             return false;
         }
+
+        if ($this->systemMaintenanceState->isEnabled() && !$user->isSuperAdmin()) {
+            return false;
+        }
         
         // All checks passed - login the user
         Auth::login($user, $request->filled('remember'));
@@ -112,10 +114,19 @@ class LoginController extends Controller
                 'login_error' => 'Your account is inactive. Please contact an administrator.',
             ])->withInput($request->only('username', 'remember'));
         }
+
+        if (
+            $user
+            && strtolower((string) $user->status) === 'active'
+            && Hash::check((string) $request->input('password'), (string) $user->password)
+            && $this->systemMaintenanceState->isEnabled()
+            && !$user->isSuperAdmin()
+        ) {
+            return redirect()->route('maintenance.notice');
+        }
         
         return redirect('/login')->withErrors([
             'login_error' => 'The username or password is incorrect.',
         ])->withInput($request->only('username', 'remember'));
     }
 }
-

@@ -4,9 +4,31 @@
 @section('page-title', 'System Maintenance')
 
 @section('content')
+    @php
+        $isMaintenanceEnabled = (bool) ($maintenanceState['enabled'] ?? false);
+        $lastUpdatedDisplay = $maintenanceState['updated_at_display'] ?? now()->format('M d, Y h:i A');
+        $lastUpdatedBy = $maintenanceState['updated_by_name'] ?? 'Superadmin';
+    @endphp
+
+    @if (session('success'))
+        <div style="margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; border: 1px solid #a7f3d0; background: #ecfdf5; color: #166534; font-size: 13px; font-weight: 600;">
+            {{ session('success') }}
+        </div>
+    @endif
+
+    @if ($errors->any())
+        <div style="margin-bottom: 18px; padding: 14px 16px; border-radius: 10px; border: 1px solid #fecaca; background: #fff7f7; color: #991b1b;">
+            <ul style="margin: 0; padding-left: 18px;">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="content-header">
         <h1>System Maintenance</h1>
-        <p>Preview workspace for maintenance tools, recovery actions, and service safeguards before backend controls are connected.</p>
+        <p>Control whether PRISM stays open to all users or is temporarily limited to superadmin access only.</p>
     </div>
 
     <section class="maintenance-shell">
@@ -19,11 +41,16 @@
                     <i class="fas fa-tools"></i>
                 </div>
                 <div>
-                    <div class="maintenance-hero__eyebrow">Preview Only</div>
-                    <h2>Operational Control Deck</h2>
+                    <div class="maintenance-hero__eyebrow {{ $isMaintenanceEnabled ? 'is-live' : '' }}">
+                        {{ $isMaintenanceEnabled ? 'Maintenance Active' : 'System Operational' }}
+                    </div>
+                    <h2>{{ $isMaintenanceEnabled ? 'Restricted Access is now live' : 'Operational access is currently open' }}</h2>
                     <p>
-                        This page is intentionally design-first. The layout is ready for maintenance mode controls, service restarts,
-                        cache cleanup, and emergency recovery workflows, but no actions are active yet.
+                        @if ($isMaintenanceEnabled)
+                            Non-superadmin users are blocked from logging in and are redirected to the maintenance notice page when they try to open protected routes.
+                        @else
+                            All users can access PRISM normally. Enable maintenance mode when you need to temporarily restrict access to superadmin accounts only.
+                        @endif
                     </p>
                 </div>
             </div>
@@ -33,36 +60,62 @@
                     <i class="fas fa-arrow-left"></i>
                     <span>Back to System Setup</span>
                 </a>
-                <button type="button" class="maintenance-button maintenance-button--primary" disabled>
-                    <i class="fas fa-power-off"></i>
-                    <span>Maintenance Mode</span>
-                </button>
+
+                <form
+                    method="POST"
+                    action="{{ route('utilities.system-maintenance.toggle') }}"
+                    onsubmit="return confirm('{{ $isMaintenanceEnabled ? 'Disable maintenance mode and restore regular access for all users?' : 'Enable maintenance mode? Only superadmin accounts will be able to sign in and access PRISM.' }}')"
+                    style="margin: 0;"
+                >
+                    @csrf
+                    <input type="hidden" name="enabled" value="{{ $isMaintenanceEnabled ? '0' : '1' }}">
+                    <button type="submit" class="maintenance-button maintenance-button--primary {{ $isMaintenanceEnabled ? 'maintenance-button--danger' : '' }}">
+                        <i class="fas {{ $isMaintenanceEnabled ? 'fa-lock-open' : 'fa-power-off' }}"></i>
+                        <span>{{ $isMaintenanceEnabled ? 'Disable Maintenance Mode' : 'Enable Maintenance Mode' }}</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="maintenance-banner {{ $isMaintenanceEnabled ? 'maintenance-banner--live' : '' }}">
+            <div class="maintenance-banner__icon">
+                <i class="fas {{ $isMaintenanceEnabled ? 'fa-triangle-exclamation' : 'fa-circle-check' }}"></i>
+            </div>
+            <div class="maintenance-banner__content">
+                <strong>{{ $isMaintenanceEnabled ? 'System lock is active.' : 'System is available.' }}</strong>
+                <span>
+                    @if ($isMaintenanceEnabled)
+                        During this period, only superadmin accounts can sign in and use internal pages. Everyone else is limited to the landing page, login page, and the maintenance notice page.
+                    @else
+                        PRISM is accepting normal sign-ins and regular page navigation for authorized users.
+                    @endif
+                </span>
             </div>
         </div>
 
         <div class="maintenance-status-grid">
             <article class="maintenance-stat maintenance-stat--accent">
                 <span class="maintenance-stat__label">System State</span>
-                <strong class="maintenance-stat__value">Operational</strong>
-                <p class="maintenance-stat__meta">Live status indicator placeholder for future maintenance toggles.</p>
+                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Under Maintenance' : 'Operational' }}</strong>
+                <p class="maintenance-stat__meta">Primary status indicator used by the global access guard.</p>
             </article>
 
             <article class="maintenance-stat">
-                <span class="maintenance-stat__label">Public Access</span>
-                <strong class="maintenance-stat__value">Allowed</strong>
-                <p class="maintenance-stat__meta">Will reflect whether public-facing routes stay open during service work.</p>
+                <span class="maintenance-stat__label">Login Access</span>
+                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Superadmin Only' : 'Allowed' }}</strong>
+                <p class="maintenance-stat__meta">Non-superadmin sign-in attempts are refused while maintenance mode is enabled.</p>
             </article>
 
             <article class="maintenance-stat">
-                <span class="maintenance-stat__label">Queued Tasks</span>
-                <strong class="maintenance-stat__value">0 Pending</strong>
-                <p class="maintenance-stat__meta">Reserved area for jobs, recovery tasks, and maintenance automation events.</p>
+                <span class="maintenance-stat__label">Allowed Public Pages</span>
+                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Landing + Login' : 'Normal Routing' }}</strong>
+                <p class="maintenance-stat__meta">The maintenance notice page is also kept available for blocked users.</p>
             </article>
 
             <article class="maintenance-stat">
-                <span class="maintenance-stat__label">Last Review</span>
-                <strong class="maintenance-stat__value">{{ now()->format('M d, Y') }}</strong>
-                <p class="maintenance-stat__meta">Static placeholder stamp so the page looks complete while features are pending.</p>
+                <span class="maintenance-stat__label">Last Updated</span>
+                <strong class="maintenance-stat__value">{{ $lastUpdatedDisplay }}</strong>
+                <p class="maintenance-stat__meta">Last changed by {{ $lastUpdatedBy }}.</p>
             </article>
         </div>
 
@@ -70,87 +123,66 @@
             <article class="maintenance-card maintenance-card--highlight">
                 <div class="maintenance-card__header">
                     <div class="maintenance-card__icon">
-                        <i class="fas fa-server"></i>
+                        <i class="fas fa-shield-alt"></i>
                     </div>
-                    <span class="maintenance-chip">Coming Soon</span>
+                    <span class="maintenance-chip {{ $isMaintenanceEnabled ? 'maintenance-chip--danger' : '' }}">
+                        {{ $isMaintenanceEnabled ? 'Active Guard' : 'Ready' }}
+                    </span>
                 </div>
-                <h3>Service Access Control</h3>
-                <p>Future controls for maintenance lockouts, read-only mode, and selective access for administrators during live interventions.</p>
+                <h3>Access Lock Policy</h3>
+                <p>When enabled, every route except the landing page, login route, logout route, and maintenance notice page is blocked for non-superadmin users.</p>
                 <div class="maintenance-card__footer">
-                    <span>Planned controls</span>
-                    <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                    <span>{{ $isMaintenanceEnabled ? 'Restriction enforced' : 'Restriction available' }}</span>
+                    <i class="fas fa-user-lock" aria-hidden="true"></i>
                 </div>
             </article>
 
             <article class="maintenance-card">
                 <div class="maintenance-card__header">
                     <div class="maintenance-card__icon">
-                        <i class="fas fa-bullhorn"></i>
+                        <i class="fas fa-right-to-bracket"></i>
                     </div>
-                    <span class="maintenance-chip maintenance-chip--warning">Design Ready</span>
+                    <span class="maintenance-chip">Login Flow</span>
                 </div>
-                <h3>Maintenance Advisory</h3>
-                <p>Placeholder area for an announcement banner, outage message, countdown window, and return-to-service notice.</p>
+                <h3>Authentication Behavior</h3>
+                <p>Superadmin credentials continue to work. Valid non-superadmin credentials are redirected to the maintenance notice instead of entering the dashboard.</p>
                 <div class="maintenance-preview">
-                    <div class="maintenance-preview__title">Scheduled Window</div>
-                    <div class="maintenance-preview__body">Friday 10:00 PM to Saturday 1:00 AM</div>
+                    <div class="maintenance-preview__title">Current Result</div>
+                    <div class="maintenance-preview__body">{{ $isMaintenanceEnabled ? 'Regular users are blocked from sign-in.' : 'All active users can sign in.' }}</div>
                 </div>
             </article>
 
             <article class="maintenance-card">
                 <div class="maintenance-card__header">
                     <div class="maintenance-card__icon">
-                        <i class="fas fa-broom"></i>
+                        <i class="fas fa-route"></i>
                     </div>
-                    <span class="maintenance-chip">Placeholder</span>
+                    <span class="maintenance-chip">Redirect Rule</span>
                 </div>
-                <h3>Cache and Session Cleanup</h3>
-                <p>Reserved for future actions such as clearing caches, invalidating stale sessions, and refreshing shared runtime state.</p>
-                <div class="maintenance-action-row">
-                    <button type="button" disabled>Clear Cache</button>
-                    <button type="button" disabled>End Sessions</button>
-                </div>
-            </article>
-
-            <article class="maintenance-card">
-                <div class="maintenance-card__header">
-                    <div class="maintenance-card__icon">
-                        <i class="fas fa-heartbeat"></i>
-                    </div>
-                    <span class="maintenance-chip">Preview</span>
-                </div>
-                <h3>Health Checks and Recovery</h3>
-                <p>Designed for future database health checks, storage verification, and guided recovery procedures after incidents.</p>
+                <h3>Active Session Redirect</h3>
+                <p>Users who are already signed in are not destroyed automatically. Instead, their next blocked request is redirected to the maintenance notice page.</p>
                 <ul class="maintenance-checklist">
-                    <li><i class="fas fa-circle"></i> Application connectivity status</li>
-                    <li><i class="fas fa-circle"></i> Database heartbeat and queue health</li>
-                    <li><i class="fas fa-circle"></i> Storage integrity and backup readiness</li>
+                    <li><i class="fas fa-circle"></i> Existing superadmin sessions stay inside PRISM</li>
+                    <li><i class="fas fa-circle"></i> Existing non-superadmin sessions are intercepted on the next request</li>
+                    <li><i class="fas fa-circle"></i> Logout remains available for blocked users</li>
                 </ul>
             </article>
+
+            <article class="maintenance-card">
+                <div class="maintenance-card__header">
+                    <div class="maintenance-card__icon">
+                        <i class="fas fa-file-lines"></i>
+                    </div>
+                    <span class="maintenance-chip">Notice Page</span>
+                </div>
+                <h3>Public Maintenance Notice</h3>
+                <p>A dedicated maintenance page explains the restriction, keeps the landing page accessible, and still allows superadmin sign-in from the portal.</p>
+                <div class="maintenance-card__footer">
+                    <span>Route: `/system-under-maintenance`</span>
+                    <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                </div>
+            </article>
         </div>
-
-        <section class="maintenance-roadmap">
-            <div>
-                <span class="maintenance-roadmap__label">Implementation Roadmap</span>
-                <h3>Suggested modules for the actual backend phase</h3>
-                <p>When you are ready to wire behavior, this page can host controlled maintenance mode switches, broadcast notices, cache tools, and recovery commands behind stricter confirmations.</p>
-            </div>
-
-            <div class="maintenance-roadmap__list">
-                <div class="maintenance-roadmap__item">
-                    <strong>Global maintenance toggle</strong>
-                    <span>Enable or disable a site-wide restricted state.</span>
-                </div>
-                <div class="maintenance-roadmap__item">
-                    <strong>Custom outage messaging</strong>
-                    <span>Publish planned downtime notices to users before and during maintenance windows.</span>
-                </div>
-                <div class="maintenance-roadmap__item">
-                    <strong>Operational cleanup tools</strong>
-                    <span>Expose cache clear, queue retry, and stale session cleanup actions with audit logging.</span>
-                </div>
-            </div>
-        </section>
     </section>
 
     <style>
@@ -158,12 +190,13 @@
             --maintenance-primary: #002c76;
             --maintenance-primary-soft: #dbeafe;
             --maintenance-surface: #ffffff;
-            --maintenance-surface-alt: #f8fbff;
             --maintenance-text: #0f172a;
             --maintenance-muted: #64748b;
             --maintenance-border: #dbe4f0;
-            --maintenance-warning: #b45309;
-            --maintenance-warning-bg: #fef3c7;
+            --maintenance-success: #166534;
+            --maintenance-success-bg: #ecfdf5;
+            --maintenance-danger: #b91c1c;
+            --maintenance-danger-bg: #fff1f2;
             position: relative;
             overflow: hidden;
             background: linear-gradient(180deg, #ffffff 0%, #f8fbff 54%, #eef4ff 100%);
@@ -199,9 +232,9 @@
         }
 
         .maintenance-hero,
+        .maintenance-banner,
         .maintenance-status-grid,
-        .maintenance-grid,
-        .maintenance-roadmap {
+        .maintenance-grid {
             position: relative;
             z-index: 1;
         }
@@ -215,7 +248,7 @@
             border-radius: 16px;
             border: 1px solid #cfe0fb;
             background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 58%, #ffffff 100%);
-            margin-bottom: 18px;
+            margin-bottom: 16px;
         }
 
         .maintenance-hero__main {
@@ -244,13 +277,18 @@
             align-items: center;
             padding: 5px 10px;
             border-radius: 999px;
-            background: rgba(255, 255, 255, 0.75);
+            background: rgba(255, 255, 255, 0.8);
             color: #1d4ed8;
             font-size: 11px;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             margin-bottom: 8px;
+        }
+
+        .maintenance-hero__eyebrow.is-live {
+            background: #fee2e2;
+            color: #b91c1c;
         }
 
         .maintenance-hero h2 {
@@ -278,13 +316,14 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            height: 42px;
-            padding: 0 16px;
+            min-height: 42px;
+            padding: 10px 16px;
             border-radius: 12px;
             text-decoration: none;
             font-size: 13px;
             font-weight: 700;
             border: 1px solid transparent;
+            cursor: pointer;
         }
 
         .maintenance-button--secondary {
@@ -297,13 +336,60 @@
             color: #ffffff;
             background: linear-gradient(135deg, #002c76 0%, #1d4ed8 100%);
             box-shadow: 0 12px 22px rgba(0, 44, 118, 0.2);
-            cursor: not-allowed;
-            opacity: 0.65;
+        }
+
+        .maintenance-button--danger {
+            background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%);
+            box-shadow: 0 12px 22px rgba(153, 27, 27, 0.22);
+        }
+
+        .maintenance-banner {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid #bbf7d0;
+            background: var(--maintenance-success-bg);
+            color: var(--maintenance-success);
+            margin-bottom: 16px;
+        }
+
+        .maintenance-banner--live {
+            border-color: #fecaca;
+            background: var(--maintenance-danger-bg);
+            color: var(--maintenance-danger);
+        }
+
+        .maintenance-banner__icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.72);
+            font-size: 16px;
+            flex: 0 0 auto;
+        }
+
+        .maintenance-banner__content {
+            display: grid;
+            gap: 4px;
+        }
+
+        .maintenance-banner__content strong {
+            font-size: 14px;
+        }
+
+        .maintenance-banner__content span {
+            font-size: 13px;
+            line-height: 1.7;
         }
 
         .maintenance-status-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 14px;
             margin-bottom: 16px;
         }
@@ -312,8 +398,7 @@
             border: 1px solid var(--maintenance-border);
             border-radius: 16px;
             padding: 16px;
-            background: rgba(255, 255, 255, 0.86);
-            backdrop-filter: blur(6px);
+            background: rgba(255, 255, 255, 0.9);
         }
 
         .maintenance-stat--accent {
@@ -334,8 +419,8 @@
             display: block;
             margin-top: 10px;
             color: var(--maintenance-text);
-            font-size: 26px;
-            line-height: 1.05;
+            font-size: 24px;
+            line-height: 1.18;
         }
 
         .maintenance-stat__meta {
@@ -347,9 +432,8 @@
 
         .maintenance-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 14px;
-            margin-bottom: 16px;
         }
 
         .maintenance-card {
@@ -399,9 +483,9 @@
             font-weight: 700;
         }
 
-        .maintenance-chip--warning {
-            background: var(--maintenance-warning-bg);
-            color: var(--maintenance-warning);
+        .maintenance-chip--danger {
+            background: #fee2e2;
+            color: #b91c1c;
         }
 
         .maintenance-card h3 {
@@ -452,26 +536,7 @@
             color: #7c2d12;
             font-size: 13px;
             font-weight: 700;
-        }
-
-        .maintenance-action-row {
-            margin-top: auto;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .maintenance-action-row button {
-            min-width: 120px;
-            height: 40px;
-            padding: 0 14px;
-            border: 1px solid #cbd5e1;
-            border-radius: 12px;
-            background: #f8fafc;
-            color: #94a3b8;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: not-allowed;
+            line-height: 1.5;
         }
 
         .maintenance-checklist {
@@ -497,74 +562,8 @@
             margin-top: 7px;
         }
 
-        .maintenance-roadmap {
-            display: grid;
-            grid-template-columns: minmax(260px, 1.15fr) minmax(260px, 1fr);
-            gap: 18px;
-            padding: 18px;
-            border-radius: 16px;
-            border: 1px solid #dbe4f0;
-            background: rgba(255, 255, 255, 0.88);
-        }
-
-        .maintenance-roadmap__label {
-            display: inline-flex;
-            align-items: center;
-            padding: 5px 10px;
-            border-radius: 999px;
-            background: #eff6ff;
-            color: #1d4ed8;
-            font-size: 11px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 10px;
-        }
-
-        .maintenance-roadmap h3 {
-            margin: 0 0 10px;
-            color: var(--maintenance-primary);
-            font-size: 20px;
-            line-height: 1.35;
-        }
-
-        .maintenance-roadmap p {
-            margin: 0;
-            color: #475569;
-            font-size: 13px;
-            line-height: 1.75;
-        }
-
-        .maintenance-roadmap__list {
-            display: grid;
-            gap: 12px;
-        }
-
-        .maintenance-roadmap__item {
-            padding: 14px;
-            border-radius: 14px;
-            border: 1px solid #dbeafe;
-            background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
-        }
-
-        .maintenance-roadmap__item strong {
-            display: block;
-            color: #0f172a;
-            font-size: 14px;
-            margin-bottom: 6px;
-        }
-
-        .maintenance-roadmap__item span {
-            display: block;
-            color: #64748b;
-            font-size: 12px;
-            line-height: 1.65;
-        }
-
         @media (max-width: 920px) {
-            .maintenance-hero,
-            .maintenance-roadmap {
-                grid-template-columns: 1fr;
+            .maintenance-hero {
                 flex-direction: column;
             }
 
@@ -579,8 +578,7 @@
                 border-radius: 14px;
             }
 
-            .maintenance-hero,
-            .maintenance-roadmap {
+            .maintenance-hero {
                 padding: 14px;
             }
 
