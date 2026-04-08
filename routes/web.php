@@ -1768,6 +1768,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/system-setup', [App\Http\Controllers\DatabaseUtilityController::class, 'systemSetup'])
             ->middleware('crud_permission:utilities_system_setup,view')
             ->name('system-setup.index');
+        Route::get('/system-maintenance', [App\Http\Controllers\DatabaseUtilityController::class, 'systemMaintenance'])
+            ->middleware('superadmin')
+            ->name('system-maintenance.index');
         Route::get('/notifications', [App\Http\Controllers\DatabaseUtilityController::class, 'notifications'])
             ->middleware('crud_permission:utilities_bulk_notifications,view')
             ->name('notifications.index');

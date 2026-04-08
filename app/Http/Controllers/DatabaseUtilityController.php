@@ -190,6 +190,13 @@ class DatabaseUtilityController extends Controller
                 'route' => route('utilities.backup-and-restore.index'),
                 'visible' => $user?->hasCrudPermission('utilities_backup_restore', 'view') ?? false,
             ],
+            [
+                'icon' => 'fas fa-tools',
+                'title' => 'System Maintenance',
+                'description' => 'Maintenance tools and controls will be available here in an upcoming release.',
+                'route' => route('utilities.system-maintenance.index'),
+                'visible' => $user?->isSuperAdmin() ?? false,
+            ],
         ])
             ->filter(fn (array $item): bool => $item['visible'])
             ->map(function (array $item): array {
@@ -203,6 +210,11 @@ class DatabaseUtilityController extends Controller
         return view('admin.utilities.system-setup', [
             'systemSetupItems' => $systemSetupItems,
         ]);
+    }
+
+    public function systemMaintenance(): View
+    {
+        return view('admin.utilities.system-maintenance');
     }
 
     public function notifications(): View
