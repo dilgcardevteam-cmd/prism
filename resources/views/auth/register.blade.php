@@ -44,6 +44,30 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        .toast-countdown {
+            display: block;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #4b5563;
+        }
+        .toast-progress-track {
+            margin-top: 8px;
+            width: 100%;
+            height: 4px;
+            border-radius: 999px;
+            background: rgba(17, 24, 39, 0.15);
+            overflow: hidden;
+        }
+        .toast-progress-bar {
+            width: 100%;
+            height: 100%;
+        }
+        .toast.success .toast-progress-bar {
+            background: #16a34a;
+        }
+        .toast.error .toast-progress-bar {
+            background: #dc2626;
+        }
     </style>
 
     <style>
@@ -469,9 +493,19 @@
             });
 
             // Toast notification function
-            function showToast(message, type = 'success') {
+            function showToast(message, type = 'success', options = {}) {
                 const toastContainer = document.getElementById('toastContainer');
                 const toastId = 'toast-' + Date.now();
+                const parsedDelay = Number(options.delay);
+                const delay = Number.isFinite(parsedDelay) ? Math.max(1000, parsedDelay) : 5000;
+                const shouldShowCountdown = options.showCountdown === true;
+                const shouldShowProgress = options.showProgress === true;
+                const countdownPrefix = typeof options.countdownPrefix === 'string' && options.countdownPrefix.trim() !== ''
+                    ? options.countdownPrefix.trim()
+                    : 'Closing in';
+                const toastExpiresAt = Date.now() + delay;
+                let countdownIntervalId = null;
+
                 const toastElement = document.createElement('div');
                 toastElement.id = toastId;
                 toastElement.className = `toast ${type}`;
@@ -497,20 +531,60 @@
                 const toastBody = document.createElement('div');
                 toastBody.className = 'toast-body';
                 toastBody.style.whiteSpace = 'pre-line';
-                toastBody.textContent = message ?? '';
+                const toastMessage = document.createElement('div');
+                toastMessage.textContent = message ?? '';
+                toastBody.appendChild(toastMessage);
+
+                let countdownText = null;
+                if (shouldShowCountdown) {
+                    countdownText = document.createElement('small');
+                    countdownText.className = 'toast-countdown';
+                    toastBody.appendChild(countdownText);
+                }
+
+                let progressBar = null;
+                if (shouldShowProgress) {
+                    const progressTrack = document.createElement('div');
+                    progressTrack.className = 'toast-progress-track';
+
+                    progressBar = document.createElement('div');
+                    progressBar.className = 'toast-progress-bar';
+                    progressTrack.appendChild(progressBar);
+                    toastBody.appendChild(progressTrack);
+                }
 
                 toastElement.append(toastHeader, toastBody);
                 toastContainer.appendChild(toastElement);
 
                 const bsToast = new bootstrap.Toast(toastElement, {
                     autohide: true,
-                    delay: 5000
+                    delay
                 });
+
+                if (countdownText) {
+                    const updateCountdown = () => {
+                        const remainingSeconds = Math.max(0, Math.ceil((toastExpiresAt - Date.now()) / 1000));
+                        countdownText.textContent = `${countdownPrefix} ${remainingSeconds}s`;
+                    };
+
+                    updateCountdown();
+                    countdownIntervalId = setInterval(updateCountdown, 100);
+                }
+
+                if (progressBar) {
+                    requestAnimationFrame(() => {
+                        progressBar.style.transition = `width ${delay}ms linear`;
+                        progressBar.style.width = '0%';
+                    });
+                }
 
                 bsToast.show();
 
                 // Remove toast from DOM after it's hidden
                 toastElement.addEventListener('hidden.bs.toast', function() {
+                    if (countdownIntervalId !== null) {
+                        clearInterval(countdownIntervalId);
+                    }
                     toastElement.remove();
                 });
             }
@@ -521,6 +595,7 @@
 
             registerForm.addEventListener('submit', function(e) {
                 e.preventDefault();
+                let isRedirecting = false;
 
                 // Show loading state
                 registerBtn.disabled = true;
@@ -539,13 +614,22 @@
                 })
                 .then(response => response.json().then(data => ({ status: response.status, data })))
                 .then(({ status, data }) => {
-                    console.log('Response status:', status, 'Response data:', data); // Debug log
                     if (status === 200 && data.success) {
-                        showToast(data.message, 'success');
-                        // Redirect after a short delay to show the toast
+                        const successDelay = 10000;
+                        const redirectUrl = (typeof data.redirect === 'string' && data.redirect.trim() !== '')
+                            ? data.redirect
+                            : @json(route('login'));
+                        isRedirecting = true;
+                        showToast(data.message, 'success', {
+                            delay: successDelay,
+                            showCountdown: true,
+                            showProgress: true,
+                            countdownPrefix: 'Redirecting to login in'
+                        });
+                        // Redirect after toast countdown
                         setTimeout(() => {
-                            window.location.href = data.redirect;
-                        }, 2000);
+                            window.location.href = redirectUrl;
+                        }, successDelay);
                     } else {
                         // Handle validation errors
                         if (data.errors) {
@@ -566,9 +650,11 @@
                     showToast('An error occurred. Please try again.', 'error');
                 })
                 .finally(() => {
-                    // Reset button state
-                    registerBtn.disabled = false;
-                    registerBtn.innerHTML = 'Register';
+                    if (!isRedirecting) {
+                        // Reset button state
+                        registerBtn.disabled = false;
+                        registerBtn.innerHTML = 'Register';
+                    }
                 });
             });
         });
