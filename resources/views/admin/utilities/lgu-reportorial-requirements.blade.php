@@ -10,7 +10,7 @@
     </div>
 
     <div class="reportorial-shell-actions">
-        <a href="{{ route('utilities.deadlines-configuration.index') }}" class="reportorial-back-link">
+        <a href="{{ route('utilities.deadlines-configuration.index') }}" class="reportorial-back-link" data-page-loading="true" data-loading-label="Opening deadlines configuration" data-loading-detail="Returning to the deadlines configuration workspace.">
             <i class="fas fa-arrow-left"></i>
             <span>Back to Deadlines Configuration</span>
         </a>
@@ -162,7 +162,7 @@
                 </div>
 
                 <div class="deadline-modal__footer">
-                    <a href="#" class="deadline-modal__link" id="deadlineDraftOpenRoute">
+                    <a href="#" class="deadline-modal__link" id="deadlineDraftOpenRoute" data-page-loading="true" data-loading-label="Opening report page" data-loading-detail="Loading the report page for this requirement.">
                         <i class="fas fa-up-right-from-square"></i>
                         <span>Open Report Page</span>
                     </a>
@@ -719,6 +719,32 @@
             box-shadow: 0 14px 24px rgba(0, 44, 118, 0.22);
         }
 
+        .deadline-modal__form.is-saving .deadline-modal__field-grid,
+        .deadline-modal__form.is-saving .deadline-modal__history,
+        .deadline-modal__form.is-saving .deadline-modal__link,
+        .deadline-modal__form.is-saving .deadline-modal__button--secondary {
+            opacity: 0.68;
+        }
+
+        .deadline-modal__button.is-loading {
+            cursor: wait;
+            pointer-events: none;
+        }
+
+        .deadline-modal__button--primary.is-loading {
+            min-width: 154px;
+        }
+
+        .deadline-modal__button--primary.is-loading::before {
+            content: '';
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            animation: deadlineButtonSpin 0.75s linear infinite;
+        }
+
         .deadline-modal__button:hover,
         .deadline-modal__link:hover {
             transform: translateY(-1px);
@@ -738,6 +764,12 @@
         .deadline-modal__link:hover {
             border-color: #93c5fd;
             background: #eff6ff;
+        }
+
+        @keyframes deadlineButtonSpin {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .deadline-page-toast {
@@ -888,11 +920,14 @@
             const currentMonthLabel = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date());
 
             const setSavingState = (isSaving) => {
-                if (!submitButton) {
+                if (!submitButton || !form) {
                     return;
                 }
 
+                form.classList.toggle('is-saving', isSaving);
+                form.setAttribute('aria-busy', isSaving ? 'true' : 'false');
                 submitButton.disabled = isSaving;
+                submitButton.classList.toggle('is-loading', isSaving);
                 submitButton.textContent = isSaving ? 'Saving...' : initialSubmitButtonText;
             };
 

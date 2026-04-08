@@ -92,7 +92,7 @@
     @include('projects.partials.project-section-tabs', ['activeTab' => $activeProjectTab ?? 'locally-funded'])
 
     <div class="dashboard-main-layout">
-        <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter collapsed" style="background: #ffffff; padding: 16px 18px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 0;">
+        <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter collapsed" data-page-loading="true" data-loading-label="Updating dashboard" data-loading-detail="Applying the selected dashboard filters." style="background: #ffffff; padding: 16px 18px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 0;">
             <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="false" aria-controls="project-filter-body">
                 <i class="fas fa-filter" aria-hidden="true" style="font-size: 16px;"></i>
                 <span>PROJECT FILTER</span>
@@ -391,7 +391,7 @@
                 </div>
 
                 <div class="dashboard-filter-reset" style="display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-                    <a href="{{ route('dashboard') }}" class="dashboard-filter-reset-link" style="height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px;">
+                    <a href="{{ route('dashboard') }}" class="dashboard-filter-reset-link" data-page-loading="true" data-loading-label="Resetting dashboard filters" data-loading-detail="Reloading the dashboard with the default filters." style="height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px;">
                         <i class="fas fa-rotate-left" aria-hidden="true"></i>
                         Reset Filter
                     </a>
@@ -5475,6 +5475,12 @@
 
                     const destinationUrl = card.dataset.cardUrl;
                     if (destinationUrl) {
+                        if (window.AppUI && typeof window.AppUI.showPageLoader === 'function') {
+                            window.AppUI.showPageLoader({
+                                title: 'Loading dashboard details',
+                                detail: 'Preparing the selected dashboard records.',
+                            });
+                        }
                         window.location.href = destinationUrl;
                     }
                 });
@@ -5496,6 +5502,12 @@
 
                     const destinationUrl = card.dataset.cardUrl;
                     if (destinationUrl) {
+                        if (window.AppUI && typeof window.AppUI.showPageLoader === 'function') {
+                            window.AppUI.showPageLoader({
+                                title: 'Loading dashboard details',
+                                detail: 'Preparing the selected dashboard records.',
+                            });
+                        }
                         window.location.href = destinationUrl;
                     }
                 });

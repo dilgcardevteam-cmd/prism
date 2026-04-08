@@ -38,7 +38,7 @@
             </article>
         </div>
 
-        <a href="{{ route('utilities.deadlines-configuration.index') }}" class="reportorial-back-link">
+        <a href="{{ route('utilities.deadlines-configuration.index') }}" class="reportorial-back-link" data-page-loading="true" data-loading-label="Opening deadlines configuration" data-loading-detail="Returning to the deadlines configuration workspace.">
             <i class="fas fa-arrow-left"></i>
             <span>Back to Deadlines Configuration</span>
         </a>

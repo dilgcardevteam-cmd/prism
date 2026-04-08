@@ -32,7 +32,7 @@
             <p>Manage the location-related configuration used across the application.</p>
         </div>
 
-        <a href="{{ route('utilities.system-setup.index') }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; background: linear-gradient(180deg, #0a4cb3 0%, #002c76 100%); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 600; border: 1px solid #002c76; box-shadow: 0 8px 18px rgba(0, 44, 118, 0.18);">
+        <a href="{{ route('utilities.system-setup.index') }}" data-page-loading="true" data-loading-label="Opening system setup" data-loading-detail="Returning to the system setup workspace." style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; background: linear-gradient(180deg, #0a4cb3 0%, #002c76 100%); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 600; border: 1px solid #002c76; box-shadow: 0 8px 18px rgba(0, 44, 118, 0.18);">
             <i class="fas fa-arrow-left"></i>
             <span>Back to System Setup</span>
         </a>
@@ -122,7 +122,7 @@
                                                     </td>
                                                     <td style="padding: 10px; color: #374151; vertical-align: top;">
                                                         <div style="display: flex; justify-content: center; gap: 6px; flex-wrap: wrap;">
-                                                            <form method="POST" action="{{ route('utilities.location-configuration.load', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" onsubmit="return confirm('Loading this file will replace the current {{ $dataset['label'] }} data. Continue?');">
+                                                            <form method="POST" action="{{ route('utilities.location-configuration.load', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" data-page-loading="true" data-loading-label="Loading {{ $dataset['label'] }} data" data-loading-detail="Replacing the current {{ strtolower($dataset['label']) }} dataset with the selected import file." onsubmit="return confirm('Loading this file will replace the current {{ $dataset['label'] }} data. Continue?');">
                                                                 @csrf
                                                                 <button type="submit" style="padding: 6px 10px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;">
                                                                     Load
@@ -131,7 +131,7 @@
                                                             <a href="{{ route('utilities.location-configuration.download', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
                                                                 Download CSV
                                                             </a>
-                                                            <form method="POST" action="{{ route('utilities.location-configuration.delete', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" onsubmit="return confirm('Delete this imported file record?');">
+                                                            <form method="POST" action="{{ route('utilities.location-configuration.delete', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" data-page-loading="true" data-loading-label="Deleting import record" data-loading-detail="Removing the selected {{ strtolower($dataset['label']) }} import record." onsubmit="return confirm('Delete this imported file record?');">
                                                                 @csrf
                                                                 @method('DELETE')
                                                                 <button type="submit" style="padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;">
@@ -156,7 +156,7 @@
                         <div id="importModal-{{ $dataset['key'] }}" style="display: none; position: fixed; inset: 0; background-color: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center;">
                             <div style="background: white; padding: 24px; border-radius: 10px; width: 100%; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
                                 <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Import {{ $dataset['label'] }} Data (CSV)</h3>
-                                <form method="POST" action="{{ $dataset['route'] }}" enctype="multipart/form-data">
+                                <form method="POST" action="{{ $dataset['route'] }}" enctype="multipart/form-data" data-page-loading="true" data-loading-label="Uploading {{ $dataset['label'] }} CSV" data-loading-detail="Importing the selected CSV file into the {{ strtolower($dataset['label']) }} dataset.">
                                     @csrf
                                     <div style="margin-bottom: 16px;">
                                         <label for="upload-{{ $dataset['key'] }}" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV File</label>

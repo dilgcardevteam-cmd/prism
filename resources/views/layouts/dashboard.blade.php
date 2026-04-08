@@ -1442,6 +1442,78 @@
             }
         }
 
+        .page-loader-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: transparent;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.18s ease, visibility 0.18s ease;
+            z-index: 2200;
+            will-change: opacity;
+        }
+
+        .page-loader-overlay.is-visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .page-loader-spinner {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 4px solid rgba(29, 78, 216, 0.15);
+            border-top-color: #1d4ed8;
+            border-right-color: #60a5fa;
+            animation: pageLoaderSpin 0.8s linear infinite;
+            position: relative;
+        }
+
+        .page-loader-spinner::after {
+            content: '';
+            position: absolute;
+            inset: 10px;
+            border-radius: 50%;
+            border: 3px solid rgba(14, 165, 233, 0.12);
+            border-bottom-color: #0284c7;
+            animation: pageLoaderSpin 1.1s linear infinite reverse;
+        }
+
+        body.page-loading {
+            cursor: progress;
+        }
+
+        @keyframes pageLoaderSpin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .page-loader-overlay {
+                transition: none;
+            }
+
+            .page-loader-spinner,
+            .page-loader-spinner::after {
+                animation: none;
+            }
+        }
+
+        @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+            .page-loader-overlay {
+                background: rgba(15, 23, 42, 0.08);
+            }
+        }
+
     </style>
     
     @yield('styles')
@@ -2072,7 +2144,7 @@
                 </a>
             </li>
             @endif
-            @if($hasAnyUtilitiesAccess)
+            @if($canViewUtilitiesSystemSetup)
                 <li>
                 @php
                     $utilitiesMenuActive = request()->routeIs('utilities.*');
@@ -2088,46 +2160,6 @@
                             <a href="{{ route('utilities.system-setup.index') }}" class="@if(request()->routeIs('utilities.system-setup.*')) active @endif">
                                 <i class="fas fa-sliders-h"></i>
                                 <span>System Setup</span>
-                            </a>
-                        </li>
-                    @endif
-                    @if(Auth::user()->isSuperAdmin())
-                        <li>
-                            <a href="{{ route('utilities.role-configuration.index') }}" class="@if(request()->routeIs('utilities.role-configuration.*')) active @endif">
-                                <i class="fas fa-user-shield"></i>
-                                <span>Role Configuration</span>
-                            </a>
-                        </li>
-                    @endif
-                    @if($canViewUtilitiesLocation)
-                        <li>
-                            <a href="{{ route('utilities.location-configuration.index') }}" class="@if(request()->routeIs('utilities.location-configuration.*')) active @endif">
-                                <i class="fas fa-map-marker-alt"></i>
-                                <span>Location Configuration</span>
-                            </a>
-                        </li>
-                    @endif
-                    @if($canViewUtilitiesDeadlines)
-                        <li>
-                            <a href="{{ route('utilities.deadlines-configuration.index') }}" class="@if(request()->routeIs('utilities.deadlines-configuration.*')) active @endif">
-                                <i class="fas fa-calendar-alt"></i>
-                                <span>Deadlines Configuration</span>
-                            </a>
-                        </li>
-                    @endif
-                    @if($canViewUtilitiesNotifications)
-                        <li>
-                            <a href="{{ route('utilities.notifications.index') }}" class="@if(request()->routeIs('utilities.notifications.*')) active @endif">
-                                <i class="fas fa-bell"></i>
-                                <span>Bulk Notification</span>
-                            </a>
-                        </li>
-                    @endif
-                    @if($canViewUtilitiesBackup)
-                        <li>
-                            <a href="{{ route('utilities.backup-and-restore.index') }}" class="@if(request()->routeIs('utilities.backup-and-restore.*')) active @endif">
-                                <i class="fas fa-server"></i>
-                                <span>Backup and Restore</span>
                             </a>
                         </li>
                     @endif
@@ -2296,6 +2328,10 @@
     <main class="main-content" id="mainContent">
         @yield('content')
     </main>
+
+    <div id="globalPageLoader" class="page-loader-overlay" aria-hidden="true" role="status" aria-live="polite">
+        <div class="page-loader-spinner" aria-hidden="true"></div>
+    </div>
 
     @include('partials.confirmation-modal')
 
@@ -2959,6 +2995,209 @@
             });
         })();
 
+        (function initializeGlobalPageLoader() {
+            const loader = document.getElementById('globalPageLoader');
+            const loaderRevealDelayMs = 90;
+            let loaderVisible = false;
+            let loaderPending = false;
+            let loaderTimer = null;
+
+            if (!loader) {
+                return;
+            }
+
+            const commitShowLoader = function () {
+                loaderPending = false;
+                loaderTimer = null;
+                loaderVisible = true;
+                loader.classList.add('is-visible');
+                loader.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('page-loading');
+            };
+
+            const showPageLoader = function (options) {
+                const immediate = !!(options && options.immediate);
+
+                if (loaderVisible) {
+                    return;
+                }
+
+                if (immediate) {
+                    if (loaderTimer) {
+                        window.clearTimeout(loaderTimer);
+                        loaderTimer = null;
+                    }
+
+                    commitShowLoader();
+                    return;
+                }
+
+                if (loaderPending || loaderTimer) {
+                    return;
+                }
+
+                loaderPending = true;
+                loaderTimer = window.setTimeout(commitShowLoader, loaderRevealDelayMs);
+            };
+
+            const hidePageLoader = function () {
+                if (loaderTimer) {
+                    window.clearTimeout(loaderTimer);
+                    loaderTimer = null;
+                }
+
+                loaderPending = false;
+                loaderVisible = false;
+                loader.classList.remove('is-visible');
+                loader.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('page-loading');
+            };
+
+            const isSafeNavigableLink = function (link) {
+                if (!link || link.hasAttribute('download')) {
+                    return false;
+                }
+
+                const href = (link.getAttribute('href') || '').trim();
+                if (href === '' || href === '#' || href.startsWith('javascript:')) {
+                    return false;
+                }
+
+                const target = (link.getAttribute('target') || '').trim().toLowerCase();
+                if (target !== '' && target !== '_self') {
+                    return false;
+                }
+
+                try {
+                    const url = new URL(link.href, window.location.href);
+                    return url.origin === window.location.origin;
+                } catch (error) {
+                    return false;
+                }
+            };
+
+            const showPageLoaderForLink = function (link) {
+                if (!link || link.dataset.pageLoading === 'false' || !isSafeNavigableLink(link)) {
+                    return false;
+                }
+
+                showPageLoader({ immediate: false });
+
+                return true;
+            };
+
+            const showPageLoaderForForm = function (form, submitter) {
+                if (!form || form.dataset.pageLoading === 'false') {
+                    return false;
+                }
+
+                if (submitter && submitter.dataset && submitter.dataset.pageLoading === 'false') {
+                    return false;
+                }
+
+                const targetAttr = (
+                    (submitter && submitter.getAttribute && submitter.getAttribute('formtarget'))
+                    || form.getAttribute('target')
+                    || ''
+                ).trim().toLowerCase();
+
+                if (targetAttr !== '' && targetAttr !== '_self') {
+                    return false;
+                }
+
+                const methodAttr = (
+                    (submitter && submitter.getAttribute && submitter.getAttribute('formmethod'))
+                    || form.getAttribute('method')
+                    || 'get'
+                ).trim().toLowerCase();
+
+                if (methodAttr === 'dialog') {
+                    return false;
+                }
+
+                const actionAttr = (
+                    (submitter && submitter.getAttribute && submitter.getAttribute('formaction'))
+                    || form.getAttribute('action')
+                    || window.location.href
+                ).trim();
+
+                if (actionAttr.toLowerCase().startsWith('javascript:')) {
+                    return false;
+                }
+
+                try {
+                    const formActionUrl = new URL(actionAttr || window.location.href, window.location.href);
+                    if (formActionUrl.origin !== window.location.origin) {
+                        return false;
+                    }
+                } catch (error) {
+                    return false;
+                }
+
+                showPageLoader({ immediate: false });
+
+                return true;
+            };
+
+            window.AppUI = window.AppUI || {};
+            window.AppUI.showPageLoader = showPageLoader;
+            window.AppUI.hidePageLoader = hidePageLoader;
+            window.AppUI.showPageLoaderForLink = showPageLoaderForLink;
+            window.AppUI.showPageLoaderForForm = showPageLoaderForForm;
+            window.showPageLoader = showPageLoader;
+            window.hidePageLoader = hidePageLoader;
+
+            document.addEventListener('click', function (event) {
+                if (
+                    event.defaultPrevented
+                    || event.button !== 0
+                    || event.metaKey
+                    || event.ctrlKey
+                    || event.shiftKey
+                    || event.altKey
+                ) {
+                    return;
+                }
+
+                const link = event.target.closest('a[href]');
+                if (!link) {
+                    return;
+                }
+
+                showPageLoaderForLink(link);
+            });
+
+            document.addEventListener('submit', function (event) {
+                if (event.defaultPrevented) {
+                    return;
+                }
+
+                showPageLoaderForForm(event.target, event.submitter);
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.defaultPrevented) {
+                    return;
+                }
+
+                const key = (event.key || '').toLowerCase();
+                const isF5 = event.key === 'F5';
+                const isReloadShortcut = key === 'r' && (event.ctrlKey || event.metaKey);
+
+                if (!isF5 && !isReloadShortcut) {
+                    return;
+                }
+
+                showPageLoader({ immediate: true });
+            });
+
+            window.addEventListener('beforeunload', function () {
+                showPageLoader({ immediate: true });
+            });
+
+            window.addEventListener('pageshow', hidePageLoader);
+        })();
+
         // Confirmation for save/update/delete actions
         (function attachActionConfirms() {
             const defaultMessages = {
@@ -3037,10 +3276,17 @@
                             if (typeof form.requestSubmit === 'function') {
                                 form.requestSubmit(target);
                             } else {
+                                if (window.AppUI && typeof window.AppUI.showPageLoaderForForm === 'function') {
+                                    window.AppUI.showPageLoaderForForm(form, target);
+                                }
                                 form.submit();
                             }
                         });
                         return;
+                    }
+
+                    if (targetTag === 'A' && window.AppUI && typeof window.AppUI.showPageLoaderForLink === 'function') {
+                        window.AppUI.showPageLoaderForLink(target);
                     }
 
                     window.withNativeConfirmBypass(function() {
@@ -3064,6 +3310,9 @@
                     e.stopPropagation();
                     window.openConfirmationModal(form.dataset.confirm, function() {
                         form.dataset.confirmed = 'true';
+                        if (window.AppUI && typeof window.AppUI.showPageLoaderForForm === 'function') {
+                            window.AppUI.showPageLoaderForForm(form, null);
+                        }
                         window.withNativeConfirmBypass(function() {
                             form.submit();
                         });
@@ -3087,6 +3336,9 @@
                         if (typeof form.requestSubmit === 'function') {
                             form.requestSubmit(submitter);
                         } else {
+                            if (window.AppUI && typeof window.AppUI.showPageLoaderForForm === 'function') {
+                                window.AppUI.showPageLoaderForForm(form, submitter);
+                            }
                             form.submit();
                         }
                     });
