@@ -51,6 +51,32 @@ class LoginController extends Controller
     }
 
     /**
+     * Show the application's public login page.
+     */
+    public function showLoginForm()
+    {
+        if ($this->systemMaintenanceState->isEnabled()) {
+            return redirect()->route('maintenance.notice');
+        }
+
+        return view('auth.login');
+    }
+
+    /**
+     * Show the temporary superadmin login page used during maintenance.
+     */
+    public function showMaintenanceLoginForm()
+    {
+        if (!$this->systemMaintenanceState->isEnabled()) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.maintenance-login', [
+            'maintenanceState' => $this->systemMaintenanceState->state(),
+        ]);
+    }
+
+    /**
      * Attempt to log the user into the application.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -108,9 +134,12 @@ class LoginController extends Controller
     protected function sendFailedLoginResponse(Request $request)
     {
         $user = User::where('username', $request->input('username'))->first();
+        $loginRoute = $this->systemMaintenanceState->isEnabled()
+            ? 'maintenance.superadmin-login'
+            : 'login';
         
         if ($user && strtolower($user->status) !== 'active') {
-            return redirect('/login')->withErrors([
+            return redirect()->route($loginRoute)->withErrors([
                 'login_error' => 'Your account is inactive. Please contact an administrator.',
             ])->withInput($request->only('username', 'remember'));
         }
@@ -125,7 +154,7 @@ class LoginController extends Controller
             return redirect()->route('maintenance.notice');
         }
         
-        return redirect('/login')->withErrors([
+        return redirect()->route($loginRoute)->withErrors([
             'login_error' => 'The username or password is incorrect.',
         ])->withInput($request->only('username', 'remember'));
     }

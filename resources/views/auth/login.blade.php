@@ -10,22 +10,32 @@
     <style>
         body {
             font-family: var(--app-font-sans);
-            background-color: #f4f4f4;
-            background-image: url('/background.jpg');
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+            background: linear-gradient(315deg, #001a40 0%, #002c6c 50%, #0052cc 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-network-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.5;
         }
         .login-container {
-            background-color: white;
+            position: relative;
+            z-index: 1;
+            background-color: rgba(255, 255, 255, 0.97);
             padding: 28px 24px;
             border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
             width: 100%;
             max-width: 420px;
         }
@@ -252,6 +262,7 @@
     </style>
 </head>
 <body>
+    <canvas id="login-network" class="login-network-canvas" aria-hidden="true"></canvas>
     @php
         $maintenanceState = app(\App\Support\SystemMaintenanceState::class)->state();
         $isMaintenanceEnabled = (bool) ($maintenanceState['enabled'] ?? false);
@@ -281,7 +292,7 @@
         <form action="{{ route('login') }}" method="POST">
             @csrf
             <div class="field">
-                <input type="text" id="username" name="username" placeholder="Username" required>
+                <input type="text" id="username" name="username" value="{{ old('username') }}" placeholder="Username" autocomplete="username" required>
             </div>
 
             <div class="field">
@@ -321,6 +332,114 @@
                 toast.style.display = 'none';
             }, 5000);
         }
+
+        (function () {
+            const canvas = document.getElementById('login-network');
+            if (!canvas) {
+                return;
+            }
+
+            const ctx = canvas.getContext('2d');
+            const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            let particles = [];
+            let width = 0;
+            let height = 0;
+            let animationId = null;
+
+            function resizeCanvas() {
+                const dpr = window.devicePixelRatio || 1;
+                width = Math.max(window.innerWidth, document.documentElement.clientWidth || 0);
+                height = Math.max(window.innerHeight, document.documentElement.clientHeight || 0);
+                canvas.width = Math.floor(width * dpr);
+                canvas.height = Math.floor(height * dpr);
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+
+            function createParticles() {
+                const baseCount = Math.max(48, Math.min(120, Math.floor(width / 18)));
+                particles = Array.from({ length: baseCount }, function () {
+                    return {
+                        x: Math.random() * width,
+                        y: Math.random() * height,
+                        vx: (Math.random() - 0.5) * 1.4,
+                        vy: (Math.random() - 0.5) * 1.4,
+                        r: Math.random() * 1.8 + 1
+                    };
+                });
+            }
+
+            function drawParticles(updateMotion) {
+                ctx.clearRect(0, 0, width, height);
+
+                for (let i = 0; i < particles.length; i++) {
+                    const p = particles[i];
+
+                    if (updateMotion) {
+                        p.x += p.vx;
+                        p.y += p.vy;
+
+                        if (p.x < 0 || p.x > width) {
+                            p.vx *= -1;
+                        }
+
+                        if (p.y < 0 || p.y > height) {
+                            p.vy *= -1;
+                        }
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+                    ctx.fill();
+                }
+
+                const maxDistance = 180;
+                for (let i = 0; i < particles.length; i++) {
+                    for (let j = i + 1; j < particles.length; j++) {
+                        const dx = particles[i].x - particles[j].x;
+                        const dy = particles[i].y - particles[j].y;
+                        const distance = Math.hypot(dx, dy);
+
+                        if (distance < maxDistance) {
+                            const alpha = 1 - distance / maxDistance;
+                            ctx.beginPath();
+                            ctx.moveTo(particles[i].x, particles[i].y);
+                            ctx.lineTo(particles[j].x, particles[j].y);
+                            ctx.strokeStyle = 'rgba(255, 255, 255, ' + (alpha * 0.38).toFixed(3) + ')';
+                            ctx.lineWidth = 1.2;
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            function drawFrame() {
+                drawParticles(true);
+                animationId = window.requestAnimationFrame(drawFrame);
+            }
+
+            function setup() {
+                resizeCanvas();
+                createParticles();
+
+                if (animationId) {
+                    window.cancelAnimationFrame(animationId);
+                    animationId = null;
+                }
+
+                if (prefersReducedMotion) {
+                    drawParticles(false);
+                    return;
+                }
+
+                drawFrame();
+            }
+
+            window.addEventListener('resize', setup);
+            setup();
+        })();
 
         document.addEventListener('DOMContentLoaded', function(){
             function initPasswordToggle(wrapper){

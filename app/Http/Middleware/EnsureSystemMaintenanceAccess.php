@@ -14,6 +14,7 @@ class EnsureSystemMaintenanceAccess
         'login',
         'logout',
         'maintenance.notice',
+        'maintenance.superadmin-login',
     ];
 
     public function __construct(
@@ -53,6 +54,7 @@ class EnsureSystemMaintenanceAccess
         }
 
         return $request->is('login')
+            || $request->is('admin/login')
             || $request->is('up');
     }
 }

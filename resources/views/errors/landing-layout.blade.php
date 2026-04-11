@@ -367,7 +367,9 @@
             <div class="error-content">
                 <canvas class="error-network-canvas" data-error-network aria-hidden="true"></canvas>
                 <div class="error-content-inner">
-                    <span class="error-status">@yield('status', 'Error')</span>
+                    @hasSection('status')
+                        <span class="error-status">@yield('status')</span>
+                    @endif
                     <h1 class="error-title">@yield('heading', 'Something went wrong')</h1>
                     <p class="error-message">@yield('message', 'The page could not be loaded at the moment.')</p>
 

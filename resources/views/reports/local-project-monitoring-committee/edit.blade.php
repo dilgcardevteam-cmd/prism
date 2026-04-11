@@ -259,9 +259,21 @@
                         @endforeach
                     </div>
                     @if ($doc && $doc->file_path)
-                        <a href="{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-bottom: 8px; color: #002C76; font-size: 12px; text-decoration: none;">
-                            <i class="fas fa-file"></i> View current file
-                        </a>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                            <a href="{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
+                                <i class="fas fa-file"></i>&nbsp;View current file
+                            </a>
+                            @if (Auth::user()->isSuperAdmin())
+                                <form method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                        <i class="fas fa-trash-alt"></i>
+                                        <span>Delete</span>
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
                     @endif
                     <input
                         id="{{ $inputId }}"
@@ -330,28 +342,26 @@
                     'Q3' => 'July - September',
                     'Q4' => 'October - December',
                 ];
-                $currentMonth = now()->month;
-                if ($currentMonth <= 3) {
-                    $currentQuarter = 'Q1';
-                } elseif ($currentMonth <= 6) {
-                    $currentQuarter = 'Q2';
-                } elseif ($currentMonth <= 9) {
-                    $currentQuarter = 'Q3';
-                } else {
-                    $currentQuarter = 'Q4';
-                }
-                $quarterOrder = ['Q1' => 1, 'Q2' => 2, 'Q3' => 3, 'Q4' => 4];
             @endphp
             @foreach ($quarters as $quarter => $label)
                 @php
-                    $isQuarterClosed = ($quarterOrder[$quarter] ?? 0) < ($quarterOrder[$currentQuarter] ?? 0);
+                    $configuredQuarterDeadline = $configuredQuarterDeadlines[$quarter] ?? null;
+                    $quarterDeadlineDisplay = is_array($configuredQuarterDeadline) ? (string) ($configuredQuarterDeadline['display'] ?? '') : '';
+                    $isQuarterClosed = (bool) (is_array($configuredQuarterDeadline) ? ($configuredQuarterDeadline['is_closed'] ?? false) : false);
                 @endphp
                 <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                    <button type="button" class="lpmc-accordion-toggle" data-target="lpmc-{{ $quarter }}" {{ $isQuarterClosed ? 'disabled' : '' }} style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: {{ $isQuarterClosed ? 'not-allowed' : 'pointer' }}; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center; opacity: {{ $isQuarterClosed ? '0.8' : '1' }};">
-                        <span>{{ $label }} <span style="font-size: 11px; font-weight: 500; opacity: 0.95;">({{ $quarterWindows[$quarter] ?? '' }})</span></span>
+                    <button type="button" class="lpmc-accordion-toggle" data-target="lpmc-{{ $quarter }}" style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center; opacity: {{ $isQuarterClosed ? '0.88' : '1' }};">
+                        <span>
+                            {{ $label }}
+                            <span style="font-size: 11px; font-weight: 500; opacity: 0.95;">({{ $quarterWindows[$quarter] ?? '' }})</span>
+                            <span style="display: block; font-size: 11px; font-weight: 500; opacity: 0.95; margin-top: 2px;">
+                                Deadline (CY {{ $deadlineReportingYear }}):
+                                {{ $quarterDeadlineDisplay !== '' ? $quarterDeadlineDisplay : 'No superadmin deadline set' }}
+                            </span>
+                        </span>
                         <span style="display: inline-flex; align-items: center; gap: 8px;">
                             <span style="display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; background: {{ $isQuarterClosed ? '#ef4444' : '#10b981' }}; color: #fff;">
-                                {{ $isQuarterClosed ? 'Closed' : 'Open for Upload' }}
+                                {{ $isQuarterClosed ? 'Deadline Passed' : 'Open for Upload' }}
                             </span>
                             <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
                         </span>
@@ -359,7 +369,7 @@
                     <div id="lpmc-{{ $quarter }}" style="display: none; padding: 16px; background-color: #ffffff;">
                         @if ($isQuarterClosed)
                             <div style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; border-radius: 8px; font-size: 12px; font-weight: 600;">
-                                Uploads for this quarter are closed. Allowed window: {{ $quarterWindows[$quarter] ?? '' }}.
+                                Uploads for this quarter are closed based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
                             </div>
                         @endif
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
@@ -548,9 +558,21 @@
                                         @endforeach
                                     </div>
                                     @if ($doc && $doc->file_path)
-                                        <a href="{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-bottom: 8px; color: #002C76; font-size: 12px; text-decoration: none;">
-                                            <i class="fas fa-file"></i> View current file
-                                        </a>
+                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                                            <a href="{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
+                                                <i class="fas fa-file"></i>&nbsp;View current file
+                                            </a>
+                                            @if (Auth::user()->isSuperAdmin())
+                                                <form method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                                        <i class="fas fa-trash-alt"></i>
+                                                        <span>Delete</span>
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     @endif
                                     <input
                                         id="{{ $inputId }}"
@@ -564,7 +586,7 @@
                                     @if ($disableUploadInput)
                                         <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
                                             @if ($disableQuarterUpload)
-                                                Uploads are closed for {{ $label }}.
+                                                Uploads are closed for {{ $label }} based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
                                             @elseif ($isRegionalOfficeUserForUpload)
                                                 Regional Office cannot upload files. Choose file is disabled.
                                             @else

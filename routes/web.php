@@ -1,10 +1,13 @@
 <?php
 
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\LocallyFundedProject;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Http\Controllers\RlipLimeProjectController;
 use App\Http\Controllers\SglgifProjectController;
 use App\Http\Controllers\SystemManagementController;
@@ -33,6 +36,9 @@ Route::get('/', function () {
     return view('landing');
 })->name('landing');
 
+Route::get('/admin/login', [App\Http\Controllers\Auth\LoginController::class, 'showMaintenanceLoginForm'])
+    ->name('maintenance.superadmin-login');
+
 Route::get('/system-under-maintenance', function (\App\Support\SystemMaintenanceState $systemMaintenanceState) {
     if (!$systemMaintenanceState->isEnabled()) {
         return redirect()->route('landing');
@@ -41,7 +47,11 @@ Route::get('/system-under-maintenance', function (\App\Support\SystemMaintenance
     return response()->view('errors.maintenance', [
         'maintenanceState' => $systemMaintenanceState->state(),
     ], 503);
-})->name('maintenance.notice');
+})->withoutMiddleware([
+    StartSession::class,
+    ShareErrorsFromSession::class,
+    VerifyCsrfToken::class,
+])->name('maintenance.notice');
 
 // Public API endpoint for municipality projects
 Route::get('/api/municipality-projects', function () {
@@ -2033,6 +2043,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('local-project-monitoring-committee.approve');
     Route::get('local-project-monitoring-committee/{lpmc}/document/{docId}', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'viewDocument'])
         ->name('local-project-monitoring-committee.document');
+    Route::delete('local-project-monitoring-committee/{lpmc}/document/{docId}', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'deleteDocument'])
+        ->name('local-project-monitoring-committee.delete-document');
     Route::resource('local-project-monitoring-committee', App\Http\Controllers\LocalProjectMonitoringCommitteeController::class)
         ->parameters(['local-project-monitoring-committee' => 'lpmc']);
 
@@ -2043,6 +2055,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('road-maintenance-status.approve');
     Route::get('road-maintenance-status/{roadMaintenance}/document/{docId}', [App\Http\Controllers\RoadMaintenanceStatusReportController::class, 'viewDocument'])
         ->name('road-maintenance-status.document');
+    Route::delete('road-maintenance-status/{roadMaintenance}/document/{docId}', [App\Http\Controllers\RoadMaintenanceStatusReportController::class, 'deleteDocument'])
+        ->name('road-maintenance-status.delete-document');
     Route::resource('road-maintenance-status', App\Http\Controllers\RoadMaintenanceStatusReportController::class)
         ->parameters(['road-maintenance-status' => 'roadMaintenance']);
 
@@ -2056,6 +2070,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.monthly.pd-no-pbbm-2025-1572-1573.approve');
     Route::get('/reports/monthly/pd-no-pbbm-2025-1572-1573/{office}/document/{docId}', [App\Http\Controllers\PdNoPbbmMonthlyReportController::class, 'viewDocument'])
         ->name('reports.monthly.pd-no-pbbm-2025-1572-1573.document');
+    Route::delete('/reports/monthly/pd-no-pbbm-2025-1572-1573/{office}/document/{docId}', [App\Http\Controllers\PdNoPbbmMonthlyReportController::class, 'deleteDocument'])
+        ->name('reports.monthly.pd-no-pbbm-2025-1572-1573.delete-document');
 
     Route::get('/reports/monthly/swa-annex-f', [App\Http\Controllers\SwaAnnexFReportController::class, 'index'])
         ->name('reports.monthly.swa-annex-f');
@@ -2067,6 +2083,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.monthly.swa-annex-f.approve');
     Route::get('/reports/monthly/swa-annex-f/{office}/document/{docId}', [App\Http\Controllers\SwaAnnexFReportController::class, 'viewDocument'])
         ->name('reports.monthly.swa-annex-f.document');
+    Route::delete('/reports/monthly/swa-annex-f/{office}/document/{docId}', [App\Http\Controllers\SwaAnnexFReportController::class, 'deleteDocument'])
+        ->name('reports.monthly.swa-annex-f.delete-document');
 
     Route::get('/reports/rbis-annual-certification', [App\Http\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');
@@ -2078,4 +2096,6 @@ Route::middleware(['auth'])->group(function () {
         ->name('rbis-annual-certification.approve');
     Route::get('/reports/rbis-annual-certification/{office}/document/{docId}', [App\Http\Controllers\RbisAnnualCertificationController::class, 'viewDocument'])
         ->name('rbis-annual-certification.document');
+    Route::delete('/reports/rbis-annual-certification/{office}/document/{docId}', [App\Http\Controllers\RbisAnnualCertificationController::class, 'deleteDocument'])
+        ->name('rbis-annual-certification.delete-document');
 });

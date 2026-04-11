@@ -47,7 +47,7 @@
                     <h2>{{ $isMaintenanceEnabled ? 'Restricted Access is now live' : 'Operational access is currently open' }}</h2>
                     <p>
                         @if ($isMaintenanceEnabled)
-                            Non-superadmin users are blocked from logging in and are redirected to the maintenance notice page when they try to open protected routes.
+                            Public `/login` requests are redirected to the maintenance notice page. Only the temporary `/admin/login` page accepts superadmin sign-ins during maintenance.
                         @else
                             All users can access PRISM normally. Enable maintenance mode when you need to temporarily restrict access to superadmin accounts only.
                         @endif
@@ -85,7 +85,7 @@
                 <strong>{{ $isMaintenanceEnabled ? 'System lock is active.' : 'System is available.' }}</strong>
                 <span>
                     @if ($isMaintenanceEnabled)
-                        During this period, only superadmin accounts can sign in and use internal pages. Everyone else is limited to the landing page, login page, and the maintenance notice page.
+                        During this period, only superadmin accounts can sign in and use internal pages. Everyone else is limited to the landing page and maintenance notice page, while superadmins use the temporary `/admin/login` page.
                     @else
                         PRISM is accepting normal sign-ins and regular page navigation for authorized users.
                     @endif
@@ -108,8 +108,8 @@
 
             <article class="maintenance-stat">
                 <span class="maintenance-stat__label">Allowed Public Pages</span>
-                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Landing + Login' : 'Normal Routing' }}</strong>
-                <p class="maintenance-stat__meta">The maintenance notice page is also kept available for blocked users.</p>
+                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Landing + Notice' : 'Normal Routing' }}</strong>
+                <p class="maintenance-stat__meta">The temporary `/admin/login` page remains available for superadmin access while maintenance is active.</p>
             </article>
 
             <article class="maintenance-stat">
@@ -130,7 +130,7 @@
                     </span>
                 </div>
                 <h3>Access Lock Policy</h3>
-                <p>When enabled, every route except the landing page, login route, logout route, and maintenance notice page is blocked for non-superadmin users.</p>
+                <p>When enabled, every route except the landing page, logout route, maintenance notice page, and temporary `/admin/login` route is blocked for non-superadmin users.</p>
                 <div class="maintenance-card__footer">
                     <span>{{ $isMaintenanceEnabled ? 'Restriction enforced' : 'Restriction available' }}</span>
                     <i class="fas fa-user-lock" aria-hidden="true"></i>
@@ -145,7 +145,7 @@
                     <span class="maintenance-chip">Login Flow</span>
                 </div>
                 <h3>Authentication Behavior</h3>
-                <p>Superadmin credentials continue to work. Valid non-superadmin credentials are redirected to the maintenance notice instead of entering the dashboard.</p>
+                <p>Superadmin credentials continue to work through the temporary `/admin/login` page. Public `/login` requests are redirected to the maintenance notice, and valid non-superadmin credentials stay blocked.</p>
                 <div class="maintenance-preview">
                     <div class="maintenance-preview__title">Current Result</div>
                     <div class="maintenance-preview__body">{{ $isMaintenanceEnabled ? 'Regular users are blocked from sign-in.' : 'All active users can sign in.' }}</div>
@@ -176,7 +176,7 @@
                     <span class="maintenance-chip">Notice Page</span>
                 </div>
                 <h3>Public Maintenance Notice</h3>
-                <p>A dedicated maintenance page explains the restriction, keeps the landing page accessible, and still allows superadmin sign-in from the portal.</p>
+                <p>A dedicated maintenance page explains the restriction, keeps the landing page accessible, and points superadmins to the temporary `/admin/login` page.</p>
                 <div class="maintenance-card__footer">
                     <span>Route: `/system-under-maintenance`</span>
                     <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>

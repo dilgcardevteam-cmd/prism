@@ -186,9 +186,21 @@
                                     @endforelse
                                 </div>
                                 @if ($doc && $doc->file_path)
-                                    <a href="{{ route('reports.monthly.swa-annex-f.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-bottom: 8px; color: #002C76; font-size: 12px; text-decoration: none;">
-                                        <i class="fas fa-file"></i> View current file
-                                    </a>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                                        <a href="{{ route('reports.monthly.swa-annex-f.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
+                                            <i class="fas fa-file"></i>&nbsp;View current file
+                                        </a>
+                                        @if (Auth::user()->isSuperAdmin())
+                                            <form method="POST" action="{{ route('reports.monthly.swa-annex-f.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                    <span>Delete</span>
+                                                </button>
+                                            </form>
+                                        @endif
+                                    </div>
                                 @endif
                                 @php
                                     $isRegionalOfficeUser = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
@@ -457,3 +469,4 @@
         </style>
     </div>
 @endsection
+

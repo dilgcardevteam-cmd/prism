@@ -1870,11 +1870,14 @@
             <li>
                 @php
                     $reportsAnnualActive = request()->routeIs('rbis-annual-certification.*');
+                    $reportsAnnualRpmesActive = false;
                     $reportsQuarterlyActive = request()->routeIs('fund-utilization.*')
                         || request()->routeIs('local-project-monitoring-committee.*')
                         || request()->routeIs('road-maintenance-status.*');
+                    $reportsQuarterlyRpmesActive = false;
                     $reportsSwaAnnexFActive = request()->routeIs('reports.monthly.swa-annex-f*');
                     $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
+                    $reportsMonthlyRpmesActive = false;
                     $reportsMonthlyActive = $reportsMonthlyReportActive || $reportsSwaAnnexFActive;
                     $reportsMenuActive = Route::currentRouteName() == 'reports'
                         || $reportsAnnualActive
@@ -1900,6 +1903,15 @@
                                         <i class="fas fa-bridge"></i>
                                         <span>RBIS Annual Certification</span>
                                     </a>
+                                </li>
+                                <li>
+                                    <a href="#" class="@if($reportsAnnualRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualRpmesMenu')">
+                                        <i class="fas fa-file-alt"></i>
+                                        <span>RPMES FORM</span>
+                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                    </a>
+                                    <ul id="reportsAnnualRpmesMenu" class="submenu" style="display: {{ $reportsAnnualRpmesActive ? 'block' : 'none' }};">
+                                    </ul>
                                 </li>
                             </ul>
                         </li>
@@ -1936,6 +1948,15 @@
                                         </a>
                                     </li>
                                 @endif
+                                <li>
+                                    <a href="#" class="@if($reportsQuarterlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyRpmesMenu')">
+                                        <i class="fas fa-file-alt"></i>
+                                        <span>RPMES FORM</span>
+                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                    </a>
+                                    <ul id="reportsQuarterlyRpmesMenu" class="submenu" style="display: {{ $reportsQuarterlyRpmesActive ? 'block' : 'none' }};">
+                                    </ul>
+                                </li>
                             </ul>
                         </li>
                     @endif
@@ -1972,6 +1993,15 @@
                                         </ul>
                                     </li>
                                 @endif
+                                <li>
+                                    <a href="#" class="@if($reportsMonthlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsMonthlyRpmesMenu')">
+                                        <i class="fas fa-file-alt"></i>
+                                        <span>RPMES FORM</span>
+                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                    </a>
+                                    <ul id="reportsMonthlyRpmesMenu" class="submenu" style="display: {{ $reportsMonthlyRpmesActive ? 'block' : 'none' }};">
+                                    </ul>
+                                </li>
                             </ul>
                         </li>
                     @endif
