@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\RoadMaintenanceStatusDocument;
 use App\Services\InterventionNotificationService;
+use App\Support\LguReportorialDeadlineResolver;
 use App\Support\InputSanitizer;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class RoadMaintenanceStatusReportController extends Controller
         $this->middleware('crud_permission:road_maintenance_status_reports,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:road_maintenance_status_reports,update')->only(['update', 'approveDocument']);
         $this->middleware('crud_permission:road_maintenance_status_reports,delete')->only(['destroy']);
+        $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
     private function getOffices(): array
@@ -683,6 +685,11 @@ class RoadMaintenanceStatusReportController extends Controller
         $usersById = $userIds
             ? User::whereIn('idno', $userIds)->get()->keyBy('idno')
             : collect();
+        $configuredQuarterDeadlines = app(LguReportorialDeadlineResolver::class)->resolveMany(
+            'road_maintenance_status_reports',
+            $reportingYear,
+            ['Q1', 'Q2', 'Q3', 'Q4']
+        );
 
         return view('reports.road-maintenance-status.edit', compact(
             'officeName',
@@ -690,13 +697,31 @@ class RoadMaintenanceStatusReportController extends Controller
             'documentsByKey',
             'usersById',
             'activityLogs',
-            'reportingYear'
+            'reportingYear',
+            'configuredQuarterDeadlines'
         ));
     }
 
     public function update(Request $request, $id)
     {
         return redirect()->route('road-maintenance-status.edit', ['roadMaintenance' => $id]);
+    }
+
+    public function deleteDocument($id, $docId)
+    {
+        $officeName = (string) $id;
+        $document = RoadMaintenanceStatusDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+            Storage::disk('public')->delete($document->file_path);
+        }
+
+        $document->delete();
+
+        return back()->with('success', 'Uploaded document deleted successfully.');
     }
 
     public function upload(Request $request, $id)
@@ -712,6 +737,19 @@ class RoadMaintenanceStatusReportController extends Controller
         $year = (int) $request->input('year');
         $quarter = $request->input('quarter');
         $docType = $this->quarterlyDocType();
+        $configuredDeadline = app(LguReportorialDeadlineResolver::class)->resolve(
+            'road_maintenance_status_reports',
+            $year,
+            $quarter
+        );
+
+        if (($configuredDeadline['is_closed'] ?? false) === true) {
+            $deadlineLabel = $configuredDeadline['display'] ?? 'the configured superadmin deadline';
+
+            return back()->withErrors([
+                'document' => 'Uploads for this quarter are closed. Deadline: ' . $deadlineLabel . '.',
+            ]);
+        }
 
         $existingDocument = RoadMaintenanceStatusDocument::where('office', $officeName)
             ->where('doc_type', $docType)

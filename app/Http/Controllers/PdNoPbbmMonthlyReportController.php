@@ -23,6 +23,7 @@ class PdNoPbbmMonthlyReportController extends Controller
         $this->middleware('crud_permission:pd_no_pbbm_monthly_reports,view')->only(['index', 'edit', 'viewDocument']);
         $this->middleware('crud_permission:pd_no_pbbm_monthly_reports,add')->only(['upload']);
         $this->middleware('crud_permission:pd_no_pbbm_monthly_reports,update')->only(['approveDocument']);
+        $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
     private function getOffices(): array
@@ -729,6 +730,23 @@ class PdNoPbbmMonthlyReportController extends Controller
             'reportingYear',
             'months'
         ));
+    }
+
+    public function deleteDocument($office, $docId)
+    {
+        $officeName = (string) $office;
+        $document = PdNoPbbmMonthlyDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+            Storage::disk('public')->delete($document->file_path);
+        }
+
+        $document->delete();
+
+        return back()->with('success', 'Uploaded document deleted successfully.');
     }
 
     public function upload(Request $request, $office)

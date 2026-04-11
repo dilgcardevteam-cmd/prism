@@ -24,6 +24,7 @@ class RbisAnnualCertificationController extends Controller
         $this->middleware('crud_permission:rbis_annual_certification,view')->only(['index', 'edit', 'viewDocument']);
         $this->middleware('crud_permission:rbis_annual_certification,add')->only(['upload']);
         $this->middleware('crud_permission:rbis_annual_certification,update')->only(['approveDocument']);
+        $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
     private function getOffices(): array
@@ -755,6 +756,23 @@ class RbisAnnualCertificationController extends Controller
             'filters',
             'filterOptions'
         ));
+    }
+
+    public function deleteDocument($id, $docId)
+    {
+        $officeName = (string) $id;
+        $document = RbisAnnualCertificationDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+            Storage::disk('public')->delete($document->file_path);
+        }
+
+        $document->delete();
+
+        return back()->with('success', 'Uploaded document deleted successfully.');
     }
 
     public function edit(Request $request, $id)

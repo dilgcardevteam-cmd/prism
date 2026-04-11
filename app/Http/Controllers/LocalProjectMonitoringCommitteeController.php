@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
+use App\Support\LguReportorialDeadlineResolver;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -24,6 +25,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:local_project_monitoring_committee,update')->only(['update', 'approveDocument']);
         $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy']);
+        $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
     private function getOffices(): array
@@ -787,8 +789,22 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $usersById = $userIds
             ? User::whereIn('idno', $userIds)->get()->keyBy('idno')
             : collect();
+        $deadlineReportingYear = (int) now()->year;
+        $configuredQuarterDeadlines = app(LguReportorialDeadlineResolver::class)->resolveMany(
+            'local_project_monitoring_committee',
+            $deadlineReportingYear,
+            ['Q1', 'Q2', 'Q3', 'Q4']
+        );
 
-        return view('reports.local-project-monitoring-committee.edit', compact('officeName', 'province', 'documentsByKey', 'usersById', 'activityLogs'));
+        return view('reports.local-project-monitoring-committee.edit', compact(
+            'officeName',
+            'province',
+            'documentsByKey',
+            'usersById',
+            'activityLogs',
+            'deadlineReportingYear',
+            'configuredQuarterDeadlines'
+        ));
     }
 
     /**
@@ -797,6 +813,23 @@ class LocalProjectMonitoringCommitteeController extends Controller
     public function update(Request $request, $id)
     {
         // Implementation for updating the record
+    }
+
+    public function deleteDocument($id, $docId)
+    {
+        $officeName = (string) $id;
+        $document = LpmcDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+            Storage::disk('public')->delete($document->file_path);
+        }
+
+        $document->delete();
+
+        return back()->with('success', 'Uploaded document deleted successfully.');
     }
 
     public function upload(Request $request, $id)
@@ -813,6 +846,23 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $docType = $request->input('doc_type');
         $year = $request->input('year');
         $quarter = $request->input('quarter');
+
+        if (is_string($quarter) && $quarter !== '') {
+            $configuredDeadline = app(LguReportorialDeadlineResolver::class)->resolve(
+                'local_project_monitoring_committee',
+                (int) now()->year,
+                $quarter
+            );
+
+            if (($configuredDeadline['is_closed'] ?? false) === true) {
+                $deadlineLabel = $configuredDeadline['display'] ?? 'the configured superadmin deadline';
+
+                return back()->withErrors([
+                    'document' => 'Uploads for this quarter are closed. Deadline: ' . $deadlineLabel . '.',
+                ]);
+            }
+        }
+
         $existingDocument = LpmcDocument::where('office', $officeName)
             ->where('doc_type', $docType)
             ->where('year', $year)
