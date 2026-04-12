@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PdNoPbbmMonthlyDocument;
 use App\Services\InterventionNotificationService;
+use App\Support\LguReportorialDeadlineResolver;
 use App\Support\InputSanitizer;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -90,6 +91,31 @@ class PdNoPbbmMonthlyReportController extends Controller
         }
 
         return $year;
+    }
+
+    private function resolveMonthlyDeadline(int $reportingYear, string $monthCode): ?array
+    {
+        $monthLabel = $this->monthOptions()[$monthCode] ?? null;
+        if ($monthLabel === null) {
+            return null;
+        }
+
+        return app(LguReportorialDeadlineResolver::class)->resolve(
+            'pd_no_pbbm_monthly_reports',
+            $reportingYear,
+            $monthLabel
+        );
+    }
+
+    private function resolveMonthlyDeadlines(int $reportingYear): array
+    {
+        $resolved = [];
+
+        foreach (array_keys($this->monthOptions()) as $monthCode) {
+            $resolved[$monthCode] = $this->resolveMonthlyDeadline($reportingYear, $monthCode);
+        }
+
+        return $resolved;
     }
 
     private function buildOfficeRows(array $offices): array
@@ -720,6 +746,7 @@ class PdNoPbbmMonthlyReportController extends Controller
         $usersById = $userIds
             ? User::whereIn('idno', $userIds)->get()->keyBy('idno')
             : collect();
+        $configuredMonthlyDeadlines = $this->resolveMonthlyDeadlines($reportingYear);
 
         return view('reports.monthly.pd-no-pbbm-2025-1572-1573.edit', compact(
             'officeName',
@@ -728,7 +755,8 @@ class PdNoPbbmMonthlyReportController extends Controller
             'usersById',
             'activityLogs',
             'reportingYear',
-            'months'
+            'months',
+            'configuredMonthlyDeadlines'
         ));
     }
 

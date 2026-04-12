@@ -74,6 +74,8 @@
                         $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
                         $hasFile = $doc && $doc->file_path;
                         $isReturned = $doc && $doc->status === 'returned';
+                        $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
+                        $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
                         $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
                         $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                         $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
@@ -108,6 +110,36 @@
                         $poApproverName = $poApprover ? trim($poApprover->fname . ' ' . $poApprover->lname) : 'Unknown';
                         $roApproverName = $roApprover ? trim($roApprover->fname . ' ' . $roApprover->lname) : 'Unknown';
                         $uploadedTime = $doc && $doc->uploaded_at ? $doc->uploaded_at->copy()->setTimezone(config('app.timezone')) : null;
+                        $resolveSubmissionTimelinessTag = function ($uploadedAt, $configuredDeadline) {
+                            if (!$uploadedAt || !is_array($configuredDeadline)) {
+                                return null;
+                            }
+
+                            $deadlineAt = $configuredDeadline['deadline_at'] ?? null;
+                            if (!$deadlineAt) {
+                                return null;
+                            }
+
+                            $timezone = config('app.timezone');
+                            $submittedAt = $uploadedAt instanceof \Carbon\CarbonInterface
+                                ? $uploadedAt->copy()->setTimezone($timezone)
+                                : \Carbon\Carbon::parse($uploadedAt)->setTimezone($timezone);
+                            $deadlineTime = $deadlineAt instanceof \Carbon\CarbonInterface
+                                ? $deadlineAt->copy()->setTimezone($timezone)
+                                : \Carbon\Carbon::parse($deadlineAt)->setTimezone($timezone);
+                            $isLate = $submittedAt->greaterThan($deadlineTime);
+
+                            return [
+                                'label' => $isLate ? 'Late' : 'On Time',
+                                'background' => $isLate ? '#fef2f2' : '#ecfdf5',
+                                'color' => $isLate ? '#b91c1c' : '#047857',
+                                'border' => $isLate ? '#fecaca' : '#a7f3d0',
+                                'title' => $isLate
+                                    ? 'Submitted after the configured deadline of ' . $deadlineTime->format('M d, Y h:i A')
+                                    : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
+                            ];
+                        };
+                        $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredMonthDeadline);
                         $poValidatedAt = $doc && $doc->approved_at_dilg_po ? $doc->approved_at_dilg_po->copy()->setTimezone(config('app.timezone')) : null;
                         $roValidatedAt = $doc && $doc->approved_at_dilg_ro ? $doc->approved_at_dilg_ro->copy()->setTimezone(config('app.timezone')) : null;
                         $returnedAt = $doc && $doc->status === 'returned' && $doc->approved_at ? $doc->approved_at->copy()->setTimezone(config('app.timezone')) : null;
@@ -160,10 +192,16 @@
                             aria-expanded="{{ $isExpandedByDefault ? 'true' : 'false' }}"
                             style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;"
                         >
-                            <span>{{ $label }} - SWA- Annex F</span>
+                            <span style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                                <span>{{ $label }} - SWA- Annex F</span>
+                                <span style="font-size: 11px; opacity: 0.95;">Deadline: {{ $monthDeadlineDisplay !== '' ? $monthDeadlineDisplay : 'No superadmin deadline set' }}</span>
+                            </span>
                             <span style="display: inline-flex; align-items: center; gap: 10px;">
                                 <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
                                     {{ $statusLabel }}
+                                </span>
+                                <span style="display: inline-block; padding: 4px 10px; background-color: {{ $monthDeadlineDisplay !== '' ? '#0f766e' : '#6b7280' }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                    {{ $monthDeadlineDisplay !== '' ? 'Deadline Set' : 'No Deadline' }}
                                 </span>
                                 <i class="fas fa-chevron-down" style="transition: transform 0.3s; transform: {{ $isExpandedByDefault ? 'rotate(180deg)' : 'rotate(0deg)' }};"></i>
                             </span>
@@ -173,6 +211,7 @@
                                 @csrf
                                 <input type="hidden" name="year" value="{{ $reportingYear }}">
                                 <input type="hidden" name="month" value="{{ $monthCode }}">
+
                                 <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0 0 8px 0;">
                                     {{ $label }} Upload
                                 </label>
@@ -190,6 +229,11 @@
                                         <a href="{{ route('reports.monthly.swa-annex-f.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
                                             <i class="fas fa-file"></i>&nbsp;View current file
                                         </a>
+                                        @if ($submissionTimeliness)
+                                            <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                {{ $submissionTimeliness['label'] }}
+                                            </span>
+                                        @endif
                                         @if (Auth::user()->isSuperAdmin())
                                             <form method="POST" action="{{ route('reports.monthly.swa-annex-f.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                                 @csrf
@@ -257,6 +301,7 @@
                                     type="submit"
                                     id="{{ $buttonId }}"
                                     class="ops-upload-submit"
+
                                     style="width: 25%; padding: 8px 12px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; opacity: 0; pointer-events: none; transition: all 0.3s ease; display: block; margin-left: 0; margin-right: auto;"
                                 >
                                     Upload
@@ -469,4 +514,8 @@
         </style>
     </div>
 @endsection
+
+
+
+
 

@@ -2086,6 +2086,19 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/reports/monthly/swa-annex-f/{office}/document/{docId}', [App\Http\Controllers\SwaAnnexFReportController::class, 'deleteDocument'])
         ->name('reports.monthly.swa-annex-f.delete-document');
 
+    Route::get('/reports/quarterly/rpmes/form-2', [App\Http\Controllers\QuarterlyRpmesForm2Controller::class, 'index'])
+        ->name('reports.quarterly.rpmes.form-2');
+    Route::post('/reports/quarterly/rpmes/form-2/{projectCode}/upload', [App\Http\Controllers\QuarterlyRpmesForm2Controller::class, 'upload'])
+        ->name('reports.quarterly.rpmes.form-2.upload');
+    Route::post('/reports/quarterly/rpmes/form-2/{projectCode}/approve/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm2Controller::class, 'approveDocument'])
+        ->name('reports.quarterly.rpmes.form-2.approve');
+    Route::get('/reports/quarterly/rpmes/form-2/{projectCode}/document/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm2Controller::class, 'viewDocument'])
+        ->name('reports.quarterly.rpmes.form-2.document');
+    Route::delete('/reports/quarterly/rpmes/form-2/{projectCode}/document/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm2Controller::class, 'deleteDocument'])
+        ->name('reports.quarterly.rpmes.form-2.delete-document');
+    Route::get('/reports/quarterly/rpmes/form-2/{projectCode}', [App\Http\Controllers\QuarterlyRpmesForm2Controller::class, 'show'])
+        ->name('reports.quarterly.rpmes.form-2.show');
+
     Route::get('/reports/rbis-annual-certification', [App\Http\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');
     Route::get('/reports/rbis-annual-certification/{office}/edit', [App\Http\Controllers\RbisAnnualCertificationController::class, 'edit'])
@@ -2099,3 +2112,10 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/reports/rbis-annual-certification/{office}/document/{docId}', [App\Http\Controllers\RbisAnnualCertificationController::class, 'deleteDocument'])
         ->name('rbis-annual-certification.delete-document');
 });
+
+
+
+
+
+
+

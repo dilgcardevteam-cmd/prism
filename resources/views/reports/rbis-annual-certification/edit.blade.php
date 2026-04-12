@@ -91,6 +91,7 @@
                 $inputId = 'rbis-input-annual';
                 $buttonId = 'rbis-btn-annual';
                 $filenameId = 'rbis-file-annual';
+                $deadlineDisplay = is_array($configuredDeadline ?? null) ? (string) ($configuredDeadline['display'] ?? '') : '';
                 $isProvincialDilgViewer = Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office';
                 $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
                 $hasFile = $doc && $doc->file_path;
@@ -139,9 +140,39 @@
 
                     return ['time' => $uploadedTime, 'name' => $encoderName !== '' ? $encoderName : 'Unknown'];
                 };
+                $resolveSubmissionTimelinessTag = function ($uploadedAt, $configuredDeadline) {
+                    if (!$uploadedAt || !is_array($configuredDeadline)) {
+                        return null;
+                    }
+
+                    $deadlineAt = $configuredDeadline['deadline_at'] ?? null;
+                    if (!$deadlineAt) {
+                        return null;
+                    }
+
+                    $timezone = config('app.timezone');
+                    $submittedAt = $uploadedAt instanceof \Carbon\CarbonInterface
+                        ? $uploadedAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($uploadedAt)->setTimezone($timezone);
+                    $deadlineTime = $deadlineAt instanceof \Carbon\CarbonInterface
+                        ? $deadlineAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($deadlineAt)->setTimezone($timezone);
+                    $isLate = $submittedAt->greaterThan($deadlineTime);
+
+                    return [
+                        'label' => $isLate ? 'Late' : 'On Time',
+                        'background' => $isLate ? '#fef2f2' : '#ecfdf5',
+                        'color' => $isLate ? '#b91c1c' : '#047857',
+                        'border' => $isLate ? '#fecaca' : '#a7f3d0',
+                        'title' => $isLate
+                            ? 'Submitted after the configured deadline of ' . $deadlineTime->format('M d, Y h:i A')
+                            : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
+                    ];
+                };
 
                 $uploadedInfo = $resolveUploaderMeta($doc);
                 $uploadedTime = $uploadedInfo['time'];
+                $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredDeadline);
                 $uploaderName = $uploadedInfo['name'];
                 $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                 $isDilgMountainUploader = $uploaderUser
@@ -200,6 +231,9 @@
                     <span style="display: inline-flex; align-items: center; gap: 10px;">
                         <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
                             {{ $statusLabel }}
+                        </span>
+                        <span style="display: inline-block; padding: 4px 10px; background-color: {{ $deadlineDisplay !== '' ? '#0f766e' : '#6b7280' }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
+                            {{ $deadlineDisplay !== '' ? 'Deadline Set' : 'No Deadline' }}
                         </span>
                         <i class="fas fa-chevron-down" style="transition: transform 0.3s; transform: rotate(180deg);"></i>
                     </span>
@@ -318,14 +352,19 @@
                                 </div>
                             @endforeach
                         </div>
-                        @if ($doc && $doc->file_path)
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-                                <a href="{{ route('rbis-annual-certification.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
-                                    <i class="fas fa-file"></i>&nbsp;View current file
-                                </a>
-                                @if (Auth::user()->isSuperAdmin())
-                                    <form method="POST" action="{{ route('rbis-annual-certification.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
-                                        @csrf
+                            @if ($doc && $doc->file_path)
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                                    <a href="{{ route('rbis-annual-certification.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
+                                        <i class="fas fa-file"></i>&nbsp;View current file
+                                    </a>
+                                    @if ($submissionTimeliness)
+                                        <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                            {{ $submissionTimeliness['label'] }}
+                                        </span>
+                                    @endif
+                                    @if (Auth::user()->isSuperAdmin())
+                                        <form method="POST" action="{{ route('rbis-annual-certification.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
+                                            @csrf
                                         @method('DELETE')
                                         <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
                                             <i class="fas fa-trash-alt"></i>

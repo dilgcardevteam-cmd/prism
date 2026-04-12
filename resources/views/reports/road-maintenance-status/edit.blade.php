@@ -85,6 +85,35 @@
 
                     return ['time' => $uploadedTime, 'name' => $encoderName !== '' ? $encoderName : 'Unknown'];
                 };
+                $resolveSubmissionTimelinessTag = function ($uploadedAt, $configuredDeadline) {
+                    if (!$uploadedAt || !is_array($configuredDeadline)) {
+                        return null;
+                    }
+
+                    $deadlineAt = $configuredDeadline['deadline_at'] ?? null;
+                    if (!$deadlineAt) {
+                        return null;
+                    }
+
+                    $timezone = config('app.timezone');
+                    $submittedAt = $uploadedAt instanceof \Carbon\CarbonInterface
+                        ? $uploadedAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($uploadedAt)->setTimezone($timezone);
+                    $deadlineTime = $deadlineAt instanceof \Carbon\CarbonInterface
+                        ? $deadlineAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($deadlineAt)->setTimezone($timezone);
+                    $isLate = $submittedAt->greaterThan($deadlineTime);
+
+                    return [
+                        'label' => $isLate ? 'Late' : 'On Time',
+                        'background' => $isLate ? '#fef2f2' : '#ecfdf5',
+                        'color' => $isLate ? '#b91c1c' : '#047857',
+                        'border' => $isLate ? '#fecaca' : '#a7f3d0',
+                        'title' => $isLate
+                            ? 'Submitted after the configured deadline of ' . $deadlineTime->format('M d, Y h:i A')
+                            : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
+                    ];
+                };
             @endphp
             @foreach ($quarters as $quarter => $label)
                 @php
@@ -98,11 +127,10 @@
                     $quarterDeadlineDisplay = is_array($configuredQuarterDeadline) ? (string) ($configuredQuarterDeadline['display'] ?? '') : '';
                     $hasFile = $doc && $doc->file_path;
                     $isReturned = $doc && $doc->status === 'returned';
-                    $isQuarterClosed = (bool) (is_array($configuredQuarterDeadline) ? ($configuredQuarterDeadline['is_closed'] ?? false) : false);
-                    $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload || $isQuarterClosed;
+                    $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                    $isExpandedByDefault = !$isQuarterClosed;
+                    $isExpandedByDefault = $loop->first;
                     $statusLabel = 'Pending Upload';
                     $statusColor = '#f59e0b';
                     if ($hasFile) {
@@ -123,6 +151,7 @@
                     }
                     $uploadedInfo = $resolveUploaderMeta($doc);
                     $uploadedTime = $uploadedInfo['time'];
+                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
                     $uploaderName = $uploadedInfo['name'];
                     $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                     $isDilgMountainUploader = $uploaderUser
@@ -162,7 +191,7 @@
                         class="road-maintenance-accordion-toggle"
                         data-target="road-maintenance-{{ $quarter }}"
                         aria-expanded="{{ $isExpandedByDefault ? 'true' : 'false' }}"
-                        style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; opacity: {{ $isQuarterClosed ? '0.88' : '1' }};"
+                        style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;"
                     >
                         <span>
                             {{ $label }} - Road Maintenance Status Report
@@ -173,8 +202,8 @@
                             </span>
                         </span>
                         <span style="display: inline-flex; align-items: center; gap: 10px;">
-                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $isQuarterClosed ? '#ef4444' : '#10b981' }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
-                                {{ $isQuarterClosed ? 'Deadline Passed' : 'Open for Upload' }}
+                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $quarterDeadlineDisplay !== '' ? '#0f766e' : '#6b7280' }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                {{ $quarterDeadlineDisplay !== '' ? 'Deadline Set' : 'No Deadline' }}
                             </span>
                             <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
                                 {{ $statusLabel }}
@@ -300,6 +329,11 @@
                                     <a href="{{ route('road-maintenance-status.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
                                         <i class="fas fa-file"></i>&nbsp;View current file
                                     </a>
+                                    @if ($submissionTimeliness)
+                                        <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                            {{ $submissionTimeliness['label'] }}
+                                        </span>
+                                    @endif
                                     @if (Auth::user()->isSuperAdmin())
                                         <form method="POST" action="{{ route('road-maintenance-status.delete-document', ['roadMaintenance' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                             @csrf
@@ -337,9 +371,7 @@
                             >
                             @if ($disableUploadInput)
                                 <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                                    @if ($isQuarterClosed)
-                                        Uploads for this quarter are closed based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
-                                    @elseif ($isRegionalOfficeUserForUpload)
+                                    @if ($isRegionalOfficeUserForUpload)
                                         Regional Office cannot upload files. Choose file is disabled.
                                     @else
                                         File already uploaded for this quarter. Choose file is disabled.

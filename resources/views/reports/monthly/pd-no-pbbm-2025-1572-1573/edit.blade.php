@@ -24,6 +24,17 @@
         </div>
     @endif
 
+    @if ($errors->any())
+        <div style="background-color: #fee2e2; border: 1px solid #fecaca; color: #991b1b; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+            <strong style="display: block; margin-bottom: 8px;">Please review the following:</strong>
+            <ul style="margin: 0; padding-left: 18px;">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); margin-bottom: 20px;">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
             <div>
@@ -78,6 +89,35 @@
 
                     return ['time' => $uploadedTime, 'name' => $encoderName !== '' ? $encoderName : 'Unknown'];
                 };
+                $resolveSubmissionTimelinessTag = function ($uploadedAt, $configuredDeadline) {
+                    if (!$uploadedAt || !is_array($configuredDeadline)) {
+                        return null;
+                    }
+
+                    $deadlineAt = $configuredDeadline['deadline_at'] ?? null;
+                    if (!$deadlineAt) {
+                        return null;
+                    }
+
+                    $timezone = config('app.timezone');
+                    $submittedAt = $uploadedAt instanceof \Carbon\CarbonInterface
+                        ? $uploadedAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($uploadedAt)->setTimezone($timezone);
+                    $deadlineTime = $deadlineAt instanceof \Carbon\CarbonInterface
+                        ? $deadlineAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($deadlineAt)->setTimezone($timezone);
+                    $isLate = $submittedAt->greaterThan($deadlineTime);
+
+                    return [
+                        'label' => $isLate ? 'Late' : 'On Time',
+                        'background' => $isLate ? '#fef2f2' : '#ecfdf5',
+                        'color' => $isLate ? '#b91c1c' : '#047857',
+                        'border' => $isLate ? '#fecaca' : '#a7f3d0',
+                        'title' => $isLate
+                            ? 'Submitted after the configured deadline of ' . $deadlineTime->format('M d, Y h:i A')
+                            : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
+                    ];
+                };
             @endphp
             @foreach ($months as $monthCode => $label)
                 @php
@@ -89,6 +129,8 @@
                     $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
                     $hasFile = $doc && $doc->file_path;
                     $isReturned = $doc && $doc->status === 'returned';
+                    $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
+                    $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
                     $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
@@ -113,6 +155,7 @@
                     }
                     $uploadedInfo = $resolveUploaderMeta($doc);
                     $uploadedTime = $uploadedInfo['time'];
+                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredMonthDeadline);
                     $uploaderName = $uploadedInfo['name'];
                     $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                     $isDilgMountainUploader = $uploaderUser
@@ -154,10 +197,16 @@
                         aria-expanded="{{ $isExpandedByDefault ? 'true' : 'false' }}"
                         style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;"
                     >
-                        <span>{{ $label }} - Report on PD No. PBBM-2025-1572-1573</span>
+                        <span style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                            <span>{{ $label }} - Report on PD No. PBBM-2025-1572-1573</span>
+                            <span style="font-size: 11px; opacity: 0.95;">Deadline: {{ $monthDeadlineDisplay !== '' ? $monthDeadlineDisplay : 'No superadmin deadline set' }}</span>
+                        </span>
                         <span style="display: inline-flex; align-items: center; gap: 10px;">
                             <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
                                 {{ $statusLabel }}
+                            </span>
+                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $monthDeadlineDisplay !== '' ? '#0f766e' : '#6b7280' }}; color: white; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                {{ $monthDeadlineDisplay !== '' ? 'Deadline Set' : 'No Deadline' }}
                             </span>
                             <i class="fas fa-chevron-down" style="transition: transform 0.3s; transform: {{ $isExpandedByDefault ? 'rotate(180deg)' : 'rotate(0deg)' }};"></i>
                         </span>
@@ -274,6 +323,11 @@
                                     <a href="{{ route('reports.monthly.pd-no-pbbm-2025-1572-1573.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
                                         <i class="fas fa-file"></i>&nbsp;View current file
                                     </a>
+                                    @if ($submissionTimeliness)
+                                        <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                            {{ $submissionTimeliness['label'] }}
+                                        </span>
+                                    @endif
                                     @if (Auth::user()->isSuperAdmin())
                                         <form method="POST" action="{{ route('reports.monthly.pd-no-pbbm-2025-1572-1573.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                             @csrf
@@ -310,17 +364,17 @@
                                 style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; margin-bottom: 8px; background-color: {{ $disableUploadInput ? '#f3f4f6' : '#ffffff' }}; cursor: {{ $disableUploadInput ? 'not-allowed' : 'auto' }};"
                                 onchange="showRoadMaintenanceSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
                             >
-                            <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                                Remarks: Only PDF files are allowed (maximum 15MB).
-                            </div>
-                            @if ($disableUploadInput)
                                 <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                                    @if ($isRegionalOfficeUserForUpload)
-                                        Regional Office cannot upload files. Choose file is disabled.
-                                    @else
-                                        File already uploaded for this month. Choose file is disabled.
-                                    @endif
+                                    Remarks: Only PDF files are allowed (maximum 15MB).
                                 </div>
+                                @if ($disableUploadInput)
+                                    <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
+                                        @if ($isRegionalOfficeUserForUpload)
+                                            Regional Office cannot upload files. Choose file is disabled.
+                                        @else
+                                            File already uploaded for this month. Choose file is disabled.
+                                        @endif
+                                    </div>
                             @endif
                             @if ($showApprovalButtons)
                                 <div style="display: flex; gap: 6px; margin-top: 8px; margin-bottom: 8px; justify-content: flex-start; align-items: center;">
@@ -337,11 +391,11 @@
                                 </div>
                             @endif
                             <div id="{{ $filenameId }}" class="ops-upload-filename" style="display: none; margin-bottom: 8px; font-size: 12px; color: #6b7280;"></div>
-                            <button
-                                type="submit"
-                                id="{{ $buttonId }}"
-                                class="ops-upload-submit"
-                                style="width: 25%; padding: 8px 12px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; opacity: 0; pointer-events: none; transition: all 0.3s ease; display: block; margin-left: 0; margin-right: auto;"
+                                <button
+                                    type="submit"
+                                    id="{{ $buttonId }}"
+                                    class="ops-upload-submit"
+                                    style="width: 25%; padding: 8px 12px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; opacity: 0; pointer-events: none; transition: all 0.3s ease; display: block; margin-left: 0; margin-right: auto;"
                             >
                                 Upload
                             </button>

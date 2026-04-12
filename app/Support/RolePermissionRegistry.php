@@ -76,6 +76,11 @@ class RolePermissionRegistry
                         'description' => 'Manage quarterly road maintenance status submissions, document uploads, and validation steps.',
                     ],
                     [
+                        'aspect' => 'quarterly_rpmes_form_2',
+                        'label' => 'Quarterly / RPMES Form 2',
+                        'description' => 'Manage quarterly RPMES Form 2 physical and financial accomplishment report submissions and validation workflow.',
+                    ],
+                    [
                         'aspect' => 'pd_no_pbbm_monthly_reports',
                         'label' => 'Monthly / PD No. PBBM-2025-1572-1573',
                         'description' => 'Manage monthly report submissions, uploaded files, and document approval actions.',
@@ -269,6 +274,10 @@ class RolePermissionRegistry
             'road_maintenance_status_reports.add',
             'road_maintenance_status_reports.update',
             'road_maintenance_status_reports.delete',
+            'quarterly_rpmes_form_2.view',
+            'quarterly_rpmes_form_2.add',
+            'quarterly_rpmes_form_2.update',
+            'quarterly_rpmes_form_2.delete',
             'rbis_annual_certification.view',
             'rbis_annual_certification.add',
             'rbis_annual_certification.update',
