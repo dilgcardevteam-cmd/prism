@@ -225,6 +225,35 @@
 
             return ['time' => $uploadedTime, 'name' => $encoderName];
         };
+        $resolveSubmissionTimelinessTag = function ($uploadedAt, $configuredDeadline) {
+            if (!$uploadedAt || !is_array($configuredDeadline)) {
+                return null;
+            }
+
+            $deadlineAt = $configuredDeadline['deadline_at'] ?? null;
+            if (!$deadlineAt) {
+                return null;
+            }
+
+            $timezone = config('app.timezone');
+            $submittedAt = $uploadedAt instanceof \Carbon\CarbonInterface
+                ? $uploadedAt->copy()->setTimezone($timezone)
+                : \Carbon\Carbon::parse($uploadedAt)->setTimezone($timezone);
+            $deadlineTime = $deadlineAt instanceof \Carbon\CarbonInterface
+                ? $deadlineAt->copy()->setTimezone($timezone)
+                : \Carbon\Carbon::parse($deadlineAt)->setTimezone($timezone);
+            $isLate = $submittedAt->greaterThan($deadlineTime);
+
+            return [
+                'label' => $isLate ? 'Late' : 'On Time',
+                'background' => $isLate ? '#fef2f2' : '#ecfdf5',
+                'color' => $isLate ? '#b91c1c' : '#047857',
+                'border' => $isLate ? '#fecaca' : '#a7f3d0',
+                'title' => $isLate
+                    ? 'Submitted after the configured deadline of ' . $deadlineTime->format('M d, Y h:i A')
+                    : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
+            ];
+        };
     @endphp
 
     <!-- Quarterly Sections -->
@@ -239,41 +268,28 @@
             ];
             $quarterLabel = $quarterLabels[$quarter] ?? $quarter;
             $quarterWindow = $quarterWindows[$quarter] ?? '';
-            $quarterOrder = ['Q1' => 1, 'Q2' => 2, 'Q3' => 3, 'Q4' => 4];
-
-            // Determine current quarter based on current date
-            $now = \Carbon\Carbon::now();
-            $currentMonth = $now->month;
-            if ($currentMonth <= 3) {
-                $currentQuarter = 'Q1';
-            } elseif ($currentMonth <= 6) {
-                $currentQuarter = 'Q2';
-            } elseif ($currentMonth <= 9) {
-                $currentQuarter = 'Q3';
-            } else {
-                $currentQuarter = 'Q4';
-            }
-
-            $isCurrentQuarter = ($quarter === $currentQuarter);
-            $isQuarterClosed = ($quarterOrder[$quarter] ?? 0) < ($quarterOrder[$currentQuarter] ?? 0);
-            $displayStyle = $isCurrentQuarter ? 'block' : 'none';
-            $iconRotation = $isCurrentQuarter ? 'rotate(180deg)' : 'rotate(0deg)';
+            $configuredQuarterDeadline = $configuredQuarterDeadlines[$quarter] ?? null;
+            $quarterDeadlineDisplay = trim((string) ($configuredQuarterDeadline['display'] ?? ''));
+            $isExpandedByDefault = $loop->first;
+            $displayStyle = $isExpandedByDefault ? 'block' : 'none';
+            $iconRotation = $isExpandedByDefault ? 'rotate(180deg)' : 'rotate(0deg)';
 
             // Define FDP variables early to avoid undefined variable errors
             $isFdpReturned = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_status === 'returned';
         @endphp
         <div style="background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.09); margin-bottom: 24px; border: 1px solid #e5e7eb; overflow: hidden;">
             <!-- Quarter Accordion Header -->
-            <button type="button" onclick="toggleAccordion('quarter-{{ $quarter }}')" {{ $isQuarterClosed ? 'disabled' : '' }} style="width: 100%; padding: 18px 24px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: white; border: none; text-align: left; cursor: {{ $isQuarterClosed ? 'not-allowed' : 'pointer' }}; font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; align-items: center; opacity: {{ $isQuarterClosed ? '0.82' : '1' }};" onmouseover="if(!this.disabled){this.style.filter='brightness(1.08)'}" onmouseout="if(!this.disabled){this.style.filter='brightness(1)'}">
+            <button type="button" onclick="toggleAccordion('quarter-{{ $quarter }}')" style="width: 100%; padding: 18px 24px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: white; border: none; text-align: left; cursor: pointer; font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter='brightness(1)'">
                 <span style="display: flex; align-items: center; gap: 12px;">
                     <span style="width: 34px; height: 34px; background: rgba(255,255,255,0.15); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <i class="fas fa-calendar-alt" style="font-size: 14px;"></i>
                     </span>
                     <span>{{ $quarterLabel }}</span>
-                    <span style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: {{ $isQuarterClosed ? 'rgba(239,68,68,0.22)' : 'rgba(16,185,129,0.25)' }}; color: #fff;">
-                        {{ $isQuarterClosed ? 'Closed' : 'Open for Upload' }}
+                    <span style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: {{ $quarterDeadlineDisplay !== '' ? 'rgba(15,118,110,0.32)' : 'rgba(107,114,128,0.35)' }}; color: #fff;">
+                        {{ $quarterDeadlineDisplay !== '' ? 'Deadline Set' : 'No Deadline' }}
                     </span>
                     <span style="font-size: 11px; opacity: 0.95;">{{ $quarterWindow }}</span>
+                    <span style="font-size: 11px; opacity: 0.95;">Deadline: {{ $quarterDeadlineDisplay !== '' ? $quarterDeadlineDisplay : 'No superadmin deadline set' }}</span>
                     <span style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 999px; font-size: 12px;">
                         <span style="width: 60px; height: 5px; background: rgba(255,255,255,0.25); border-radius: 999px; overflow: hidden; display: inline-block;">
                             <span style="width: {{ $accomplishmentPercentages[$quarter] }}%; height: 100%; background: #34d399; display: block;"></span>
@@ -286,7 +302,6 @@
 
             <!-- Quarter Content -->
             <div id="quarter-{{ $quarter }}" style="display: {{ $displayStyle }}; padding: 22px 24px;">
-
             <!-- Fund Utilization Report (MOV) Section -->
             @php
                 $hasMovFile = $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path;
@@ -353,6 +368,14 @@
                                     $encoderName = $uploadedInfo['name'];
                                 @endphp
                                 Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                @php
+                                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                @endphp
+                                @if($submissionTimeliness)
+                                    <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                        {{ $submissionTimeliness['label'] }}
+                                    </span>
+                                @endif
                             </span>
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -395,7 +418,7 @@
                     <form action="{{ route('fund-utilization.upload-mov', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="mov_file" accept="application/pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned ? 'disabled' : '' }} {{ $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned ? 'title="Document was returned. Delete the current file to upload a new one."' : '' }}>
+                        <input type="file" name="mov_file" accept="application/pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned ? 'disabled' : '' }} title="{{ $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned ? 'Document was returned. Delete the current file to upload a new one.' : '' }}">
                         <button type="submit" id="mov-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -608,6 +631,14 @@
                                                     $encoderName = $uploadedInfo['name'];
                                                 @endphp
                                                 Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                                @php
+                                                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                                @endphp
+                                                @if($submissionTimeliness)
+                                                    <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                        {{ $submissionTimeliness['label'] }}
+                                                    </span>
+                                                @endif
                                             </span>
                                             @php
                                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -647,7 +678,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dbm" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned ? 'disabled' : '' }} {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned ? 'title="Document was returned. Delete the current file to upload a new one."' : '' }}>
+                                    <input type="file" name="secretary_dbm" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned ? 'Document was returned. Delete the current file to upload a new one.' : '' }}">
                                     <button type="submit" id="dbm-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -789,6 +820,14 @@
                                                     $encoderName = $uploadedInfo['name'];
                                                 @endphp
                                                 Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                                @php
+                                                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                                @endphp
+                                                @if($submissionTimeliness)
+                                                    <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                        {{ $submissionTimeliness['label'] }}
+                                                    </span>
+                                                @endif
                                             </span>
                                             @php
                                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -828,7 +867,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dilg" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned ? 'disabled' : '' }} {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned ? 'title="File already uploaded. Delete the current file to upload a new one."' : '' }}>
+                                    <input type="file" name="secretary_dilg" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}">
                                     <button type="submit" id="dilg-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -971,6 +1010,14 @@
                                                 $encoderName = $uploadedInfo['name'];
                                             @endphp
                                             Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                            @php
+                                                $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                            @endphp
+                                            @if($submissionTimeliness)
+                                                <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                    {{ $submissionTimeliness['label'] }}
+                                                </span>
+                                            @endif
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1001,7 +1048,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="speaker_house" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned ? 'disabled' : '' }} {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned ? 'title="File already uploaded. Delete the current file to upload a new one."' : '' }}>
+                                    <input type="file" name="speaker_house" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}">
                                     <button type="submit" id="speaker-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1133,6 +1180,14 @@
                                                 $encoderName = $uploadedInfo['name'];
                                             @endphp
                                             Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                            @php
+                                                $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                            @endphp
+                                            @if($submissionTimeliness)
+                                                <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                    {{ $submissionTimeliness['label'] }}
+                                                </span>
+                                            @endif
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1163,7 +1218,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="president_senate" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned ? 'disabled' : '' }} {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned ? 'title="File already uploaded. Delete the current file to upload a new one."' : '' }}>
+                                    <input type="file" name="president_senate" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}">
                                     <button type="submit" id="president-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1291,6 +1346,14 @@
                                                 $encoderName = $uploadedInfo['name'];
                                             @endphp
                                             Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                            @php
+                                                $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                            @endphp
+                                            @if($submissionTimeliness)
+                                                <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                    {{ $submissionTimeliness['label'] }}
+                                                </span>
+                                            @endif
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1321,7 +1384,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="house_committee" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned ? 'disabled' : '' }} {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned ? 'title="File already uploaded. Delete the current file to upload a new one."' : '' }}>
+                                    <input type="file" name="house_committee" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}">
                                     <button type="submit" id="house-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1447,6 +1510,14 @@
                                                 $encoderName = $uploadedInfo['name'];
                                             @endphp
                                             Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                            @php
+                                                $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                            @endphp
+                                            @if($submissionTimeliness)
+                                                <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                    {{ $submissionTimeliness['label'] }}
+                                                </span>
+                                            @endif
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1477,7 +1548,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="senate_committee" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned ? 'disabled' : '' }} {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned ? 'title="File already uploaded. Delete the current file to upload a new one."' : '' }}>
+                                    <input type="file" name="senate_committee" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}">
                                     <button type="submit" id="senate-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1646,6 +1717,14 @@
                                     $encoderName = $uploadedInfo['name'];
                                 @endphp
                                 Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $encoderName }}
+                                @php
+                                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                @endphp
+                                @if($submissionTimeliness)
+                                    <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                        {{ $submissionTimeliness['label'] }}
+                                    </span>
+                                @endif
                             </span>
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1689,7 +1768,7 @@
                     <form action="{{ route('fund-utilization.upload-fdp', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="fdp_file" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned ? 'disabled' : '' }} {{ $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned ? 'title="File already uploaded. Delete the current file to upload a new one."' : '' }}>
+                        <input type="file" name="fdp_file" accept="image/*,.pdf" style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned ? 'disabled' : '' }} title="{{ $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}">
                         <button type="submit" id="fdp-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -1825,6 +1904,14 @@
                                     $postingEncoderName = $uploadedInfo['name'];
                                 @endphp
                                 Uploaded at: {{ $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '-' }} by {{ $postingEncoderName }}
+                                @php
+                                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
+                                @endphp
+                                @if($submissionTimeliness)
+                                    <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; margin-left: 8px; padding: 3px 8px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                        {{ $submissionTimeliness['label'] }}
+                                    </span>
+                                @endif
                             </span>
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -2601,4 +2688,3 @@
 
     </div>
 @endsection
-

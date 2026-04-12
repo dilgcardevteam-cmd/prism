@@ -847,22 +847,6 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $year = $request->input('year');
         $quarter = $request->input('quarter');
 
-        if (is_string($quarter) && $quarter !== '') {
-            $configuredDeadline = app(LguReportorialDeadlineResolver::class)->resolve(
-                'local_project_monitoring_committee',
-                (int) now()->year,
-                $quarter
-            );
-
-            if (($configuredDeadline['is_closed'] ?? false) === true) {
-                $deadlineLabel = $configuredDeadline['display'] ?? 'the configured superadmin deadline';
-
-                return back()->withErrors([
-                    'document' => 'Uploads for this quarter are closed. Deadline: ' . $deadlineLabel . '.',
-                ]);
-            }
-        }
-
         $existingDocument = LpmcDocument::where('office', $officeName)
             ->where('doc_type', $docType)
             ->where('year', $year)

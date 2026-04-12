@@ -8,6 +8,7 @@ use App\Models\FURMovUpload;
 use App\Models\FURWrittenNotice;
 use App\Models\FURFDP;
 use App\Models\FURAdminRemark;
+use App\Support\LguReportorialDeadlineResolver;
 use App\Support\InputSanitizer;
 use App\Support\NotificationUrl;
 use App\Models\User;
@@ -274,6 +275,23 @@ class FundUtilizationReportController extends Controller
         $report->lfp_id = $lfpProject->id;
 
         return $report;
+    }
+
+    private function fundUtilizationDeadlineReportingYear(): int
+    {
+        // Fund utilization timeliness tracking follows the LGU reportorial
+        // deadline configuration for the current reporting cycle, not the
+        // project's funding year.
+        return (int) now()->year;
+    }
+
+    private function resolveFundUtilizationQuarterDeadline($report, string $quarter): ?array
+    {
+        return app(LguReportorialDeadlineResolver::class)->resolve(
+            'fund_utilization_reports',
+            $this->fundUtilizationDeadlineReportingYear(),
+            $quarter
+        );
     }
 
     private function isProvincialDilgUser(?User $user): bool
@@ -1198,6 +1216,12 @@ class FundUtilizationReportController extends Controller
         }
         
         $quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+        $deadlineReportingYear = $this->fundUtilizationDeadlineReportingYear();
+        $configuredQuarterDeadlines = app(LguReportorialDeadlineResolver::class)->resolveMany(
+            'fund_utilization_reports',
+            $deadlineReportingYear,
+            $quarters
+        );
         
         $movUploads = [];
         $writtenNotices = [];
@@ -1225,7 +1249,18 @@ class FundUtilizationReportController extends Controller
 
         $activityLogs = $this->getFundUtilizationLogs($projectCode);
 
-        return view('reports.fund-utilization.show', compact('report', 'quarters', 'movUploads', 'writtenNotices', 'fdpDocuments', 'adminRemarks', 'activityLogs', 'accomplishmentPercentages'));
+        return view('reports.fund-utilization.show', compact(
+            'report',
+            'quarters',
+            'movUploads',
+            'writtenNotices',
+            'fdpDocuments',
+            'adminRemarks',
+            'activityLogs',
+            'accomplishmentPercentages',
+            'deadlineReportingYear',
+            'configuredQuarterDeadlines'
+        ));
     }
 
     /**

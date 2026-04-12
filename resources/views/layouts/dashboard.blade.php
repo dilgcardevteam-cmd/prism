@@ -1871,10 +1871,11 @@
                 @php
                     $reportsAnnualActive = request()->routeIs('rbis-annual-certification.*');
                     $reportsAnnualRpmesActive = false;
+                    $reportsQuarterlyRpmesActive = request()->routeIs('reports.quarterly.rpmes.form-2*');
                     $reportsQuarterlyActive = request()->routeIs('fund-utilization.*')
                         || request()->routeIs('local-project-monitoring-committee.*')
-                        || request()->routeIs('road-maintenance-status.*');
-                    $reportsQuarterlyRpmesActive = false;
+                        || request()->routeIs('road-maintenance-status.*')
+                        || $reportsQuarterlyRpmesActive;
                     $reportsSwaAnnexFActive = request()->routeIs('reports.monthly.swa-annex-f*');
                     $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
                     $reportsMonthlyRpmesActive = false;
@@ -1955,6 +1956,12 @@
                                         <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
                                     </a>
                                     <ul id="reportsQuarterlyRpmesMenu" class="submenu" style="display: {{ $reportsQuarterlyRpmesActive ? 'block' : 'none' }};">
+                                        <li>
+                                            <a href="{{ route('reports.quarterly.rpmes.form-2') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-2*')) active @endif">
+                                                <i class="fas fa-file-signature"></i>
+                                                <span>RPMES FORM 2</span>
+                                            </a>
+                                        </li>
                                     </ul>
                                 </li>
                             </ul>

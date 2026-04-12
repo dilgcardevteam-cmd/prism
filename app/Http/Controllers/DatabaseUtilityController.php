@@ -492,6 +492,10 @@ class DatabaseUtilityController extends Controller
                 'route' => route('road-maintenance-status.index'),
                 'icon' => 'fas fa-road',
             ],
+            'quarterly_rpmes_form_2' => [
+                'route' => route('reports.quarterly.rpmes.form-2'),
+                'icon' => 'fas fa-file-signature',
+            ],
             'pd_no_pbbm_monthly_reports' => [
                 'route' => route('reports.monthly.pd-no-pbbm-2025-1572-1573'),
                 'icon' => 'fas fa-file-alt',

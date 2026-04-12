@@ -737,20 +737,6 @@ class RoadMaintenanceStatusReportController extends Controller
         $year = (int) $request->input('year');
         $quarter = $request->input('quarter');
         $docType = $this->quarterlyDocType();
-        $configuredDeadline = app(LguReportorialDeadlineResolver::class)->resolve(
-            'road_maintenance_status_reports',
-            $year,
-            $quarter
-        );
-
-        if (($configuredDeadline['is_closed'] ?? false) === true) {
-            $deadlineLabel = $configuredDeadline['display'] ?? 'the configured superadmin deadline';
-
-            return back()->withErrors([
-                'document' => 'Uploads for this quarter are closed. Deadline: ' . $deadlineLabel . '.',
-            ]);
-        }
-
         $existingDocument = RoadMaintenanceStatusDocument::where('office', $officeName)
             ->where('doc_type', $docType)
             ->where('year', $year)

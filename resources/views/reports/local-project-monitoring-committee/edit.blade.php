@@ -81,6 +81,35 @@
 
                     return ['time' => $uploadedTime, 'name' => $encoderName !== '' ? $encoderName : 'Unknown'];
                 };
+                $resolveSubmissionTimelinessTag = function ($uploadedAt, $configuredDeadline) {
+                    if (!$uploadedAt || !is_array($configuredDeadline)) {
+                        return null;
+                    }
+
+                    $deadlineAt = $configuredDeadline['deadline_at'] ?? null;
+                    if (!$deadlineAt) {
+                        return null;
+                    }
+
+                    $timezone = config('app.timezone');
+                    $submittedAt = $uploadedAt instanceof \Carbon\CarbonInterface
+                        ? $uploadedAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($uploadedAt)->setTimezone($timezone);
+                    $deadlineTime = $deadlineAt instanceof \Carbon\CarbonInterface
+                        ? $deadlineAt->copy()->setTimezone($timezone)
+                        : \Carbon\Carbon::parse($deadlineAt)->setTimezone($timezone);
+                    $isLate = $submittedAt->greaterThan($deadlineTime);
+
+                    return [
+                        'label' => $isLate ? 'Late' : 'On Time',
+                        'background' => $isLate ? '#fef2f2' : '#ecfdf5',
+                        'color' => $isLate ? '#b91c1c' : '#047857',
+                        'border' => $isLate ? '#fecaca' : '#a7f3d0',
+                        'title' => $isLate
+                            ? 'Submitted after the configured deadline of ' . $deadlineTime->format('M d, Y h:i A')
+                            : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
+                    ];
+                };
             @endphp
             @foreach ($docBlocks as $docBlock)
                 @php
@@ -347,10 +376,9 @@
                 @php
                     $configuredQuarterDeadline = $configuredQuarterDeadlines[$quarter] ?? null;
                     $quarterDeadlineDisplay = is_array($configuredQuarterDeadline) ? (string) ($configuredQuarterDeadline['display'] ?? '') : '';
-                    $isQuarterClosed = (bool) (is_array($configuredQuarterDeadline) ? ($configuredQuarterDeadline['is_closed'] ?? false) : false);
                 @endphp
                 <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-                    <button type="button" class="lpmc-accordion-toggle" data-target="lpmc-{{ $quarter }}" style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center; opacity: {{ $isQuarterClosed ? '0.88' : '1' }};">
+                    <button type="button" class="lpmc-accordion-toggle" data-target="lpmc-{{ $quarter }}" style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center;">
                         <span>
                             {{ $label }}
                             <span style="font-size: 11px; font-weight: 500; opacity: 0.95;">({{ $quarterWindows[$quarter] ?? '' }})</span>
@@ -360,18 +388,13 @@
                             </span>
                         </span>
                         <span style="display: inline-flex; align-items: center; gap: 8px;">
-                            <span style="display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; background: {{ $isQuarterClosed ? '#ef4444' : '#10b981' }}; color: #fff;">
-                                {{ $isQuarterClosed ? 'Deadline Passed' : 'Open for Upload' }}
+                            <span style="display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; background: {{ $quarterDeadlineDisplay !== '' ? '#0f766e' : '#6b7280' }}; color: #fff;">
+                                {{ $quarterDeadlineDisplay !== '' ? 'Deadline Set' : 'No Deadline' }}
                             </span>
                             <i class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
                         </span>
                     </button>
                     <div id="lpmc-{{ $quarter }}" style="display: none; padding: 16px; background-color: #ffffff;">
-                        @if ($isQuarterClosed)
-                            <div style="margin-bottom: 12px; padding: 10px 12px; border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; border-radius: 8px; font-size: 12px; font-weight: 600;">
-                                Uploads for this quarter are closed based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
-                            </div>
-                        @endif
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
                             @php
                                 $quarterDocs = [
@@ -388,10 +411,9 @@
                                     $buttonId = 'lpmc-q-btn-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $filenameId = 'lpmc-q-file-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
-                                    $disableQuarterUpload = $isQuarterClosed;
                                     $hasFile = $doc && $doc->file_path;
                                     $isReturned = $doc && $doc->status === 'returned';
-                                    $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload || $disableQuarterUpload;
+                                    $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
                                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
                                     $statusLabel = 'Pending Upload';
@@ -417,6 +439,7 @@
                                     $roApprover = $doc && $doc->approved_by_dilg_ro && isset($usersById[$doc->approved_by_dilg_ro]) ? $usersById[$doc->approved_by_dilg_ro] : null;
                                     $uploadedInfo = $resolveUploaderMeta($doc);
                                     $uploadedTime = $uploadedInfo['time'];
+                                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
                                     $uploaderName = $uploadedInfo['name'];
                                     $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                                     $isDilgMountainUploader = $uploaderUser
@@ -454,8 +477,15 @@
                                     <input type="hidden" name="quarter" value="{{ $quarter }}">
                                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
                                         <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0;">{{ $qDoc['label'] }}</label>
-                                        <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
-                                            {{ $statusLabel }}
+                                        <span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+                                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                                {{ $statusLabel }}
+                                            </span>
+                                            @if ($submissionTimeliness)
+                                                <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
+                                                    {{ $submissionTimeliness['label'] }}
+                                                </span>
+                                            @endif
                                         </span>
                                     </div>
                                     <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">

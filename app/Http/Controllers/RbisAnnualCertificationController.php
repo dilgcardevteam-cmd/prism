@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\LguReportorialDeadline;
 use App\Models\RbisAnnualCertificationDocument;
 use App\Services\InterventionNotificationService;
 use App\Support\InputSanitizer;
+use App\Support\LguReportorialDeadlineResolver;
 use App\Models\User;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -110,73 +110,11 @@ class RbisAnnualCertificationController extends Controller
 
     private function resolveConfiguredDeadline(int $reportingYear): ?array
     {
-        if (!Schema::hasTable('lgu_reportorial_deadlines')) {
-            return null;
-        }
-
-        $record = LguReportorialDeadline::query()
-            ->where('aspect', 'rbis_annual_certification')
-            ->where('reporting_year', $reportingYear)
-            ->where('reporting_period', 'Annual')
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
-            ->first();
-
-        if (!$record) {
-            return null;
-        }
-
-        $deadlineDate = $record->deadline_date instanceof Carbon
-            ? $record->deadline_date->format('Y-m-d')
-            : trim((string) $record->deadline_date);
-        $deadlineTimeRaw = trim((string) $record->deadline_time);
-
-        if ($deadlineDate === '') {
-            return null;
-        }
-
-        $parsedDeadlineDate = null;
-        try {
-            $parsedDeadlineDate = Carbon::parse($deadlineDate)->setTimezone(config('app.timezone'));
-            $formattedDate = $parsedDeadlineDate->format('M j, Y');
-        } catch (\Throwable) {
-            $formattedDate = $deadlineDate;
-        }
-
-        $formattedTime = '';
-        foreach (['H:i:s', 'H:i'] as $timeFormat) {
-            try {
-                $formattedTime = Carbon::createFromFormat($timeFormat, $deadlineTimeRaw)->format('h:i A');
-                break;
-            } catch (\Throwable) {
-                continue;
-            }
-        }
-
-        $display = $formattedDate . ($formattedTime !== '' ? ' ' . $formattedTime : '');
-        $deadlineIso = null;
-        if ($parsedDeadlineDate && $deadlineTimeRaw !== '') {
-            foreach (['Y-m-d H:i:s', 'Y-m-d H:i'] as $dateTimeFormat) {
-                try {
-                    $deadlineIso = Carbon::createFromFormat(
-                        $dateTimeFormat,
-                        $deadlineDate . ' ' . $deadlineTimeRaw,
-                        config('app.timezone')
-                    )->toIso8601String();
-                    break;
-                } catch (\Throwable) {
-                    continue;
-                }
-            }
-        }
-
-        return [
-            'display' => $display,
-            'deadline_iso' => $deadlineIso,
-            'updated_at' => $record->updated_at?->setTimezone(config('app.timezone')),
-            'updated_by' => $record->updated_by ? (int) $record->updated_by : null,
-            'updated_by_name' => null,
-        ];
+        return app(LguReportorialDeadlineResolver::class)->resolve(
+            'rbis_annual_certification',
+            $reportingYear,
+            'Annual'
+        );
     }
 
     private function buildOfficeRows(array $officesByProvince): array

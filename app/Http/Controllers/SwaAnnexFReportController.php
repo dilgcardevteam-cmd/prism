@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SwaAnnexFDocument;
 use App\Models\User;
 use App\Support\InputSanitizer;
+use App\Support\LguReportorialDeadlineResolver;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +89,31 @@ class SwaAnnexFReportController extends Controller
         }
 
         return $year;
+    }
+
+    private function resolveMonthlyDeadline(int $reportingYear, string $monthCode): ?array
+    {
+        $monthLabel = $this->monthOptions()[$monthCode] ?? null;
+        if ($monthLabel === null) {
+            return null;
+        }
+
+        return app(LguReportorialDeadlineResolver::class)->resolve(
+            'swa_annex_f_monthly_reports',
+            $reportingYear,
+            $monthLabel
+        );
+    }
+
+    private function resolveMonthlyDeadlines(int $reportingYear): array
+    {
+        $resolved = [];
+
+        foreach (array_keys($this->monthOptions()) as $monthCode) {
+            $resolved[$monthCode] = $this->resolveMonthlyDeadline($reportingYear, $monthCode);
+        }
+
+        return $resolved;
     }
 
     private function buildOfficeRows(array $offices): array
@@ -593,6 +619,7 @@ class SwaAnnexFReportController extends Controller
         $usersById = $userIds !== []
             ? User::whereIn('idno', $userIds)->get()->keyBy('idno')
             : collect();
+        $configuredMonthlyDeadlines = $this->resolveMonthlyDeadlines($reportingYear);
 
         return view('reports.monthly.swa-annex-f.edit', compact(
             'officeName',
@@ -600,7 +627,8 @@ class SwaAnnexFReportController extends Controller
             'documentsByKey',
             'usersById',
             'reportingYear',
-            'months'
+            'months',
+            'configuredMonthlyDeadlines'
         ));
     }
 
