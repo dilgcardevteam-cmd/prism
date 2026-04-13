@@ -480,6 +480,10 @@ class DatabaseUtilityController extends Controller
                 'route' => route('rbis-annual-certification.index'),
                 'icon' => 'fas fa-bridge',
             ],
+            'annual_rpmes_form_4' => [
+                'route' => route('reports.annual.rpmes.form-4'),
+                'icon' => 'fas fa-diagram-project',
+            ],
             'fund_utilization_reports' => [
                 'route' => route('fund-utilization.index'),
                 'icon' => 'fas fa-coins',
@@ -495,6 +499,14 @@ class DatabaseUtilityController extends Controller
             'quarterly_rpmes_form_2' => [
                 'route' => route('reports.quarterly.rpmes.form-2'),
                 'icon' => 'fas fa-file-signature',
+            ],
+            'quarterly_rpmes_form_5' => [
+                'route' => route('reports.quarterly.rpmes.form-5'),
+                'icon' => 'fas fa-chart-column',
+            ],
+            'quarterly_rpmes_form_6' => [
+                'route' => route('reports.quarterly.rpmes.form-6'),
+                'icon' => 'fas fa-triangle-exclamation',
             ],
             'pd_no_pbbm_monthly_reports' => [
                 'route' => route('reports.monthly.pd-no-pbbm-2025-1572-1573'),

@@ -1751,11 +1751,27 @@
                 $canViewSglgifPortal = Auth::user()->hasCrudPermission('sglgif_portal', 'view');
                 $canViewPreImplementationDocuments = Auth::user()->hasCrudPermission('pre_implementation_documents', 'view');
                 $canViewRbisAnnualCertification = Auth::user()->hasCrudPermission('rbis_annual_certification', 'view');
+                $canViewAnnualRpmesBase = $canViewRbisAnnualCertification;
+                $canViewAnnualRpmesForm4 = $canViewAnnualRpmesBase
+                    || Auth::user()->hasCrudPermission('annual_rpmes_form_4', 'view');
+                $canViewAnyAnnualRpmesForm = $canViewAnnualRpmesForm4;
                 $canViewPdNoPbbmMonthlyReports = Auth::user()->hasCrudPermission('pd_no_pbbm_monthly_reports', 'view');
                 $canViewSwaAnnexFMonthlyReports = Auth::user()->hasCrudPermission('swa_annex_f_monthly_reports', 'view');
                 $canViewFundUtilizationReports = Auth::user()->hasCrudPermission('fund_utilization_reports', 'view');
                 $canViewLpmcReports = Auth::user()->hasCrudPermission('local_project_monitoring_committee', 'view');
                 $canViewRoadMaintenanceReports = Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'view');
+                $canViewQuarterlyRpmesBase = $canViewFundUtilizationReports
+                    || $canViewLpmcReports
+                    || $canViewRoadMaintenanceReports;
+                $canViewQuarterlyRpmesForm2 = $canViewQuarterlyRpmesBase
+                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_2', 'view');
+                $canViewQuarterlyRpmesForm5 = $canViewQuarterlyRpmesBase
+                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_5', 'view');
+                $canViewQuarterlyRpmesForm6 = $canViewQuarterlyRpmesBase
+                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_6', 'view');
+                $canViewAnyQuarterlyRpmesForm = $canViewQuarterlyRpmesForm2
+                    || $canViewQuarterlyRpmesForm5
+                    || $canViewQuarterlyRpmesForm6;
                 $canViewTicketingSystem = Auth::user()->hasCrudPermission('ticketing_system', 'view');
                 $canViewSubaybayanUploads = Auth::user()->hasCrudPermission('subaybayan_data_uploads', 'view');
                 $canViewRssaLgsfUploads = $canViewSubaybayanUploads;
@@ -1773,11 +1789,13 @@
                     || $canViewProjectAtRiskProjects
                     || $canViewSglgifPortal;
                 $hasAnyReportorialAccess = $canViewRbisAnnualCertification
+                    || $canViewAnyAnnualRpmesForm
                     || $canViewPdNoPbbmMonthlyReports
                     || $canViewSwaAnnexFMonthlyReports
                     || $canViewFundUtilizationReports
                     || $canViewLpmcReports
-                    || $canViewRoadMaintenanceReports;
+                    || $canViewRoadMaintenanceReports
+                    || $canViewAnyQuarterlyRpmesForm;
                 $hasAnyUtilitiesAccess = $canViewUtilitiesSystemSetup
                     || $canViewUtilitiesNotifications
                     || $canViewUtilitiesDeadlines
@@ -1869,9 +1887,12 @@
             @if($hasAnyReportorialAccess)
             <li>
                 @php
-                    $reportsAnnualActive = request()->routeIs('rbis-annual-certification.*');
-                    $reportsAnnualRpmesActive = false;
-                    $reportsQuarterlyRpmesActive = request()->routeIs('reports.quarterly.rpmes.form-2*');
+                    $reportsAnnualRpmesActive = request()->routeIs('reports.annual.rpmes.form-4*');
+                    $reportsAnnualActive = request()->routeIs('rbis-annual-certification.*')
+                        || $reportsAnnualRpmesActive;
+                    $reportsQuarterlyRpmesActive = request()->routeIs('reports.quarterly.rpmes.form-2*')
+                        || request()->routeIs('reports.quarterly.rpmes.form-5*')
+                        || request()->routeIs('reports.quarterly.rpmes.form-6*');
                     $reportsQuarterlyActive = request()->routeIs('fund-utilization.*')
                         || request()->routeIs('local-project-monitoring-committee.*')
                         || request()->routeIs('road-maintenance-status.*')
@@ -1891,7 +1912,7 @@
                     <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                 </a>
                 <ul id="reportsMenu" class="submenu" style="display: {{ $reportsMenuActive ? 'block' : 'none' }};">
-                    @if($canViewRbisAnnualCertification)
+                    @if($canViewRbisAnnualCertification || $canViewAnyAnnualRpmesForm)
                         <li>
                             <a href="#" class="@if($reportsAnnualActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualMenu')">
                                 <i class="fas fa-calendar-alt"></i>
@@ -1899,25 +1920,37 @@
                                 <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
                             </a>
                             <ul id="reportsAnnualMenu" class="submenu" style="display: {{ $reportsAnnualActive ? 'block' : 'none' }};">
-                                <li>
-                                    <a href="{{ route('rbis-annual-certification.index') }}" class="@if(request()->routeIs('rbis-annual-certification.*')) active @endif">
-                                        <i class="fas fa-bridge"></i>
-                                        <span>RBIS Annual Certification</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="#" class="@if($reportsAnnualRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualRpmesMenu')">
-                                        <i class="fas fa-file-alt"></i>
-                                        <span>RPMES FORM</span>
-                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
-                                    </a>
-                                    <ul id="reportsAnnualRpmesMenu" class="submenu" style="display: {{ $reportsAnnualRpmesActive ? 'block' : 'none' }};">
-                                    </ul>
-                                </li>
+                                @if($canViewRbisAnnualCertification)
+                                    <li>
+                                        <a href="{{ route('rbis-annual-certification.index') }}" class="@if(request()->routeIs('rbis-annual-certification.*')) active @endif">
+                                            <i class="fas fa-bridge"></i>
+                                            <span>RBIS Annual Certification</span>
+                                        </a>
+                                    </li>
+                                @endif
+                                @if($canViewAnyAnnualRpmesForm)
+                                    <li>
+                                        <a href="#" class="@if($reportsAnnualRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualRpmesMenu')">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>RPMES FORM</span>
+                                            <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                        </a>
+                                        <ul id="reportsAnnualRpmesMenu" class="submenu" style="display: {{ $reportsAnnualRpmesActive ? 'block' : 'none' }};">
+                                            @if($canViewAnnualRpmesForm4)
+                                                <li>
+                                                    <a href="{{ route('reports.annual.rpmes.form-4') }}" class="@if(request()->routeIs('reports.annual.rpmes.form-4*')) active @endif">
+                                                        <i class="fas fa-diagram-project"></i>
+                                                        <span>RPMES FORM 4</span>
+                                                    </a>
+                                                </li>
+                                            @endif
+                                        </ul>
+                                    </li>
+                                @endif
                             </ul>
                         </li>
                     @endif
-                    @if($canViewFundUtilizationReports || $canViewLpmcReports || $canViewRoadMaintenanceReports)
+                    @if($canViewFundUtilizationReports || $canViewLpmcReports || $canViewRoadMaintenanceReports || $canViewAnyQuarterlyRpmesForm)
                         <li>
                             <a href="#" class="@if($reportsQuarterlyActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyMenu')">
                                 <i class="fas fa-calendar-check"></i>
@@ -1949,21 +1982,41 @@
                                         </a>
                                     </li>
                                 @endif
-                                <li>
-                                    <a href="#" class="@if($reportsQuarterlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyRpmesMenu')">
-                                        <i class="fas fa-file-alt"></i>
-                                        <span>RPMES FORM</span>
-                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
-                                    </a>
-                                    <ul id="reportsQuarterlyRpmesMenu" class="submenu" style="display: {{ $reportsQuarterlyRpmesActive ? 'block' : 'none' }};">
-                                        <li>
-                                            <a href="{{ route('reports.quarterly.rpmes.form-2') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-2*')) active @endif">
-                                                <i class="fas fa-file-signature"></i>
-                                                <span>RPMES FORM 2</span>
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </li>
+                                @if($canViewAnyQuarterlyRpmesForm)
+                                    <li>
+                                        <a href="#" class="@if($reportsQuarterlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyRpmesMenu')">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>RPMES FORM</span>
+                                            <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                        </a>
+                                        <ul id="reportsQuarterlyRpmesMenu" class="submenu" style="display: {{ $reportsQuarterlyRpmesActive ? 'block' : 'none' }};">
+                                            @if($canViewQuarterlyRpmesForm2)
+                                                <li>
+                                                    <a href="{{ route('reports.quarterly.rpmes.form-2') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-2*')) active @endif">
+                                                        <i class="fas fa-file-signature"></i>
+                                                        <span>RPMES FORM 2</span>
+                                                    </a>
+                                                </li>
+                                            @endif
+                                            @if($canViewQuarterlyRpmesForm5)
+                                                <li>
+                                                    <a href="{{ route('reports.quarterly.rpmes.form-5') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-5*')) active @endif">
+                                                        <i class="fas fa-chart-column"></i>
+                                                        <span>RPMES FORM 5</span>
+                                                    </a>
+                                                </li>
+                                            @endif
+                                            @if($canViewQuarterlyRpmesForm6)
+                                                <li>
+                                                    <a href="{{ route('reports.quarterly.rpmes.form-6') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-6*')) active @endif">
+                                                        <i class="fas fa-triangle-exclamation"></i>
+                                                        <span>RPMES FORM 6</span>
+                                                    </a>
+                                                </li>
+                                            @endif
+                                        </ul>
+                                    </li>
+                                @endif
                             </ul>
                         </li>
                     @endif

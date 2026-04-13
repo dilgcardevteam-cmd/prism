@@ -128,18 +128,18 @@
                                 <i class="fas fa-chevron-down"></i>
                             </span>
                         </div>
-                        <div id="province_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                        <div id="province_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
                     </div>
                     <select
                         id="province"
-                        name="province"
+                        name="province[]"
+                        multiple
                         class="dashboard-stacked-filter-source"
                         data-filter-label="Province"
                         aria-hidden="true"
                     >
-                        <option value="">All</option>
                         @foreach (($filterOptions['provinces'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(($filters['province'] ?? '') === (string) $option)>{{ $option }}</option>
+                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['province'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -169,18 +169,18 @@
                                 <i class="fas fa-chevron-down"></i>
                             </span>
                         </div>
-                        <div id="city_municipality_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                        <div id="city_municipality_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
                     </div>
                     <select
                         id="city_municipality"
-                        name="city_municipality"
+                        name="city_municipality[]"
+                        multiple
                         class="dashboard-stacked-filter-source"
                         data-filter-label="City/Municipality"
                         aria-hidden="true"
                     >
-                        <option value="">All</option>
                         @foreach (($filterOptions['cities'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(($filters['city_municipality'] ?? '') === (string) $option)>{{ $option }}</option>
+                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['city_municipality'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -210,18 +210,18 @@
                                 <i class="fas fa-chevron-down"></i>
                             </span>
                         </div>
-                        <div id="barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                        <div id="barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
                     </div>
                     <select
                         id="barangay"
-                        name="barangay"
+                        name="barangay[]"
+                        multiple
                         class="dashboard-stacked-filter-source"
                         data-filter-label="Barangay"
                         aria-hidden="true"
                     >
-                        <option value="">All</option>
                         @foreach (($filterOptions['barangays'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(($filters['barangay'] ?? '') === (string) $option)>{{ $option }}</option>
+                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['barangay'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -292,18 +292,18 @@
                                 <i class="fas fa-chevron-down"></i>
                             </span>
                         </div>
-                        <div id="funding_year_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                        <div id="funding_year_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
                     </div>
                     <select
                         id="funding_year"
-                        name="funding_year"
+                        name="funding_year[]"
+                        multiple
                         class="dashboard-stacked-filter-source"
                         data-filter-label="Funding Year"
                         aria-hidden="true"
                     >
-                        <option value="">All</option>
                         @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(($filters['funding_year'] ?? '') === (string) $option)>{{ $option }}</option>
+                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['funding_year'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -333,18 +333,18 @@
                                 <i class="fas fa-chevron-down"></i>
                             </span>
                         </div>
-                        <div id="project_type_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                        <div id="project_type_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
                     </div>
                     <select
                         id="project_type"
-                        name="project_type"
+                        name="project_type[]"
+                        multiple
                         class="dashboard-stacked-filter-source"
                         data-filter-label="Project Type"
                         aria-hidden="true"
                     >
-                        <option value="">All</option>
                         @foreach (($filterOptions['project_types'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(($filters['project_type'] ?? '') === (string) $option)>{{ $option }}</option>
+                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['project_type'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -374,18 +374,18 @@
                                 <i class="fas fa-chevron-down"></i>
                             </span>
                         </div>
-                        <div id="project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox"></div>
+                        <div id="project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
                     </div>
                     <select
                         id="project_status"
-                        name="project_status"
+                        name="project_status[]"
+                        multiple
                         class="dashboard-stacked-filter-source"
                         data-filter-label="Project Status"
                         aria-hidden="true"
                     >
-                        <option value="">All</option>
                         @foreach (($filterOptions['project_statuses'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(($filters['project_status'] ?? '') === (string) $option)>{{ $option }}</option>
+                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['project_status'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>

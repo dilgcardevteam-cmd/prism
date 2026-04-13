@@ -277,29 +277,37 @@ Route::middleware(['auth'])->group(function () {
             $isDilgUser = $user->isDilgUser();
             $isRegionalOfficeUser = $user->isRegionalOfficeAssignment();
 
-            $requestedPrograms = request()->input('program', []);
-            if (!is_array($requestedPrograms)) {
-                $requestedPrograms = $requestedPrograms === null ? [] : [$requestedPrograms];
-            }
-            $selectedPrograms = collect($requestedPrograms)
-                ->map(function ($value) {
-                    return trim((string) $value);
-                })
-                ->filter(function ($value) {
-                    return $value !== '';
-                })
-                ->unique()
-                ->values()
-                ->all();
+            $normalizeFilterValue = function ($value): string {
+                $normalizedValue = trim((string) $value);
+                $normalizedValue = preg_replace('/\s+/u', ' ', $normalizedValue) ?? $normalizedValue;
+
+                return trim($normalizedValue);
+            };
+
+            $parseRequestedFilterValues = function (string $inputName) use ($normalizeFilterValue): array {
+                $requestedValues = request()->input($inputName, []);
+                if (!is_array($requestedValues)) {
+                    $requestedValues = $requestedValues === null ? [] : [$requestedValues];
+                }
+
+                return collect($requestedValues)
+                    ->map($normalizeFilterValue)
+                    ->filter(function ($value) {
+                        return $value !== '';
+                    })
+                    ->unique()
+                    ->values()
+                    ->all();
+            };
 
             $filters = [
-                'province' => trim((string) request('province', '')),
-                'city_municipality' => trim((string) request('city_municipality', '')),
-                'barangay' => trim((string) request('barangay', '')),
-                'programs' => $selectedPrograms,
-                'funding_year' => trim((string) request('funding_year', '')),
-                'project_type' => trim((string) request('project_type', '')),
-                'project_status' => trim((string) request('project_status', '')),
+                'province' => $parseRequestedFilterValues('province'),
+                'city_municipality' => $parseRequestedFilterValues('city_municipality'),
+                'barangay' => $parseRequestedFilterValues('barangay'),
+                'programs' => $parseRequestedFilterValues('program'),
+                'funding_year' => $parseRequestedFilterValues('funding_year'),
+                'project_type' => $parseRequestedFilterValues('project_type'),
+                'project_status' => $parseRequestedFilterValues('project_status'),
             ];
 
             $filterOptions = [
@@ -359,19 +367,19 @@ Route::middleware(['auth'])->group(function () {
                 }
             };
 
-            $applyExactFilterToSubay = function ($query, string $column, string $value) {
-                $normalized = trim($value);
-                if ($normalized === '') {
-                    return;
-                }
-
-                $query->whereRaw("LOWER(TRIM(COALESCE({$column}, ''))) = ?", [strtolower($normalized)]);
+            $normalizedSqlComparable = function (string $column): string {
+                return "LOWER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE({$column}, ''), CHAR(13), ' '), CHAR(10), ' '), CHAR(9), ' '), '  ', ' '), '  ', ' '), '  ', ' ')))";
             };
 
-            $applyExactMultiFilterToSubay = function ($query, string $column, array $values) {
+            $normalizedDelimitedSqlComparable = function (string $column): string {
+                return "LOWER(CONCAT('|', TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE({$column}, ''), CHAR(13), '|'), CHAR(10), '|'), CHAR(9), ' '), ' |', '|'), '| ', '|'), '||', '|'), '||', '|')), '|'))";
+            };
+
+            $applyExactMultiFilterToSubay = function ($query, string $column, array $values) use ($normalizedSqlComparable, $normalizeFilterValue) {
                 $normalizedValues = collect($values)
+                    ->map($normalizeFilterValue)
                     ->map(function ($value) {
-                        return strtolower(trim((string) $value));
+                        return strtolower($value);
                     })
                     ->filter(function ($value) {
                         return $value !== '';
@@ -385,7 +393,32 @@ Route::middleware(['auth'])->group(function () {
                 }
 
                 $placeholders = implode(', ', array_fill(0, count($normalizedValues), '?'));
-                $query->whereRaw("LOWER(TRIM(COALESCE({$column}, ''))) IN ({$placeholders})", $normalizedValues);
+                $query->whereRaw($normalizedSqlComparable($column) . " IN ({$placeholders})", $normalizedValues);
+            };
+
+            $applyDelimitedMultiFilterToSubay = function ($query, string $column, array $values) use ($normalizedDelimitedSqlComparable, $normalizeFilterValue) {
+                $normalizedValues = collect($values)
+                    ->map($normalizeFilterValue)
+                    ->map(function ($value) {
+                        return strtolower($value);
+                    })
+                    ->filter(function ($value) {
+                        return $value !== '';
+                    })
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if (empty($normalizedValues)) {
+                    return;
+                }
+
+                $normalizedExpression = $normalizedDelimitedSqlComparable($column);
+                $query->where(function ($subQuery) use ($normalizedValues, $normalizedExpression) {
+                    foreach ($normalizedValues as $normalizedValue) {
+                        $subQuery->orWhereRaw($normalizedExpression . ' LIKE ?', ['%|' . $normalizedValue . '|%']);
+                    }
+                });
             };
 
             $excludeSglgifFromSubay = function ($query) {
@@ -398,14 +431,14 @@ Route::middleware(['auth'])->group(function () {
                     ->whereRaw('UPPER(TRIM(COALESCE(fund_source, ""))) <> ?', ['SGLGIF']);
             };
 
-            $applyDashboardFiltersToSubay = function ($query) use ($filters, $applyExactFilterToSubay, $applyExactMultiFilterToSubay) {
-                $applyExactFilterToSubay($query, 'spp.province', $filters['province']);
-                $applyExactFilterToSubay($query, 'spp.city_municipality', $filters['city_municipality']);
-                $applyExactFilterToSubay($query, 'spp.barangay', $filters['barangay']);
+            $applyDashboardFiltersToSubay = function ($query) use ($filters, $applyExactMultiFilterToSubay, $applyDelimitedMultiFilterToSubay) {
+                $applyExactMultiFilterToSubay($query, 'spp.province', $filters['province']);
+                $applyExactMultiFilterToSubay($query, 'spp.city_municipality', $filters['city_municipality']);
+                $applyDelimitedMultiFilterToSubay($query, 'spp.barangay', $filters['barangay']);
                 $applyExactMultiFilterToSubay($query, 'spp.program', $filters['programs']);
-                $applyExactFilterToSubay($query, 'spp.funding_year', $filters['funding_year']);
-                $applyExactFilterToSubay($query, 'spp.type_of_project', $filters['project_type']);
-                $applyExactFilterToSubay($query, 'spp.status', $filters['project_status']);
+                $applyExactMultiFilterToSubay($query, 'spp.funding_year', $filters['funding_year']);
+                $applyExactMultiFilterToSubay($query, 'spp.type_of_project', $filters['project_type']);
+                $applyExactMultiFilterToSubay($query, 'spp.status', $filters['project_status']);
             };
 
             $totalProjects = 0;
@@ -940,7 +973,7 @@ Route::middleware(['auth'])->group(function () {
                     ->pluck('spp.province');
 
                 $cityOptionsQuery = clone $subayBaseQuery;
-                $applyExactFilterToSubay($cityOptionsQuery, 'spp.province', $filters['province']);
+                $applyExactMultiFilterToSubay($cityOptionsQuery, 'spp.province', $filters['province']);
                 $filterOptions['cities'] = $cityOptionsQuery
                     ->select('spp.city_municipality')
                     ->whereNotNull('spp.city_municipality')
@@ -950,20 +983,32 @@ Route::middleware(['auth'])->group(function () {
                     ->pluck('spp.city_municipality');
 
                 $barangayOptionsQuery = clone $subayBaseQuery;
-                $applyExactFilterToSubay($barangayOptionsQuery, 'spp.province', $filters['province']);
-                $applyExactFilterToSubay($barangayOptionsQuery, 'spp.city_municipality', $filters['city_municipality']);
+                $applyExactMultiFilterToSubay($barangayOptionsQuery, 'spp.province', $filters['province']);
+                $applyExactMultiFilterToSubay($barangayOptionsQuery, 'spp.city_municipality', $filters['city_municipality']);
                 $filterOptions['barangays'] = $barangayOptionsQuery
                     ->select('spp.barangay')
                     ->whereNotNull('spp.barangay')
                     ->whereRaw('TRIM(spp.barangay) <> ""')
-                    ->distinct()
-                    ->orderBy('spp.barangay')
-                    ->pluck('spp.barangay');
+                    ->pluck('spp.barangay')
+                    ->flatMap(function ($value) {
+                        return preg_split('/\r\n|\r|\n/u', (string) $value) ?: [];
+                    })
+                    ->map($normalizeFilterValue)
+                    ->filter(function ($value) {
+                        return $value !== '';
+                    })
+                    ->unique(function ($value) {
+                        return strtolower($value);
+                    })
+                    ->sort(function ($leftValue, $rightValue) {
+                        return strnatcasecmp((string) $leftValue, (string) $rightValue);
+                    })
+                    ->values();
 
                 $programOptionsQuery = clone $subayBaseQuery;
-                $applyExactFilterToSubay($programOptionsQuery, 'spp.province', $filters['province']);
-                $applyExactFilterToSubay($programOptionsQuery, 'spp.city_municipality', $filters['city_municipality']);
-                $applyExactFilterToSubay($programOptionsQuery, 'spp.barangay', $filters['barangay']);
+                $applyExactMultiFilterToSubay($programOptionsQuery, 'spp.province', $filters['province']);
+                $applyExactMultiFilterToSubay($programOptionsQuery, 'spp.city_municipality', $filters['city_municipality']);
+                $applyExactMultiFilterToSubay($programOptionsQuery, 'spp.barangay', $filters['barangay']);
                 $filterOptions['programs'] = $programOptionsQuery
                     ->select('spp.program')
                     ->whereNotNull('spp.program')
@@ -1434,15 +1479,9 @@ Route::middleware(['auth'])->group(function () {
                     }
                 }
 
-                if ($filters['province'] !== '') {
-                    $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(province, ""))) = ?', [strtolower($filters['province'])]);
-                }
-                if ($filters['city_municipality'] !== '') {
-                    $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(city_municipality, ""))) = ?', [strtolower($filters['city_municipality'])]);
-                }
-                if ($filters['barangay'] !== '') {
-                    $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(barangay, ""))) = ?', [strtolower($filters['barangay'])]);
-                }
+                $applyExactMultiFilterToSubay($fallbackQuery, 'province', $filters['province']);
+                $applyExactMultiFilterToSubay($fallbackQuery, 'city_municipality', $filters['city_municipality']);
+                $applyDelimitedMultiFilterToSubay($fallbackQuery, 'barangay', $filters['barangay']);
                 if (!empty($filters['programs'])) {
                     $normalizedPrograms = collect($filters['programs'])
                         ->map(function ($value) {
@@ -1460,15 +1499,9 @@ Route::middleware(['auth'])->group(function () {
                         $fallbackQuery->whereRaw("LOWER(TRIM(COALESCE(fund_source, \"\"))) IN ({$placeholders})", $normalizedPrograms);
                     }
                 }
-                if ($filters['funding_year'] !== '') {
-                    $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(funding_year, ""))) = ?', [strtolower($filters['funding_year'])]);
-                }
-                if ($filters['project_type'] !== '') {
-                    $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(project_type, ""))) = ?', [strtolower($filters['project_type'])]);
-                }
-                if ($filters['project_status'] !== '') {
-                    $fallbackQuery->whereRaw('LOWER(TRIM(COALESCE(status, ""))) = ?', [strtolower($filters['project_status'])]);
-                }
+                $applyExactMultiFilterToSubay($fallbackQuery, 'funding_year', $filters['funding_year']);
+                $applyExactMultiFilterToSubay($fallbackQuery, 'project_type', $filters['project_type']);
+                $applyExactMultiFilterToSubay($fallbackQuery, 'status', $filters['project_status']);
 
                 $totalProjects = (int) (clone $fallbackQuery)->count();
 
@@ -2098,6 +2131,42 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.quarterly.rpmes.form-2.delete-document');
     Route::get('/reports/quarterly/rpmes/form-2/{projectCode}', [App\Http\Controllers\QuarterlyRpmesForm2Controller::class, 'show'])
         ->name('reports.quarterly.rpmes.form-2.show');
+    Route::get('/reports/quarterly/rpmes/form-5', [App\Http\Controllers\QuarterlyRpmesForm5Controller::class, 'index'])
+        ->name('reports.quarterly.rpmes.form-5');
+    Route::post('/reports/quarterly/rpmes/form-5/{projectCode}/upload', [App\Http\Controllers\QuarterlyRpmesForm5Controller::class, 'upload'])
+        ->name('reports.quarterly.rpmes.form-5.upload');
+    Route::post('/reports/quarterly/rpmes/form-5/{projectCode}/approve/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm5Controller::class, 'approveDocument'])
+        ->name('reports.quarterly.rpmes.form-5.approve');
+    Route::get('/reports/quarterly/rpmes/form-5/{projectCode}/document/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm5Controller::class, 'viewDocument'])
+        ->name('reports.quarterly.rpmes.form-5.document');
+    Route::delete('/reports/quarterly/rpmes/form-5/{projectCode}/document/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm5Controller::class, 'deleteDocument'])
+        ->name('reports.quarterly.rpmes.form-5.delete-document');
+    Route::get('/reports/quarterly/rpmes/form-5/{projectCode}', [App\Http\Controllers\QuarterlyRpmesForm5Controller::class, 'show'])
+        ->name('reports.quarterly.rpmes.form-5.show');
+    Route::get('/reports/quarterly/rpmes/form-6', [App\Http\Controllers\QuarterlyRpmesForm6Controller::class, 'index'])
+        ->name('reports.quarterly.rpmes.form-6');
+    Route::post('/reports/quarterly/rpmes/form-6/{projectCode}/upload', [App\Http\Controllers\QuarterlyRpmesForm6Controller::class, 'upload'])
+        ->name('reports.quarterly.rpmes.form-6.upload');
+    Route::post('/reports/quarterly/rpmes/form-6/{projectCode}/approve/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm6Controller::class, 'approveDocument'])
+        ->name('reports.quarterly.rpmes.form-6.approve');
+    Route::get('/reports/quarterly/rpmes/form-6/{projectCode}/document/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm6Controller::class, 'viewDocument'])
+        ->name('reports.quarterly.rpmes.form-6.document');
+    Route::delete('/reports/quarterly/rpmes/form-6/{projectCode}/document/{quarter}', [App\Http\Controllers\QuarterlyRpmesForm6Controller::class, 'deleteDocument'])
+        ->name('reports.quarterly.rpmes.form-6.delete-document');
+    Route::get('/reports/quarterly/rpmes/form-6/{projectCode}', [App\Http\Controllers\QuarterlyRpmesForm6Controller::class, 'show'])
+        ->name('reports.quarterly.rpmes.form-6.show');
+    Route::get('/reports/annual/rpmes/form-4', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'index'])
+        ->name('reports.annual.rpmes.form-4');
+    Route::post('/reports/annual/rpmes/form-4/{projectCode}/upload', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'upload'])
+        ->name('reports.annual.rpmes.form-4.upload');
+    Route::post('/reports/annual/rpmes/form-4/{projectCode}/approve/{quarter}', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'approveDocument'])
+        ->name('reports.annual.rpmes.form-4.approve');
+    Route::get('/reports/annual/rpmes/form-4/{projectCode}/document/{quarter}', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'viewDocument'])
+        ->name('reports.annual.rpmes.form-4.document');
+    Route::delete('/reports/annual/rpmes/form-4/{projectCode}/document/{quarter}', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'deleteDocument'])
+        ->name('reports.annual.rpmes.form-4.delete-document');
+    Route::get('/reports/annual/rpmes/form-4/{projectCode}', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'show'])
+        ->name('reports.annual.rpmes.form-4.show');
 
     Route::get('/reports/rbis-annual-certification', [App\Http\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');
@@ -2112,10 +2181,3 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/reports/rbis-annual-certification/{office}/document/{docId}', [App\Http\Controllers\RbisAnnualCertificationController::class, 'deleteDocument'])
         ->name('rbis-annual-certification.delete-document');
 });
-
-
-
-
-
-
-
