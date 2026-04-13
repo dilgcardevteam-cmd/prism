@@ -9,8 +9,4 @@
         <i class="fas fa-house"></i>
         <span>Back to Landing Page</span>
     </a>
-    <a href="{{ route('maintenance.superadmin-login') }}" class="error-btn error-btn-secondary">
-        <i class="fas fa-right-to-bracket"></i>
-        <span>Superadmin Login</span>
-    </a>
 @endsection
