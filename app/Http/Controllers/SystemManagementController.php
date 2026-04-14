@@ -8,11 +8,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Shuchkin\SimpleXLS;
 
 class SystemManagementController extends Controller
 {
     private const IMPORT_HISTORY_TABLE = 'subaybayan_import_histories';
     private const RLIP_LIME_IMPORT_HISTORY_TABLE = 'rlip_lime_import_histories';
+    private const LEGACY_SUBAYBAYAN_TEMPLATE_PATH = 'templates/legacy-subaybayan-template.xls';
     private const SUBAYBAYAN_TEMPLATE_HEADERS = [
         'program',
         'project_code',
@@ -58,6 +60,22 @@ class SystemManagementController extends Controller
         'intended_completion_date_2',
         'date_of_receipt_of_ntp',
         'date_of_expiration_of_contract',
+        'uploaded_images_w_geotag',
+        'uploaded_images_without_geotag',
+        'before_w_geotag',
+        'before_without_geotag',
+        'project_billboard_w_geotag',
+        'project_billboard_without_geotag',
+        'photo_20_40_w_geotag',
+        'photo_20_40_without_geotag',
+        'photo_50_70_w_geotag',
+        'photo_50_70_without_geotag',
+        'photo_90_w_geotag',
+        'photo_90_without_geotag',
+        'completed_w_geotag',
+        'completed_without_geotag',
+        'during_the_operation_w_geotag',
+        'during_the_operation_without_geotag',
         'total_accomplishment',
         'date',
         'obligation',
@@ -85,6 +103,95 @@ class SystemManagementController extends Controller
         'noa_issuance',
         'project_billboard',
         'submission_of_certificate_on_the_receipt_of_funds',
+    ];
+    private const LEGACY_SUBAYBAYAN_TEMPLATE_COLUMN_MAP = [
+        0 => 'program',
+        1 => 'project_code',
+        2 => 'project_title',
+        3 => 'region',
+        4 => 'province',
+        5 => 'city_municipality',
+        6 => 'barangay',
+        7 => 'exact_location',
+        8 => 'type',
+        9 => 'project_description',
+        10 => 'road_length_in_km',
+        11 => 'funding_year',
+        12 => 'type_of_project',
+        13 => 'sub_type_of_project',
+        14 => 'procurement_type',
+        15 => 'procurement',
+        16 => 'beneficiaries',
+        17 => 'status',
+        18 => 'remarks',
+        19 => 'profile_approval_status',
+        20 => 'national_subsidy_original_allocation',
+        21 => 'lgu_counterpart_original_allocation',
+        22 => 'national_subsidy_cancelled_allocation',
+        23 => 'lgu_counterpart_cancelled_allocation',
+        24 => 'national_subsidy_reverted_amount',
+        25 => 'lgu_counterpart_reverted_amount',
+        26 => 'national_subsidy_revised_allocation',
+        27 => 'lgu_counterpart_revised_allocation',
+        28 => 'total_project_cost',
+        29 => 'implementing_unit',
+        30 => 'moi',
+        31 => 'total_estimated_cost_of_project',
+        32 => 'duration',
+        33 => 'intended_completion_date',
+        34 => 'actual_start_of_construction',
+        35 => 'unit_implementing_the_project',
+        36 => 'name_of_contractor',
+        37 => 'contract_price',
+        38 => 'contract_duration',
+        39 => 'office_address',
+        40 => 'date_of_perfection_of_contract',
+        41 => 'intended_completion_date_2',
+        42 => 'date_of_receipt_of_ntp',
+        43 => 'date_of_expiration_of_contract',
+        44 => 'uploaded_images_w_geotag',
+        45 => 'uploaded_images_without_geotag',
+        46 => 'before_w_geotag',
+        47 => 'before_without_geotag',
+        48 => 'project_billboard_w_geotag',
+        49 => 'project_billboard_without_geotag',
+        50 => 'photo_20_40_w_geotag',
+        51 => 'photo_20_40_without_geotag',
+        52 => 'photo_50_70_w_geotag',
+        53 => 'photo_50_70_without_geotag',
+        54 => 'photo_90_w_geotag',
+        55 => 'photo_90_without_geotag',
+        56 => 'completed_w_geotag',
+        57 => 'completed_without_geotag',
+        58 => 'during_the_operation_w_geotag',
+        59 => 'during_the_operation_without_geotag',
+        60 => 'total_accomplishment',
+        61 => 'date',
+        62 => 'obligation',
+        63 => 'disbursement',
+        64 => 'liquidations',
+        65 => 'bid_opening_bid_evaluation',
+        66 => 'bid_opening_evaluation',
+        67 => 'date_of_nadai',
+        68 => 'date_of_receipt_of_notice_to_proceed',
+        69 => 'ded_pow_preparation',
+        70 => 'ded_pow_prep_notarized_lce_cert',
+        71 => 'ded_pow_review_and_approval',
+        72 => 'ded_pow_review_and_approval_2',
+        73 => 'endorsement_of_projects_to_dbm_for_the_release_of_saro',
+        74 => 'fs_technical_specification_and_ded_pow_preparation',
+        75 => 'fs_technical_specification_and_ded_pow_review_approval',
+        76 => 'fs_technical_specification_preparation',
+        77 => 'installation_of_community_billboard',
+        78 => 'installation_of_community_billboard_2',
+        79 => 'invitation_to_bid_ib_posted',
+        80 => 'moa_signing',
+        81 => 'no_objection_1',
+        82 => 'no_objection_2',
+        83 => 'no_objection_3',
+        84 => 'noa_issuance',
+        85 => 'project_billboard',
+        86 => 'submission_of_certificate_on_the_receipt_of_funds',
     ];
     private const SGLGIF_TEMPLATE_HEADERS = [
         'LGU Reference Code',
@@ -132,6 +239,13 @@ class SystemManagementController extends Controller
         );
     }
 
+    public function uploadSubaybayan2025()
+    {
+        return $this->renderSubaybayanUploadManager(
+            $this->resolveSubaybayanUploadPage('system-management.upload-subaybayan-2025')
+        );
+    }
+
     public function uploadRssa()
     {
         return $this->renderSubaybayanUploadManager(
@@ -149,6 +263,17 @@ class SystemManagementController extends Controller
     public function downloadSubaybayanTemplate(Request $request)
     {
         $uploadPage = $this->resolveSubaybayanUploadPage($request->route()?->getName());
+
+        $templateSourcePath = $uploadPage['templateSourcePath'] ?? null;
+        if (is_string($templateSourcePath) && is_file($templateSourcePath)) {
+            return response()->download(
+                $templateSourcePath,
+                $uploadPage['templateFileName'],
+                [
+                    'Content-Type' => $uploadPage['templateContentType'] ?? 'application/octet-stream',
+                ]
+            );
+        }
 
         return response()->streamDownload(function () use ($uploadPage) {
             echo "\xEF\xBB\xBF";
@@ -170,10 +295,10 @@ class SystemManagementController extends Controller
 
         $request->validate(
             [
-                'file' => ['required', 'file', 'mimes:csv,txt', 'max:51200'],
+                'file' => ['required', 'file', 'mimes:csv,txt,xls', 'max:51200'],
             ],
             [
-                'file.mimes' => 'Please upload a CSV file. If your data is in Excel, save it as CSV first.',
+                'file.mimes' => 'Please upload a CSV or legacy Excel (.xls) file.',
             ]
         );
 
@@ -206,7 +331,7 @@ class SystemManagementController extends Controller
             'updated_at' => $now,
         ]);
 
-        return back()->with('success', 'CSV file added to import history. Click Load to import it into ' . $uploadPage['entityLabel'] . ' data.');
+        return back()->with('success', 'File added to import history. Click Load to import it into ' . $uploadPage['entityLabel'] . ' data.');
     }
 
     public function loadSubaybayanImport(Request $request, $importId)
@@ -234,7 +359,7 @@ class SystemManagementController extends Controller
 
         $absolutePath = Storage::disk('local')->path($storedPath);
         try {
-            $inserted = $this->importCsvSnapshot($absolutePath, $uploadPage);
+            $inserted = $this->importSnapshot($absolutePath, $uploadPage);
         } catch (\RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
         }
@@ -462,15 +587,41 @@ class SystemManagementController extends Controller
                 'description' => 'Upload RSSA data files for system processing.',
                 'listTitle' => 'Imported RSSA Files',
                 'entityLabel' => 'RSSA',
-                'modalTitle' => 'Import RSSA Data (CSV)',
+                'modalTitle' => 'Import RSSA Data (CSV/XLS)',
                 'routeBase' => 'system-management.upload-rssa',
-                'templateFileName' => 'rssa-template.csv',
+                'templateFileName' => 'rssa-template.xls',
+                'templateSourcePath' => resource_path(self::LEGACY_SUBAYBAYAN_TEMPLATE_PATH),
+                'templateContentType' => 'application/vnd.ms-excel',
                 'storageSlug' => 'rssa',
                 'storageFolder' => 'rssa-imports',
                 'templateHeaders' => self::SUBAYBAYAN_TEMPLATE_HEADERS,
                 'customHeaderMap' => [],
                 'rowDefaults' => [],
                 'snapshotScope' => 'subaybayan',
+            ];
+        }
+
+        if (Str::startsWith((string) $routeName, 'system-management.upload-subaybayan-2025')) {
+            return [
+                'title' => 'Upload LFP Data (2025 Above Projects)',
+                'pageTitle' => 'Upload LFP Data (2025 Above Projects)',
+                'heading' => 'Upload LFP Data (2025 Above Projects)',
+                'description' => 'Upload SubayBAYAN data files for 2025 above projects.',
+                'listTitle' => 'Imported 2025 Above Project Files',
+                'entityLabel' => 'SubayBAYAN 2025 Above Projects',
+                'modalTitle' => 'Import 2025 Above Project Data (CSV/XLS)',
+                'routeBase' => 'system-management.upload-subaybayan-2025',
+                'templateFileName' => 'subaybayan-2025-template.xls',
+                'templateSourcePath' => resource_path(self::LEGACY_SUBAYBAYAN_TEMPLATE_PATH),
+                'templateContentType' => 'application/vnd.ms-excel',
+                'storageSlug' => 'subaybayan-2025',
+                'storageFolder' => 'subaybayan-2025-imports',
+                'templateHeaders' => self::SUBAYBAYAN_TEMPLATE_HEADERS,
+                'customHeaderMap' => [],
+                'rowDefaults' => [
+                    'subaybayan_dataset_group' => '2025_above',
+                ],
+                'snapshotScope' => 'subaybayan_2025_above',
             ];
         }
 
@@ -482,9 +633,11 @@ class SystemManagementController extends Controller
                 'description' => 'Upload SGLGIF data files for system processing.',
                 'listTitle' => 'Imported SGLGIF Files',
                 'entityLabel' => 'SGLGIF',
-                'modalTitle' => 'Import SGLGIF Data (CSV)',
+                'modalTitle' => 'Import SGLGIF Data (CSV/XLS)',
                 'routeBase' => 'system-management.upload-sglgif',
                 'templateFileName' => 'sglgif-template.csv',
+                'templateSourcePath' => null,
+                'templateContentType' => 'text/csv; charset=UTF-8',
                 'storageSlug' => 'sglgif',
                 'storageFolder' => 'sglgif-imports',
                 'templateHeaders' => self::SGLGIF_TEMPLATE_HEADERS,
@@ -503,9 +656,11 @@ class SystemManagementController extends Controller
             'description' => 'Upload SubayBAYAN data files for system processing.',
             'listTitle' => 'Imported SubayBAYAN Files',
             'entityLabel' => 'SubayBAYAN',
-            'modalTitle' => 'Import SubayBAYAN Data (CSV)',
+            'modalTitle' => 'Import SubayBAYAN Data (CSV/XLS)',
             'routeBase' => 'system-management.upload-subaybayan',
-            'templateFileName' => 'subaybayan-template.csv',
+            'templateFileName' => 'subaybayan-template.xls',
+            'templateSourcePath' => resource_path(self::LEGACY_SUBAYBAYAN_TEMPLATE_PATH),
+            'templateContentType' => 'application/vnd.ms-excel',
             'storageSlug' => 'subaybayan',
             'storageFolder' => 'subaybayan-imports',
             'templateHeaders' => self::SUBAYBAYAN_TEMPLATE_HEADERS,
@@ -754,83 +909,224 @@ class SystemManagementController extends Controller
         );
     }
 
-    private function importCsvSnapshot(string $path, array $uploadPage): int
+    private function importSnapshot(string $path, array $uploadPage): int
+    {
+        $rows = $this->readImportedRows($path);
+        if (empty($rows)) {
+            throw new \RuntimeException('The selected file appears to be empty.');
+        }
+
+        $columns = Schema::getColumnListing('subay_project_profiles');
+        $structure = $this->resolveImportStructure($rows, $columns, $uploadPage['customHeaderMap'] ?? []);
+        $headerMap = $structure['headerMap'];
+        $dataStartRow = $structure['dataStartRow'];
+
+        if (empty($headerMap)) {
+            throw new \RuntimeException('No recognizable columns were found in the selected file.');
+        }
+
+        return DB::transaction(function () use ($rows, $headerMap, $dataStartRow, $uploadPage) {
+            $now = now();
+            $batchRows = [];
+            $inserted = 0;
+            $rowDefaults = $uploadPage['rowDefaults'] ?? [];
+
+            // Replace only the rows owned by the active import scope.
+            $this->clearImportScopeRows($uploadPage);
+
+            for ($rowIndex = $dataStartRow; $rowIndex < count($rows); $rowIndex++) {
+                $data = $rows[$rowIndex] ?? [];
+                if (!is_array($data) || $this->rowIsEmpty($data)) {
+                    continue;
+                }
+
+                $row = [];
+                foreach ($headerMap as $index => $column) {
+                    $row[$column] = $this->normalizeImportedCell($data[$index] ?? null);
+                }
+
+                foreach ($rowDefaults as $column => $value) {
+                    if (!array_key_exists($column, $row) || $row[$column] === null || $row[$column] === '') {
+                        $row[$column] = $value;
+                    }
+                }
+
+                if ($this->rowIsEmpty($row)) {
+                    continue;
+                }
+
+                $row['created_at'] = $now;
+                $row['updated_at'] = $now;
+                $batchRows[] = $row;
+
+                if (count($batchRows) >= 500) {
+                    DB::table('subay_project_profiles')->insert($batchRows);
+                    $inserted += count($batchRows);
+                    $batchRows = [];
+                }
+            }
+
+            if (!empty($batchRows)) {
+                DB::table('subay_project_profiles')->insert($batchRows);
+                $inserted += count($batchRows);
+            }
+
+            return $inserted;
+        });
+    }
+
+    private function readImportedRows(string $path): array
     {
         if (!is_readable($path)) {
             throw new \RuntimeException('Unable to read the selected file.');
         }
 
-        $handle = fopen($path, 'r');
-        if ($handle === false) {
-            throw new \RuntimeException('Unable to open the selected file.');
-        }
-
-        try {
-            $headers = fgetcsv($handle);
-            if ($headers === false) {
-                throw new \RuntimeException('The selected file appears to be empty.');
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if (in_array($extension, ['csv', 'txt'], true)) {
+            $handle = fopen($path, 'r');
+            if ($handle === false) {
+                throw new \RuntimeException('Unable to open the selected file.');
             }
 
-            $columns = Schema::getColumnListing('subay_project_profiles');
-            $headerMap = $this->buildHeaderMap($headers, $columns, $uploadPage['customHeaderMap'] ?? []);
-            if (empty($headerMap)) {
-                throw new \RuntimeException('No recognizable columns were found in the CSV file.');
-            }
-
-            return DB::transaction(function () use ($handle, $headerMap, $uploadPage) {
-                $now = now();
+            try {
                 $rows = [];
-                $inserted = 0;
-                $rowDefaults = $uploadPage['rowDefaults'] ?? [];
-
-                // Replace only the rows owned by the active import scope.
-                $this->clearImportScopeRows($uploadPage);
-
-                while (($data = fgetcsv($handle)) !== false) {
-                    if ($this->rowIsEmpty($data)) {
-                        continue;
-                    }
-
-                    $row = [];
-                    foreach ($headerMap as $index => $column) {
-                        $value = $data[$index] ?? null;
-                        if (is_string($value)) {
-                            $value = $this->sanitizeValue($value);
-                        }
-                        $row[$column] = $value === '' ? null : $value;
-                    }
-
-                    foreach ($rowDefaults as $column => $value) {
-                        if (!array_key_exists($column, $row) || $row[$column] === null || $row[$column] === '') {
-                            $row[$column] = $value;
-                        }
-                    }
-
-                    if (empty($row)) {
-                        continue;
-                    }
-
-                    $row['created_at'] = $now;
-                    $row['updated_at'] = $now;
+                while (($row = fgetcsv($handle)) !== false) {
                     $rows[] = $row;
-
-                    if (count($rows) >= 500) {
-                        DB::table('subay_project_profiles')->insert($rows);
-                        $inserted += count($rows);
-                        $rows = [];
-                    }
                 }
 
-                if (!empty($rows)) {
-                    DB::table('subay_project_profiles')->insert($rows);
-                    $inserted += count($rows);
-                }
-
-                return $inserted;
-            });
-        } finally {
-            fclose($handle);
+                return $rows;
+            } finally {
+                fclose($handle);
+            }
         }
+
+        if ($extension !== 'xls') {
+            throw new \RuntimeException('Unsupported file type. Please upload a CSV or legacy Excel (.xls) file.');
+        }
+
+        $xls = SimpleXLS::parse($path);
+        if (!$xls) {
+            throw new \RuntimeException('Unable to parse the uploaded Excel file: ' . (SimpleXLS::parseError() ?: 'Unknown parser error'));
+        }
+
+        return $xls->rows();
+    }
+
+    private function resolveImportStructure(array $rows, array $columns, array $routeCustomMap = []): array
+    {
+        $rowCount = count($rows);
+        if ($rowCount === 0) {
+            return [
+                'headerMap' => [],
+                'dataStartRow' => 0,
+            ];
+        }
+
+        if ($this->matchesLegacySubaybayanTemplate($rows)) {
+            $columnLookup = array_fill_keys($columns, true);
+            $headerMap = [];
+
+            foreach (self::LEGACY_SUBAYBAYAN_TEMPLATE_COLUMN_MAP as $index => $column) {
+                if (isset($columnLookup[$column])) {
+                    $headerMap[$index] = $column;
+                }
+            }
+
+            return [
+                'headerMap' => $headerMap,
+                'dataStartRow' => 3,
+            ];
+        }
+
+        $bestHeaderMap = [];
+        $bestHeaderRows = 1;
+        $maxHeaderRows = min(3, $rowCount);
+
+        for ($headerRows = 1; $headerRows <= $maxHeaderRows; $headerRows++) {
+            $headers = $headerRows === 1
+                ? ($rows[0] ?? [])
+                : $this->buildMultiRowHeaders(array_slice($rows, 0, $headerRows));
+
+            $headerMap = $this->buildHeaderMap($headers, $columns, $routeCustomMap);
+            if (
+                count($headerMap) > count($bestHeaderMap)
+                || (count($headerMap) === count($bestHeaderMap) && $headerRows < $bestHeaderRows)
+            ) {
+                $bestHeaderMap = $headerMap;
+                $bestHeaderRows = $headerRows;
+            }
+        }
+
+        return [
+            'headerMap' => $bestHeaderMap,
+            'dataStartRow' => $bestHeaderRows,
+        ];
+    }
+
+    private function matchesLegacySubaybayanTemplate(array $rows): bool
+    {
+        if (count($rows) < 3) {
+            return false;
+        }
+
+        $row0col0 = strtoupper(trim((string) ($rows[0][0] ?? '')));
+        $row1col0 = strtoupper(trim((string) ($rows[1][0] ?? '')));
+        $row1col1 = strtoupper(trim((string) ($rows[1][1] ?? '')));
+        $row1col44 = strtoupper(trim((string) ($rows[1][44] ?? '')));
+        $row2col44 = strtoupper(trim((string) ($rows[2][44] ?? '')));
+        $row1col60 = strtoupper(trim((string) ($rows[1][60] ?? '')));
+        $row1col65 = strtoupper(trim((string) ($rows[1][65] ?? '')));
+
+        return $row0col0 === 'PROJECT PROFILE'
+            && $row1col0 === 'PROGRAM'
+            && $row1col1 === 'PROJECT CODE'
+            && $row1col44 === 'UPLOADED IMAGES'
+            && $row2col44 === 'W/ GEOTAG'
+            && $row1col60 === 'TOTAL ACCOMPLISHMENT'
+            && $row1col65 === 'BID OPENING/BID EVALUATION';
+    }
+
+    private function buildMultiRowHeaders(array $headerRows): array
+    {
+        $columnCount = 0;
+        foreach ($headerRows as $headerRow) {
+            if (is_array($headerRow)) {
+                $columnCount = max($columnCount, count($headerRow));
+            }
+        }
+
+        $headers = [];
+        for ($columnIndex = 0; $columnIndex < $columnCount; $columnIndex++) {
+            $selectedHeader = '';
+            foreach ($headerRows as $headerRow) {
+                $value = trim((string) ($headerRow[$columnIndex] ?? ''));
+                if ($value !== '') {
+                    $selectedHeader = $value;
+                }
+            }
+
+            $headers[$columnIndex] = $selectedHeader;
+        }
+
+        return $headers;
+    }
+
+    private function normalizeImportedCell(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            $value = $value ? '1' : '0';
+        }
+
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        return $this->sanitizeValue($value);
     }
 
     private function generateImportStorageFileName(
@@ -926,10 +1222,23 @@ class SystemManagementController extends Controller
             return;
         }
 
+        if ($scope === 'subaybayan_2025_above') {
+            DB::table('subay_project_profiles')
+                ->where('subaybayan_dataset_group', '2025_above')
+                ->delete();
+
+            return;
+        }
+
         DB::table('subay_project_profiles')
             ->where(function ($query) {
-                $query->whereNull('program')
-                    ->orWhereRaw('UPPER(TRIM(COALESCE(program, ""))) <> ?', ['SGLGIF']);
+                $query->where(function ($subQuery) {
+                    $subQuery->whereNull('program')
+                        ->orWhereRaw('UPPER(TRIM(COALESCE(program, ""))) <> ?', ['SGLGIF']);
+                })->where(function ($subQuery) {
+                    $subQuery->whereNull('subaybayan_dataset_group')
+                        ->orWhere('subaybayan_dataset_group', '!=', '2025_above');
+                });
             })
             ->delete();
     }

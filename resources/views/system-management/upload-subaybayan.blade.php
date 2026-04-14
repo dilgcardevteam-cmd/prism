@@ -6,7 +6,7 @@
         'description' => 'Upload SubayBAYAN data files for system processing.',
         'listTitle' => 'Imported SubayBAYAN Files',
         'entityLabel' => 'SubayBAYAN',
-        'modalTitle' => 'Import SubayBAYAN Data (CSV)',
+        'modalTitle' => 'Import SubayBAYAN Data (CSV/XLS)',
         'routeBase' => 'system-management.upload-subaybayan',
     ];
     $uploadAspect = match ($uploadPage['routeBase']) {
@@ -66,7 +66,7 @@
                     </a>
                     @if($canAddUpload)
                         <button type="button" onclick="openImportModal()" style="padding: 8px 14px; background: linear-gradient(180deg, #0a4cb3 0%, #002C76 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; box-shadow: 0 6px 16px rgba(0, 44, 118, 0.2);">
-                            Import CSV
+                            Import File
                         </button>
                     @endif
                 </div>
@@ -114,7 +114,7 @@
                                                 </form>
                                             @endif
                                             <a href="{{ route($uploadPage['routeBase'] . '.download', ['importId' => $historyRow->id]) }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
-                                                Download CSV
+                                                Download File
                                             </a>
                                             @if($canDeleteUpload)
                                                 <form method="POST" action="{{ route($uploadPage['routeBase'] . '.delete', ['importId' => $historyRow->id]) }}" onsubmit="return confirm('Delete this imported file record?');">
@@ -179,9 +179,9 @@
                 <form method="POST" action="{{ route($uploadPage['routeBase'] . '.import') }}" enctype="multipart/form-data">
                     @csrf
                     <div style="margin-bottom: 16px;">
-                        <label for="import-file" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV File</label>
-                        <input id="import-file" class="dashboard-file-input" type="file" name="file" accept=".csv" required>
-                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">Excel users: Save As CSV first.</div>
+                        <label for="import-file" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV or XLS File</label>
+                        <input id="import-file" class="dashboard-file-input" type="file" name="file" accept=".csv,.xls" required>
+                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">Flat CSV uploads still work. The legacy Excel `.xls` template is also accepted.</div>
                     </div>
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
                         <button type="button" onclick="closeImportModal()" style="padding: 8px 14px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Cancel</button>

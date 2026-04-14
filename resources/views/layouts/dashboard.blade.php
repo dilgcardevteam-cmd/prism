@@ -2172,12 +2172,35 @@
                             $rssaUploadsMenuActive = request()->routeIs('system-management.upload-rssa*')
                                 || request()->routeIs('system-management.upload-rlip-lime*');
                         @endphp
+                        @php
+                            $currentSystemManagementRoute = (string) Route::currentRouteName();
+                            $lfp2024UploadsActive = $currentSystemManagementRoute === 'system-management.upload-subaybayan'
+                                || \Illuminate\Support\Str::startsWith($currentSystemManagementRoute, 'system-management.upload-subaybayan.');
+                            $lfp2025UploadsActive = $currentSystemManagementRoute === 'system-management.upload-subaybayan-2025'
+                                || \Illuminate\Support\Str::startsWith($currentSystemManagementRoute, 'system-management.upload-subaybayan-2025.');
+                            $lfpUploadsMenuActive = $lfp2024UploadsActive || $lfp2025UploadsActive;
+                        @endphp
                         @if($canViewSubaybayanUploads)
                             <li>
-                                <a href="{{ route('system-management.upload-subaybayan') }}" class="@if(Route::currentRouteName() == 'system-management.upload-subaybayan') active @endif">
+                                <a href="#" class="@if($lfpUploadsMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'lfpUploadsMenu')">
                                     <i class="fas fa-upload"></i>
                                     <span>Upload LFP Data</span>
+                                    <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
                                 </a>
+                                <ul id="lfpUploadsMenu" class="submenu" style="display: {{ $lfpUploadsMenuActive ? 'block' : 'none' }};">
+                                    <li>
+                                        <a href="{{ route('system-management.upload-subaybayan') }}" class="@if($lfp2024UploadsActive) active @endif">
+                                            <i class="fas fa-folder-open"></i>
+                                            <span>2024 Below Projects</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('system-management.upload-subaybayan-2025') }}" class="@if($lfp2025UploadsActive) active @endif">
+                                            <i class="fas fa-folder-plus"></i>
+                                            <span>2025 Above Projects</span>
+                                        </a>
+                                    </li>
+                                </ul>
                             </li>
                         @endif
                         @if($canViewRssaUploads)

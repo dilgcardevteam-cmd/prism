@@ -100,8 +100,8 @@
     <!-- Reports Card -->
     <div class="report-table-card" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
         <div class="report-table-scroll">
-            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 1700px;">
-            <thead>Manage fund utilization reports and project documents
+            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 1860px;">
+            <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Project Code</th>
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px; width: 180px; max-width: 180px;">Project Title</th>
@@ -115,11 +115,22 @@
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q2 %</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q3 %</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q4 %</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Validation</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($reports as $report)
+                    @php
+                        $validationSummary = $report->validation_summary ?? [
+                            'label' => 'No Upload',
+                            'detail' => 'No uploaded documents yet',
+                            'icon' => 'fa-minus-circle',
+                            'text_color' => '#4b5563',
+                            'background_color' => '#f3f4f6',
+                            'border_color' => '#d1d5db',
+                        ];
+                    @endphp
                     <tr style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
                         <td style="padding: 12px; color: #111827; font-size: 14px;">{{ $report->project_code }}</td>
                         <td style="padding: 12px; color: #111827; font-size: 14px; width: 180px; max-width: 180px;">
@@ -158,6 +169,17 @@
                         <td style="padding: 12px; text-align: center; color: {{ $report->quarter_q3_percentage == 100 ? '#10b981' : ($report->quarter_q3_percentage > 70 ? '#f59e0b' : '#ef4444') }}; font-size: 14px; font-weight: 600;">{{ $report->quarter_q3_percentage }}%</td>
                         <td style="padding: 12px; text-align: center; color: {{ $report->quarter_q4_percentage == 100 ? '#10b981' : ($report->quarter_q4_percentage > 70 ? '#f59e0b' : '#ef4444') }}; font-size: 14px; font-weight: 600;">{{ $report->quarter_q4_percentage }}%</td>
                         <td style="padding: 12px; text-align: center;">
+                            <span style="display: inline-flex; flex-direction: column; align-items: center; gap: 4px; min-width: 150px; max-width: 180px; padding: 8px 12px; border-radius: 12px; border: 1px solid {{ $validationSummary['border_color'] ?? '#d1d5db' }}; background-color: {{ $validationSummary['background_color'] ?? '#f3f4f6' }}; color: {{ $validationSummary['text_color'] ?? '#374151' }}; font-size: 11px; line-height: 1.25; font-weight: 700;">
+                                <span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+                                    <i class="fas {{ $validationSummary['icon'] ?? 'fa-minus-circle' }}" aria-hidden="true"></i>
+                                    <span>{{ $validationSummary['label'] ?? 'No Upload' }}</span>
+                                </span>
+                                <span style="font-size: 10px; font-weight: 600; opacity: 0.9; text-align: center; white-space: normal;">
+                                    {{ $validationSummary['detail'] ?? 'No uploaded documents yet' }}
+                                </span>
+                            </span>
+                        </td>
+                        <td style="padding: 12px; text-align: center;">
                             <a href="{{ route('fund-utilization.show', $report->project_code) }}" style="display: inline-block; padding: 8px 16px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-decoration: none; transition: all 0.3s ease;">
                                 <i class="fas fa-eye" style="margin-right: 4px;"></i> View
                             </a>
@@ -165,7 +187,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="13" style="padding: 40px; text-align: center; color: #6b7280;">
+                        <td colspan="14" style="padding: 40px; text-align: center; color: #6b7280;">
                             <i class="fas fa-inbox" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
                             No reports found. Create one to get started.
                         </td>
