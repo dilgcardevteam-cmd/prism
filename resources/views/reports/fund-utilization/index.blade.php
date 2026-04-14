@@ -100,22 +100,13 @@
     <!-- Reports Card -->
     <div class="report-table-card" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
         <div class="report-table-scroll">
-            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 1860px;">
+            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 980px;">
             <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Project Code</th>
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px; width: 180px; max-width: 180px;">Project Title</th>
+                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px; width: 220px; max-width: 220px;">Project Details</th>
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Location</th>
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Fund Source</th>
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Funding Year</th>
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Allocation</th>
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Contract Amount</th>
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Project Status</th>
-                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q1 %</th>
-                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q2 %</th>
-                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q3 %</th>
-                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q4 %</th>
-                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Validation</th>
+                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Funding / Status</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Validation / Progress</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Actions</th>
                 </tr>
             </thead>
@@ -132,9 +123,15 @@
                         ];
                     @endphp
                     <tr style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
-                        <td style="padding: 12px; color: #111827; font-size: 14px;">{{ $report->project_code }}</td>
-                        <td style="padding: 12px; color: #111827; font-size: 14px; width: 180px; max-width: 180px;">
-                            <div style="max-width: 180px; white-space: normal; word-break: break-word;">{{ $report->project_title }}</div>
+                        <td style="padding: 12px; color: #111827; font-size: 14px; width: 220px; max-width: 220px;">
+                            <div style="display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; background: #e0e7ff; color: #1e3a8a; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px;">
+                                {{ $report->project_code }}
+                            </div>
+                            <div style="max-width: 220px; white-space: normal; word-break: break-word; font-weight: 700; line-height: 1.4;">{{ $report->project_title }}</div>
+                            <div style="margin-top: 8px; font-size: 11px; color: #6b7280; line-height: 1.45;">
+                                <div><strong>Fund Source:</strong> {{ $report->fund_source ?: '-' }}</div>
+                                <div><strong>Funding Year:</strong> {{ $report->funding_year ?: '-' }}</div>
+                            </div>
                         </td>
                         <td style="padding: 12px; color: #111827; font-size: 14px;">
                             @php
@@ -159,25 +156,40 @@
                                 <span>{{ $report->implementing_unit ?: '-' }}</span>
                             </div>
                         </td>
-                        <td style="padding: 12px; color: #111827; font-size: 14px;">{{ $report->fund_source }}</td>
-                        <td style="padding: 12px; color: #111827; font-size: 14px;">{{ $report->funding_year }}</td>
-                        <td style="padding: 12px; color: #111827; font-size: 14px;">{{ $report->allocation ? 'PHP ' . number_format($report->allocation, 2) : '-' }}</td>
-                        <td style="padding: 12px; color: #111827; font-size: 14px;">{{ $report->contract_amount ? 'PHP ' . number_format($report->contract_amount, 2) : '-' }}</td>
-                        <td style="padding: 12px; color: #111827; font-size: 14px;">{{ $report->project_status }}</td>
-                        <td style="padding: 12px; text-align: center; color: {{ $report->quarter_q1_percentage == 100 ? '#10b981' : ($report->quarter_q1_percentage > 70 ? '#f59e0b' : '#ef4444') }}; font-size: 14px; font-weight: 600;">{{ $report->quarter_q1_percentage }}%</td>
-                        <td style="padding: 12px; text-align: center; color: {{ $report->quarter_q2_percentage == 100 ? '#10b981' : ($report->quarter_q2_percentage > 70 ? '#f59e0b' : '#ef4444') }}; font-size: 14px; font-weight: 600;">{{ $report->quarter_q2_percentage }}%</td>
-                        <td style="padding: 12px; text-align: center; color: {{ $report->quarter_q3_percentage == 100 ? '#10b981' : ($report->quarter_q3_percentage > 70 ? '#f59e0b' : '#ef4444') }}; font-size: 14px; font-weight: 600;">{{ $report->quarter_q3_percentage }}%</td>
-                        <td style="padding: 12px; text-align: center; color: {{ $report->quarter_q4_percentage == 100 ? '#10b981' : ($report->quarter_q4_percentage > 70 ? '#f59e0b' : '#ef4444') }}; font-size: 14px; font-weight: 600;">{{ $report->quarter_q4_percentage }}%</td>
+                        <td style="padding: 12px; color: #111827; font-size: 13px;">
+                            <div style="display: flex; flex-direction: column; gap: 8px; line-height: 1.4;">
+                                <div>
+                                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Allocation</div>
+                                    <div style="font-weight: 700;">{{ $report->allocation ? 'PHP ' . number_format($report->allocation, 2) : '-' }}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Contract Amount</div>
+                                    <div style="font-weight: 700;">{{ $report->contract_amount ? 'PHP ' . number_format($report->contract_amount, 2) : '-' }}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Project Status</div>
+                                    <div style="font-weight: 700;">{{ $report->project_status ?: '-' }}</div>
+                                </div>
+                            </div>
+                        </td>
                         <td style="padding: 12px; text-align: center;">
-                            <span style="display: inline-flex; flex-direction: column; align-items: center; gap: 4px; min-width: 150px; max-width: 180px; padding: 8px 12px; border-radius: 12px; border: 1px solid {{ $validationSummary['border_color'] ?? '#d1d5db' }}; background-color: {{ $validationSummary['background_color'] ?? '#f3f4f6' }}; color: {{ $validationSummary['text_color'] ?? '#374151' }}; font-size: 11px; line-height: 1.25; font-weight: 700;">
-                                <span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
-                                    <i class="fas {{ $validationSummary['icon'] ?? 'fa-minus-circle' }}" aria-hidden="true"></i>
-                                    <span>{{ $validationSummary['label'] ?? 'No Upload' }}</span>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                                <span style="display: inline-flex; flex-direction: column; align-items: center; gap: 4px; min-width: 150px; max-width: 180px; padding: 8px 12px; border-radius: 12px; border: 1px solid {{ $validationSummary['border_color'] ?? '#d1d5db' }}; background-color: {{ $validationSummary['background_color'] ?? '#f3f4f6' }}; color: {{ $validationSummary['text_color'] ?? '#374151' }}; font-size: 11px; line-height: 1.25; font-weight: 700;">
+                                    <span style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+                                        <i class="fas {{ $validationSummary['icon'] ?? 'fa-minus-circle' }}" aria-hidden="true"></i>
+                                        <span>{{ $validationSummary['label'] ?? 'No Upload' }}</span>
+                                    </span>
+                                    <span style="font-size: 10px; font-weight: 600; opacity: 0.9; text-align: center; white-space: normal;">
+                                        {{ $validationSummary['detail'] ?? 'No uploaded documents yet' }}
+                                    </span>
                                 </span>
-                                <span style="font-size: 10px; font-weight: 600; opacity: 0.9; text-align: center; white-space: normal;">
-                                    {{ $validationSummary['detail'] ?? 'No uploaded documents yet' }}
-                                </span>
-                            </span>
+                                <div style="display: grid; grid-template-columns: repeat(2, minmax(54px, 1fr)); gap: 6px; width: 100%; max-width: 170px;">
+                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q1_percentage == 100 ? '#10b981' : ($report->quarter_q1_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q1: {{ $report->quarter_q1_percentage }}%</span>
+                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q2_percentage == 100 ? '#10b981' : ($report->quarter_q2_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q2: {{ $report->quarter_q2_percentage }}%</span>
+                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q3_percentage == 100 ? '#10b981' : ($report->quarter_q3_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q3: {{ $report->quarter_q3_percentage }}%</span>
+                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q4_percentage == 100 ? '#10b981' : ($report->quarter_q4_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q4: {{ $report->quarter_q4_percentage }}%</span>
+                                </div>
+                            </div>
                         </td>
                         <td style="padding: 12px; text-align: center;">
                             <a href="{{ route('fund-utilization.show', $report->project_code) }}" style="display: inline-block; padding: 8px 16px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-decoration: none; transition: all 0.3s ease;">
@@ -187,7 +199,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="14" style="padding: 40px; text-align: center; color: #6b7280;">
+                        <td colspan="5" style="padding: 40px; text-align: center; color: #6b7280;">
                             <i class="fas fa-inbox" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
                             No reports found. Create one to get started.
                         </td>
