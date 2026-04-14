@@ -11,10 +11,16 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
-        $this->call([
+        $seeders = [
             TicketCategorySeeder::class,
             TicketingUserSeeder::class,
             TicketSeeder::class,
-        ]);
+        ];
+
+        if ($this->app->environment(['local', 'testing'])) {
+            $seeders[] = ActivityLogSeeder::class;
+        }
+
+        $this->call($seeders);
     }
 }

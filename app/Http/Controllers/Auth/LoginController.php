@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use App\Support\SystemMaintenanceState;
 
 class LoginController extends Controller
@@ -134,11 +136,25 @@ class LoginController extends Controller
     protected function sendFailedLoginResponse(Request $request)
     {
         $user = User::where('username', $request->input('username'))->first();
+        $failureReason = 'Invalid username or password.';
         $loginRoute = $this->systemMaintenanceState->isEnabled()
             ? 'maintenance.superadmin-login'
             : 'login';
         
         if ($user && strtolower($user->status) !== 'active') {
+            $failureReason = 'Attempted login with an inactive account.';
+            app(ActivityLogService::class)->log(
+                $user,
+                ActivityLog::ACTION_FAILED_LOGIN,
+                'Failed login attempt: inactive account.',
+                [
+                    'request' => $request,
+                    'properties' => [
+                        'reason' => $failureReason,
+                    ],
+                ],
+            );
+
             return redirect()->route($loginRoute)->withErrors([
                 'login_error' => 'Your account is inactive. Please contact an administrator.',
             ])->withInput($request->only('username', 'remember'));
@@ -151,8 +167,34 @@ class LoginController extends Controller
             && $this->systemMaintenanceState->isEnabled()
             && !$user->isSuperAdmin()
         ) {
+            $failureReason = 'Attempted login during maintenance without superadmin access.';
+            app(ActivityLogService::class)->log(
+                $user,
+                ActivityLog::ACTION_FAILED_LOGIN,
+                'Failed login attempt during maintenance mode.',
+                [
+                    'request' => $request,
+                    'properties' => [
+                        'reason' => $failureReason,
+                    ],
+                ],
+            );
+
             return redirect()->route('maintenance.notice');
         }
+
+        app(ActivityLogService::class)->log(
+            $user,
+            ActivityLog::ACTION_FAILED_LOGIN,
+            'Failed login attempt for username "' . trim((string) $request->input('username')) . '".',
+            [
+                'request' => $request,
+                'username' => trim((string) $request->input('username')),
+                'properties' => [
+                    'reason' => $failureReason,
+                ],
+            ],
+        );
         
         return redirect()->route($loginRoute)->withErrors([
             'login_error' => 'The username or password is incorrect.',

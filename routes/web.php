@@ -1818,6 +1818,12 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::prefix('utilities')->name('utilities.')->group(function () {
+        Route::get('/activity-logs', [App\Http\Controllers\ActivityLogController::class, 'index'])
+            ->middleware('superadmin')
+            ->name('activity-logs.index');
+        Route::get('/activity-logs/export', [App\Http\Controllers\ActivityLogController::class, 'export'])
+            ->middleware('superadmin')
+            ->name('activity-logs.export');
         Route::get('/system-setup', [App\Http\Controllers\DatabaseUtilityController::class, 'systemSetup'])
             ->middleware('crud_permission:utilities_system_setup,view')
             ->name('system-setup.index');

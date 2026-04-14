@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\RolePermissionSetting;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use App\Support\InputSanitizer;
 use App\Support\RolePermissionRegistry;
 use Illuminate\Http\Request;
@@ -223,7 +225,22 @@ class UserManagementController extends Controller
         $validated['password'] = Hash::make($validated['password']);
         $validated['email_verified_at'] = now();
 
-        User::create($validated);
+        $createdUser = User::create($validated);
+
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_CREATE,
+            'Created user account "' . $createdUser->username . '" (' . $createdUser->idno . ').',
+            [
+                'request' => $request,
+                'properties' => [
+                    'target_user_id' => $createdUser->idno,
+                    'target_username' => $createdUser->username,
+                    'target_role' => $createdUser->role,
+                    'target_status' => $createdUser->status,
+                ],
+            ],
+        );
 
         return redirect()->route('users.index')->with('success', 'User created successfully!');
     }
@@ -245,6 +262,10 @@ class UserManagementController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $originalRole = strtolower(trim((string) $user->role));
+        $originalAccess = (string) $user->access;
+        $originalStatus = strtolower(trim((string) $user->status));
+
         $validated = $request->validate([
             'fname' => ['required', 'string', 'max:255'],
             'lname' => ['required', 'string', 'max:255'],
@@ -275,6 +296,72 @@ class UserManagementController extends Controller
         unset($validated['crud_permissions']);
         $user->update($validated);
 
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_UPDATE,
+            'Updated user account "' . $user->username . '" (' . $user->idno . ').',
+            [
+                'request' => $request,
+                'properties' => [
+                    'target_user_id' => $user->idno,
+                    'target_username' => $user->username,
+                ],
+            ],
+        );
+
+        $updatedRole = strtolower(trim((string) $user->role));
+        if ($originalRole !== $updatedRole) {
+            app(ActivityLogService::class)->log(
+                $request->user(),
+                ActivityLog::ACTION_ROLE_CHANGE,
+                'Changed role for "' . $user->username . '" from ' . ($originalRole !== '' ? $originalRole : 'none') . ' to ' . ($updatedRole !== '' ? $updatedRole : 'none') . '.',
+                [
+                    'request' => $request,
+                    'properties' => [
+                        'target_user_id' => $user->idno,
+                        'target_username' => $user->username,
+                        'from_role' => $originalRole,
+                        'to_role' => $updatedRole,
+                    ],
+                ],
+            );
+        }
+
+        if ($originalAccess !== (string) $user->access) {
+            app(ActivityLogService::class)->log(
+                $request->user(),
+                ActivityLog::ACTION_PERMISSION_CHANGE,
+                'Updated access grants for "' . $user->username . '".',
+                [
+                    'request' => $request,
+                    'properties' => [
+                        'target_user_id' => $user->idno,
+                        'target_username' => $user->username,
+                        'from_access' => $originalAccess,
+                        'to_access' => (string) $user->access,
+                    ],
+                ],
+            );
+        }
+
+        $updatedStatus = strtolower(trim((string) $user->status));
+        if ($originalStatus !== $updatedStatus) {
+            app(ActivityLogService::class)->log(
+                $request->user(),
+                ActivityLog::ACTION_STATUS_CHANGE,
+                'Changed status for "' . $user->username . '" from ' . ($originalStatus !== '' ? $originalStatus : 'unknown') . ' to ' . ($updatedStatus !== '' ? $updatedStatus : 'unknown') . '.',
+                [
+                    'request' => $request,
+                    'properties' => [
+                        'target_user_id' => $user->idno,
+                        'target_username' => $user->username,
+                        'from_status' => $originalStatus,
+                        'to_status' => $updatedStatus,
+                    ],
+                ],
+            );
+        }
+
         return redirect()->route('users.index')->with('success', 'User updated successfully!');
     }
 
@@ -284,7 +371,22 @@ class UserManagementController extends Controller
             return back()->with('error', 'You cannot delete your own account.');
         }
 
+        $deletedUserId = $user->idno;
+        $deletedUsername = $user->username;
         $user->delete();
+
+        app(ActivityLogService::class)->log(
+            request()->user(),
+            ActivityLog::ACTION_DELETE,
+            'Deleted user account "' . $deletedUsername . '" (' . $deletedUserId . ').',
+            [
+                'request' => request(),
+                'properties' => [
+                    'target_user_id' => $deletedUserId,
+                    'target_username' => $deletedUsername,
+                ],
+            ],
+        );
 
         return redirect()->route('users.index')->with('success', 'User deleted successfully!');
     }
@@ -296,10 +398,27 @@ class UserManagementController extends Controller
         }
 
         $isInactive = strtolower(trim((string) $user->status)) === 'inactive';
+        $fromStatus = $isInactive ? 'inactive' : 'active';
+        $toStatus = $isInactive ? 'active' : 'inactive';
 
         $user->update([
-            'status' => $isInactive ? 'active' : 'inactive',
+            'status' => $toStatus,
         ]);
+
+        app(ActivityLogService::class)->log(
+            request()->user(),
+            ActivityLog::ACTION_STATUS_CHANGE,
+            'Changed status for "' . $user->username . '" from ' . $fromStatus . ' to ' . $toStatus . '.',
+            [
+                'request' => request(),
+                'properties' => [
+                    'target_user_id' => $user->idno,
+                    'target_username' => $user->username,
+                    'from_status' => $fromStatus,
+                    'to_status' => $toStatus,
+                ],
+            ],
+        );
 
         if ($isInactive) {
             return redirect()->route('users.index')->with('success', 'User activated successfully.');

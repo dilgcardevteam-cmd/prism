@@ -2237,7 +2237,8 @@
             @if($canViewUtilitiesSystemSetup)
                 <li>
                 @php
-                    $utilitiesMenuActive = request()->routeIs('utilities.*');
+                    $utilitiesMenuActive = request()->routeIs('utilities.*')
+                        && !request()->routeIs('utilities.activity-logs.*');
                 @endphp
                 <a href="#" class="@if($utilitiesMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'utilitiesMenu')">
                     <i class="fas fa-toolbox"></i>
@@ -2255,6 +2256,14 @@
                     @endif
                 </ul>
                 </li>
+            @endif
+            @if(Auth::user()->isSuperAdmin())
+            <li>
+                <a href="{{ route('utilities.activity-logs.index') }}" class="@if(request()->routeIs('utilities.activity-logs.*')) active @endif">
+                    <i class="fas fa-history"></i>
+                    <span>Activity Logs</span>
+                </a>
+            </li>
             @endif
         </ul>
     </aside>

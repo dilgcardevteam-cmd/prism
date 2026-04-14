@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Mail\PasswordResetOtpMail;
+use App\Models\ActivityLog;
 use App\Models\User;
+use App\Services\ActivityLogService;
 use Illuminate\Foundation\Auth\SendsPasswordResetEmails;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -73,6 +75,18 @@ class ForgotPasswordController extends Controller
         }
 
         $request->session()->put('otp_email', $email);
+
+        app(ActivityLogService::class)->log(
+            $user,
+            ActivityLog::ACTION_PASSWORD_RESET_REQUEST,
+            'Password reset OTP requested.',
+            [
+                'request' => $request,
+                'properties' => [
+                    'email' => $user->emailaddress,
+                ],
+            ],
+        );
 
         return redirect()
             ->route('forgot-password.verify')
@@ -158,6 +172,15 @@ class ForgotPasswordController extends Controller
         $user->save();
 
         $request->session()->forget('otp_verified_email');
+
+        app(ActivityLogService::class)->log(
+            $user,
+            ActivityLog::ACTION_PASSWORD_RESET,
+            'Password reset completed through OTP verification.',
+            [
+                'request' => $request,
+            ],
+        );
 
         return redirect('/login')->with('success', 'Password reset successful. You can now log in.');
     }

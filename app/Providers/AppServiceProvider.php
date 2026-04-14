@@ -4,8 +4,14 @@ namespace App\Providers;
 
 use App\Models\LocallyFundedProject;
 use App\Models\Ticket;
+use App\Models\ActivityLog;
 use App\Observers\LocallyFundedProjectObserver;
+use App\Services\ActivityLogService;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -24,6 +30,49 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         LocallyFundedProject::observe(LocallyFundedProjectObserver::class);
+
+        Event::listen(Login::class, function (Login $event): void {
+            app(ActivityLogService::class)->log(
+                $event->user,
+                ActivityLog::ACTION_LOGIN,
+                'User logged in successfully.',
+                [
+                    'request' => request(),
+                    'properties' => [
+                        'guard' => $event->guard,
+                    ],
+                ],
+            );
+        });
+
+        Event::listen(Logout::class, function (Logout $event): void {
+            app(ActivityLogService::class)->log(
+                $event->user,
+                ActivityLog::ACTION_LOGOUT,
+                'User logged out.',
+                [
+                    'request' => request(),
+                    'properties' => [
+                        'guard' => $event->guard,
+                    ],
+                ],
+            );
+        });
+
+        Event::listen(Registered::class, function (Registered $event): void {
+            app(ActivityLogService::class)->log(
+                $event->user,
+                ActivityLog::ACTION_REGISTER,
+                'User registration completed.',
+                [
+                    'request' => request(),
+                    'properties' => [
+                        'status' => $event->user?->status,
+                        'role' => $event->user?->role,
+                    ],
+                ],
+            );
+        });
 
         Gate::define('ticketing.submit', fn ($user) => $user->isLguUser());
 

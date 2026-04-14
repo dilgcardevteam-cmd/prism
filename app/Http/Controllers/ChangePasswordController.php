@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -53,6 +55,15 @@ class ChangePasswordController extends Controller
         $user->update([
             'password' => Hash::make($validated['new_password'])
         ]);
+
+        app(ActivityLogService::class)->log(
+            $user,
+            ActivityLog::ACTION_PASSWORD_CHANGE,
+            'Password changed from the authenticated profile settings.',
+            [
+                'request' => $request,
+            ],
+        );
 
         return redirect()->route('profile.show')->with('success', 'Password changed successfully!');
     }

@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Mail\AutomatedDatabaseBackupMail;
 use App\Mail\BulkNotificationMail;
+use App\Models\ActivityLog;
 use App\Models\BackupAutomationSetting;
 use App\Models\DatabaseBackupRun;
 use App\Models\LguReportorialDeadline;
 use App\Models\RolePermissionSetting;
 use App\Models\User;
 use App\Models\UserRole;
+use App\Services\ActivityLogService;
 use App\Services\DatabaseBackupService;
 use App\Support\InputSanitizer;
 use App\Support\NotificationUrl;
@@ -165,6 +167,13 @@ class DatabaseUtilityController extends Controller
                 'visible' => $user?->isSuperAdmin() ?? false,
             ],
             [
+                'icon' => 'fas fa-history',
+                'title' => 'Activity Logs',
+                'description' => 'Review immutable audit events for authentication, CRUD actions, role changes, and other sensitive system activity.',
+                'route' => route('utilities.activity-logs.index'),
+                'visible' => $user?->isSuperAdmin() ?? false,
+            ],
+            [
                 'icon' => 'fas fa-map-marker-alt',
                 'title' => 'Location Configuration',
                 'description' => 'Review and manage the location-related configuration used across the application.',
@@ -227,8 +236,24 @@ class DatabaseUtilityController extends Controller
             'enabled' => ['required', 'boolean'],
         ]);
 
+        $previousState = (bool) ($this->systemMaintenanceState->state()['enabled'] ?? false);
         $enabled = (bool) $validated['enabled'];
         $this->systemMaintenanceState->setEnabled($enabled, $request->user());
+
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_MAINTENANCE_MODE_CHANGE,
+            $enabled
+                ? 'Enabled system maintenance mode.'
+                : 'Disabled system maintenance mode.',
+            [
+                'request' => $request,
+                'properties' => [
+                    'previous_state' => $previousState,
+                    'enabled' => $enabled,
+                ],
+            ],
+        );
 
         return redirect()
             ->route('utilities.system-maintenance.index')
@@ -902,6 +927,19 @@ class DatabaseUtilityController extends Controller
 
         $redirectUrl = route('utilities.role-configuration.index', ['role' => $roleDefinition->role_key]);
 
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_ROLE_CHANGE,
+            'Created role definition "' . $roleDefinition->label . '" (' . $roleDefinition->role_key . ').',
+            [
+                'request' => $request,
+                'properties' => [
+                    'role_key' => $roleDefinition->role_key,
+                    'role_label' => $roleDefinition->label,
+                ],
+            ],
+        );
+
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => 'Role created successfully.',
@@ -945,6 +983,19 @@ class DatabaseUtilityController extends Controller
         RolePermissionSetting::flushPermissionsCache();
 
         $redirectUrl = route('utilities.role-configuration.index', ['role' => $roleDefinition->role_key]);
+
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_ROLE_CHANGE,
+            'Updated role definition "' . $roleDefinition->label . '" (' . $roleDefinition->role_key . ').',
+            [
+                'request' => $request,
+                'properties' => [
+                    'role_key' => $roleDefinition->role_key,
+                    'role_label' => $roleDefinition->label,
+                ],
+            ],
+        );
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -1011,6 +1062,19 @@ class DatabaseUtilityController extends Controller
         $nextRole = collect(RolePermissionRegistry::configurableRoles())->first() ?? User::ROLE_REGIONAL;
         $redirectUrl = route('utilities.role-configuration.index', ['role' => $nextRole]);
 
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_ROLE_CHANGE,
+            'Deleted role definition "' . $normalizedRole . '".',
+            [
+                'request' => $request,
+                'properties' => [
+                    'role_key' => $normalizedRole,
+                    'assigned_users' => $assignedUsersCount,
+                ],
+            ],
+        );
+
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => 'Role deleted successfully.',
@@ -1053,6 +1117,19 @@ class DatabaseUtilityController extends Controller
 
         RolePermissionSetting::flushPermissionsCache();
 
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_PERMISSION_CHANGE,
+            'Updated permissions for role "' . $normalizedRole . '".',
+            [
+                'request' => $request,
+                'properties' => [
+                    'role' => $normalizedRole,
+                    'permissions' => $permissions,
+                ],
+            ],
+        );
+
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => 'Role configuration updated successfully.',
@@ -1090,6 +1167,19 @@ class DatabaseUtilityController extends Controller
         RolePermissionSetting::flushPermissionsCache();
 
         $defaultPermissions = RolePermissionRegistry::permissionsForRole($normalizedRole);
+
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_PERMISSION_CHANGE,
+            'Reset permissions for role "' . $normalizedRole . '" to the default baseline.',
+            [
+                'request' => $request,
+                'properties' => [
+                    'role' => $normalizedRole,
+                    'permissions' => $defaultPermissions,
+                ],
+            ],
+        );
 
         if ($request->expectsJson()) {
             return response()->json([
