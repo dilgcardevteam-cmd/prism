@@ -723,7 +723,7 @@ $url = route('locally-funded-project.show', $project, false);
         $cacheKey = "lfp_index:{$userId}:{$filterHash}";
 
         if (Illuminate\Support\Facades\Cache::has($cacheKey)) {
-            $cached = Cache::get($cacheKey);
+            $cached = Illuminate\Support\Facades\Cache::get($cacheKey);
             return view('projects.locally-funded', $cached['view_data']);
         }
 
