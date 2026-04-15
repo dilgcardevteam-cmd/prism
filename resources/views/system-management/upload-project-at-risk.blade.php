@@ -48,7 +48,7 @@
                     <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 12px;">Loading a file will delete the current Project At Risk records first, then import the selected CSV.</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <a href="{{ route('system-management.upload-project-at-risk.template') }}" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; background: linear-gradient(180deg, #008c4d 0%, #007542 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none; box-shadow: 0 6px 16px rgba(0, 117, 66, 0.18);">
+                    <a href="{{ route('system-management.upload-project-at-risk.template') }}" data-page-loading="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; background: linear-gradient(180deg, #008c4d 0%, #007542 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none; box-shadow: 0 6px 16px rgba(0, 117, 66, 0.18);">
                         <i class="fas fa-file-excel" aria-hidden="true"></i>
                         <span>Download Template</span>
                     </a>
@@ -102,7 +102,7 @@
                                                     </button>
                                                 </form>
                                             @endif
-                                            <a href="{{ route('system-management.upload-project-at-risk.download', ['importId' => $historyRow->id]) }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
+                                            <a href="{{ route('system-management.upload-project-at-risk.download', ['importId' => $historyRow->id]) }}" data-page-loading="false" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
                                                 Download CSV
                                             </a>
                                             @if($canDeleteUpload)

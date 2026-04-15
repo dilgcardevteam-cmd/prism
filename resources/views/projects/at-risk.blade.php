@@ -105,7 +105,7 @@
         <div class="risk-card-header">
             <h2>Projects</h2>
             <div class="risk-card-actions">
-                <a id="risk-export" href="{{ route('projects.at-risk.export', request()->query()) }}" class="risk-btn risk-btn--success">
+                <a id="risk-export" href="{{ route('projects.at-risk.export', request()->query()) }}" class="risk-btn risk-btn--success" data-page-loading="false">
                     Export Excel
                 </a>
             </div>

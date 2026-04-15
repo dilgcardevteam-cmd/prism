@@ -60,7 +60,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
                 <h2 style="color: #002C76; font-size: 18px; margin: 0;">{{ $uploadPage['listTitle'] }}</h2>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <a href="{{ route($uploadPage['routeBase'] . '.template') }}" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; background: linear-gradient(180deg, #008c4d 0%, #007542 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none; box-shadow: 0 6px 16px rgba(0, 117, 66, 0.18);">
+                    <a href="{{ route($uploadPage['routeBase'] . '.template') }}" data-page-loading="false" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; background: linear-gradient(180deg, #008c4d 0%, #007542 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none; box-shadow: 0 6px 16px rgba(0, 117, 66, 0.18);">
                         <i class="fas fa-file-excel" aria-hidden="true"></i>
                         <span>Download Template</span>
                     </a>
@@ -113,7 +113,7 @@
                                                     </button>
                                                 </form>
                                             @endif
-                                            <a href="{{ route($uploadPage['routeBase'] . '.download', ['importId' => $historyRow->id]) }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
+                                            <a href="{{ route($uploadPage['routeBase'] . '.download', ['importId' => $historyRow->id]) }}" data-page-loading="false" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
                                                 Download File
                                             </a>
                                             @if($canDeleteUpload)

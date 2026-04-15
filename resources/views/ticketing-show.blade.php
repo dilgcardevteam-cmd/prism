@@ -255,7 +255,7 @@
                                         • {{ number_format($attachment->file_size / 1024, 1) }} KB
                                     @endif
                                 </div>
-                                <a href="{{ route('ticketing.attachments.download', [$ticket, $attachment]) }}" class="ticketing-btn ticketing-btn--secondary">
+                                <a href="{{ route('ticketing.attachments.download', [$ticket, $attachment]) }}" class="ticketing-btn ticketing-btn--secondary" data-page-loading="false">
                                     <i class="fas fa-download"></i>
                                     Download Attachment
                                 </a>

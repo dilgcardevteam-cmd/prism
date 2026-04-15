@@ -128,7 +128,7 @@
                                                                     Load
                                                                 </button>
                                                             </form>
-                                                            <a href="{{ route('utilities.location-configuration.download', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
+                                                            <a href="{{ route('utilities.location-configuration.download', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" data-page-loading="false" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
                                                                 Download CSV
                                                             </a>
                                                             <form method="POST" action="{{ route('utilities.location-configuration.delete', ['dataset' => $dataset['key'], 'importId' => $historyRow->id]) }}" data-page-loading="true" data-loading-label="Deleting import record" data-loading-detail="Removing the selected {{ strtolower($dataset['label']) }} import record." onsubmit="return confirm('Delete this imported file record?');">

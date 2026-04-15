@@ -3175,6 +3175,43 @@
                 document.body.classList.remove('page-loading');
             };
 
+            const loaderSuppressionWindowMs = 5000;
+            let loaderSuppressedUntil = 0;
+
+            const suppressPageLoader = function (durationMs) {
+                const resolvedDuration = Number.isFinite(durationMs) ? durationMs : loaderSuppressionWindowMs;
+                loaderSuppressedUntil = Date.now() + Math.max(resolvedDuration, 0);
+                hidePageLoader();
+            };
+
+            const isPageLoaderSuppressed = function () {
+                return loaderSuppressedUntil > Date.now();
+            };
+
+            const looksLikeFileTransferUrl = function (url) {
+                if (!url) {
+                    return false;
+                }
+
+                const pathname = (url.pathname || '').toLowerCase();
+                if (/\.(csv|xls|xlsx|sql|zip|pdf|doc|docx|txt)$/i.test(pathname)) {
+                    return true;
+                }
+
+                if (/(?:\/download(?:\/|$)|\/export(?:\/|$)|\/extract(?:\/|$)|\/attachments(?:\/|$)|\/(?:view-)?document(?:\/|$))/i.test(pathname)) {
+                    return true;
+                }
+
+                const searchParams = url.searchParams;
+                if (!searchParams) {
+                    return false;
+                }
+
+                return ['download', 'export', 'extract'].some(function (key) {
+                    return searchParams.has(key);
+                });
+            };
+
             const isSafeNavigableLink = function (link) {
                 if (!link || link.hasAttribute('download')) {
                     return false;
@@ -3199,7 +3236,26 @@
             };
 
             const showPageLoaderForLink = function (link) {
-                if (!link || link.dataset.pageLoading === 'false' || !isSafeNavigableLink(link)) {
+                if (!link) {
+                    return false;
+                }
+
+                if (link.dataset.pageLoading === 'false') {
+                    suppressPageLoader();
+                    return false;
+                }
+
+                if (!isSafeNavigableLink(link)) {
+                    return false;
+                }
+
+                try {
+                    const url = new URL(link.href, window.location.href);
+                    if (looksLikeFileTransferUrl(url)) {
+                        suppressPageLoader();
+                        return false;
+                    }
+                } catch (error) {
                     return false;
                 }
 
@@ -3209,11 +3265,17 @@
             };
 
             const showPageLoaderForForm = function (form, submitter) {
-                if (!form || form.dataset.pageLoading === 'false') {
+                if (!form) {
+                    return false;
+                }
+
+                if (form.dataset.pageLoading === 'false') {
+                    suppressPageLoader();
                     return false;
                 }
 
                 if (submitter && submitter.dataset && submitter.dataset.pageLoading === 'false') {
+                    suppressPageLoader();
                     return false;
                 }
 
@@ -3252,6 +3314,11 @@
                     if (formActionUrl.origin !== window.location.origin) {
                         return false;
                     }
+
+                    if (looksLikeFileTransferUrl(formActionUrl)) {
+                        suppressPageLoader();
+                        return false;
+                    }
                 } catch (error) {
                     return false;
                 }
@@ -3266,6 +3333,7 @@
             window.AppUI.hidePageLoader = hidePageLoader;
             window.AppUI.showPageLoaderForLink = showPageLoaderForLink;
             window.AppUI.showPageLoaderForForm = showPageLoaderForForm;
+            window.AppUI.suppressPageLoader = suppressPageLoader;
             window.showPageLoader = showPageLoader;
             window.hidePageLoader = hidePageLoader;
 
@@ -3314,6 +3382,10 @@
             });
 
             window.addEventListener('beforeunload', function () {
+                if (isPageLoaderSuppressed()) {
+                    return;
+                }
+
                 showPageLoader({ immediate: true });
             });
 
