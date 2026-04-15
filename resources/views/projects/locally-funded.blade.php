@@ -31,6 +31,8 @@
                 'project_update_status' => '',
             ], $filters ?? []);
 
+            $provinceMunicipalities = $provinceMunicipalities ?? ($options['provinceMunicipalities'] ?? []);
+
             $selectedProvinceFilter = trim((string) ($activeFilters['province'] ?? ''));
             if ($selectedProvinceFilter !== '' && array_key_exists($selectedProvinceFilter, $provinceMunicipalities)) {
                 $cityOptions = collect($provinceMunicipalities[$selectedProvinceFilter] ?? []);
