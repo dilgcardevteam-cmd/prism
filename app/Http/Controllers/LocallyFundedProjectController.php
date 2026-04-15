@@ -10,6 +10,7 @@ use App\Support\InputSanitizer;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -51,8 +52,9 @@ class LocallyFundedProjectController extends Controller
 
     private function applyUserScopeToLocationQuery($query, string $provinceColumnExpression, string $cityColumnExpression, string $regionColumnExpression): void
     {
+        /** @var User|null $user */
         $user = Auth::user();
-        if (!$user || $user->isSuperAdmin()) {
+        if (!$user instanceof User || $user->isSuperAdmin()) {
             return;
         }
 
@@ -448,8 +450,9 @@ class LocallyFundedProjectController extends Controller
                 return;
             }
 
+            /** @var User|null $actor */
             $actor = Auth::user();
-            if (!$actor) {
+            if (!$actor instanceof User) {
                 return;
             }
 
@@ -722,9 +725,19 @@ $url = route('locally-funded-project.show', $project, false);
         $filterHash = md5(serialize(request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir'])));
         $cacheKey = "lfp_index:{$userId}:{$filterHash}";
 
-        if (Illuminate\Support\Facades\Cache::has($cacheKey)) {
-            $cached = Illuminate\Support\Facades\Cache::get($cacheKey);
-            return view('projects.locally-funded', $cached['view_data']);
+        if (Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+            $cachedViewData = $cached['view_data'] ?? [];
+            if (!is_array($cachedViewData)) {
+                $cachedViewData = [];
+            }
+
+            $cachedOptions = $cachedViewData['options'] ?? [];
+            if (!is_array($cachedOptions)) {
+                $cachedOptions = [];
+            }
+
+            return view('projects.locally-funded', array_merge($cachedOptions, $cachedViewData));
         }
 
         $this->syncMissingFundUtilizationReports();
@@ -1274,23 +1287,26 @@ $url = route('locally-funded-project.show', $project, false);
             ->all();
 
         // Cache results
-        $viewData = compact(
-            'projects',
-            'physicalStatuses',
-            'perPage',
-            'sortBy',
-            'sortDir',
-            'filters',
-            'listRouteName',
-            'activeProjectTab',
-            'pageTitle',
-            'pageDescription',
-            'tableTitle',
-            'forceFundSource',
-            'options'
+        $viewData = array_merge(
+            $options,
+            compact(
+                'projects',
+                'physicalStatuses',
+                'perPage',
+                'sortBy',
+                'sortDir',
+                'filters',
+                'listRouteName',
+                'activeProjectTab',
+                'pageTitle',
+                'pageDescription',
+                'tableTitle',
+                'forceFundSource',
+                'options'
+            )
         );
 
-        Illuminate\Support\Facades\Cache::put($cacheKey, ['view_data' => $viewData], now()->addMinutes(5));
+        Cache::put($cacheKey, ['view_data' => $viewData], now()->addMinutes(5));
 
         return view('projects.locally-funded', $viewData);
     }
@@ -2421,7 +2437,7 @@ $url = route('locally-funded-project.show', $project, false);
         foreach ($dateFields as $field) {
             $prefill[$field] = $project->{$field} ? $project->{$field}->format('Y-m-d') : null;
         }
-        request()->session()->flashInput($prefill);
+        request()->session()->put('_old_input', $prefill);
 
         $section = request()->query('section');
         $deadlineConfiguration = $this->deadlineConfigurationForProject($project);
@@ -2565,8 +2581,9 @@ $url = route('locally-funded-project.show', $project, false);
         $this->authorizeLocallyFundedProjectAccess($project);
 
         $section = $request->input('section');
+        /** @var User|null $user */
         $user = Auth::user();
-        $canEditProjectProfile = $user
+        $canEditProjectProfile = $user instanceof User
             && strtoupper(trim((string) ($user->agency ?? ''))) === 'DILG'
             && trim((string) ($user->province ?? '')) === 'Regional Office'
             && $user->isSuperAdmin();
