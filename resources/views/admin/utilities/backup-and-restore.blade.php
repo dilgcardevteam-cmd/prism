@@ -105,7 +105,7 @@
                     <div><strong>Next Scheduled Run:</strong> {{ $nextScheduledRun ?? 'Scheduler disabled' }}</div>
                 </div>
 
-                <form method="GET" action="{{ route('utilities.backup-and-restore.download') }}" data-page-loading="false">
+                <form method="GET" action="{{ route('utilities.backup-and-restore.download') }}">
                     <button type="submit" style="width: 100%; padding: 12px 18px; background-color: #002C76; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
                         <i class="fas fa-download"></i>
                         <span>Download SQL Backup</span>

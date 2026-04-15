@@ -95,7 +95,7 @@
                                                 </button>
                                             </form>
                                         @endif
-                                        <a href="{{ route('system-management.upload-rlip-lime.download', ['importId' => $historyRow->id]) }}" data-page-loading="false" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
+                                        <a href="{{ route('system-management.upload-rlip-lime.download', ['importId' => $historyRow->id]) }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
                                             Download
                                         </a>
                                         @if($canDeleteUpload)

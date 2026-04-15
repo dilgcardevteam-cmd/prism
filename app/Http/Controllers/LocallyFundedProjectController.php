@@ -10,7 +10,6 @@ use App\Support\InputSanitizer;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -721,10 +720,10 @@ $url = route('locally-funded-project.show', $project, false);
         // Cache key: user + filters (5min TTL)
         $userId = Auth::id();
         $filterHash = md5(serialize(request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir'])));
-        $cacheKey = "lfp_index_v2:{$userId}:{$filterHash}";
+        $cacheKey = "lfp_index:{$userId}:{$filterHash}";
 
-        if (Cache::has($cacheKey)) {
-            $cached = Cache::get($cacheKey);
+        if (Illuminate\Support\Facades\Cache::has($cacheKey)) {
+            $cached = Illuminate\Support\Facades\Cache::get($cacheKey);
             return view('projects.locally-funded', $cached['view_data']);
         }
 
@@ -1275,25 +1274,23 @@ $url = route('locally-funded-project.show', $project, false);
             ->all();
 
         // Cache results
-        $viewData = array_merge(
-            $options,
-            compact(
-                'projects',
-                'physicalStatuses',
-                'perPage',
-                'sortBy',
-                'sortDir',
-                'filters',
-                'listRouteName',
-                'activeProjectTab',
-                'pageTitle',
-                'pageDescription',
-                'tableTitle',
-                'forceFundSource'
-            )
+        $viewData = compact(
+            'projects',
+            'physicalStatuses',
+            'perPage',
+            'sortBy',
+            'sortDir',
+            'filters',
+            'listRouteName',
+            'activeProjectTab',
+            'pageTitle',
+            'pageDescription',
+            'tableTitle',
+            'forceFundSource',
+            'options'
         );
 
-        Cache::put($cacheKey, ['view_data' => $viewData], now()->addMinutes(5));
+        Illuminate\Support\Facades\Cache::put($cacheKey, ['view_data' => $viewData], now()->addMinutes(5));
 
         return view('projects.locally-funded', $viewData);
     }
