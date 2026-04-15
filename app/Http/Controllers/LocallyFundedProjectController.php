@@ -717,7 +717,18 @@ $url = route('locally-funded-project.show', $project, false);
      */
     public function index()
     {
+        // Cache key: user + filters (5min TTL)
+        $userId = Auth::id();
+        $filterHash = md5(serialize(request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir'])));
+        $cacheKey = "lfp_index:{$userId}:{$filterHash}";
+
+        if (Illuminate\Support\Facades\Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+            return view('projects.locally-funded', $cached['view_data']);
+        }
+
         $this->syncMissingFundUtilizationReports();
+
         $listRouteName = 'projects.locally-funded';
         $activeProjectTab = 'locally-funded';
         $pageTitle = 'Locally Funded Projects';
@@ -1262,23 +1273,26 @@ $url = route('locally-funded-project.show', $project, false);
             ->values()
             ->all();
 
-        return view('projects.locally-funded', array_merge(
-            $options,
-            compact(
-                'projects',
-                'physicalStatuses',
-                'perPage',
-                'sortBy',
-                'sortDir',
-                'filters',
-                'listRouteName',
-                'activeProjectTab',
-                'pageTitle',
-                'pageDescription',
-                'tableTitle',
-                'forceFundSource'
-            )
-        ));
+        // Cache results
+        $viewData = compact(
+            'projects',
+            'physicalStatuses',
+            'perPage',
+            'sortBy',
+            'sortDir',
+            'filters',
+            'listRouteName',
+            'activeProjectTab',
+            'pageTitle',
+            'pageDescription',
+            'tableTitle',
+            'forceFundSource',
+            'options'
+        );
+
+        Illuminate\Support\Facades\Cache::put($cacheKey, ['view_data' => $viewData], now()->addMinutes(5));
+
+        return view('projects.locally-funded', $viewData);
     }
 
     /**
