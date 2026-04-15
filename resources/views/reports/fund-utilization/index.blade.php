@@ -314,10 +314,6 @@
             }
 
             // Redirect to the export URL
-            if (window.AppUI && typeof window.AppUI.suppressPageLoader === 'function') {
-                window.AppUI.suppressPageLoader();
-            }
-
             window.location.href = url.toString();
         });
 

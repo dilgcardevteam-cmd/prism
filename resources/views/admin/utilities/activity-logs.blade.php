@@ -353,7 +353,7 @@
                         <span>Reset</span>
                     </a>
                     @if ($tableReady)
-                        <a href="{{ route('utilities.activity-logs.export', $filters) }}" class="activity-logs-btn activity-logs-btn--secondary" data-page-loading="false">
+                        <a href="{{ route('utilities.activity-logs.export', $filters) }}" class="activity-logs-btn activity-logs-btn--secondary">
                             <i class="fas fa-file-csv"></i>
                             <span>Export CSV</span>
                         </a>
