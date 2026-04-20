@@ -33,6 +33,8 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             $perPage = 15;
         }
 
+        $filters = $this->resolveProjectFilters($request);
+
         if (!Schema::hasTable('subay_project_profiles')) {
             $projects = new LengthAwarePaginator([], 0, $perPage, 1, [
                 'path' => $request->url(),
@@ -42,11 +44,16 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             return view('reports.quarterly.rpmes.shared.index', [
                 'projects' => $projects,
                 'perPage' => $perPage,
+                'filters' => $filters,
+                'filterOptions' => $this->emptyProjectFilterOptions(),
                 'formMeta' => $this->viewMeta(),
             ]);
         }
 
-        $projects = $this->buildAccessibleSubayQuery($user)
+        $baseQuery = $this->buildAccessibleSubayQuery($user);
+        $filterOptions = $this->buildProjectFilterOptions(clone $baseQuery);
+
+        $projectsQuery = (clone $baseQuery)
             ->whereNotNull('spp.project_code')
             ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''")
             ->select([
@@ -57,7 +64,11 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 'spp.funding_year',
                 'spp.status',
                 DB::raw($this->fundSourceExpression('spp') . ' as fund_source'),
-            ])
+            ]);
+
+        $this->applyProjectFilters($projectsQuery, $filters);
+
+        $projects = $projectsQuery
             ->orderByRaw("CASE WHEN spp.funding_year IS NULL OR TRIM(spp.funding_year) = '' THEN 1 ELSE 0 END")
             ->orderByRaw("CAST(COALESCE(NULLIF(TRIM(spp.funding_year), ''), '0') AS UNSIGNED) DESC")
             ->orderBy('spp.project_code')
@@ -67,6 +78,8 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         return view('reports.quarterly.rpmes.shared.index', [
             'projects' => $projects,
             'perPage' => $perPage,
+            'filters' => $filters,
+            'filterOptions' => $filterOptions,
             'formMeta' => $this->viewMeta(),
         ]);
     }
@@ -554,6 +567,130 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 ELSE 'UNSPECIFIED'
             END
         ";
+    }
+
+    protected function projectTypeExpression(string $alias = 'spp'): string
+    {
+        return "TRIM(COALESCE(NULLIF(TRIM({$alias}.type_of_project), ''), NULLIF(TRIM({$alias}.type), ''), ''))";
+    }
+
+    protected function resolveProjectFilters(Request $request): array
+    {
+        return [
+            'province' => $this->normalizeProjectFilterValues($request->input('province', [])),
+            'city_municipality' => $this->normalizeProjectFilterValues($request->input('city_municipality', [])),
+            'barangay' => $this->normalizeProjectFilterValues($request->input('barangay', [])),
+            'program' => $this->normalizeProjectFilterValues($request->input('program', [])),
+            'funding_year' => $this->normalizeProjectFilterValues($request->input('funding_year', [])),
+            'project_type' => $this->normalizeProjectFilterValues($request->input('project_type', [])),
+            'project_status' => $this->normalizeProjectFilterValues($request->input('project_status', [])),
+        ];
+    }
+
+    protected function normalizeProjectFilterValues($rawValues): array
+    {
+        $values = is_array($rawValues) ? $rawValues : [$rawValues];
+
+        return collect($values)
+            ->map(static fn ($value) => trim((string) $value))
+            ->filter(static fn (string $value) => $value !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    protected function emptyProjectFilterOptions(): array
+    {
+        return [
+            'provinces' => collect(),
+            'cities' => collect(),
+            'barangays' => collect(),
+            'programs' => collect(),
+            'funding_years' => collect(),
+            'project_types' => collect(),
+            'project_statuses' => collect(),
+        ];
+    }
+
+    protected function buildProjectFilterOptions($baseQuery): array
+    {
+        $projectTypeExpression = $this->projectTypeExpression('spp');
+
+        return [
+            'provinces' => (clone $baseQuery)
+                ->select('spp.province')
+                ->whereRaw("TRIM(COALESCE(spp.province, '')) <> ''")
+                ->distinct()
+                ->orderBy('spp.province')
+                ->pluck('spp.province'),
+            'cities' => (clone $baseQuery)
+                ->select('spp.city_municipality')
+                ->whereRaw("TRIM(COALESCE(spp.city_municipality, '')) <> ''")
+                ->distinct()
+                ->orderBy('spp.city_municipality')
+                ->pluck('spp.city_municipality'),
+            'barangays' => (clone $baseQuery)
+                ->select('spp.barangay')
+                ->whereRaw("TRIM(COALESCE(spp.barangay, '')) <> ''")
+                ->distinct()
+                ->orderBy('spp.barangay')
+                ->pluck('spp.barangay'),
+            'programs' => (clone $baseQuery)
+                ->select('spp.program')
+                ->whereRaw("TRIM(COALESCE(spp.program, '')) <> ''")
+                ->distinct()
+                ->orderBy('spp.program')
+                ->pluck('spp.program'),
+            'funding_years' => (clone $baseQuery)
+                ->select('spp.funding_year')
+                ->whereRaw("TRIM(COALESCE(spp.funding_year, '')) <> ''")
+                ->distinct()
+                ->orderByRaw("CAST(COALESCE(NULLIF(TRIM(spp.funding_year), ''), '0') AS UNSIGNED) DESC")
+                ->pluck('spp.funding_year'),
+            'project_types' => (clone $baseQuery)
+                ->select(DB::raw("{$projectTypeExpression} as project_type"))
+                ->whereRaw("{$projectTypeExpression} <> ''")
+                ->distinct()
+                ->orderBy('project_type')
+                ->pluck('project_type'),
+            'project_statuses' => (clone $baseQuery)
+                ->select('spp.status')
+                ->whereRaw("TRIM(COALESCE(spp.status, '')) <> ''")
+                ->distinct()
+                ->orderBy('spp.status')
+                ->pluck('spp.status'),
+        ];
+    }
+
+    protected function applyProjectFilters($query, array $filters): void
+    {
+        if (!empty($filters['province'])) {
+            $query->whereIn(DB::raw("TRIM(COALESCE(spp.province, ''))"), $filters['province']);
+        }
+
+        if (!empty($filters['city_municipality'])) {
+            $query->whereIn(DB::raw("TRIM(COALESCE(spp.city_municipality, ''))"), $filters['city_municipality']);
+        }
+
+        if (!empty($filters['barangay'])) {
+            $query->whereIn(DB::raw("TRIM(COALESCE(spp.barangay, ''))"), $filters['barangay']);
+        }
+
+        if (!empty($filters['program'])) {
+            $query->whereIn(DB::raw("TRIM(COALESCE(spp.program, ''))"), $filters['program']);
+        }
+
+        if (!empty($filters['funding_year'])) {
+            $query->whereIn(DB::raw("TRIM(COALESCE(spp.funding_year, ''))"), $filters['funding_year']);
+        }
+
+        if (!empty($filters['project_type'])) {
+            $query->whereIn(DB::raw($this->projectTypeExpression('spp')), $filters['project_type']);
+        }
+
+        if (!empty($filters['project_status'])) {
+            $query->whereIn(DB::raw("TRIM(COALESCE(spp.status, ''))"), $filters['project_status']);
+        }
     }
 
     protected function deadlineReportingYear(): int
