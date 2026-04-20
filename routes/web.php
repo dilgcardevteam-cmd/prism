@@ -1850,9 +1850,9 @@ Route::middleware(['auth'])->group(function () {
         }
     };
 
-    Route::get('/dashboard', [App\Http\Controllers\ProjectDashboardController::class, '__invoke'])->name('dashboard');
-    
-    Route::get('/dashboard/filters/{type}', [App\Http\Controllers\DashboardFilterController::class, 'getFilterOptions'])->name('dashboard.filters');
+    Route::get('/dashboard', function () use ($renderProjectDashboard) {
+        return $renderProjectDashboard(request()->query('tab', 'locally-funded'));
+    })->name('dashboard');
     
     // Profile routes
     Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show'])->name('profile.show');
