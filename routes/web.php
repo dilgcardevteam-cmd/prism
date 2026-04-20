@@ -310,10 +310,20 @@ Route::middleware(['auth'])->group(function () {
                 'project_status' => $parseRequestedFilterValues('project_status'),
             ];
 
+            if (empty($filters['province'])) {
+                $filters['city_municipality'] = [];
+            }
+
+            if (empty($filters['city_municipality'])) {
+                $filters['barangay'] = [];
+            }
+
             $filterOptions = [
                 'provinces' => collect(),
                 'cities' => collect(),
+                'province_city_map' => [],
                 'barangays' => collect(),
+                'city_barangay_map' => [],
                 'programs' => collect(),
                 'funding_years' => collect(),
                 'project_types' => collect(),
@@ -972,36 +982,131 @@ Route::middleware(['auth'])->group(function () {
                     ->orderBy('spp.province')
                     ->pluck('spp.province');
 
-                $cityOptionsQuery = clone $subayBaseQuery;
-                $applyExactMultiFilterToSubay($cityOptionsQuery, 'spp.province', $filters['province']);
-                $filterOptions['cities'] = $cityOptionsQuery
-                    ->select('spp.city_municipality')
-                    ->whereNotNull('spp.city_municipality')
-                    ->whereRaw('TRIM(spp.city_municipality) <> ""')
-                    ->distinct()
-                    ->orderBy('spp.city_municipality')
-                    ->pluck('spp.city_municipality');
-
-                $barangayOptionsQuery = clone $subayBaseQuery;
-                $applyExactMultiFilterToSubay($barangayOptionsQuery, 'spp.province', $filters['province']);
-                $applyExactMultiFilterToSubay($barangayOptionsQuery, 'spp.city_municipality', $filters['city_municipality']);
-                $filterOptions['barangays'] = $barangayOptionsQuery
-                    ->select('spp.barangay')
-                    ->whereNotNull('spp.barangay')
-                    ->whereRaw('TRIM(spp.barangay) <> ""')
-                    ->pluck('spp.barangay')
-                    ->flatMap(function ($value) {
-                        return preg_split('/\r\n|\r|\n/u', (string) $value) ?: [];
-                    })
+                $provinceCityMap = [];
+                $provinceOptionLabels = collect($filterOptions['provinces'] ?? [])
                     ->map($normalizeFilterValue)
                     ->filter(function ($value) {
                         return $value !== '';
                     })
-                    ->unique(function ($value) {
-                        return strtolower($value);
+                    ->values();
+
+                if (
+                    Schema::hasTable('location_provinces')
+                    && Schema::hasTable('location_city_municipalities')
+                ) {
+                    $configuredProvinceCityRows = DB::table('location_city_municipalities as lcm')
+                        ->join('location_provinces as lp', 'lp.id', '=', 'lcm.province_id')
+                        ->selectRaw('TRIM(COALESCE(lp.province_name, "")) as province')
+                        ->selectRaw('TRIM(COALESCE(lcm.citymun_name, "")) as city_municipality')
+                        ->whereNotNull('lp.province_name')
+                        ->whereRaw('TRIM(lp.province_name) <> ""')
+                        ->whereNotNull('lcm.citymun_name')
+                        ->whereRaw('TRIM(lcm.citymun_name) <> ""')
+                        ->orderBy('lp.province_name')
+                        ->orderBy('lcm.citymun_name')
+                        ->get();
+
+                    $configuredProvinceCityIndex = [];
+                    foreach ($configuredProvinceCityRows as $row) {
+                        $provinceLabel = $normalizeFilterValue($row->province ?? '');
+                        $cityLabel = $normalizeFilterValue($row->city_municipality ?? '');
+
+                        if ($provinceLabel === '' || $cityLabel === '') {
+                            continue;
+                        }
+
+                        $configuredProvinceKey = strtolower($provinceLabel);
+                        $configuredProvinceCityIndex[$configuredProvinceKey] ??= [];
+                        if (!in_array($cityLabel, $configuredProvinceCityIndex[$configuredProvinceKey], true)) {
+                            $configuredProvinceCityIndex[$configuredProvinceKey][] = $cityLabel;
+                        }
+                    }
+
+                    foreach ($provinceOptionLabels as $provinceOptionLabel) {
+                        $provinceCityMap[$provinceOptionLabel] = $configuredProvinceCityIndex[strtolower($provinceOptionLabel)] ?? [];
+                    }
+                }
+
+                if (empty(array_filter($provinceCityMap))) {
+                    $provinceCityRows = (clone $subayBaseQuery)
+                        ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                        ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
+                        ->whereNotNull('spp.province')
+                        ->whereRaw('TRIM(spp.province) <> ""')
+                        ->whereNotNull('spp.city_municipality')
+                        ->whereRaw('TRIM(spp.city_municipality) <> ""')
+                        ->distinct()
+                        ->orderBy('spp.province')
+                        ->orderBy('spp.city_municipality')
+                        ->get();
+
+                    foreach ($provinceCityRows as $row) {
+                        $provinceLabel = trim((string) ($row->province ?? ''));
+                        $cityLabel = trim((string) ($row->city_municipality ?? ''));
+
+                        if ($provinceLabel === '' || $cityLabel === '') {
+                            continue;
+                        }
+
+                        $provinceCityMap[$provinceLabel] ??= [];
+                        if (!in_array($cityLabel, $provinceCityMap[$provinceLabel], true)) {
+                            $provinceCityMap[$provinceLabel][] = $cityLabel;
+                        }
+                    }
+                }
+
+                $filterOptions['province_city_map'] = $provinceCityMap;
+                $filterOptions['cities'] = collect($filters['province'])
+                    ->flatMap(function ($provinceLabel) use ($provinceCityMap) {
+                        return $provinceCityMap[$provinceLabel] ?? [];
                     })
-                    ->sort(function ($leftValue, $rightValue) {
-                        return strnatcasecmp((string) $leftValue, (string) $rightValue);
+                    ->unique(function ($cityLabel) {
+                        return strtolower(trim((string) $cityLabel));
+                    })
+                    ->values();
+
+                $cityBarangayRows = (clone $subayBaseQuery)
+                    ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
+                    ->selectRaw('TRIM(COALESCE(spp.barangay, "")) as barangay')
+                    ->whereNotNull('spp.city_municipality')
+                    ->whereRaw('TRIM(spp.city_municipality) <> ""')
+                    ->whereNotNull('spp.barangay')
+                    ->whereRaw('TRIM(spp.barangay) <> ""')
+                    ->orderBy('spp.city_municipality')
+                    ->get();
+
+                $cityBarangayMap = [];
+                $cityBarangaySeenMap = [];
+                foreach ($cityBarangayRows as $row) {
+                    $cityLabel = trim((string) ($row->city_municipality ?? ''));
+                    if ($cityLabel === '') {
+                        continue;
+                    }
+
+                    $barangayItems = preg_split('/\r\n|\r|\n/u', (string) ($row->barangay ?? '')) ?: [];
+                    foreach ($barangayItems as $barangayValue) {
+                        $barangayLabel = $normalizeFilterValue($barangayValue);
+                        if ($barangayLabel === '') {
+                            continue;
+                        }
+
+                        $cityBarangayMap[$cityLabel] ??= [];
+                        $cityBarangaySeenMap[$cityLabel] ??= [];
+                        $dedupeKey = strtolower($barangayLabel);
+                        if (!array_key_exists($dedupeKey, $cityBarangaySeenMap[$cityLabel])) {
+                            $cityBarangayMap[$cityLabel][] = $barangayLabel;
+                            $cityBarangaySeenMap[$cityLabel][$dedupeKey] = true;
+                        }
+                    }
+                }
+
+                $filterOptions['city_barangay_map'] = $cityBarangayMap;
+                $filterOptions['barangays'] = collect($filters['city_municipality'])
+                    ->flatMap(function ($cityLabel) use ($cityBarangayMap) {
+                        return $cityBarangayMap[$cityLabel] ?? [];
+                    })
+                    ->unique(function ($barangayLabel) {
+                        return strtolower(trim((string) $barangayLabel));
                     })
                     ->values();
 
