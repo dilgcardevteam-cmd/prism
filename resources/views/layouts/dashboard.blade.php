@@ -2292,7 +2292,7 @@
     </aside>
     
     <!-- Top Navigation Bar -->
-        <div class="topbar with-sidebar" id="topbar">
+        <div class="topbar" id="topbar">
             <div class="topbar-left">
                 <button class="toggle-btn" id="toggleBtn" title="Toggle Sidebar">
                     <i class="fas fa-bars"></i>
@@ -2447,7 +2447,7 @@
     </div>
     
     <!-- Main Content Area -->
-    <main class="main-content with-sidebar" id="mainContent">
+    <main class="main-content" id="mainContent">
         @yield('content')
     </main>
 
