@@ -6,7 +6,7 @@
 @section('content')
     <div class="content-header">
         <h1>Welcome back, {{ Auth::user()->fname ?? 'User' }}! 👋</h1>
-        <p>Project Status Summary as of {{ $subayUploadDateLabel }}.</p>
+        <p>Project Status Summary as of {{ $subayUploadDateLabel ?? 'No SubayBAYAN upload yet' }}.</p>
     </div>
 
     @php
