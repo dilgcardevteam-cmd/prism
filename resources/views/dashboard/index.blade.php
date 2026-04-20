@@ -126,6 +126,21 @@
             'disbursement' => ['bg' => '#f0fdf4', 'border' => '#bbf7d0', 'iconBg' => '#dcfce7', 'iconColor' => '#15803d', 'labelColor' => '#14532d', 'valueColor' => '#14532d'],
             'balance' => ['bg' => '#f5f3ff', 'border' => '#ddd6fe', 'iconBg' => '#ede9fe', 'iconColor' => '#6d28d9', 'labelColor' => '#5b21b6', 'valueColor' => '#5b21b6'],
         ];
+
+        $asCollection = static function ($value) {
+            if ($value instanceof \Illuminate\Support\Collection) {
+                return $value;
+            }
+
+            if (is_array($value) || $value instanceof \Traversable) {
+                return collect($value);
+            }
+
+            return collect();
+        };
+
+        $statusSubaybayanCounts = $asCollection($statusSubaybayanCounts ?? []);
+        $fundSourceCounts = $asCollection($fundSourceCounts ?? []);
         $balanceProjectsModalId = 'financial-balance-projects-modal';
         $balanceProjectsModalTitleId = $balanceProjectsModalId . '-title';
     @endphp
@@ -865,7 +880,7 @@
 
         <div class="dashboard-card expected-completion-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); height: 583px; display: flex; flex-direction: column;">
             @php
-                $dueProjects = $projectsExpectedCompletionThisMonth ?? collect();
+                $dueProjects = $asCollection($projectsExpectedCompletionThisMonth ?? null);
             @endphp
             <h2 style="color: #002C76; font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px;">
                 <span style="width: 22px; height: 22px; border-radius: 999px; background-color: #dbeafe; color: #2563eb; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
@@ -1668,7 +1683,7 @@
         $projectAtRiskAgingProjectsModal = $projectAtRiskAgingProjects ?? [];
         $statusSubaybayanProjectsModalMap = $statusSubaybayanProjectsMap ?? [];
         $fundSourceProjectsModalMap = $fundSourceProjectsMap ?? [];
-        $balanceProjectsModal = collect($projectsWithBalance ?? []);
+        $balanceProjectsModal = $asCollection($projectsWithBalance ?? null);
         $balanceProjectsModalSubtitle = 'Projects with remaining balance from SubayBAYAN. Balance formula: Original Allocation - (Disbursement + Reverted Allocation). LGU Counterpart is shown as a separate column.';
         $projectAtRiskAgingModalSubtitles = [
             'High Risk' => 'Aging is greater than or equal to 60 days based on the latest Project at Risk extraction data.',
@@ -1687,7 +1702,7 @@
             $statusModalKey = trim((string) preg_replace('/[^a-z0-9]+/i', '-', (string) $status), '-');
             $statusModalId = 'status-subaybayan-' . ($statusModalKey !== '' ? $statusModalKey : 'unspecified') . '-modal';
             $statusModalTitleId = $statusModalId . '-title';
-            $statusModalProjects = collect($statusSubaybayanProjectsModalMap[$status] ?? []);
+            $statusModalProjects = $asCollection($statusSubaybayanProjectsModalMap[$status] ?? null);
         @endphp
         <div id="{{ $statusModalId }}" class="dashboard-modal" aria-hidden="true">
             <div class="dashboard-modal-backdrop" data-close-modal></div>
@@ -1755,10 +1770,10 @@
                 $fundSourceModalKey = trim((string) preg_replace('/[^a-z0-9]+/i', '-', (string) $fundSource), '-');
                 $fundSourceModalId = 'fund-source-' . ($fundSourceModalKey !== '' ? $fundSourceModalKey : 'unspecified') . '-modal';
                 $fundSourceModalTitleId = $fundSourceModalId . '-title';
-                $fundSourceModalProjects = collect(
+                $fundSourceModalProjects = $asCollection(
                     $fundSourceProjectsModalMap[$fundSource]
                         ?? $fundSourceProjectsModalMap[strtoupper(trim((string) $fundSource))]
-                        ?? []
+                        ?? null
                 );
             @endphp
             <div id="{{ $fundSourceModalId }}" class="dashboard-modal" aria-hidden="true">
@@ -1917,7 +1932,7 @@
             $riskKey = strtolower(str_replace(' ', '-', $riskLabel));
             $modalId = 'project-risk-aging-' . $riskKey . '-modal';
             $modalTitleId = $modalId . '-title';
-            $modalProjects = $projectAtRiskAgingProjectsModal[$riskLabel] ?? collect();
+            $modalProjects = $asCollection($projectAtRiskAgingProjectsModal[$riskLabel] ?? null);
             $subtitleText = $projectAtRiskAgingModalSubtitles[$riskLabel] ?? '';
         @endphp
         <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true">
@@ -2026,7 +2041,7 @@
                                 @foreach ($projectUpdateStatusOrder as $riskLabel)
                                     @php
                                         $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['badgeBg' => '#f3f4f6', 'badgeColor' => '#374151'];
-                                        $riskProjects = collect($projectUpdateRiskProjectsModal[$riskLabel] ?? []);
+                                        $riskProjects = $asCollection($projectUpdateRiskProjectsModal[$riskLabel] ?? null);
                                     @endphp
                                     @foreach ($riskProjects as $projectRow)
                                         @php
@@ -2083,7 +2098,7 @@
             $riskKey = strtolower(str_replace(' ', '-', $riskLabel));
             $modalId = 'project-update-' . $riskKey . '-modal';
             $modalTitleId = $modalId . '-title';
-            $modalProjects = $projectUpdateRiskProjectsModal[$riskLabel] ?? collect();
+            $modalProjects = $asCollection($projectUpdateRiskProjectsModal[$riskLabel] ?? null);
             $subtitleText = $projectUpdateModalSubtitles[$riskLabel] ?? '';
         @endphp
         <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true">
