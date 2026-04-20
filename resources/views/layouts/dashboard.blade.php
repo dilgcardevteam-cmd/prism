@@ -532,6 +532,10 @@
             font-size: 12px;
             font-weight: 700;
             text-decoration: none;
+            border: none;
+            background: transparent;
+            padding: 0;
+            cursor: pointer;
         }
 
         .notification-menu-view-all:hover {
@@ -606,6 +610,158 @@
         .notification-menu-time {
             font-size: 11px;
             color: #64748b;
+        }
+
+        .notification-list-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            z-index: 1400;
+        }
+
+        .notification-list-modal.is-open {
+            display: block;
+        }
+
+        .notification-list-modal__backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.52);
+            backdrop-filter: blur(4px);
+        }
+
+        .notification-list-modal__dialog {
+            position: relative;
+            width: min(760px, calc(100vw - 32px));
+            max-height: min(78vh, 860px);
+            margin: 6vh auto 0;
+            background: #ffffff;
+            border: 1px solid #dbe4f0;
+            border-radius: 18px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+            overflow: hidden;
+        }
+
+        .notification-list-modal__header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 22px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: linear-gradient(180deg, #f8fbff 0%, #f8fafc 100%);
+        }
+
+        .notification-list-modal__title {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.2;
+            color: #0f172a;
+            font-weight: 800;
+        }
+
+        .notification-list-modal__subtitle {
+            margin: 6px 0 0;
+            font-size: 13px;
+            line-height: 1.45;
+            color: #64748b;
+        }
+
+        .notification-list-modal__close {
+            width: 38px;
+            height: 38px;
+            border: 1px solid #d1d5db;
+            border-radius: 999px;
+            background: #ffffff;
+            color: #475569;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+        }
+
+        .notification-list-modal__close:hover {
+            background: #f8fafc;
+            color: #0f172a;
+            border-color: #94a3b8;
+        }
+
+        .notification-list-modal__body {
+            max-height: calc(min(78vh, 860px) - 92px);
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .notification-list-modal__items {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .notification-list-modal__item {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid #dbeafe;
+            background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
+            border-radius: 14px;
+            padding: 14px 16px;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .notification-list-modal__item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.14);
+            border-color: #93c5fd;
+        }
+
+        .notification-list-modal__item-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .notification-list-modal__item-copy {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .notification-list-modal__item-message {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #0f172a;
+            font-weight: 700;
+            word-break: break-word;
+        }
+
+        .notification-list-modal__item-time {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .notification-list-modal__item-arrow {
+            color: #1d4ed8;
+            margin-top: 2px;
+            flex: 0 0 auto;
+        }
+
+        .notification-list-modal__empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 48px 20px;
+            color: #64748b;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .notification-list-modal__empty i {
+            font-size: 28px;
+            color: #94a3b8;
         }
 
         .profile-menu {
@@ -2309,6 +2465,11 @@
                         ->where('user_id', Auth::id())
                         ->whereNull('read_at');
                     $unreadNotifications = (clone $unreadNotificationQuery)->count();
+                    $allUnreadNotifications = \Illuminate\Support\Facades\DB::table('tbnotifications')
+                        ->where('user_id', Auth::id())
+                        ->whereNull('read_at')
+                        ->orderByDesc('created_at')
+                        ->get(['id', 'message', 'created_at']);
                     $recentNotifications = \Illuminate\Support\Facades\DB::table('tbnotifications')
                         ->where('user_id', Auth::id())
                         ->orderByDesc('created_at')
@@ -2364,10 +2525,10 @@
                                         </button>
                                     </form>
                                 @endif
-                                <a href="{{ route('messages.index') }}" class="notification-menu-view-all">
+                                <button type="button" class="notification-menu-view-all" id="openNotificationsModalBtn">
                                     <i class="fas fa-envelope-open-text"></i>
-                                    <span>Open Messages</span>
-                                </a>
+                                    <span>Open Notification</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2466,6 +2627,51 @@
             <div class="system-dialog-body" id="globalErrorModalMessage">An unexpected error occurred.</div>
             <div class="system-dialog-actions">
                 <button type="button" class="system-dialog-btn error-ok" id="globalErrorOkBtn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notificationsListModal" class="notification-list-modal" aria-hidden="true">
+        <div class="notification-list-modal__backdrop" data-notifications-modal-dismiss></div>
+        <div class="notification-list-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="notificationsListModalTitle">
+            <div class="notification-list-modal__header">
+                <div>
+                    <h3 id="notificationsListModalTitle" class="notification-list-modal__title">Unread Notifications</h3>
+                    <p class="notification-list-modal__subtitle">Click a notification to open it. Read items automatically disappear from this list.</p>
+                </div>
+                <button type="button" class="notification-list-modal__close" id="closeNotificationsModalBtn" aria-label="Close notifications">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="notification-list-modal__body">
+                @if($allUnreadNotifications->isEmpty())
+                    <div class="notification-list-modal__empty">
+                        <i class="fas fa-bell-slash"></i>
+                        <span>No unread notifications.</span>
+                    </div>
+                @else
+                    <div class="notification-list-modal__items">
+                        @foreach($allUnreadNotifications as $notificationItem)
+                            <a
+                                href="{{ route('notifications.read', ['id' => $notificationItem->id]) }}"
+                                class="notification-list-modal__item"
+                            >
+                                <div class="notification-list-modal__item-row">
+                                    <span class="notification-unread-dot" aria-hidden="true"></span>
+                                    <div class="notification-list-modal__item-copy">
+                                        <div class="notification-list-modal__item-message">{{ $notificationItem->message }}</div>
+                                        <div class="notification-list-modal__item-time">
+                                            {{ \Illuminate\Support\Carbon::parse($notificationItem->created_at)->format('M d, Y h:i A') }}
+                                        </div>
+                                    </div>
+                                    <span class="notification-list-modal__item-arrow" aria-hidden="true">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </span>
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
+                @endif
             </div>
         </div>
     </div>
@@ -2607,6 +2813,9 @@
         const profileMenu = document.getElementById('profileMenu');
         const notificationBell = document.getElementById('notificationBell');
         const notificationMenu = document.getElementById('notificationMenu');
+        const openNotificationsModalBtn = document.getElementById('openNotificationsModalBtn');
+        const notificationsListModal = document.getElementById('notificationsListModal');
+        const closeNotificationsModalBtn = document.getElementById('closeNotificationsModalBtn');
         const messageBell = document.getElementById('messageBell');
         const messageMenu = document.getElementById('messageMenu');
         
@@ -2812,6 +3021,33 @@
             saveOpenSubmenus();
         }
 
+        function closeNotificationsListModal() {
+            if (!notificationsListModal) {
+                return;
+            }
+
+            notificationsListModal.classList.remove('is-open');
+            notificationsListModal.setAttribute('aria-hidden', 'true');
+            body.style.overflow = '';
+        }
+
+        function openNotificationsListModal() {
+            if (!notificationsListModal) {
+                return;
+            }
+
+            if (notificationMenu) {
+                notificationMenu.classList.remove('show');
+            }
+            if (notificationBell) {
+                notificationBell.setAttribute('aria-expanded', 'false');
+            }
+
+            notificationsListModal.classList.add('is-open');
+            notificationsListModal.setAttribute('aria-hidden', 'false');
+            body.style.overflow = 'hidden';
+        }
+
         // Toggle submenu function
         function toggleSubmenu(event, submenuId) {
             event.preventDefault();
@@ -2864,6 +3100,7 @@
             notificationBell.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                closeNotificationsListModal();
                 notificationMenu.classList.toggle('show');
                 this.setAttribute('aria-expanded', notificationMenu.classList.contains('show') ? 'true' : 'false');
                 if (profileMenu) {
@@ -2882,6 +3119,7 @@
             messageBell.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                closeNotificationsListModal();
                 messageMenu.classList.toggle('show');
                 this.setAttribute('aria-expanded', messageMenu.classList.contains('show') ? 'true' : 'false');
                 if (profileMenu) {
@@ -2896,6 +3134,26 @@
             });
         }
 
+        if (openNotificationsModalBtn) {
+            openNotificationsModalBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                openNotificationsListModal();
+            });
+        }
+
+        if (closeNotificationsModalBtn) {
+            closeNotificationsModalBtn.addEventListener('click', function () {
+                closeNotificationsListModal();
+            });
+        }
+
+        document.querySelectorAll('[data-notifications-modal-dismiss]').forEach((dismissTarget) => {
+            dismissTarget.addEventListener('click', function () {
+                closeNotificationsListModal();
+            });
+        });
+
         // Close menus when clicking outside
         document.addEventListener('click', function(e) {
             if (profileMenu && profileIcon && !profileMenu.contains(e.target) && !profileIcon.contains(e.target)) {
@@ -2908,6 +3166,12 @@
             if (messageMenu && messageBell && !messageMenu.contains(e.target) && !messageBell.contains(e.target)) {
                 messageMenu.classList.remove('show');
                 messageBell.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeNotificationsListModal();
             }
         });
 

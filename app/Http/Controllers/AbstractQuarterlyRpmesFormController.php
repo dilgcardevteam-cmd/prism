@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\SecureTimestampService;
 use App\Support\InputSanitizer;
 use App\Support\LguReportorialDeadlineResolver;
+use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
@@ -51,7 +52,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         }
 
         $baseQuery = $this->buildAccessibleSubayQuery($user);
-        $filterOptions = $this->buildProjectFilterOptions(clone $baseQuery);
+        $filterOptions = $this->buildProjectFilterOptions(clone $baseQuery, $filters);
 
         $projectsQuery = (clone $baseQuery)
             ->whereNotNull('spp.project_code')
@@ -576,7 +577,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
 
     protected function resolveProjectFilters(Request $request): array
     {
-        return [
+        $filters = [
             'province' => $this->normalizeProjectFilterValues($request->input('province', [])),
             'city_municipality' => $this->normalizeProjectFilterValues($request->input('city_municipality', [])),
             'barangay' => $this->normalizeProjectFilterValues($request->input('barangay', [])),
@@ -585,6 +586,16 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             'project_type' => $this->normalizeProjectFilterValues($request->input('project_type', [])),
             'project_status' => $this->normalizeProjectFilterValues($request->input('project_status', [])),
         ];
+
+        if (empty($filters['province'])) {
+            $filters['city_municipality'] = [];
+        }
+
+        if (empty($filters['city_municipality'])) {
+            $filters['barangay'] = [];
+        }
+
+        return $filters;
     }
 
     protected function normalizeProjectFilterValues($rawValues): array
@@ -605,6 +616,8 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             'provinces' => collect(),
             'cities' => collect(),
             'barangays' => collect(),
+            'province_city_map' => [],
+            'city_barangay_map' => [],
             'programs' => collect(),
             'funding_years' => collect(),
             'project_types' => collect(),
@@ -612,29 +625,45 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         ];
     }
 
-    protected function buildProjectFilterOptions($baseQuery): array
+    protected function buildProjectFilterOptions($baseQuery, array $filters): array
     {
         $projectTypeExpression = $this->projectTypeExpression('spp');
+        $provinces = (clone $baseQuery)
+            ->select('spp.province')
+            ->whereRaw("TRIM(COALESCE(spp.province, '')) <> ''")
+            ->distinct()
+            ->orderBy('spp.province')
+            ->pluck('spp.province')
+            ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+            ->filter()
+            ->values();
+
+        $provinceCityMap = ProjectLocationFilterHelper::buildProvinceCityMap(
+            clone $baseQuery,
+            $provinces->all(),
+            'spp.province',
+            'spp.city_municipality'
+        );
+        $selectedCities = ProjectLocationFilterHelper::selectedMappedValues(
+            $filters['province'] ?? [],
+            $provinceCityMap
+        );
+        $cityBarangayMap = ProjectLocationFilterHelper::buildCityBarangayMap(
+            clone $baseQuery,
+            'spp.city_municipality',
+            'spp.barangay'
+        );
+        $selectedBarangays = ProjectLocationFilterHelper::selectedMappedValues(
+            $filters['city_municipality'] ?? [],
+            $cityBarangayMap
+        );
 
         return [
-            'provinces' => (clone $baseQuery)
-                ->select('spp.province')
-                ->whereRaw("TRIM(COALESCE(spp.province, '')) <> ''")
-                ->distinct()
-                ->orderBy('spp.province')
-                ->pluck('spp.province'),
-            'cities' => (clone $baseQuery)
-                ->select('spp.city_municipality')
-                ->whereRaw("TRIM(COALESCE(spp.city_municipality, '')) <> ''")
-                ->distinct()
-                ->orderBy('spp.city_municipality')
-                ->pluck('spp.city_municipality'),
-            'barangays' => (clone $baseQuery)
-                ->select('spp.barangay')
-                ->whereRaw("TRIM(COALESCE(spp.barangay, '')) <> ''")
-                ->distinct()
-                ->orderBy('spp.barangay')
-                ->pluck('spp.barangay'),
+            'provinces' => $provinces,
+            'cities' => $selectedCities,
+            'barangays' => $selectedBarangays,
+            'province_city_map' => $provinceCityMap,
+            'city_barangay_map' => $cityBarangayMap,
             'programs' => (clone $baseQuery)
                 ->select('spp.program')
                 ->whereRaw("TRIM(COALESCE(spp.program, '')) <> ''")

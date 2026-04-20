@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -28,6 +29,10 @@ class SglgifProjectController extends Controller
             'type' => trim((string) $request->query('type', '')),
             'status' => trim((string) $request->query('status', '')),
         ];
+
+        if ($filters['province'] === '') {
+            $filters['city'] = '';
+        }
 
         if (!Schema::hasTable('subay_project_profiles')) {
             return view('projects.sglgif-dashboard', $this->emptyDashboardPayload($filters));
@@ -75,18 +80,15 @@ class SglgifProjectController extends Controller
             ->orderBy('spp.status')
             ->pluck('spp.status');
 
-        $cityOptionsQuery = clone $baseQuery;
-        if ($filters['province'] !== '') {
-            $cityOptionsQuery->whereRaw('LOWER(TRIM(COALESCE(spp.province, ""))) = ?', [mb_strtolower($filters['province'])]);
-        }
-
-        $cityOptions = $cityOptionsQuery
-            ->select('spp.city_municipality')
-            ->whereNotNull('spp.city_municipality')
-            ->whereRaw('TRIM(spp.city_municipality) <> ""')
-            ->distinct()
-            ->orderBy('spp.city_municipality')
-            ->pluck('spp.city_municipality');
+        $provinceMunicipalities = ProjectLocationFilterHelper::buildProvinceCityMap(
+            clone $baseQuery,
+            $provinces->all(),
+            'spp.province',
+            'spp.city_municipality'
+        );
+        $cityOptions = $filters['province'] !== ''
+            ? collect($provinceMunicipalities[$filters['province']] ?? [])
+            : collect();
 
         $query = clone $baseQuery;
         $this->applyFiltersToQuery($query, $filters);
@@ -246,6 +248,7 @@ class SglgifProjectController extends Controller
             'filters' => $filters,
             'fundingYears' => $fundingYears,
             'provinces' => $provinces,
+            'provinceMunicipalities' => $provinceMunicipalities,
             'cityOptions' => $cityOptions,
             'levelOptions' => $levelOptions,
             'typeOptions' => $typeOptions,
@@ -299,6 +302,10 @@ class SglgifProjectController extends Controller
             'type' => trim((string) $request->query('type', '')),
             'status' => trim((string) $request->query('status', '')),
         ];
+
+        if ($filters['province'] === '') {
+            $filters['city'] = '';
+        }
 
         $perPage = (int) $request->query('per_page', 15);
         $allowedPerPage = [10, 15, 25, 50];
@@ -376,18 +383,15 @@ class SglgifProjectController extends Controller
             ->orderBy('spp.status')
             ->pluck('spp.status');
 
-        $cityOptionsQuery = clone $baseQuery;
-        if ($filters['province'] !== '') {
-            $cityOptionsQuery->whereRaw('LOWER(TRIM(COALESCE(spp.province, ""))) = ?', [mb_strtolower($filters['province'])]);
-        }
-
-        $cityOptions = $cityOptionsQuery
-            ->select('spp.city_municipality')
-            ->whereNotNull('spp.city_municipality')
-            ->whereRaw('TRIM(spp.city_municipality) <> ""')
-            ->distinct()
-            ->orderBy('spp.city_municipality')
-            ->pluck('spp.city_municipality');
+        $provinceMunicipalities = ProjectLocationFilterHelper::buildProvinceCityMap(
+            clone $baseQuery,
+            $provinces->all(),
+            'spp.province',
+            'spp.city_municipality'
+        );
+        $cityOptions = $filters['province'] !== ''
+            ? collect($provinceMunicipalities[$filters['province']] ?? [])
+            : collect();
 
         $filteredQuery = clone $baseQuery;
         $this->applyFiltersToQuery($filteredQuery, $filters);
@@ -514,6 +518,7 @@ class SglgifProjectController extends Controller
             'filters' => $filters,
             'fundingYears' => $fundingYears,
             'provinces' => $provinces,
+            'provinceMunicipalities' => $provinceMunicipalities,
             'cityOptions' => $cityOptions,
             'levelOptions' => $levelOptions,
             'typeOptions' => $typeOptions,
@@ -534,6 +539,7 @@ class SglgifProjectController extends Controller
             'filters' => $filters,
             'fundingYears' => collect(),
             'provinces' => collect(),
+            'provinceMunicipalities' => [],
             'cityOptions' => collect(),
             'levelOptions' => collect(),
             'typeOptions' => collect(),
