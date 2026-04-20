@@ -152,6 +152,7 @@
                     data-dropdown-toggle-id="city_municipality_dropdown_toggle"
                     data-dropdown-menu-id="city_municipality_dropdown_menu"
                     data-empty-badge-text="All"
+                    data-disabled-badge-text="Select province first"
                 >
                     <label for="city_municipality_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
                     <div class="dashboard-stacked-filter-dropdown">
@@ -193,6 +194,7 @@
                     data-dropdown-toggle-id="barangay_dropdown_toggle"
                     data-dropdown-menu-id="barangay_dropdown_menu"
                     data-empty-badge-text="All"
+                    data-disabled-badge-text="Select province and municipality first"
                 >
                     <label for="barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
                     <div class="dashboard-stacked-filter-dropdown">
@@ -2155,11 +2157,20 @@
             gap: 8px;
             font-size: 12px;
             cursor: pointer;
-            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease;
         }
 
         .dashboard-stacked-filter-toggle:hover {
             border-color: #9ca3af;
+        }
+
+        .dashboard-stacked-filter-toggle.is-disabled,
+        .dashboard-stacked-filter-toggle.is-disabled:hover {
+            background: #f9fafb;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+            cursor: not-allowed;
+            box-shadow: none;
         }
 
         .dashboard-stacked-filter-toggle:focus-visible {
@@ -2322,6 +2333,51 @@
             color: #6b7280;
             font-size: 12px;
             padding: 6px 8px;
+        }
+
+        .dashboard-stacked-filter-search {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #ffffff;
+            padding: 4px;
+            border-bottom: 1px solid #e5e7eb;
+            margin: -4px -4px 4px;
+        }
+
+        .dashboard-stacked-filter-search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .dashboard-stacked-filter-search-icon {
+            position: absolute;
+            left: 10px;
+            color: #9ca3af;
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        .dashboard-stacked-filter-search-input {
+            width: 100%;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 7px 10px 7px 30px;
+            font-size: 12px;
+            color: #111827;
+            background: #ffffff;
+        }
+
+        .dashboard-stacked-filter-search-input:focus {
+            outline: 0;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.15);
+        }
+
+        .dashboard-stacked-filter-menu-options {
+            display: grid;
+            gap: 2px;
         }
 
         .dashboard-filter-helper-note {
@@ -3994,6 +4050,7 @@
 
     <script>
         const PROJECT_FILTER_STATE_KEY = 'dashboard.project_filter_collapsed';
+        const LOCATION_HIERARCHY = @json($filterOptions['locationHierarchy'] ?? []);
         const DASHBOARD_LEGEND_STATE_PREFIX = 'dashboard.legend_collapsed.';
         const STATUS_LOCATION_EXPORT_ROWS = @json($statusSubaybayanLocationReport ?? []);
         const PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS = @json($provinceFundingYearProgramStatusReport ?? []);
@@ -4117,6 +4174,83 @@
             }
 
             body.style.maxHeight = `${body.scrollHeight}px`;
+        }
+
+        function uniqueSortedValues(values) {
+            return Array.from(new Set(
+                values
+                    .map((value) => String(value || '').trim())
+                    .filter(Boolean)
+            )).sort((leftValue, rightValue) => leftValue.localeCompare(rightValue));
+        }
+
+        function setSelectOptions(selectElement, values, selectedValues) {
+            if (!selectElement) {
+                return;
+            }
+
+            const selectedValueSet = new Set(selectedValues);
+            selectElement.innerHTML = '';
+
+            values.forEach((value) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                option.selected = selectedValueSet.has(value);
+                selectElement.appendChild(option);
+            });
+        }
+
+        function rebuildLocationDependentFilters() {
+            const provinceSelect = document.getElementById('province');
+            const citySelect = document.getElementById('city_municipality');
+            const barangaySelect = document.getElementById('barangay');
+
+            if (!provinceSelect || !citySelect || !barangaySelect) {
+                return;
+            }
+
+            const selectedProvinces = Array.from(provinceSelect.selectedOptions || [])
+                .map((option) => option.value.trim())
+                .filter(Boolean);
+
+            const previouslySelectedCities = Array.from(citySelect.selectedOptions || [])
+                .map((option) => option.value.trim())
+                .filter(Boolean);
+
+            const availableCities = selectedProvinces.length
+                ? uniqueSortedValues(
+                    selectedProvinces.flatMap((province) => Object.keys(LOCATION_HIERARCHY?.[province] || {}))
+                )
+                : [];
+
+            const selectedCities = previouslySelectedCities.filter((city) => availableCities.includes(city));
+
+            citySelect.disabled = selectedProvinces.length === 0;
+            setSelectOptions(citySelect, availableCities, selectedCities);
+
+            const availableBarangays = selectedProvinces.length && selectedCities.length
+                ? uniqueSortedValues(
+                    selectedProvinces.flatMap((province) =>
+                        selectedCities.flatMap((city) => LOCATION_HIERARCHY?.[province]?.[city] || [])
+                    )
+                )
+                : [];
+
+            const previouslySelectedBarangays = Array.from(barangaySelect.selectedOptions || [])
+                .map((option) => option.value.trim())
+                .filter(Boolean);
+            const selectedBarangays = previouslySelectedBarangays.filter((barangay) => availableBarangays.includes(barangay));
+
+            barangaySelect.disabled = !(selectedProvinces.length && selectedCities.length);
+            setSelectOptions(barangaySelect, availableBarangays, selectedBarangays);
+
+            [citySelect, barangaySelect].forEach((selectElement) => {
+                const stackedFilter = selectElement.closest('[data-stacked-filter]');
+                if (stackedFilter && typeof stackedFilter.__refreshDropdown === 'function') {
+                    stackedFilter.__refreshDropdown();
+                }
+            });
         }
 
         function toggleProjectFilter(button) {
@@ -4529,8 +4663,10 @@
                 ).trim();
                 const emptyBadgeText = stackedFilter.dataset.emptyBadgeText
                     || (isMultiple ? `No ${filterLabel.toLowerCase()} selected.` : 'All');
+                const disabledBadgeText = stackedFilter.dataset.disabledBadgeText || 'Select an option first';
                 const emptyMenuText = stackedFilter.dataset.emptyMenuText
                     || `No ${filterLabel.toLowerCase()} options available.`;
+                const noSearchResultsText = `No matching ${filterLabel.toLowerCase()} found.`;
 
                 if (!sourceSelect || !badgeContainer || !dropdownToggle || !dropdownMenu) {
                     return;
@@ -4639,14 +4775,29 @@
                     dropdownMenu.classList.add('is-open');
                     dropdownToggle.classList.add('is-open');
                     dropdownToggle.setAttribute('aria-expanded', 'true');
-                    syncDropdownMenuPosition();
+                    renderDropdownOptions(dropdownMenu.querySelector('.dashboard-stacked-filter-search-input')?.value || '');
                 };
 
                 const toggleDropdown = () => {
+                    if (sourceSelect.disabled) {
+                        return;
+                    }
+
                     if (dropdownMenu.classList.contains('is-open')) {
                         closeDropdown();
                     } else {
                         openDropdown();
+                    }
+                };
+
+                const updateDisabledState = () => {
+                    const isDisabled = Boolean(sourceSelect.disabled);
+                    dropdownToggle.classList.toggle('is-disabled', isDisabled);
+                    dropdownToggle.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
+                    dropdownToggle.tabIndex = isDisabled ? -1 : 0;
+
+                    if (isDisabled) {
+                        closeDropdown();
                     }
                 };
 
@@ -4655,7 +4806,12 @@
                         .filter((optionEl) => optionEl.selected && optionEl.value.trim() !== '');
 
                     badgeContainer.innerHTML = '';
-                    if (!selectedOptions.length) {
+                    if (sourceSelect.disabled) {
+                        const disabledBadge = document.createElement('span');
+                        disabledBadge.className = 'dashboard-filter-badge-empty';
+                        disabledBadge.textContent = disabledBadgeText;
+                        badgeContainer.appendChild(disabledBadge);
+                    } else if (!selectedOptions.length) {
                         const emptyBadge = document.createElement('span');
                         emptyBadge.className = 'dashboard-filter-badge-empty';
                         emptyBadge.textContent = emptyBadgeText;
@@ -4686,22 +4842,69 @@
                     syncDropdownMenuPosition();
                 };
 
-                const renderDropdownOptions = () => {
+                const renderDropdownOptions = (searchTerm = '') => {
                     const selectOptions = getSelectOptions();
                     const availableOptions = isMultiple
                         ? selectOptions.filter((optionEl) => optionEl.value.trim() !== '')
                         : selectOptions;
+                    const normalizedSearchTerm = String(searchTerm || '').trim().toLowerCase();
+                    const filteredOptions = normalizedSearchTerm === ''
+                        ? availableOptions
+                        : availableOptions.filter((optionEl) => getOptionLabel(optionEl).toLowerCase().includes(normalizedSearchTerm));
 
                     dropdownMenu.innerHTML = '';
+                    if (!sourceSelect.disabled) {
+                        const searchWrapper = document.createElement('div');
+                        searchWrapper.className = 'dashboard-stacked-filter-search';
+
+                        const searchBox = document.createElement('div');
+                        searchBox.className = 'dashboard-stacked-filter-search-box';
+
+                        const searchIcon = document.createElement('span');
+                        searchIcon.className = 'dashboard-stacked-filter-search-icon';
+                        searchIcon.innerHTML = '<i class="fas fa-search" aria-hidden="true"></i>';
+
+                        const searchInput = document.createElement('input');
+                        searchInput.type = 'search';
+                        searchInput.className = 'dashboard-stacked-filter-search-input';
+                        searchInput.placeholder = `Search ${filterLabel.toLowerCase()}`;
+                        searchInput.value = searchTerm;
+                        searchInput.autocomplete = 'off';
+                        searchInput.setAttribute('aria-label', `Search ${filterLabel}`);
+                        searchInput.addEventListener('input', (event) => {
+                            renderDropdownOptions(event.target.value);
+                        });
+                        searchInput.addEventListener('keydown', (event) => {
+                            event.stopPropagation();
+                        });
+
+                        searchBox.appendChild(searchIcon);
+                        searchBox.appendChild(searchInput);
+                        searchWrapper.appendChild(searchBox);
+                        dropdownMenu.appendChild(searchWrapper);
+                    }
+
+                    const optionsContainer = document.createElement('div');
+                    optionsContainer.className = 'dashboard-stacked-filter-menu-options';
+                    dropdownMenu.appendChild(optionsContainer);
+
                     if (!availableOptions.length) {
                         const emptyMenuItem = document.createElement('div');
                         emptyMenuItem.className = 'dashboard-stacked-filter-menu-empty';
                         emptyMenuItem.textContent = emptyMenuText;
-                        dropdownMenu.appendChild(emptyMenuItem);
+                        optionsContainer.appendChild(emptyMenuItem);
                         return;
                     }
 
-                    availableOptions.forEach((optionEl) => {
+                    if (!filteredOptions.length) {
+                        const noResultsItem = document.createElement('div');
+                        noResultsItem.className = 'dashboard-stacked-filter-menu-empty';
+                        noResultsItem.textContent = noSearchResultsText;
+                        optionsContainer.appendChild(noResultsItem);
+                        return;
+                    }
+
+                    filteredOptions.forEach((optionEl) => {
                         const optionIndex = selectOptions.indexOf(optionEl);
                         const optionButton = document.createElement('button');
                         optionButton.type = 'button';
@@ -4723,12 +4926,32 @@
 
                         optionButton.appendChild(optionLabel);
                         optionButton.appendChild(optionCheck);
-                        dropdownMenu.appendChild(optionButton);
+                        optionsContainer.appendChild(optionButton);
+                    });
+
+                    requestAnimationFrame(() => {
+                        const searchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
+                        if (dropdownMenu.classList.contains('is-open') && searchInput) {
+                            searchInput.focus({ preventScroll: true });
+                            searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+                        }
+
+                        positionDropdownMenu();
                     });
                 };
 
+                const refreshDropdown = (searchTerm = '') => {
+                    updateDisabledState();
+                    renderBadges();
+                    renderDropdownOptions(searchTerm);
+                };
+
+                const notifyChange = () => {
+                    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+
                 dropdownToggle.addEventListener('click', (event) => {
-                    if (event.target.closest('.dashboard-filter-badge-remove')) {
+                    if (event.target.closest('.dashboard-filter-badge-remove') || sourceSelect.disabled) {
                         return;
                     }
 
@@ -4736,6 +4959,10 @@
                 });
 
                 dropdownToggle.addEventListener('keydown', (event) => {
+                    if (sourceSelect.disabled) {
+                        return;
+                    }
+
                     if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
                         toggleDropdown();
@@ -4772,8 +4999,8 @@
                         });
                     }
 
-                    renderBadges();
-                    renderDropdownOptions();
+                    refreshDropdown(dropdownMenu.querySelector('.dashboard-stacked-filter-search-input')?.value || '');
+                    notifyChange();
                     if (!isMultiple) {
                         closeDropdown();
                     }
@@ -4803,8 +5030,8 @@
                         resetSingleSelectToDefault();
                     }
 
-                    renderBadges();
-                    renderDropdownOptions();
+                    refreshDropdown(dropdownMenu.querySelector('.dashboard-stacked-filter-search-input')?.value || '');
+                    notifyChange();
                 });
 
                 document.addEventListener('click', (event) => {
@@ -4822,9 +5049,9 @@
                 window.addEventListener('resize', syncDropdownMenuPosition);
                 document.addEventListener('scroll', syncDropdownMenuPosition, true);
 
-                renderBadges();
-                renderDropdownOptions();
+                refreshDropdown();
                 stackedFilter.__closeDropdown = closeDropdown;
+                stackedFilter.__refreshDropdown = refreshDropdown;
                 stackedFilter.dataset.stackedFilterInitialized = '1';
             });
         }
@@ -5518,6 +5745,19 @@
             const forms = document.querySelectorAll('.project-filter-form');
             const legendBlocks = document.querySelectorAll('.dashboard-legend-block');
             initializeStackedFilters();
+
+            const provinceSelect = document.getElementById('province');
+            const citySelect = document.getElementById('city_municipality');
+
+            if (provinceSelect) {
+                provinceSelect.addEventListener('change', rebuildLocationDependentFilters);
+            }
+
+            if (citySelect) {
+                citySelect.addEventListener('change', rebuildLocationDependentFilters);
+            }
+
+            rebuildLocationDependentFilters();
 
             forms.forEach((form) => {
                 const shouldStartCollapsed = readProjectFilterCollapsedState();
