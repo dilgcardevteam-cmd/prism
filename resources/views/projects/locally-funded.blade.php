@@ -421,7 +421,7 @@
                                         @if(count($barangays))
                                             <ul style="margin: 4px 0 0 16px; padding: 0;">
                                                 @foreach($barangays as $barangay)
-                                                    <li style="margin: 0; list-style: disc;">{!! $highlightSearch($barangay) !!}</li>
+                                                    <li style="margin: 0; list-style: disc;">{!! $highlightSearch(strcasecmp(trim((string) $barangay), 'Unknown') === 0 ? '-' : $barangay) !!}</li>
                                                 @endforeach
                                             </ul>
                                         @else
