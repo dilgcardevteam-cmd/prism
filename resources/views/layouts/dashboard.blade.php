@@ -693,6 +693,89 @@
             padding: 10px;
         }
 
+        .notification-filter-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .notification-filter-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px 12px;
+        }
+
+        .notification-filter-group label {
+            display: block;
+            color: #1f2937;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .notification-filter-input,
+        .notification-filter-select {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 13px;
+            min-height: 38px;
+            padding: 8px 10px;
+            outline: none;
+        }
+
+        .notification-filter-input:focus,
+        .notification-filter-select:focus {
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+        }
+
+        .notification-filter-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .notification-filter-btn {
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            background: #eff6ff;
+            color: #1e40af;
+            font-size: 12px;
+            font-weight: 700;
+            height: 34px;
+            padding: 0 12px;
+            cursor: pointer;
+        }
+
+        .notification-filter-btn:hover {
+            background: #dbeafe;
+        }
+
+        .notification-filter-btn.apply {
+            border-color: #15803d;
+            background: #15803d;
+            color: #ffffff;
+        }
+
+        .notification-filter-btn.apply:hover {
+            background: #166534;
+        }
+
+        .notification-list-modal__empty-filter {
+            display: none;
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            padding: 18px 10px 8px;
+        }
+
         .notification-list-modal__items {
             display: flex;
             flex-direction: column;
@@ -762,6 +845,12 @@
         .notification-list-modal__empty i {
             font-size: 28px;
             color: #94a3b8;
+        }
+
+        @media (max-width: 640px) {
+            .notification-filter-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .profile-menu {
@@ -2475,6 +2564,41 @@
                         ->orderByDesc('created_at')
                         ->limit(12)
                         ->get(['id', 'message', 'created_at', 'read_at']);
+
+                    $notificationFilterConfiguredProvinces = [];
+                    $notificationFilterConfiguredCitiesByProvince = [];
+                    $notificationFilterConfiguredBarangaysByCity = [];
+
+                    if (\Illuminate\Support\Facades\Schema::hasTable('location_provinces')
+                        && \Illuminate\Support\Facades\Schema::hasTable('location_city_municipalities')) {
+                        $configuredLocationRows = \Illuminate\Support\Facades\DB::table('location_city_municipalities as lcm')
+                            ->join('location_provinces as lp', 'lp.id', '=', 'lcm.province_id')
+                            ->selectRaw('TRIM(COALESCE(lp.province_name, "")) as province')
+                            ->selectRaw('TRIM(COALESCE(lcm.citymun_name, "")) as city_municipality')
+                            ->whereRaw('TRIM(COALESCE(lp.province_name, "")) <> ""')
+                            ->whereRaw('TRIM(COALESCE(lcm.citymun_name, "")) <> ""')
+                            ->orderBy('lp.province_name')
+                            ->orderBy('lcm.citymun_name')
+                            ->get();
+
+                        foreach ($configuredLocationRows as $configuredLocationRow) {
+                            $provinceLabel = strtoupper(trim((string) ($configuredLocationRow->province ?? '')));
+                            $cityLabel = strtoupper(trim((string) ($configuredLocationRow->city_municipality ?? '')));
+
+                            if ($provinceLabel === '' || $cityLabel === '') {
+                                continue;
+                            }
+
+                            if (!in_array($provinceLabel, $notificationFilterConfiguredProvinces, true)) {
+                                $notificationFilterConfiguredProvinces[] = $provinceLabel;
+                            }
+
+                            $notificationFilterConfiguredCitiesByProvince[$provinceLabel] ??= [];
+                            if (!in_array($cityLabel, $notificationFilterConfiguredCitiesByProvince[$provinceLabel], true)) {
+                                $notificationFilterConfiguredCitiesByProvince[$provinceLabel][] = $cityLabel;
+                            }
+                        }
+                    }
                 @endphp
                 <div class="notification-wrap">
                     <button
@@ -2650,6 +2774,47 @@
                         <span>No unread notifications.</span>
                     </div>
                 @else
+                    <div class="notification-filter-panel" id="notificationsFilterPanel">
+                        <div class="notification-filter-grid">
+                            <div class="notification-filter-group">
+                                <label for="notificationsProjectCodeFilter">Project Code</label>
+                                <input
+                                    id="notificationsProjectCodeFilter"
+                                    type="text"
+                                    class="notification-filter-input"
+                                    placeholder="e.g. SBDP-2025-14-44-04-001-01"
+                                >
+                            </div>
+                            <div class="notification-filter-group">
+                                <label for="notificationsProvinceFilter">Province</label>
+                                <select id="notificationsProvinceFilter" class="notification-filter-select">
+                                    <option value="">All</option>
+                                </select>
+                            </div>
+                            <div class="notification-filter-group">
+                                <label for="notificationsCityFilter">City/Municipality</label>
+                                <select id="notificationsCityFilter" class="notification-filter-select">
+                                    <option value="">All</option>
+                                </select>
+                            </div>
+                            <div class="notification-filter-group">
+                                <label for="notificationsBarangayFilter">Barangay</label>
+                                <select id="notificationsBarangayFilter" class="notification-filter-select">
+                                    <option value="">All</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="notification-filter-actions">
+                            <button type="button" class="notification-filter-btn" id="notificationsResetFilterBtn">
+                                <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                                Reset
+                            </button>
+                            <button type="button" class="notification-filter-btn apply" id="notificationsApplyFilterBtn">
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                                Apply Filter
+                            </button>
+                        </div>
+                    </div>
                     <div class="notification-list-modal__items">
                         @foreach($allUnreadNotifications as $notificationItem)
                             <a
@@ -2670,6 +2835,9 @@
                                 </div>
                             </a>
                         @endforeach
+                    </div>
+                    <div class="notification-list-modal__empty-filter" id="notificationsFilteredEmptyState">
+                        No unread notifications match the selected filters.
                     </div>
                 @endif
             </div>
@@ -2818,6 +2986,11 @@
         const closeNotificationsModalBtn = document.getElementById('closeNotificationsModalBtn');
         const messageBell = document.getElementById('messageBell');
         const messageMenu = document.getElementById('messageMenu');
+        const NOTIFICATION_LOCATION_CONFIG = {
+            provinces: @json($notificationFilterConfiguredProvinces ?? []),
+            citiesByProvince: @json($notificationFilterConfiguredCitiesByProvince ?? []),
+            barangaysByCity: @json($notificationFilterConfiguredBarangaysByCity ?? []),
+        };
         
         const SIDEBAR_SUBMENU_STORAGE_KEY = 'pdmuoms.sidebar.openSubmenus';
         const SIDEBAR_SUBMENU_COLLAPSE_ONCE_KEY = 'pdmuoms.sidebar.collapseSubmenusOnce';
@@ -3046,6 +3219,275 @@
             notificationsListModal.classList.add('is-open');
             notificationsListModal.setAttribute('aria-hidden', 'false');
             body.style.overflow = 'hidden';
+
+            initializeNotificationFilters();
+        }
+
+        function parseNotificationMetadata(message) {
+            const rawMessage = String(message || '').trim();
+            const upperMessage = rawMessage.toUpperCase();
+
+            const projectCodeMatch = upperMessage.match(/\b[A-Z0-9]+(?:-[A-Z0-9]+){3,}\b/);
+            const projectCode = projectCodeMatch ? projectCodeMatch[0] : '';
+
+            let province = '';
+            let cityMunicipality = '';
+            let barangay = '';
+
+            const locationMatch = rawMessage.match(/\bfor\s+(.+?)\s*-\s*([A-Za-z .()]+?)(?:\s+and\s|\s*$)/i);
+            if (locationMatch) {
+                const rawLocationLeft = String(locationMatch[1] || '').trim();
+                const rawProvince = String(locationMatch[2] || '').trim();
+
+                province = rawProvince.toUpperCase();
+
+                const locationParts = rawLocationLeft
+                    .split(',')
+                    .map((part) => part.trim())
+                    .filter((part) => part !== '');
+
+                if (locationParts.length >= 2) {
+                    barangay = locationParts[0].toUpperCase();
+                    cityMunicipality = locationParts[locationParts.length - 1].toUpperCase();
+                } else if (locationParts.length === 1) {
+                    cityMunicipality = locationParts[0].toUpperCase();
+                }
+            }
+
+            return {
+                projectCode,
+                province,
+                cityMunicipality,
+                barangay,
+            };
+        }
+
+        function setNotificationSelectOptions(selectElement, values, placeholder = 'All') {
+            if (!selectElement) {
+                return;
+            }
+
+            const currentValue = String(selectElement.value || '');
+            const uniqueValues = Array.from(new Set(values.map((value) => String(value || '').trim()).filter((value) => value !== '')))
+                .sort((a, b) => a.localeCompare(b));
+
+            selectElement.innerHTML = '';
+
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = placeholder;
+            selectElement.appendChild(defaultOption);
+
+            uniqueValues.forEach((value) => {
+                const optionElement = document.createElement('option');
+                optionElement.value = value;
+                optionElement.textContent = value;
+                selectElement.appendChild(optionElement);
+            });
+
+            if (currentValue !== '' && uniqueValues.includes(currentValue)) {
+                selectElement.value = currentValue;
+            } else {
+                selectElement.value = '';
+            }
+        }
+
+        function initializeNotificationFilters() {
+            const notificationItems = Array.from(document.querySelectorAll('.notification-list-modal__item'));
+            if (!notificationItems.length) {
+                return;
+            }
+
+            const projectCodeInput = document.getElementById('notificationsProjectCodeFilter');
+            const provinceSelect = document.getElementById('notificationsProvinceFilter');
+            const citySelect = document.getElementById('notificationsCityFilter');
+            const barangaySelect = document.getElementById('notificationsBarangayFilter');
+            const applyButton = document.getElementById('notificationsApplyFilterBtn');
+            const resetButton = document.getElementById('notificationsResetFilterBtn');
+            const filteredEmptyState = document.getElementById('notificationsFilteredEmptyState');
+
+            if (!projectCodeInput || !provinceSelect || !citySelect || !barangaySelect || !applyButton || !resetButton) {
+                return;
+            }
+
+            const itemMetadata = notificationItems.map((item) => {
+                const messageText = item.querySelector('.notification-list-modal__item-message')?.textContent || '';
+                const metadata = parseNotificationMetadata(messageText);
+                item.dataset.projectCode = metadata.projectCode;
+                item.dataset.province = metadata.province;
+                item.dataset.cityMunicipality = metadata.cityMunicipality;
+                item.dataset.barangay = metadata.barangay;
+
+                return metadata;
+            });
+
+            const configuredProvinces = Array.isArray(NOTIFICATION_LOCATION_CONFIG?.provinces)
+                ? NOTIFICATION_LOCATION_CONFIG.provinces.map((value) => String(value || '').trim().toUpperCase()).filter((value) => value !== '')
+                : [];
+
+            const configuredCitiesByProvince = (NOTIFICATION_LOCATION_CONFIG?.citiesByProvince && typeof NOTIFICATION_LOCATION_CONFIG.citiesByProvince === 'object')
+                ? Object.entries(NOTIFICATION_LOCATION_CONFIG.citiesByProvince).reduce((result, [provinceKey, cityValues]) => {
+                    const normalizedProvinceKey = String(provinceKey || '').trim().toUpperCase();
+                    if (normalizedProvinceKey === '') {
+                        return result;
+                    }
+
+                    const normalizedCityValues = Array.isArray(cityValues)
+                        ? cityValues.map((value) => String(value || '').trim().toUpperCase()).filter((value) => value !== '')
+                        : [];
+
+                    result[normalizedProvinceKey] = normalizedCityValues;
+                    return result;
+                }, {})
+                : {};
+
+            const configuredBarangaysByCity = (NOTIFICATION_LOCATION_CONFIG?.barangaysByCity && typeof NOTIFICATION_LOCATION_CONFIG.barangaysByCity === 'object')
+                ? Object.entries(NOTIFICATION_LOCATION_CONFIG.barangaysByCity).reduce((result, [cityKey, barangayValues]) => {
+                    const normalizedCityKey = String(cityKey || '').trim().toUpperCase();
+                    if (normalizedCityKey === '') {
+                        return result;
+                    }
+
+                    const normalizedBarangayValues = Array.isArray(barangayValues)
+                        ? barangayValues.map((value) => String(value || '').trim().toUpperCase()).filter((value) => value !== '')
+                        : [];
+
+                    result[normalizedCityKey] = normalizedBarangayValues;
+                    return result;
+                }, {})
+                : {};
+
+            const refreshCityOptions = () => {
+                const selectedProvince = String(provinceSelect.value || '').trim();
+
+                const configuredCityValues = selectedProvince !== ''
+                    ? (configuredCitiesByProvince[selectedProvince] || [])
+                    : Object.values(configuredCitiesByProvince).flat();
+
+                const cityValues = configuredCityValues.length > 0
+                    ? configuredCityValues
+                    : itemMetadata
+                        .filter((metadata) => !selectedProvince || metadata.province === selectedProvince)
+                        .map((metadata) => metadata.cityMunicipality);
+
+                setNotificationSelectOptions(citySelect, cityValues, 'All');
+            };
+
+            const refreshBarangayOptions = () => {
+                const selectedProvince = String(provinceSelect.value || '').trim();
+                const selectedCity = String(citySelect.value || '').trim();
+
+                const configuredBarangayValues = selectedCity !== ''
+                    ? (configuredBarangaysByCity[selectedCity] || [])
+                    : [];
+
+                const barangayValues = configuredBarangayValues.length > 0
+                    ? configuredBarangayValues
+                    : itemMetadata
+                        .filter((metadata) => (!selectedProvince || metadata.province === selectedProvince)
+                            && (!selectedCity || metadata.cityMunicipality === selectedCity))
+                        .map((metadata) => metadata.barangay);
+
+                setNotificationSelectOptions(barangaySelect, barangayValues, 'All');
+            };
+
+            const applyNotificationFilters = () => {
+                const projectCodeNeedle = String(projectCodeInput.value || '').trim().toLowerCase();
+                const selectedProvince = String(provinceSelect.value || '').trim();
+                const selectedCity = String(citySelect.value || '').trim();
+                const selectedBarangay = String(barangaySelect.value || '').trim();
+
+                let visibleCount = 0;
+
+                notificationItems.forEach((item) => {
+                    const itemProjectCode = String(item.dataset.projectCode || '');
+                    const itemProvince = String(item.dataset.province || '');
+                    const itemCity = String(item.dataset.cityMunicipality || '');
+                    const itemBarangay = String(item.dataset.barangay || '');
+
+                    const matchesProjectCode = !projectCodeNeedle
+                        || itemProjectCode.toLowerCase().includes(projectCodeNeedle);
+                    const matchesProvince = !selectedProvince || itemProvince === selectedProvince;
+                    const matchesCity = !selectedCity || itemCity === selectedCity;
+                    const matchesBarangay = !selectedBarangay || itemBarangay === selectedBarangay;
+
+                    const isVisible = matchesProjectCode && matchesProvince && matchesCity && matchesBarangay;
+                    item.style.display = isVisible ? '' : 'none';
+                    if (isVisible) {
+                        visibleCount += 1;
+                    }
+                });
+
+                if (filteredEmptyState) {
+                    filteredEmptyState.style.display = visibleCount === 0 ? 'block' : 'none';
+                }
+            };
+
+            const provinceValues = configuredProvinces.length > 0
+                ? configuredProvinces
+                : itemMetadata.map((metadata) => metadata.province);
+
+            setNotificationSelectOptions(provinceSelect, provinceValues, 'All');
+            refreshCityOptions();
+            refreshBarangayOptions();
+            applyNotificationFilters();
+
+            if (projectCodeInput.dataset.notificationFilterBound !== '1') {
+                projectCodeInput.dataset.notificationFilterBound = '1';
+                projectCodeInput.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        applyNotificationFilters();
+                    }
+                });
+                projectCodeInput.addEventListener('input', function () {
+                    applyNotificationFilters();
+                });
+            }
+
+            if (provinceSelect.dataset.notificationFilterBound !== '1') {
+                provinceSelect.dataset.notificationFilterBound = '1';
+                provinceSelect.addEventListener('change', function () {
+                    refreshCityOptions();
+                    refreshBarangayOptions();
+                    applyNotificationFilters();
+                });
+            }
+
+            if (citySelect.dataset.notificationFilterBound !== '1') {
+                citySelect.dataset.notificationFilterBound = '1';
+                citySelect.addEventListener('change', function () {
+                    refreshBarangayOptions();
+                    applyNotificationFilters();
+                });
+            }
+
+            if (barangaySelect.dataset.notificationFilterBound !== '1') {
+                barangaySelect.dataset.notificationFilterBound = '1';
+                barangaySelect.addEventListener('change', function () {
+                    applyNotificationFilters();
+                });
+            }
+
+            if (applyButton.dataset.notificationFilterBound !== '1') {
+                applyButton.dataset.notificationFilterBound = '1';
+                applyButton.addEventListener('click', function () {
+                    applyNotificationFilters();
+                });
+            }
+
+            if (resetButton.dataset.notificationFilterBound !== '1') {
+                resetButton.dataset.notificationFilterBound = '1';
+                resetButton.addEventListener('click', function () {
+                    projectCodeInput.value = '';
+                    provinceSelect.value = '';
+                    refreshCityOptions();
+                    citySelect.value = '';
+                    refreshBarangayOptions();
+                    barangaySelect.value = '';
+                    applyNotificationFilters();
+                });
+            }
         }
 
         // Toggle submenu function
