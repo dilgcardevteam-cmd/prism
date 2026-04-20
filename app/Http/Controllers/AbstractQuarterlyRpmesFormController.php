@@ -576,7 +576,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
 
     protected function resolveProjectFilters(Request $request): array
     {
-        return [
+        $filters = [
             'province' => $this->normalizeProjectFilterValues($request->input('province', [])),
             'city_municipality' => $this->normalizeProjectFilterValues($request->input('city_municipality', [])),
             'barangay' => $this->normalizeProjectFilterValues($request->input('barangay', [])),
@@ -585,6 +585,15 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             'project_type' => $this->normalizeProjectFilterValues($request->input('project_type', [])),
             'project_status' => $this->normalizeProjectFilterValues($request->input('project_status', [])),
         ];
+
+        if (empty($filters['province'])) {
+            $filters['city_municipality'] = [];
+            $filters['barangay'] = [];
+        } elseif (empty($filters['city_municipality'])) {
+            $filters['barangay'] = [];
+        }
+
+        return $filters;
     }
 
     protected function normalizeProjectFilterValues($rawValues): array
@@ -605,6 +614,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             'provinces' => collect(),
             'cities' => collect(),
             'barangays' => collect(),
+            'locationHierarchy' => [],
             'programs' => collect(),
             'funding_years' => collect(),
             'project_types' => collect(),
@@ -635,6 +645,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 ->distinct()
                 ->orderBy('spp.barangay')
                 ->pluck('spp.barangay'),
+            'locationHierarchy' => $this->buildProjectLocationHierarchy(clone $baseQuery),
             'programs' => (clone $baseQuery)
                 ->select('spp.program')
                 ->whereRaw("TRIM(COALESCE(spp.program, '')) <> ''")
@@ -660,6 +671,63 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 ->orderBy('spp.status')
                 ->pluck('spp.status'),
         ];
+    }
+
+    protected function buildProjectLocationHierarchy($baseQuery): array
+    {
+        $rows = (clone $baseQuery)
+            ->select('spp.province', 'spp.city_municipality', 'spp.barangay')
+            ->whereRaw("TRIM(COALESCE(spp.province, '')) <> ''")
+            ->whereRaw("TRIM(COALESCE(spp.city_municipality, '')) <> ''")
+            ->get();
+
+        $hierarchy = [];
+
+        foreach ($rows as $row) {
+            $province = $this->normalizeProjectLocationValue($row->province ?? null);
+            $cityMunicipality = $this->normalizeProjectLocationValue($row->city_municipality ?? null);
+
+            if ($province === '' || $cityMunicipality === '') {
+                continue;
+            }
+
+            $hierarchy[$province] ??= [];
+            $hierarchy[$province][$cityMunicipality] ??= [];
+
+            $barangayValues = preg_split('/\r\n|\r|\n/u', (string) ($row->barangay ?? '')) ?: [];
+            foreach ($barangayValues as $barangayValue) {
+                $barangay = $this->normalizeProjectLocationValue($barangayValue);
+                if ($barangay === '') {
+                    continue;
+                }
+
+                $hierarchy[$province][$cityMunicipality][$barangay] = $barangay;
+            }
+        }
+
+        uksort($hierarchy, 'strnatcasecmp');
+
+        foreach ($hierarchy as $province => $cityGroups) {
+            uksort($cityGroups, 'strnatcasecmp');
+
+            foreach ($cityGroups as $cityMunicipality => $barangays) {
+                $barangayList = array_values($barangays);
+                usort($barangayList, 'strnatcasecmp');
+                $cityGroups[$cityMunicipality] = $barangayList;
+            }
+
+            $hierarchy[$province] = $cityGroups;
+        }
+
+        return $hierarchy;
+    }
+
+    protected function normalizeProjectLocationValue($value): string
+    {
+        $normalizedValue = trim((string) $value);
+        $normalizedValue = preg_replace('/\s+/u', ' ', $normalizedValue) ?? $normalizedValue;
+
+        return trim($normalizedValue);
     }
 
     protected function applyProjectFilters($query, array $filters): void

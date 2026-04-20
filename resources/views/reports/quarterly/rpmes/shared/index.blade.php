@@ -26,9 +26,10 @@
         .dashboard-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px 16px; align-items: end; }
         .dashboard-stacked-filter-source { display: none; }
         .dashboard-stacked-filter-dropdown { position: relative; }
-        .dashboard-stacked-filter-toggle { min-height: 34px; width: 100%; border: 1px solid #d1d5db; border-radius: 7px; background: #ffffff; color: #111827; padding: 5px 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+        .dashboard-stacked-filter-toggle { min-height: 34px; width: 100%; border: 1px solid #d1d5db; border-radius: 7px; background: #ffffff; color: #111827; padding: 5px 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease; }
         .dashboard-stacked-filter-toggle:hover { border-color: #9ca3af; }
         .dashboard-stacked-filter-toggle:focus-visible, .dashboard-stacked-filter-toggle.is-open { outline: 0; border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2); }
+        .dashboard-stacked-filter-toggle.is-disabled, .dashboard-stacked-filter-toggle.is-disabled:hover { background: #f9fafb; color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; box-shadow: none; }
         .dashboard-filter-badge-list { min-height: 20px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 1; min-width: 0; }
         .dashboard-filter-badge { display: inline-flex; align-items: center; gap: 4px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; color: #374151; font-size: 11px; font-weight: 500; line-height: 1; padding: 3px 6px; max-width: 100%; }
         .dashboard-filter-badge-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -44,6 +45,12 @@
         .dashboard-stacked-filter-option-check { visibility: hidden; color: #1d4ed8; font-size: 11px; font-weight: 700; flex: 0 0 auto; }
         .dashboard-stacked-filter-option.is-selected .dashboard-stacked-filter-option-check { visibility: visible; }
         .dashboard-stacked-filter-menu-empty { color: #6b7280; font-size: 12px; padding: 6px 8px; }
+        .dashboard-stacked-filter-search { position: sticky; top: 0; z-index: 1; background: #ffffff; padding: 4px; border-bottom: 1px solid #e5e7eb; margin: -4px -4px 4px; }
+        .dashboard-stacked-filter-search-box { position: relative; display: flex; align-items: center; }
+        .dashboard-stacked-filter-search-icon { position: absolute; left: 10px; color: #9ca3af; font-size: 12px; pointer-events: none; }
+        .dashboard-stacked-filter-search-input { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 7px 10px 7px 30px; font-size: 12px; color: #111827; background: #ffffff; }
+        .dashboard-stacked-filter-search-input:focus { outline: 0; border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.15); }
+        .dashboard-stacked-filter-menu-options { display: grid; gap: 2px; }
         .dashboard-filter-reset { grid-column: 3; display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
         .dashboard-filter-reset-link { height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px; box-shadow: 0 4px 10px rgba(0, 44, 118, 0.18); transition: box-shadow 0.18s ease, transform 0.18s ease; }
         .dashboard-filter-reset-link:hover { box-shadow: 0 6px 14px rgba(0, 44, 118, 0.24); transform: translateY(-1px); }
@@ -76,7 +83,7 @@
                     <select id="province" name="province[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Province" aria-hidden="true">@foreach (($filterOptions['provinces'] ?? collect()) as $option)<option value="{{ $option }}" @selected(in_array((string) $option, ($filters['province'] ?? []), true))>{{ $option }}</option>@endforeach</select>
                 </div>
 
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="city_municipality" data-badge-container-id="city_municipality_badges" data-dropdown-toggle-id="city_municipality_dropdown_toggle" data-dropdown-menu-id="city_municipality_dropdown_menu" data-empty-badge-text="All">
+                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="city_municipality" data-badge-container-id="city_municipality_badges" data-dropdown-toggle-id="city_municipality_dropdown_toggle" data-dropdown-menu-id="city_municipality_dropdown_menu" data-empty-badge-text="All" data-disabled-badge-text="Select province first">
                     <label for="city_municipality_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
                     <div class="dashboard-stacked-filter-dropdown">
                         <div id="city_municipality_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="city_municipality_dropdown_menu"><div id="city_municipality_badges" class="dashboard-filter-badge-list" aria-live="polite"></div><span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span></div>
@@ -85,7 +92,7 @@
                     <select id="city_municipality" name="city_municipality[]" multiple class="dashboard-stacked-filter-source" data-filter-label="City/Municipality" aria-hidden="true">@foreach (($filterOptions['cities'] ?? collect()) as $option)<option value="{{ $option }}" @selected(in_array((string) $option, ($filters['city_municipality'] ?? []), true))>{{ $option }}</option>@endforeach</select>
                 </div>
 
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="barangay" data-badge-container-id="barangay_badges" data-dropdown-toggle-id="barangay_dropdown_toggle" data-dropdown-menu-id="barangay_dropdown_menu" data-empty-badge-text="All">
+                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="barangay" data-badge-container-id="barangay_badges" data-dropdown-toggle-id="barangay_dropdown_toggle" data-dropdown-menu-id="barangay_dropdown_menu" data-empty-badge-text="All" data-disabled-badge-text="Select province and municipality first">
                     <label for="barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
                     <div class="dashboard-stacked-filter-dropdown">
                         <div id="barangay_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="barangay_dropdown_menu"><div id="barangay_badges" class="dashboard-filter-badge-list" aria-live="polite"></div><span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span></div>
@@ -268,12 +275,517 @@
 
 @section('scripts')
     <script>
-        const PROJECT_FILTER_STATE_KEY=@json(($formMeta['index_route'] ?? 'rpmes-shared') . '-filter-collapsed');
-        function readProjectFilterCollapsedState(){try{const v=window.localStorage.getItem(PROJECT_FILTER_STATE_KEY);return v===null?true:v==='1';}catch(e){return true;}}
-        function writeProjectFilterCollapsedState(isCollapsed){try{window.localStorage.setItem(PROJECT_FILTER_STATE_KEY,isCollapsed?'1':'0');}catch(e){}}
-        function setProjectFilterBodyHeight(form){const body=form.querySelector('.project-filter-body');if(!body){return;}body.style.maxHeight=form.classList.contains('collapsed')?'0px':`${body.scrollHeight}px`;}
-        function toggleProjectFilter(button){const form=button.closest('.project-filter-form');if(!form){return;}const body=form.querySelector('.project-filter-body');if(!body){return;}form.querySelectorAll('[data-stacked-filter]').forEach((f)=>{if(typeof f.__closeDropdown==='function'){f.__closeDropdown();}});const isCollapsed=form.classList.contains('collapsed');if(isCollapsed){form.classList.remove('collapsed');requestAnimationFrame(()=>{body.style.maxHeight=`${body.scrollHeight}px`;});}else{body.style.maxHeight=`${body.scrollHeight}px`;requestAnimationFrame(()=>{form.classList.add('collapsed');body.style.maxHeight='0px';});}const nextCollapsed=!isCollapsed;button.setAttribute('aria-expanded',nextCollapsed?'false':'true');writeProjectFilterCollapsedState(nextCollapsed);}
-        function initializeStackedFilters(){document.querySelectorAll('[data-stacked-filter]').forEach((stackedFilter)=>{if(stackedFilter.dataset.stackedFilterInitialized==='1'){return;}const sourceSelect=document.getElementById(stackedFilter.dataset.sourceSelectId||'');const badgeContainer=document.getElementById(stackedFilter.dataset.badgeContainerId||'');const dropdownToggle=document.getElementById(stackedFilter.dataset.dropdownToggleId||'');const dropdownMenu=document.getElementById(stackedFilter.dataset.dropdownMenuId||'');if(!sourceSelect||!badgeContainer||!dropdownToggle||!dropdownMenu){return;}const emptyBadgeText=stackedFilter.dataset.emptyBadgeText||'All';const filterLabel=String(sourceSelect.dataset.filterLabel||'Filter').trim();const emptyMenuText=`No ${filterLabel.toLowerCase()} options available.`;if(dropdownMenu.dataset.overlayAttached!=='1'){document.body.appendChild(dropdownMenu);dropdownMenu.dataset.overlayAttached='1';}const getSelectOptions=()=>Array.from(sourceSelect.options||[]);const updateFilterBodyHeight=()=>{const parentForm=stackedFilter.closest('.project-filter-form');if(!parentForm||parentForm.classList.contains('collapsed')){return;}requestAnimationFrame(()=>setProjectFilterBodyHeight(parentForm));};const positionDropdownMenu=()=>{if(!dropdownMenu.classList.contains('is-open')){return;}const viewportMargin=8;const menuGap=4;const rect=dropdownToggle.getBoundingClientRect();const availableBelow=Math.max(0,window.innerHeight-rect.bottom-viewportMargin);const availableAbove=Math.max(0,rect.top-viewportMargin);const preferredHeight=Math.min(dropdownMenu.scrollHeight,220);const shouldOpenUpward=availableBelow<Math.min(preferredHeight,160)&&availableAbove>availableBelow;const availableHeight=Math.max(96,Math.min(Math.max(96,window.innerHeight-(viewportMargin*2)),(shouldOpenUpward?availableAbove:availableBelow)-menuGap));const renderedHeight=Math.min(dropdownMenu.scrollHeight,availableHeight);const renderedWidth=Math.min(rect.width,window.innerWidth-(viewportMargin*2));const top=shouldOpenUpward?Math.max(viewportMargin,rect.top-renderedHeight-menuGap):Math.min(window.innerHeight-viewportMargin-renderedHeight,rect.bottom+menuGap);const left=Math.min(Math.max(viewportMargin,rect.left),window.innerWidth-viewportMargin-renderedWidth);dropdownMenu.style.left=`${left}px`;dropdownMenu.style.top=`${Math.max(viewportMargin,top)}px`;dropdownMenu.style.width=`${renderedWidth}px`;dropdownMenu.style.maxHeight=`${availableHeight}px`;};const closeDropdown=()=>{dropdownMenu.classList.remove('is-open');dropdownToggle.classList.remove('is-open');dropdownToggle.setAttribute('aria-expanded','false');dropdownMenu.style.left='';dropdownMenu.style.top='';dropdownMenu.style.width='';dropdownMenu.style.maxHeight='';};const openDropdown=()=>{document.querySelectorAll('[data-stacked-filter]').forEach((otherFilter)=>{if(otherFilter!==stackedFilter&&typeof otherFilter.__closeDropdown==='function'){otherFilter.__closeDropdown();}});dropdownMenu.classList.add('is-open');dropdownToggle.classList.add('is-open');dropdownToggle.setAttribute('aria-expanded','true');requestAnimationFrame(positionDropdownMenu);};const renderBadges=()=>{const selected=getSelectOptions().filter((optionEl)=>optionEl.selected&&optionEl.value.trim()!=='');badgeContainer.innerHTML='';if(!selected.length){const emptyBadge=document.createElement('span');emptyBadge.className='dashboard-filter-badge-empty';emptyBadge.textContent=emptyBadgeText;badgeContainer.appendChild(emptyBadge);}else{selected.forEach((optionEl)=>{const badge=document.createElement('span');badge.className='dashboard-filter-badge';const label=document.createElement('span');label.className='dashboard-filter-badge-label';label.textContent=optionEl.textContent.replace(/\s+/g,' ').trim();const removeButton=document.createElement('button');removeButton.type='button';removeButton.className='dashboard-filter-badge-remove';removeButton.dataset.removeValue=optionEl.value;removeButton.textContent='x';removeButton.setAttribute('aria-label',`Remove ${label.textContent}`);badge.appendChild(label);badge.appendChild(removeButton);badgeContainer.appendChild(badge);});}updateFilterBodyHeight();requestAnimationFrame(positionDropdownMenu);};const renderDropdownOptions=()=>{const options=getSelectOptions().filter((optionEl)=>optionEl.value.trim()!=='');dropdownMenu.innerHTML='';if(!options.length){const emptyMenuItem=document.createElement('div');emptyMenuItem.className='dashboard-stacked-filter-menu-empty';emptyMenuItem.textContent=emptyMenuText;dropdownMenu.appendChild(emptyMenuItem);return;}options.forEach((optionEl,index)=>{const optionButton=document.createElement('button');optionButton.type='button';optionButton.className='dashboard-stacked-filter-option';optionButton.dataset.optionIndex=String(index);optionButton.setAttribute('role','option');optionButton.setAttribute('aria-selected',optionEl.selected?'true':'false');if(optionEl.selected){optionButton.classList.add('is-selected');}const optionLabel=document.createElement('span');optionLabel.textContent=optionEl.textContent.replace(/\s+/g,' ').trim();const optionCheck=document.createElement('span');optionCheck.className='dashboard-stacked-filter-option-check';optionCheck.textContent='✓';optionButton.appendChild(optionLabel);optionButton.appendChild(optionCheck);dropdownMenu.appendChild(optionButton);});};dropdownToggle.addEventListener('click',(event)=>{if(event.target.closest('.dashboard-filter-badge-remove')){return;}dropdownMenu.classList.contains('is-open')?closeDropdown():openDropdown();});dropdownToggle.addEventListener('keydown',(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();dropdownMenu.classList.contains('is-open')?closeDropdown():openDropdown();}if(event.key==='Escape'){event.preventDefault();closeDropdown();}});dropdownMenu.addEventListener('click',(event)=>{const optionButton=event.target.closest('.dashboard-stacked-filter-option');if(!optionButton){return;}const optionIndex=Number(optionButton.dataset.optionIndex);const matchingOption=sourceSelect.options[optionIndex];if(!matchingOption){return;}matchingOption.selected=!matchingOption.selected;renderBadges();renderDropdownOptions();});badgeContainer.addEventListener('click',(event)=>{const removeButton=event.target.closest('.dashboard-filter-badge-remove');if(!removeButton){return;}event.preventDefault();event.stopPropagation();getSelectOptions().forEach((optionEl)=>{if(optionEl.value===removeButton.dataset.removeValue){optionEl.selected=false;}});renderBadges();renderDropdownOptions();});document.addEventListener('click',(event)=>{if(!stackedFilter.contains(event.target)&&!dropdownMenu.contains(event.target)){closeDropdown();}});document.addEventListener('keydown',(event)=>{if(event.key==='Escape'){closeDropdown();}});window.addEventListener('resize',()=>requestAnimationFrame(positionDropdownMenu));document.addEventListener('scroll',()=>requestAnimationFrame(positionDropdownMenu),true);renderBadges();renderDropdownOptions();stackedFilter.__closeDropdown=closeDropdown;stackedFilter.dataset.stackedFilterInitialized='1';});}
-        document.addEventListener('DOMContentLoaded',()=>{initializeStackedFilters();const forms=document.querySelectorAll('.project-filter-form');forms.forEach((form)=>{const collapsed=readProjectFilterCollapsedState();const toggleButton=form.querySelector('.project-filter-toggle');form.classList.toggle('collapsed',collapsed);if(toggleButton){toggleButton.setAttribute('aria-expanded',collapsed?'false':'true');}setProjectFilterBodyHeight(form);});window.addEventListener('resize',()=>{forms.forEach((form)=>{if(!form.classList.contains('collapsed')){setProjectFilterBodyHeight(form);}});});});
+        const PROJECT_FILTER_STATE_KEY = @json(($formMeta['index_route'] ?? 'rpmes-shared') . '-filter-collapsed');
+        const LOCATION_HIERARCHY = @json($filterOptions['locationHierarchy'] ?? []);
+
+        function readProjectFilterCollapsedState() {
+            try {
+                const storedValue = window.localStorage.getItem(PROJECT_FILTER_STATE_KEY);
+                return storedValue === null ? true : storedValue === '1';
+            } catch (error) {
+                return true;
+            }
+        }
+
+        function writeProjectFilterCollapsedState(isCollapsed) {
+            try {
+                window.localStorage.setItem(PROJECT_FILTER_STATE_KEY, isCollapsed ? '1' : '0');
+            } catch (error) {
+                // Ignore localStorage write errors.
+            }
+        }
+
+        function setProjectFilterBodyHeight(form) {
+            const body = form.querySelector('.project-filter-body');
+            if (!body) {
+                return;
+            }
+
+            body.style.maxHeight = form.classList.contains('collapsed') ? '0px' : `${body.scrollHeight}px`;
+        }
+
+        function toggleProjectFilter(button) {
+            const form = button.closest('.project-filter-form');
+            if (!form) {
+                return;
+            }
+
+            const body = form.querySelector('.project-filter-body');
+            if (!body) {
+                return;
+            }
+
+            form.querySelectorAll('[data-stacked-filter]').forEach((stackedFilter) => {
+                if (typeof stackedFilter.__closeDropdown === 'function') {
+                    stackedFilter.__closeDropdown();
+                }
+            });
+
+            const isCollapsed = form.classList.contains('collapsed');
+            if (isCollapsed) {
+                form.classList.remove('collapsed');
+                requestAnimationFrame(() => {
+                    body.style.maxHeight = `${body.scrollHeight}px`;
+                });
+            } else {
+                body.style.maxHeight = `${body.scrollHeight}px`;
+                requestAnimationFrame(() => {
+                    form.classList.add('collapsed');
+                    body.style.maxHeight = '0px';
+                });
+            }
+
+            const nextCollapsed = !isCollapsed;
+            button.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+            writeProjectFilterCollapsedState(nextCollapsed);
+        }
+
+        function uniqueSortedValues(values) {
+            return Array.from(new Set(
+                values
+                    .map((value) => String(value || '').trim())
+                    .filter(Boolean)
+            )).sort((leftValue, rightValue) => leftValue.localeCompare(rightValue));
+        }
+
+        function setSelectOptions(selectElement, values, selectedValues) {
+            if (!selectElement) {
+                return;
+            }
+
+            const selectedValueSet = new Set(selectedValues);
+            selectElement.innerHTML = '';
+
+            values.forEach((value) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                option.selected = selectedValueSet.has(value);
+                selectElement.appendChild(option);
+            });
+        }
+
+        function rebuildLocationDependentFilters() {
+            const provinceSelect = document.getElementById('province');
+            const citySelect = document.getElementById('city_municipality');
+            const barangaySelect = document.getElementById('barangay');
+
+            if (!provinceSelect || !citySelect || !barangaySelect) {
+                return;
+            }
+
+            const selectedProvinces = Array.from(provinceSelect.selectedOptions || [])
+                .map((option) => option.value.trim())
+                .filter(Boolean);
+
+            const previouslySelectedCities = Array.from(citySelect.selectedOptions || [])
+                .map((option) => option.value.trim())
+                .filter(Boolean);
+
+            const availableCities = selectedProvinces.length
+                ? uniqueSortedValues(
+                    selectedProvinces.flatMap((province) => Object.keys(LOCATION_HIERARCHY?.[province] || {}))
+                )
+                : [];
+
+            const selectedCities = previouslySelectedCities.filter((city) => availableCities.includes(city));
+
+            citySelect.disabled = selectedProvinces.length === 0;
+            setSelectOptions(citySelect, availableCities, selectedCities);
+
+            const availableBarangays = selectedProvinces.length && selectedCities.length
+                ? uniqueSortedValues(
+                    selectedProvinces.flatMap((province) =>
+                        selectedCities.flatMap((city) => LOCATION_HIERARCHY?.[province]?.[city] || [])
+                    )
+                )
+                : [];
+
+            const previouslySelectedBarangays = Array.from(barangaySelect.selectedOptions || [])
+                .map((option) => option.value.trim())
+                .filter(Boolean);
+            const selectedBarangays = previouslySelectedBarangays.filter((barangay) => availableBarangays.includes(barangay));
+
+            barangaySelect.disabled = !(selectedProvinces.length && selectedCities.length);
+            setSelectOptions(barangaySelect, availableBarangays, selectedBarangays);
+
+            [citySelect, barangaySelect].forEach((selectElement) => {
+                const stackedFilter = selectElement.closest('[data-stacked-filter]');
+                if (stackedFilter && typeof stackedFilter.__refreshDropdown === 'function') {
+                    stackedFilter.__refreshDropdown();
+                }
+            });
+        }
+
+        function initializeStackedFilters() {
+            document.querySelectorAll('[data-stacked-filter]').forEach((stackedFilter) => {
+                if (stackedFilter.dataset.stackedFilterInitialized === '1') {
+                    return;
+                }
+
+                const sourceSelect = document.getElementById(stackedFilter.dataset.sourceSelectId || '');
+                const badgeContainer = document.getElementById(stackedFilter.dataset.badgeContainerId || '');
+                const dropdownToggle = document.getElementById(stackedFilter.dataset.dropdownToggleId || '');
+                const dropdownMenu = document.getElementById(stackedFilter.dataset.dropdownMenuId || '');
+
+                if (!sourceSelect || !badgeContainer || !dropdownToggle || !dropdownMenu) {
+                    return;
+                }
+
+                const emptyBadgeText = stackedFilter.dataset.emptyBadgeText || 'All';
+                const disabledBadgeText = stackedFilter.dataset.disabledBadgeText || 'Select an option first';
+                const filterLabel = String(sourceSelect.dataset.filterLabel || 'Filter').trim();
+                const emptyMenuText = `No ${filterLabel.toLowerCase()} options available.`;
+                const noSearchResultsText = `No matching ${filterLabel.toLowerCase()} found.`;
+
+                if (dropdownMenu.dataset.overlayAttached !== '1') {
+                    document.body.appendChild(dropdownMenu);
+                    dropdownMenu.dataset.overlayAttached = '1';
+                }
+
+                const getSelectOptions = () => Array.from(sourceSelect.options || []);
+                const getOptionLabel = (optionElement) => optionElement.textContent.replace(/\s+/g, ' ').trim();
+
+                const updateFilterBodyHeight = () => {
+                    const parentForm = stackedFilter.closest('.project-filter-form');
+                    if (!parentForm || parentForm.classList.contains('collapsed')) {
+                        return;
+                    }
+
+                    requestAnimationFrame(() => setProjectFilterBodyHeight(parentForm));
+                };
+
+                const positionDropdownMenu = () => {
+                    if (!dropdownMenu.classList.contains('is-open')) {
+                        return;
+                    }
+
+                    const viewportMargin = 8;
+                    const menuGap = 4;
+                    const rect = dropdownToggle.getBoundingClientRect();
+                    const availableBelow = Math.max(0, window.innerHeight - rect.bottom - viewportMargin);
+                    const availableAbove = Math.max(0, rect.top - viewportMargin);
+                    const preferredHeight = Math.min(dropdownMenu.scrollHeight, 260);
+                    const shouldOpenUpward = availableBelow < Math.min(preferredHeight, 160) && availableAbove > availableBelow;
+                    const availableHeight = Math.max(
+                        120,
+                        Math.min(
+                            Math.max(120, window.innerHeight - (viewportMargin * 2)),
+                            (shouldOpenUpward ? availableAbove : availableBelow) - menuGap
+                        )
+                    );
+                    const renderedHeight = Math.min(dropdownMenu.scrollHeight, availableHeight);
+                    const renderedWidth = Math.min(rect.width, window.innerWidth - (viewportMargin * 2));
+                    const top = shouldOpenUpward
+                        ? Math.max(viewportMargin, rect.top - renderedHeight - menuGap)
+                        : Math.min(window.innerHeight - viewportMargin - renderedHeight, rect.bottom + menuGap);
+                    const left = Math.min(Math.max(viewportMargin, rect.left), window.innerWidth - viewportMargin - renderedWidth);
+
+                    dropdownMenu.style.left = `${left}px`;
+                    dropdownMenu.style.top = `${Math.max(viewportMargin, top)}px`;
+                    dropdownMenu.style.width = `${renderedWidth}px`;
+                    dropdownMenu.style.maxHeight = `${availableHeight}px`;
+                };
+
+                const closeDropdown = () => {
+                    dropdownMenu.classList.remove('is-open');
+                    dropdownToggle.classList.remove('is-open');
+                    dropdownToggle.setAttribute('aria-expanded', 'false');
+                    dropdownMenu.style.left = '';
+                    dropdownMenu.style.top = '';
+                    dropdownMenu.style.width = '';
+                    dropdownMenu.style.maxHeight = '';
+                };
+
+                const renderBadges = () => {
+                    const selectedOptions = getSelectOptions().filter((optionElement) => optionElement.selected && optionElement.value.trim() !== '');
+                    badgeContainer.innerHTML = '';
+
+                    if (sourceSelect.disabled) {
+                        const disabledBadge = document.createElement('span');
+                        disabledBadge.className = 'dashboard-filter-badge-empty';
+                        disabledBadge.textContent = disabledBadgeText;
+                        badgeContainer.appendChild(disabledBadge);
+                    } else if (!selectedOptions.length) {
+                        const emptyBadge = document.createElement('span');
+                        emptyBadge.className = 'dashboard-filter-badge-empty';
+                        emptyBadge.textContent = emptyBadgeText;
+                        badgeContainer.appendChild(emptyBadge);
+                    } else {
+                        selectedOptions.forEach((optionElement) => {
+                            const badge = document.createElement('span');
+                            badge.className = 'dashboard-filter-badge';
+
+                            const label = document.createElement('span');
+                            label.className = 'dashboard-filter-badge-label';
+                            label.textContent = getOptionLabel(optionElement);
+
+                            const removeButton = document.createElement('button');
+                            removeButton.type = 'button';
+                            removeButton.className = 'dashboard-filter-badge-remove';
+                            removeButton.dataset.removeValue = optionElement.value;
+                            removeButton.textContent = 'x';
+                            removeButton.setAttribute('aria-label', `Remove ${label.textContent}`);
+
+                            badge.appendChild(label);
+                            badge.appendChild(removeButton);
+                            badgeContainer.appendChild(badge);
+                        });
+                    }
+
+                    updateFilterBodyHeight();
+                    requestAnimationFrame(positionDropdownMenu);
+                };
+
+                const renderDropdownOptions = (searchTerm = '') => {
+                    const normalizedSearchTerm = String(searchTerm || '').trim().toLowerCase();
+                    const options = getSelectOptions().filter((optionElement) => optionElement.value.trim() !== '');
+                    const filteredOptions = normalizedSearchTerm === ''
+                        ? options
+                        : options.filter((optionElement) => getOptionLabel(optionElement).toLowerCase().includes(normalizedSearchTerm));
+
+                    dropdownMenu.innerHTML = '';
+
+                    if (!sourceSelect.disabled) {
+                        const searchWrapper = document.createElement('div');
+                        searchWrapper.className = 'dashboard-stacked-filter-search';
+
+                        const searchBox = document.createElement('div');
+                        searchBox.className = 'dashboard-stacked-filter-search-box';
+
+                        const searchIcon = document.createElement('span');
+                        searchIcon.className = 'dashboard-stacked-filter-search-icon';
+                        searchIcon.innerHTML = '<i class="fas fa-search" aria-hidden="true"></i>';
+
+                        const searchInput = document.createElement('input');
+                        searchInput.type = 'search';
+                        searchInput.className = 'dashboard-stacked-filter-search-input';
+                        searchInput.placeholder = `Search ${filterLabel.toLowerCase()}`;
+                        searchInput.value = searchTerm;
+                        searchInput.autocomplete = 'off';
+                        searchInput.setAttribute('aria-label', `Search ${filterLabel}`);
+                        searchInput.addEventListener('input', (event) => {
+                            renderDropdownOptions(event.target.value);
+                        });
+                        searchInput.addEventListener('keydown', (event) => {
+                            event.stopPropagation();
+                        });
+
+                        searchBox.appendChild(searchIcon);
+                        searchBox.appendChild(searchInput);
+                        searchWrapper.appendChild(searchBox);
+                        dropdownMenu.appendChild(searchWrapper);
+                    }
+
+                    const optionsContainer = document.createElement('div');
+                    optionsContainer.className = 'dashboard-stacked-filter-menu-options';
+                    dropdownMenu.appendChild(optionsContainer);
+
+                    if (!options.length) {
+                        const emptyMenuItem = document.createElement('div');
+                        emptyMenuItem.className = 'dashboard-stacked-filter-menu-empty';
+                        emptyMenuItem.textContent = emptyMenuText;
+                        optionsContainer.appendChild(emptyMenuItem);
+                        return;
+                    }
+
+                    if (!filteredOptions.length) {
+                        const noResultsItem = document.createElement('div');
+                        noResultsItem.className = 'dashboard-stacked-filter-menu-empty';
+                        noResultsItem.textContent = noSearchResultsText;
+                        optionsContainer.appendChild(noResultsItem);
+                        return;
+                    }
+
+                    filteredOptions.forEach((optionElement) => {
+                        const optionIndex = getSelectOptions().indexOf(optionElement);
+                        const optionButton = document.createElement('button');
+                        optionButton.type = 'button';
+                        optionButton.className = 'dashboard-stacked-filter-option';
+                        optionButton.dataset.optionIndex = String(optionIndex);
+                        optionButton.setAttribute('role', 'option');
+                        optionButton.setAttribute('aria-selected', optionElement.selected ? 'true' : 'false');
+
+                        if (optionElement.selected) {
+                            optionButton.classList.add('is-selected');
+                        }
+
+                        const optionLabel = document.createElement('span');
+                        optionLabel.textContent = getOptionLabel(optionElement);
+
+                        const optionCheck = document.createElement('span');
+                        optionCheck.className = 'dashboard-stacked-filter-option-check';
+                        optionCheck.textContent = '✓';
+
+                        optionButton.appendChild(optionLabel);
+                        optionButton.appendChild(optionCheck);
+                        optionsContainer.appendChild(optionButton);
+                    });
+
+                    requestAnimationFrame(() => {
+                        const searchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
+                        if (dropdownMenu.classList.contains('is-open') && searchInput) {
+                            searchInput.focus({ preventScroll: true });
+                            searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+                        }
+                        positionDropdownMenu();
+                    });
+                };
+
+                const updateDisabledState = () => {
+                    const isDisabled = Boolean(sourceSelect.disabled);
+                    dropdownToggle.classList.toggle('is-disabled', isDisabled);
+                    dropdownToggle.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
+                    dropdownToggle.tabIndex = isDisabled ? -1 : 0;
+
+                    if (isDisabled) {
+                        closeDropdown();
+                    }
+                };
+
+                const refreshDropdown = (searchTerm = '') => {
+                    updateDisabledState();
+                    renderBadges();
+                    renderDropdownOptions(searchTerm);
+                };
+
+                const notifyChange = () => {
+                    sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+
+                const openDropdown = () => {
+                    if (sourceSelect.disabled) {
+                        return;
+                    }
+
+                    document.querySelectorAll('[data-stacked-filter]').forEach((otherFilter) => {
+                        if (otherFilter !== stackedFilter && typeof otherFilter.__closeDropdown === 'function') {
+                            otherFilter.__closeDropdown();
+                        }
+                    });
+
+                    dropdownMenu.classList.add('is-open');
+                    dropdownToggle.classList.add('is-open');
+                    dropdownToggle.setAttribute('aria-expanded', 'true');
+                    renderDropdownOptions();
+                };
+
+                dropdownToggle.addEventListener('click', (event) => {
+                    if (event.target.closest('.dashboard-filter-badge-remove') || sourceSelect.disabled) {
+                        return;
+                    }
+
+                    dropdownMenu.classList.contains('is-open') ? closeDropdown() : openDropdown();
+                });
+
+                dropdownToggle.addEventListener('keydown', (event) => {
+                    if (sourceSelect.disabled) {
+                        return;
+                    }
+
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        dropdownMenu.classList.contains('is-open') ? closeDropdown() : openDropdown();
+                    }
+
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeDropdown();
+                    }
+                });
+
+                dropdownMenu.addEventListener('click', (event) => {
+                    const optionButton = event.target.closest('.dashboard-stacked-filter-option');
+                    if (!optionButton) {
+                        return;
+                    }
+
+                    const optionIndex = Number(optionButton.dataset.optionIndex);
+                    const matchingOption = sourceSelect.options[optionIndex];
+                    if (!matchingOption) {
+                        return;
+                    }
+
+                    matchingOption.selected = !matchingOption.selected;
+                    refreshDropdown(dropdownMenu.querySelector('.dashboard-stacked-filter-search-input')?.value || '');
+                    notifyChange();
+                });
+
+                badgeContainer.addEventListener('click', (event) => {
+                    const removeButton = event.target.closest('.dashboard-filter-badge-remove');
+                    if (!removeButton) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    getSelectOptions().forEach((optionElement) => {
+                        if (optionElement.value === removeButton.dataset.removeValue) {
+                            optionElement.selected = false;
+                        }
+                    });
+
+                    refreshDropdown(dropdownMenu.querySelector('.dashboard-stacked-filter-search-input')?.value || '');
+                    notifyChange();
+                });
+
+                document.addEventListener('click', (event) => {
+                    if (!stackedFilter.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                        closeDropdown();
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeDropdown();
+                    }
+                });
+
+                window.addEventListener('resize', () => requestAnimationFrame(positionDropdownMenu));
+                document.addEventListener('scroll', () => requestAnimationFrame(positionDropdownMenu), true);
+
+                refreshDropdown();
+                stackedFilter.__closeDropdown = closeDropdown;
+                stackedFilter.__refreshDropdown = refreshDropdown;
+                stackedFilter.dataset.stackedFilterInitialized = '1';
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeStackedFilters();
+
+            const forms = document.querySelectorAll('.project-filter-form');
+            forms.forEach((form) => {
+                const collapsed = readProjectFilterCollapsedState();
+                const toggleButton = form.querySelector('.project-filter-toggle');
+                form.classList.toggle('collapsed', collapsed);
+                if (toggleButton) {
+                    toggleButton.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                }
+                setProjectFilterBodyHeight(form);
+            });
+
+            const provinceSelect = document.getElementById('province');
+            const citySelect = document.getElementById('city_municipality');
+
+            if (provinceSelect) {
+                provinceSelect.addEventListener('change', rebuildLocationDependentFilters);
+            }
+
+            if (citySelect) {
+                citySelect.addEventListener('change', rebuildLocationDependentFilters);
+            }
+
+            rebuildLocationDependentFilters();
+
+            window.addEventListener('resize', () => {
+                forms.forEach((form) => {
+                    if (!form.classList.contains('collapsed')) {
+                        setProjectFilterBodyHeight(form);
+                    }
+                });
+            });
+        });
     </script>
 @endsection

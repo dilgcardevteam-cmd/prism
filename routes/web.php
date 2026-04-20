@@ -310,10 +310,18 @@ Route::middleware(['auth'])->group(function () {
                 'project_status' => $parseRequestedFilterValues('project_status'),
             ];
 
+            if (empty($filters['province'])) {
+                $filters['city_municipality'] = [];
+                $filters['barangay'] = [];
+            } elseif (empty($filters['city_municipality'])) {
+                $filters['barangay'] = [];
+            }
+
             $filterOptions = [
                 'provinces' => collect(),
                 'cities' => collect(),
                 'barangays' => collect(),
+                'locationHierarchy' => [],
                 'programs' => collect(),
                 'funding_years' => collect(),
                 'project_types' => collect(),
@@ -1004,6 +1012,52 @@ Route::middleware(['auth'])->group(function () {
                         return strnatcasecmp((string) $leftValue, (string) $rightValue);
                     })
                     ->values();
+
+                $locationHierarchyRows = (clone $subayBaseQuery)
+                    ->select('spp.province', 'spp.city_municipality', 'spp.barangay')
+                    ->whereNotNull('spp.province')
+                    ->whereRaw('TRIM(spp.province) <> ""')
+                    ->whereNotNull('spp.city_municipality')
+                    ->whereRaw('TRIM(spp.city_municipality) <> ""')
+                    ->get();
+
+                $locationHierarchy = [];
+                foreach ($locationHierarchyRows as $locationHierarchyRow) {
+                    $provinceValue = $normalizeFilterValue($locationHierarchyRow->province ?? null);
+                    $cityValue = $normalizeFilterValue($locationHierarchyRow->city_municipality ?? null);
+
+                    if ($provinceValue === '' || $cityValue === '') {
+                        continue;
+                    }
+
+                    $locationHierarchy[$provinceValue] ??= [];
+                    $locationHierarchy[$provinceValue][$cityValue] ??= [];
+
+                    $barangayValues = preg_split('/\r\n|\r|\n/u', (string) ($locationHierarchyRow->barangay ?? '')) ?: [];
+                    foreach ($barangayValues as $barangayValue) {
+                        $normalizedBarangay = $normalizeFilterValue($barangayValue);
+                        if ($normalizedBarangay === '') {
+                            continue;
+                        }
+
+                        $locationHierarchy[$provinceValue][$cityValue][$normalizedBarangay] = $normalizedBarangay;
+                    }
+                }
+
+                uksort($locationHierarchy, 'strnatcasecmp');
+                foreach ($locationHierarchy as $provinceValue => $cityGroups) {
+                    uksort($cityGroups, 'strnatcasecmp');
+
+                    foreach ($cityGroups as $cityValue => $barangayGroups) {
+                        $barangayList = array_values($barangayGroups);
+                        usort($barangayList, 'strnatcasecmp');
+                        $cityGroups[$cityValue] = $barangayList;
+                    }
+
+                    $locationHierarchy[$provinceValue] = $cityGroups;
+                }
+
+                $filterOptions['locationHierarchy'] = $locationHierarchy;
 
                 $programOptionsQuery = clone $subayBaseQuery;
                 $applyExactMultiFilterToSubay($programOptionsQuery, 'spp.province', $filters['province']);
