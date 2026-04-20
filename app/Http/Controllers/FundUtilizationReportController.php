@@ -171,6 +171,25 @@ class FundUtilizationReportController extends Controller
         return $year;
     }
 
+    private function normalizeFilterValues($rawValues, bool $lowercase = false): array
+    {
+        $values = is_array($rawValues) ? $rawValues : [$rawValues];
+
+        return collect($values)
+            ->map(function ($value) use ($lowercase) {
+                $normalized = trim((string) $value);
+                if ($normalized === '') {
+                    return '';
+                }
+
+                return $lowercase ? strtolower($normalized) : $normalized;
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function syncMissingSubayReports(): void
     {
         if (!Schema::hasTable('tbfur') || !Schema::hasTable('subay_project_profiles')) {
@@ -636,11 +655,11 @@ class FundUtilizationReportController extends Controller
     private function buildFilteredReportsQuery(Request $request): array
     {
         $search = trim((string) $request->query('search', ''));
-        $program = trim((string) $request->query('program', ''));
-        $fundSource = trim((string) $request->query('fund_source', ''));
-        $fundingYear = trim((string) $request->query('funding_year', ''));
-        $province = trim((string) $request->query('province', ''));
-        $city = trim((string) $request->query('city', ''));
+        $programs = $this->normalizeFilterValues($request->query('program', []), true);
+        $fundSources = $this->normalizeFilterValues($request->query('fund_source', []), true);
+        $fundingYears = $this->normalizeFilterValues($request->query('funding_year', []));
+        $provinces = $this->normalizeFilterValues($request->query('province', []), true);
+        $cities = $this->normalizeFilterValues($request->query('city', []), true);
 
         $user = Auth::user();
         $userProvince = $user ? trim((string) $user->province) : '';
@@ -817,33 +836,29 @@ class FundUtilizationReportController extends Controller
             });
         }
 
-        if ($program !== '') {
-            $programLower = strtolower($program);
-            $furQuery->whereRaw("LOWER({$furProgramExpression}) = ?", [$programLower]);
-            $lfpQuery->whereRaw("LOWER({$lfpProgramExpression}) = ?", [$programLower]);
+        if (!empty($programs)) {
+            $furQuery->whereIn(DB::raw("LOWER({$furProgramExpression})"), $programs);
+            $lfpQuery->whereIn(DB::raw("LOWER({$lfpProgramExpression})"), $programs);
         }
 
-        if ($fundSource !== '') {
-            $fundSourceLower = strtolower($fundSource);
-            $furQuery->whereRaw("LOWER({$furFundSourceExpression}) = ?", [$fundSourceLower]);
-            $lfpQuery->whereRaw("LOWER({$lfpFundSourceExpression}) = ?", [$fundSourceLower]);
+        if (!empty($fundSources)) {
+            $furQuery->whereIn(DB::raw("LOWER({$furFundSourceExpression})"), $fundSources);
+            $lfpQuery->whereIn(DB::raw("LOWER({$lfpFundSourceExpression})"), $fundSources);
         }
 
-        if ($fundingYear !== '') {
-            $furQuery->where('tbfur.funding_year', $fundingYear);
-            $lfpQuery->where('locally_funded_projects.funding_year', $fundingYear);
+        if (!empty($fundingYears)) {
+            $furQuery->whereIn(DB::raw('TRIM(COALESCE(tbfur.funding_year, ""))'), $fundingYears);
+            $lfpQuery->whereIn(DB::raw('TRIM(COALESCE(locally_funded_projects.funding_year, ""))'), $fundingYears);
         }
 
-        if ($province !== '') {
-            $provinceLower = strtolower($province);
-            $furQuery->whereRaw("LOWER({$furProvinceExpression}) = ?", [$provinceLower]);
-            $lfpQuery->whereRaw("LOWER({$lfpProvinceExpression}) = ?", [$provinceLower]);
+        if (!empty($provinces)) {
+            $furQuery->whereIn(DB::raw("LOWER({$furProvinceExpression})"), $provinces);
+            $lfpQuery->whereIn(DB::raw("LOWER({$lfpProvinceExpression})"), $provinces);
         }
 
-        if ($city !== '') {
-            $cityLower = strtolower($city);
-            $furQuery->whereRaw("LOWER({$furCityExpression}) = ?", [$cityLower]);
-            $lfpQuery->whereRaw("LOWER({$lfpCityExpression}) = ?", [$cityLower]);
+        if (!empty($cities)) {
+            $furQuery->whereIn(DB::raw("LOWER({$furCityExpression})"), $cities);
+            $lfpQuery->whereIn(DB::raw("LOWER({$lfpCityExpression})"), $cities);
         }
 
         // Union the queries
@@ -851,11 +866,11 @@ class FundUtilizationReportController extends Controller
 
         $filters = [
             'search' => $search,
-            'program' => $program,
-            'fund_source' => $fundSource,
-            'funding_year' => $fundingYear,
-            'province' => $province,
-            'city' => $city,
+            'program' => $this->normalizeFilterValues($request->query('program', [])),
+            'fund_source' => $this->normalizeFilterValues($request->query('fund_source', [])),
+            'funding_year' => $this->normalizeFilterValues($request->query('funding_year', [])),
+            'province' => $this->normalizeFilterValues($request->query('province', [])),
+            'city' => $this->normalizeFilterValues($request->query('city', [])),
         ];
 
         return [$reportsQuery, $filters, $filterOptions];
