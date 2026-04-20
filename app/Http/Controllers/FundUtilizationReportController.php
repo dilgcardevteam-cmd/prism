@@ -14,6 +14,7 @@ use App\Support\NotificationUrl;
 use App\Models\User;
 use App\Services\SecureTimestampService;
 use Illuminate\Http\Request;
+use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -661,6 +662,10 @@ class FundUtilizationReportController extends Controller
         $provinces = $this->normalizeFilterValues($request->query('province', []), true);
         $cities = $this->normalizeFilterValues($request->query('city', []), true);
 
+        if (empty($provinces)) {
+            $cities = [];
+        }
+
         $user = Auth::user();
         $userProvince = $user ? trim((string) $user->province) : '';
         $userProvinceLower = $user ? $user->normalizedProvince() : '';
@@ -957,21 +962,39 @@ class FundUtilizationReportController extends Controller
             ->unique(fn ($row) => $row['province'] . '|' . $row['city_municipality'])
             ->values();
 
+        $provinces = $locations
+            ->pluck('province')
+            ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        $configuredProvinceMunicipalities = ProjectLocationFilterHelper::buildConfiguredProvinceCityMap($provinces->all());
+        $fallbackProvinceMunicipalities = $locations
+            ->filter(fn ($row) => $row['city_municipality'] !== '')
+            ->groupBy('province')
+            ->map(function ($rows) {
+                return $rows->pluck('city_municipality')
+                    ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+            })
+            ->toArray();
+
+        $provinceMunicipalities = !empty(array_filter($configuredProvinceMunicipalities))
+            ? $configuredProvinceMunicipalities
+            : $fallbackProvinceMunicipalities;
+
         return [
             'programs' => $programs,
             'fund_sources' => $fundSources,
             'funding_years' => $fundingYears,
-            'provinces' => $locations
-                ->pluck('province')
-                ->filter()
-                ->unique()
-                ->sort()
-                ->values(),
-            'provinceMunicipalities' => $locations
-                ->filter(fn ($row) => $row['city_municipality'] !== '')
-                ->groupBy('province')
-                ->map(fn ($rows) => $rows->pluck('city_municipality')->filter()->unique()->sort()->values()->all())
-                ->toArray(),
+            'provinces' => $provinces,
+            'provinceMunicipalities' => $provinceMunicipalities,
         ];
     }
 

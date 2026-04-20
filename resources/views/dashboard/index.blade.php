@@ -3,6 +3,47 @@
 @section('title', 'Dashboard')
 @section('page-title', 'Dashboard')
 
+@section('styles')
+    <style>
+        /* Prevent first-paint flash of the raw filter form before the page-level styles load. */
+        .project-filter-body {
+            overflow: hidden;
+            max-height: 1200px;
+            opacity: 1;
+            transform: translateY(0);
+            transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.25s ease;
+            will-change: max-height, opacity, transform;
+        }
+
+        .project-filter-form.collapsed .project-filter-body {
+            max-height: 0;
+            opacity: 0;
+            transform: translateY(-6px);
+            pointer-events: none;
+        }
+
+        .project-filter-form.collapsed .project-filter-chevron {
+            transform: rotate(180deg);
+        }
+
+        .dashboard-stacked-filter-source {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .dashboard-stacked-filter-menu {
+            display: none;
+        }
+    </style>
+@endsection
+
 @section('content')
     <div class="content-header">
         <h1>Welcome back, {{ Auth::user()->fname ?? 'User' }}! 👋</h1>

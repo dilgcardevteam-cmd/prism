@@ -191,7 +191,7 @@
 
                     <div class="sglgif-filter-field">
                         <label for="sglgif-city">City/Municipality</label>
-                        <select id="sglgif-city" name="city">
+                        <select id="sglgif-city" name="city" @disabled(($activeFilters['province'] ?? '') === '')>
                             <option value="">All</option>
                             @foreach($cityOptions as $city)
                                 <option value="{{ $city }}" @selected((string) $activeFilters['city'] === (string) $city)>{{ $city }}</option>
@@ -2888,7 +2888,53 @@
             button.setAttribute('aria-expanded', isCollapsed ? 'true' : 'false');
         }
 
+        function initializeSglgifLocationDependencies() {
+            const provinceSelect = document.getElementById('sglgif-province');
+            const citySelect = document.getElementById('sglgif-city');
+            const provinceMunicipalities = @json($provinceMunicipalities ?? []);
+
+            if (!provinceSelect || !citySelect) {
+                return;
+            }
+
+            const rebuildCityOptions = () => {
+                const selectedProvince = String(provinceSelect.value || '').trim();
+                const selectedCity = String(citySelect.value || '').trim();
+                const nextCities = selectedProvince
+                    ? (provinceMunicipalities[selectedProvince] || [])
+                        .map((city) => String(city || '').trim())
+                        .filter((city) => city !== '')
+                    : [];
+
+                citySelect.innerHTML = '';
+
+                const allOption = document.createElement('option');
+                allOption.value = '';
+                allOption.textContent = 'All';
+                citySelect.appendChild(allOption);
+
+                nextCities.forEach((city) => {
+                    const option = document.createElement('option');
+                    option.value = city;
+                    option.textContent = city;
+                    option.selected = selectedCity !== '' && selectedCity === city;
+                    citySelect.appendChild(option);
+                });
+
+                if (!nextCities.includes(selectedCity)) {
+                    citySelect.value = '';
+                }
+
+                citySelect.disabled = selectedProvince === '';
+            };
+
+            provinceSelect.addEventListener('change', rebuildCityOptions);
+            rebuildCityOptions();
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
+            initializeSglgifLocationDependencies();
+
             const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             const integerFormatter = new Intl.NumberFormat('en-US', {
                 maximumFractionDigits: 0,
