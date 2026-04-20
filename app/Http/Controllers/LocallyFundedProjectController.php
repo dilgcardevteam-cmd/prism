@@ -2595,6 +2595,42 @@ $url = route('locally-funded-project.show', $project, false);
         $this->mergeCleanCurrencyInputs($request);
 
         if ($section === 'physical') {
+            if ($request->has('physical_remarks')) {
+                $validated = $request->validate([
+                    'physical_remarks' => 'nullable|string|max:1000',
+                ]);
+
+                $project->update([
+                    'physical_remarks' => $this->sanitizeLocallyFundedRemark($validated['physical_remarks'] ?? null),
+                    'physical_remarks_updated_at' => now(),
+                    'physical_remarks_updated_by' => Auth::id(),
+                    'physical_remarks_encoded_by' => $project->physical_remarks_encoded_by ?: Auth::id(),
+                ]);
+                $this->notifyLocallyFundedUpdateRecipients($project, 'updated Physical Remarks', false);
+
+                return redirect()->route('locally-funded-project.show', $project)
+                    ->with('success', 'Physical remarks updated successfully!');
+            }
+
+            if ($request->has('actual_date_completion')) {
+                $validated = $request->validate([
+                    'actual_date_completion' => 'nullable|date',
+                ]);
+
+                $project->update([
+                    'actual_date_completion' => $validated['actual_date_completion'] ?? null,
+                    'actual_date_completion_updated_by' => Auth::id(),
+                ]);
+                $this->notifyLocallyFundedUpdateRecipients($project, 'updated Actual Date of Completion', false);
+
+                return redirect()->route('locally-funded-project.show', $project)
+                    ->with('success', 'Actual date of completion updated successfully!');
+            }
+
+
+            $field = $request->input('physical_field');
+            $month = (int) $request->input('month', now()->month);
+
             $rulesByField = [
                 'status_project_fou' => 'nullable|string',
                 'status_project_ro' => 'nullable|string',
@@ -2615,69 +2651,15 @@ $url = route('locally-funded-project.show', $project, false);
                 'risk_aging' => 'Risk/Aging',
                 'nc_letters' => 'NC Letters',
             ];
-            $requestData = $request->all();
-            $provincialEditablePhysicalFields = [
-                'status_project_fou',
-                'accomplishment_pct',
-                'slippage',
-            ];
-            $restrictedPhysicalRequestKeys = array_merge(
-                array_diff(array_keys($rulesByField), $provincialEditablePhysicalFields),
-                ['actual_date_completion', 'physical_remarks']
-            );
 
-            $isProvincialDilgUser = $user instanceof User
-                && $user->isDilgUser()
-                && $user->isProvincialUser()
-                && !$user->isRegionalOfficeAssignment();
-
-            if ($isProvincialDilgUser) {
-                $submittedRestrictedKeys = array_intersect(array_keys($requestData), $restrictedPhysicalRequestKeys);
-                if (!empty($submittedRestrictedKeys)) {
-                    abort(403, 'Unauthorized');
-                }
-            }
-
-            $now = now();
-            $projectUpdates = [];
-            $notifications = [];
-            $legacyField = $request->input('physical_field');
-            $processedFields = [];
-
-            if (array_key_exists('physical_remarks', $requestData)) {
-                $validated = \Illuminate\Support\Facades\Validator::make($requestData, [
-                    'physical_remarks' => 'nullable|string|max:1000',
-                ])->validate();
-
-                $projectUpdates['physical_remarks'] = $this->sanitizeLocallyFundedRemark($validated['physical_remarks'] ?? null);
-                $projectUpdates['physical_remarks_updated_at'] = $now;
-                $projectUpdates['physical_remarks_updated_by'] = Auth::id();
-                $projectUpdates['physical_remarks_encoded_by'] = $project->physical_remarks_encoded_by ?: Auth::id();
-                $notifications[] = ['label' => 'Physical Remarks', 'status_sensitive' => false];
-            }
-
-            if (array_key_exists('actual_date_completion', $requestData)) {
-                $validated = \Illuminate\Support\Facades\Validator::make($requestData, [
-                    'actual_date_completion' => 'nullable|date',
-                ])->validate();
-
-                $projectUpdates['actual_date_completion'] = $validated['actual_date_completion'] ?? null;
-                $projectUpdates['actual_date_completion_updated_by'] = Auth::id();
-                $notifications[] = ['label' => 'Actual Date of Completion', 'status_sensitive' => false];
-            }
-
-            if (!empty($projectUpdates)) {
-                $project->update($projectUpdates);
-            }
-
-            if (is_string($legacyField) && array_key_exists($legacyField, $rulesByField)) {
-                $validated = \Illuminate\Support\Facades\Validator::make($requestData, [
+            if (array_key_exists($field, $rulesByField)) {
+                $validated = $request->validate([
                     'month' => 'required|integer|min:1|max:12',
-                    $legacyField => $rulesByField[$legacyField],
-                ])->validate();
+                    $field => $rulesByField[$field],
+                ]);
+                $value = $this->sanitizeLocallyFundedFieldValue($field, $validated[$field] ?? null);
 
-                $month = (int) $validated['month'];
-                $value = $this->sanitizeLocallyFundedFieldValue($legacyField, $validated[$legacyField] ?? null);
+                $now = now();
 
                 \Illuminate\Support\Facades\DB::table('locally_funded_physical_updates')->updateOrInsert(
                     [
@@ -2686,63 +2668,58 @@ $url = route('locally-funded-project.show', $project, false);
                         'month' => $month,
                     ],
                     [
-                        $legacyField => $value,
+                        $field => $value,
                         'updated_by' => Auth::id(),
                         'updated_at' => $now,
                         'created_at' => $now,
                     ]
                 );
 
-                $formattedValue = $this->formatLocallyFundedActivityValue($legacyField, $value);
+                $formattedValue = $this->formatLocallyFundedActivityValue($field, $value);
                 $details = 'Month: ' . $month;
                 if ($formattedValue !== null && $formattedValue !== '') {
                     $details .= ' • ' . $formattedValue;
                 }
-
                 $this->logLocallyFundedActivity(
                     $project,
                     'update',
                     'Physical',
-                    $physicalFieldLabels[$legacyField] ?? $legacyField,
+                    $physicalFieldLabels[$field] ?? $field,
                     $details,
                     $now,
                     Auth::id()
                 );
+                $this->notifyLocallyFundedUpdateRecipients(
+                    $project,
+                    'updated ' . ($physicalFieldLabels[$field] ?? $field),
+                    in_array($field, ['status_project_fou', 'status_project_ro'], true)
+                );
 
-                $notifications[] = [
-                    'label' => $physicalFieldLabels[$legacyField] ?? $legacyField,
-                    'status_sensitive' => in_array($legacyField, ['status_project_fou', 'status_project_ro'], true),
-                ];
-                $processedFields[$legacyField] = true;
+                return redirect()->route('locally-funded-project.show', $project)
+                    ->with('success', 'Physical accomplishment updated successfully!');
             }
 
-            foreach ($rulesByField as $field => $rule) {
-                if (isset($processedFields[$field]) || !array_key_exists($field, $requestData)) {
-                    continue;
+            $field = null;
+            foreach (array_keys($rulesByField) as $candidate) {
+                if (array_key_exists($candidate, $request->all())) {
+                    $field = $candidate;
+                    break;
                 }
+            }
 
-                $validated = \Illuminate\Support\Facades\Validator::make($requestData, [
+            if ($field) {
+                $validated = \Illuminate\Support\Facades\Validator::make($request->all(), [
                     $field => 'sometimes|array',
-                    $field . '.*' => $rule,
+                    $field . '.*' => $rulesByField[$field],
                 ])->validate();
 
-                $valuesByMonth = $validated[$field] ?? [];
-                if (!is_array($valuesByMonth) || empty($valuesByMonth)) {
-                    continue;
-                }
+                $now = now();
+                $m = (int) $now->month;
+                $updatedCurrentMonth = false;
 
-                $fieldUpdated = false;
-
-                foreach ($valuesByMonth as $submittedMonth => $rawValue) {
-                    $validatedMonth = \Illuminate\Support\Facades\Validator::make(
-                        ['month' => $submittedMonth],
-                        ['month' => 'required|integer|min:1|max:12']
-                    )->validate();
-
-                    $month = (int) $validatedMonth['month'];
-                    $value = $this->sanitizeLocallyFundedFieldValue($field, $rawValue);
-                    $storedValue = $value === '' ? null : $value;
-                    $data = [$field => $storedValue];
+                if (isset($validated[$field]) && array_key_exists($m, $validated[$field])) {
+                    $value = $this->sanitizeLocallyFundedFieldValue($field, $validated[$field][$m]);
+                    $data = [$field => $value === '' ? null : $value];
                     $data[$field . '_updated_at'] = $now;
                     $data[$field . '_updated_by'] = Auth::id();
 
@@ -2750,7 +2727,7 @@ $url = route('locally-funded-project.show', $project, false);
                         [
                             'project_id' => $project->id,
                             'year' => $now->year,
-                            'month' => $month,
+                            'month' => $m,
                         ],
                         array_merge($data, [
                             'updated_by' => Auth::id(),
@@ -2758,13 +2735,13 @@ $url = route('locally-funded-project.show', $project, false);
                             'created_at' => $now,
                         ])
                     );
+                    $updatedCurrentMonth = true;
 
-                    $formattedValue = $this->formatLocallyFundedActivityValue($field, $storedValue);
-                    $details = 'Month: ' . $month;
+                    $formattedValue = $this->formatLocallyFundedActivityValue($field, $value === '' ? null : $value);
+                    $details = 'Month: ' . $m;
                     if ($formattedValue !== null && $formattedValue !== '') {
                         $details .= ' • ' . $formattedValue;
                     }
-
                     $this->logLocallyFundedActivity(
                         $project,
                         'update',
@@ -2774,24 +2751,18 @@ $url = route('locally-funded-project.show', $project, false);
                         $now,
                         Auth::id()
                     );
-
-                    $fieldUpdated = true;
                 }
 
-                if ($fieldUpdated) {
-                    $notifications[] = [
-                        'label' => $physicalFieldLabels[$field] ?? $field,
-                        'status_sensitive' => in_array($field, ['status_project_fou', 'status_project_ro'], true),
-                    ];
+                if ($updatedCurrentMonth) {
+                    $this->notifyLocallyFundedUpdateRecipients(
+                        $project,
+                        'updated ' . ($physicalFieldLabels[$field] ?? $field),
+                        in_array($field, ['status_project_fou', 'status_project_ro'], true)
+                    );
                 }
-            }
 
-            foreach ($notifications as $notification) {
-                $this->notifyLocallyFundedUpdateRecipients(
-                    $project,
-                    'updated ' . $notification['label'],
-                    $notification['status_sensitive']
-                );
+                return redirect()->route('locally-funded-project.show', $project)
+                    ->with('success', 'Physical accomplishment updated successfully!');
             }
 
             return redirect()->route('locally-funded-project.show', $project)

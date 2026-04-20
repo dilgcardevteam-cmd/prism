@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Services\RlipLimeDataService;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -231,50 +230,6 @@ class SystemManagementController extends Controller
         'physical' => 'total_accomplishment',
         'attachment' => 'sglgif_attachment',
         'overall' => 'sglgif_overall',
-    ];
-    private const SUBAYBAYAN_2025_TEMPLATE_HEADER_MAP = [
-        'component_details' => 'sub_type_of_project',
-        'project_type' => 'type_of_project',
-        'mode_of_implementation' => 'moi',
-        'road_length_floor_area_level_of_service' => 'road_length_in_km',
-        'original_allocation_national_subsidy' => 'national_subsidy_original_allocation',
-        'original_allocation_lgu_counterpart' => 'lgu_counterpart_original_allocation',
-        'approval_status' => 'profile_approval_status',
-        'physical_status' => 'status',
-        'image_uploaded_images_w_geotagged' => 'uploaded_images_w_geotag',
-        'image_uploaded_images_w_o_geotagged' => 'uploaded_images_without_geotag',
-        'image_before_w_geotagged' => 'before_w_geotag',
-        'image_before_w_o_geotagged' => 'before_without_geotag',
-        'image_project_billboard_w_geotagged' => 'project_billboard_w_geotag',
-        'image_project_billboard_w_o_geotagged' => 'project_billboard_without_geotag',
-        'image_20_40_w_geotagged' => 'photo_20_40_w_geotag',
-        'image_20_40_w_o_geotagged' => 'photo_20_40_without_geotag',
-        'image_50_70_w_geotagged' => 'photo_50_70_w_geotag',
-        'image_50_70_w_o_geotagged' => 'photo_50_70_without_geotag',
-        'image_90_w_geotagged' => 'photo_90_w_geotag',
-        'image_90_w_o_geotagged' => 'photo_90_without_geotag',
-        'image_completed_w_geotagged' => 'completed_w_geotag',
-        'image_completed_w_o_geotagged' => 'completed_without_geotag',
-        'image_during_the_operation_w_geotagged' => 'during_the_operation_w_geotag',
-        'image_during_the_operation_w_o_geotagged' => 'during_the_operation_without_geotag',
-        'initial_project_report_total_program_project_cost' => 'total_project_cost',
-        'admin_details_implementing_unit' => 'implementing_unit',
-        'admin_details_total_estimated_cost' => 'total_estimated_cost_of_project',
-        'admin_details_duration' => 'duration',
-        'admin_details_intended_completion_date' => 'intended_completion_date',
-        'admin_details_actual_start_date' => 'actual_start_of_construction',
-        'contract_details_contractor' => 'name_of_contractor',
-        'contract_details_office_address' => 'office_address',
-        'contract_details_perfection_date' => 'date_of_perfection_of_contract',
-        'contract_details_contract_amount' => 'contract_price',
-        'contract_details_contract_duration' => 'contract_duration',
-        'contract_details_intended_completion_date' => 'intended_completion_date_2',
-        'contract_details_ntp' => 'date_of_receipt_of_ntp',
-        'contract_details_expiration_date' => 'date_of_expiration_of_contract',
-        'monthly_accomplishments_form_2_obligation' => 'obligation',
-        'monthly_accomplishments_form_2_disbursement' => 'disbursement',
-        'monthly_accomplishments_form_2_actual_owpa_to_date' => 'total_accomplishment',
-        'monthly_accomplishments_form_2_remarks' => 'remarks',
     ];
 
     public function uploadSubaybayan()
@@ -662,8 +617,7 @@ class SystemManagementController extends Controller
                 'storageSlug' => 'subaybayan-2025',
                 'storageFolder' => 'subaybayan-2025-imports',
                 'templateHeaders' => self::SUBAYBAYAN_TEMPLATE_HEADERS,
-                'customHeaderMap' => self::SUBAYBAYAN_2025_TEMPLATE_HEADER_MAP,
-                'allowDynamicColumns' => true,
+                'customHeaderMap' => [],
                 'rowDefaults' => [
                     'subaybayan_dataset_group' => '2025_above',
                 ],
@@ -963,22 +917,12 @@ class SystemManagementController extends Controller
         }
 
         $columns = Schema::getColumnListing('subay_project_profiles');
-        $structure = $this->resolveImportStructure(
-            $rows,
-            $columns,
-            $uploadPage['customHeaderMap'] ?? [],
-            (bool) ($uploadPage['allowDynamicColumns'] ?? false)
-        );
+        $structure = $this->resolveImportStructure($rows, $columns, $uploadPage['customHeaderMap'] ?? []);
         $headerMap = $structure['headerMap'];
         $dataStartRow = $structure['dataStartRow'];
-        $newColumns = $structure['newColumns'] ?? [];
 
         if (empty($headerMap)) {
             throw new \RuntimeException('No recognizable columns were found in the selected file.');
-        }
-
-        if (!empty($newColumns)) {
-            $this->ensureImportColumnsExist('subay_project_profiles', $newColumns);
         }
 
         return DB::transaction(function () use ($rows, $headerMap, $dataStartRow, $uploadPage) {
@@ -1068,19 +1012,13 @@ class SystemManagementController extends Controller
         return $xls->rows();
     }
 
-    private function resolveImportStructure(
-        array $rows,
-        array $columns,
-        array $routeCustomMap = [],
-        bool $allowDynamicColumns = false
-    ): array
+    private function resolveImportStructure(array $rows, array $columns, array $routeCustomMap = []): array
     {
         $rowCount = count($rows);
         if ($rowCount === 0) {
             return [
                 'headerMap' => [],
                 'dataStartRow' => 0,
-                'newColumns' => [],
             ];
         }
 
@@ -1097,24 +1035,11 @@ class SystemManagementController extends Controller
             return [
                 'headerMap' => $headerMap,
                 'dataStartRow' => 3,
-                'newColumns' => [],
-            ];
-        }
-
-        if ($this->matchesSubaybayan2025Template($rows)) {
-            $headers = $this->buildMultiRowHeaders(array_slice($rows, 7, 3));
-            $headerResolution = $this->buildHeaderMap($headers, $columns, $routeCustomMap, $allowDynamicColumns);
-
-            return [
-                'headerMap' => $headerResolution['headerMap'],
-                'dataStartRow' => 10,
-                'newColumns' => $headerResolution['newColumns'],
             ];
         }
 
         $bestHeaderMap = [];
         $bestHeaderRows = 1;
-        $bestNewColumns = [];
         $maxHeaderRows = min(3, $rowCount);
 
         for ($headerRows = 1; $headerRows <= $maxHeaderRows; $headerRows++) {
@@ -1122,22 +1047,19 @@ class SystemManagementController extends Controller
                 ? ($rows[0] ?? [])
                 : $this->buildMultiRowHeaders(array_slice($rows, 0, $headerRows));
 
-            $headerResolution = $this->buildHeaderMap($headers, $columns, $routeCustomMap, $allowDynamicColumns);
-            $headerMap = $headerResolution['headerMap'];
+            $headerMap = $this->buildHeaderMap($headers, $columns, $routeCustomMap);
             if (
                 count($headerMap) > count($bestHeaderMap)
                 || (count($headerMap) === count($bestHeaderMap) && $headerRows < $bestHeaderRows)
             ) {
                 $bestHeaderMap = $headerMap;
                 $bestHeaderRows = $headerRows;
-                $bestNewColumns = $headerResolution['newColumns'];
             }
         }
 
         return [
             'headerMap' => $bestHeaderMap,
             'dataStartRow' => $bestHeaderRows,
-            'newColumns' => $bestNewColumns,
         ];
     }
 
@@ -1164,31 +1086,6 @@ class SystemManagementController extends Controller
             && $row1col65 === 'BID OPENING/BID EVALUATION';
     }
 
-    private function matchesSubaybayan2025Template(array $rows): bool
-    {
-        if (count($rows) < 10) {
-            return false;
-        }
-
-        $row7col74 = strtoupper(trim((string) ($rows[7][74] ?? '')));
-        $row8col0 = strtoupper(trim((string) ($rows[8][0] ?? '')));
-        $row8col23 = strtoupper(trim((string) ($rows[8][23] ?? '')));
-        $row8col74 = strtoupper(trim((string) ($rows[8][74] ?? '')));
-        $row8col96 = strtoupper(trim((string) ($rows[8][96] ?? '')));
-        $row8col105 = strtoupper(trim((string) ($rows[8][105] ?? '')));
-        $row9col50 = strtoupper(trim((string) ($rows[9][50] ?? '')));
-        $row9col106 = strtoupper(trim((string) ($rows[9][106] ?? '')));
-
-        return $row7col74 === 'MONTHLY ACCOMPLISHMENTS (FORM 2)'
-            && $row8col0 === 'PROJECT OWNER'
-            && $row8col23 === 'UPLOADED IMAGES'
-            && $row8col74 === 'MONTH (YEAR)'
-            && $row8col96 === 'MONTH (YEAR)'
-            && $row8col105 === 'YEAR OF ASSESSMENT'
-            && $row9col50 === 'OBJECTIVE'
-            && $row9col106 === 'OBSERVED RESULT';
-    }
-
     private function buildMultiRowHeaders(array $headerRows): array
     {
         $columnCount = 0;
@@ -1198,51 +1095,17 @@ class SystemManagementController extends Controller
             }
         }
 
-        $filledRows = [];
-        foreach ($headerRows as $rowIndex => $headerRow) {
-            $currentValue = '';
-            $filledRow = [];
-
-            for ($columnIndex = 0; $columnIndex < $columnCount; $columnIndex++) {
-                $value = trim((string) ($headerRow[$columnIndex] ?? ''));
-                if ($value !== '') {
-                    $currentValue = $value;
-                    $filledRow[$columnIndex] = $value;
-                    continue;
-                }
-
-                if ($rowIndex === 0) {
-                    $filledRow[$columnIndex] = $currentValue;
-                    continue;
-                }
-
-                $canInherit = $currentValue !== '';
-                for ($parentRowIndex = 0; $parentRowIndex < $rowIndex; $parentRowIndex++) {
-                    $previousParent = $filledRows[$parentRowIndex][$columnIndex - 1] ?? '';
-                    $currentParent = $filledRows[$parentRowIndex][$columnIndex] ?? '';
-                    if ($previousParent !== $currentParent) {
-                        $canInherit = false;
-                        break;
-                    }
-                }
-
-                $filledRow[$columnIndex] = $canInherit ? $currentValue : '';
-            }
-
-            $filledRows[] = $filledRow;
-        }
-
         $headers = [];
         for ($columnIndex = 0; $columnIndex < $columnCount; $columnIndex++) {
-            $parts = [];
-            foreach ($filledRows as $filledRow) {
-                $value = trim((string) ($filledRow[$columnIndex] ?? ''));
-                if ($value !== '' && !in_array($value, $parts, true)) {
-                    $parts[] = $value;
+            $selectedHeader = '';
+            foreach ($headerRows as $headerRow) {
+                $value = trim((string) ($headerRow[$columnIndex] ?? ''));
+                if ($value !== '') {
+                    $selectedHeader = $value;
                 }
             }
 
-            $headers[$columnIndex] = implode(' ', $parts);
+            $headers[$columnIndex] = $selectedHeader;
         }
 
         return $headers;
@@ -1294,12 +1157,7 @@ class SystemManagementController extends Controller
         return $fileName . ($extension !== '' ? '.' . $extension : '.' . $fallbackExtension);
     }
 
-    private function buildHeaderMap(
-        array $headers,
-        array $columns,
-        array $routeCustomMap = [],
-        bool $allowDynamicColumns = false
-    ): array
+    private function buildHeaderMap(array $headers, array $columns, array $routeCustomMap = []): array
     {
         $columnLookup = array_fill_keys($columns, true);
         $customMap = array_merge([
@@ -1312,7 +1170,6 @@ class SystemManagementController extends Controller
         ], $routeCustomMap);
 
         $headerMap = [];
-        $newColumns = [];
         $counts = [];
 
         foreach ($headers as $index => $header) {
@@ -1335,9 +1192,6 @@ class SystemManagementController extends Controller
                 $column = $candidate;
             } elseif (isset($columnLookup[$base])) {
                 $column = $base;
-            } elseif ($allowDynamicColumns) {
-                $column = $this->shortenImportColumnName($candidate);
-                $newColumns[$column] = $column;
             } else {
                 continue;
             }
@@ -1345,41 +1199,7 @@ class SystemManagementController extends Controller
             $headerMap[$index] = $column;
         }
 
-        return [
-            'headerMap' => $headerMap,
-            'newColumns' => array_values($newColumns),
-        ];
-    }
-
-    private function shortenImportColumnName(string $column): string
-    {
-        if (strlen($column) <= 64) {
-            return $column;
-        }
-
-        return substr($column, 0, 55) . '_' . substr(md5($column), 0, 8);
-    }
-
-    private function ensureImportColumnsExist(string $table, array $columns): void
-    {
-        $columnsToAdd = [];
-        foreach ($columns as $column) {
-            if ($column === '' || Schema::hasColumn($table, $column)) {
-                continue;
-            }
-
-            $columnsToAdd[] = $column;
-        }
-
-        if (empty($columnsToAdd)) {
-            return;
-        }
-
-        Schema::table($table, function (Blueprint $tableBlueprint) use ($columnsToAdd) {
-            foreach ($columnsToAdd as $column) {
-                $tableBlueprint->text($column)->nullable();
-            }
-        });
+        return $headerMap;
     }
 
     private function findImportHistoryRecord(int $importId, array $uploadPage): ?object

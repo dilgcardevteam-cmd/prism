@@ -13,48 +13,52 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
-class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
+class QuarterlyRpmesForm2Controller extends Controller
 {
     public function __construct()
     {
         $this->middleware('auth');
     }
 
-    protected function formConfig(): array
-    {
-        return [
-            'page_title' => 'Quarterly RPMES Form 2',
-            'page_heading' => 'RPMES FORM 2 : Physical and Financial Accomplishment Report',
-            'page_subtitle' => 'Physical and Financial Accomplishment Report',
-            'project_view_heading' => 'Project View',
-            'project_view_description' => 'SubayBayan project details, quarterly uploads, and DILG validation workflow for RPMES Form 2.',
-            'list_heading' => 'RPMES FORM 2 : Physical and Financial Accomplishment Report',
-            'list_title_badge' => 'SubayBayan Project List',
-            'list_description' => 'All accessible SubayBayan projects are listed below, ordered by latest funding year first.',
-            'report_short_label' => 'RPMES FORM 2',
-            'report_short_name' => 'RPMES Form 2',
-            'report_full_title' => 'Physical and Financial Accomplishment Report',
-            'submission_heading' => 'Submission of Physical and Financial Accomplishment Report (RPMES FORM 2)',
-            'submission_description' => 'Each quarter supports one report upload plus DILG Provincial Office and DILG Regional Office validation.',
-            'acceptance_note' => 'Accepted files: PDF, JPG, JPEG, PNG. Maximum size: 10 MB.',
-            'permission_aspect' => 'quarterly_rpmes_form_2',
-            'deadline_aspect' => 'quarterly_rpmes_form_2',
-            'upload_table' => 'quarterly_rpmes_form2_uploads',
-            'model_class' => QuarterlyRpmesForm2Upload::class,
-            'storage_directory' => 'rpmes-form-2',
-            'timestamp_log_key' => 'rpmes-form-2',
-            'index_route' => 'reports.quarterly.rpmes.form-2',
-            'show_route' => 'reports.quarterly.rpmes.form-2.show',
-            'upload_route' => 'reports.quarterly.rpmes.form-2.upload',
-            'approve_route' => 'reports.quarterly.rpmes.form-2.approve',
-            'document_route' => 'reports.quarterly.rpmes.form-2.document',
-            'delete_route' => 'reports.quarterly.rpmes.form-2.delete-document',
-        ];
-    }
-
     public function index(Request $request)
     {
-        return parent::index($request);
+        $user = Auth::user();
+        abort_unless($this->userCanAccessReport($user), 403);
+
+        $perPage = (int) $request->input('per_page', 15);
+        $allowedPerPage = [10, 15, 25, 50];
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 15;
+        }
+
+        if (!Schema::hasTable('subay_project_profiles')) {
+            $projects = new LengthAwarePaginator([], 0, $perPage, 1, [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]);
+
+            return view('reports.quarterly.rpmes.form-2.index', compact('projects', 'perPage'));
+        }
+
+        $projects = $this->buildAccessibleSubayQuery($user)
+            ->whereNotNull('spp.project_code')
+            ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''")
+            ->select([
+                'spp.project_code',
+                'spp.project_title',
+                'spp.city_municipality',
+                'spp.province',
+                'spp.funding_year',
+                'spp.status',
+                DB::raw($this->fundSourceExpression('spp') . ' as fund_source'),
+            ])
+            ->orderByRaw("CASE WHEN spp.funding_year IS NULL OR TRIM(spp.funding_year) = '' THEN 1 ELSE 0 END")
+            ->orderByRaw("CAST(COALESCE(NULLIF(TRIM(spp.funding_year), ''), '0') AS UNSIGNED) DESC")
+            ->orderBy('spp.project_code')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return view('reports.quarterly.rpmes.form-2.index', compact('projects', 'perPage'));
     }
 
     public function show(Request $request, string $projectCode)
@@ -401,7 +405,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
             ->with('success', 'RPMES Form 2 report deleted successfully.');
     }
 
-    protected function userCanAccessReport($user): bool
+    private function userCanAccessReport($user): bool
     {
         if (!$user) {
             return false;
@@ -413,7 +417,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
             || $user->hasCrudPermission('quarterly_rpmes_form_2', 'view');
     }
 
-    protected function userCanApproveReport($user): bool
+    private function userCanApproveReport($user): bool
     {
         if (!$this->userCanAccessReport($user) || !$user || !$user->isDilgUser()) {
             return false;
@@ -422,7 +426,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
         return $this->isProvincialDilgUser($user) || $user->isRegionalOfficeAssignment();
     }
 
-    protected function isProvincialDilgUser($user): bool
+    private function isProvincialDilgUser($user): bool
     {
         if (!$user) {
             return false;
@@ -437,7 +441,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
         return $provinceLower !== '' && $provinceLower !== 'regional office';
     }
 
-    protected function buildAccessibleSubayQuery($user)
+    private function buildAccessibleSubayQuery($user)
     {
         $province = trim((string) ($user->province ?? ''));
         $office = trim((string) ($user->office ?? ''));
@@ -488,7 +492,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
         return $query;
     }
 
-    protected function resolveProjectForUser(string $projectCode, $user): ?object
+    private function resolveProjectForUser(string $projectCode, $user): ?object
     {
         $projectCode = trim($projectCode);
         if ($projectCode === '') {
@@ -517,7 +521,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
             ->first();
     }
 
-    protected function fundSourceExpression(string $alias = 'spp'): string
+    private function fundSourceExpression(string $alias = 'spp'): string
     {
         return "
             CASE
@@ -542,7 +546,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
         return (int) now()->year;
     }
 
-    protected function quarters(): array
+    private function quarters(): array
     {
         return [
             'Q1' => '1st Quarter',
@@ -552,9 +556,8 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
         ];
     }
 
-    protected function normalizeQuarter(?string $quarter, ?string $default = null): string
+    private function normalizeQuarter(?string $quarter, string $default = 'Q1'): string
     {
-        $default = $default ?? 'Q1';
         $quarter = strtoupper(trim((string) $quarter));
         return array_key_exists($quarter, $this->quarters()) ? $quarter : $default;
     }

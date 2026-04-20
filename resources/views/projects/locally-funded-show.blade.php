@@ -72,32 +72,6 @@
             line-height: 1.05;
         }
 
-        .lfp-mobile-shell,
-        .lfp-mobile-canvas {
-            width: 100%;
-            max-width: 100%;
-            min-width: 0;
-        }
-
-        #mainContent .lfp-mobile-shell {
-            overflow-x: clip;
-        }
-
-        #mainContent .lfp-mobile-canvas > * {
-            min-width: 0;
-            max-width: 100%;
-        }
-
-        @media (min-width: 769px) {
-            #mainContent.with-sidebar .lfp-mobile-shell {
-                max-width: calc(100vw - 310px);
-            }
-
-            #mainContent:not(.with-sidebar) .lfp-mobile-shell {
-                max-width: calc(100vw - 60px);
-            }
-        }
-
         .lfp-inline-modal-backdrop {
             display: none;
             position: fixed;
@@ -2272,7 +2246,7 @@
                     </div>
                     <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                         <input type="date" id="actual_date_completion_physical" name="actual_date_completion" value="{{ old('actual_date_completion', $project->actual_date_completion ? $project->actual_date_completion->format('Y-m-d') : '') }}"
-                               data-physical-edit="true" data-month="{{ $currentMonth }}" data-ro-only="true" disabled
+                               data-physical-edit="true" data-month="{{ $currentMonth }}" disabled
                                style="padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
                     </div>
                 </form>
@@ -2377,7 +2351,7 @@
                                     @endphp
                                     <div>{{ $monthName }}</div>
                                     <div>
-                                        <select name="nc_letters[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" disabled
+                                        <select name="nc_letters[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled
                                                 style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: {{ $bgColor }}; color: {{ $textColor }};">
                                             <option value="">-- Select --</option>
                                             <option value="NC No. 1" {{ $value === 'NC No. 1' ? 'selected' : '' }}>NC No. 1</option>
@@ -2399,7 +2373,7 @@
                         @csrf
                         @method('PUT')
                         <input type="hidden" name="section" value="physical">
-                        <textarea name="physical_remarks" rows="3" data-physical-edit="true" data-month="{{ $currentMonth }}" data-ro-only="true" disabled
+                        <textarea name="physical_remarks" rows="3" data-physical-edit="true" data-month="{{ $currentMonth }}" disabled
                                   style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; resize: vertical; background-color: #f3f4f6;">{{ old('physical_remarks', $project->physical_remarks) }}</textarea>
                         <div style="display: flex; gap: 12px; align-items: center; margin-top: 8px; font-size: 12px; color: #6b7280; flex-wrap: wrap;">
                             <span><strong>Updated By:</strong> {{ $physicalRemarksUpdatedByName ?? '-' }}</span>
@@ -4809,7 +4783,7 @@
                 const footer = document.createElement('div');
                 footer.className = 'lfp-inline-section-footer';
                 footer.innerHTML = '' +
-                    '<button type="button" class="lfp-inline-section-save" data-inline-section-save="' + targetId + '" data-confirm-skip="true">' +
+                    '<button type="button" class="lfp-inline-section-save" data-inline-section-save="' + targetId + '">' +
                         '<i class="fas fa-check" style="margin-right: 8px;" aria-hidden="true"></i>Save Changes' +
                     '</button>' +
                     '<button type="button" class="lfp-inline-section-cancel" data-inline-section-cancel="' + targetId + '">' +
@@ -4827,23 +4801,13 @@
                 return;
             }
 
-            const fields = getInlineEditFields(targetId).filter((field) => {
-                if (field.disabled || !field.name) {
-                    return false;
-                }
-
-                const originalValue = Object.prototype.hasOwnProperty.call(field.dataset, 'inlineOriginalValue')
-                    ? field.dataset.inlineOriginalValue
-                    : getTrackedInlineEditValue(field);
-
-                return getTrackedInlineEditValue(field) !== originalValue;
-            });
+            const fields = getInlineEditFields(targetId).filter((field) => !field.disabled && field.name);
             const referenceForm = section.querySelector('form[action]');
             if (!referenceForm) {
                 return;
             }
 
-            if (!hasInlineEditChanges(targetId) || fields.length === 0) {
+            if (!hasInlineEditChanges(targetId)) {
                 syncInlineEditSaveState(targetId);
                 return;
             }
@@ -4908,17 +4872,6 @@
         }
 
         initializeInlineSectionFooters();
-
-        document.querySelectorAll([
-            '[data-inline-section-save]',
-            '#editProfileForm button[type="submit"]',
-            '#editProfileForm input[type="submit"]',
-            '#editContractForm button[type="submit"]',
-            '#editContractForm input[type="submit"]',
-        ].join(',')).forEach((button) => {
-            button.dataset.confirmSkip = 'true';
-        });
-
         Object.keys(inlineEditConfigs).forEach((targetId) => {
             syncInlineEditSaveState(targetId);
         });
