@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Http\Controllers\RlipLimeProjectController;
 use App\Http\Controllers\SglgifProjectController;
-use App\Http\Controllers\SystemManagementController;
+use App\Http\Controllers\SystemManagementController
 
 Auth::routes(['reset' => false, 'register' => false]); // Disable default register routes
 
