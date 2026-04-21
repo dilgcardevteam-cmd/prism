@@ -1,13 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Image, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import ConfirmationModal from "../../../../../components/common/ConfirmationModal";
+import FloatingToast from "../../../../../components/common/FloatingToast";
 import { APP_ROUTES } from "../../../../../constants/routes";
+import { useAuth } from "../../../../../contexts/AuthContext";
 import { useWebAppRequest } from "../../../../../hooks/useWebAppRequest";
 
 const GALLERY_FILTER_OPTIONS = [
@@ -22,24 +24,14 @@ const GALLERY_FILTER_OPTIONS = [
   "During",
 ];
 
-const TOAST_STYLES = {
-  success: {
-    container: "border-[#15a34a] bg-[#f0fdf4]",
-    text: "#166534",
-  },
-  error: {
-    container: "border-[#dc2626] bg-[#fef2f2]",
-    text: "#991b1b",
-  },
-  warning: {
-    container: "border-[#d97706] bg-[#fffbeb]",
-    text: "#92400e",
-  },
-  info: {
-    container: "border-[#1d4ed8] bg-[#eff6ff]",
-    text: "#1e3a8a",
-  },
+const BRAND = {
+  primary: "#0f2f7a",
+  primarySoft: "#e8f0ff",
+  border: "#d7e2f5",
+  borderSoft: "#c9d8f4",
+  textMuted: "#6077a4",
 };
+
 
 function normalizeGalleryImages(images) {
   if (!Array.isArray(images)) {
@@ -52,6 +44,13 @@ function normalizeGalleryImages(images) {
       category: String(image?.category || "").trim() || "During",
       imageUrl: String(image?.imageUrl || image?.image_url || "").trim(),
       createdAt: image?.createdAt || image?.created_at || null,
+      capturedBy:
+        image?.capturedBy ||
+        image?.captured_by ||
+        image?.uploadedByName ||
+        image?.uploaded_by_name ||
+        image?.uploaded_by ||
+        null,
       latitude:
         image?.latitude === null || image?.latitude === undefined || image?.latitude === ""
           ? null
@@ -68,37 +67,22 @@ function normalizeGalleryImages(images) {
     .filter((image) => image.id && image.imageUrl);
 }
 
-function ActionToast({ visible, type = "info", message = "" }) {
-  if (!visible || !message) {
-    return null;
-  }
-
-  const style = TOAST_STYLES[type] || TOAST_STYLES.info;
-
-  return (
-    <View pointerEvents="none" className="absolute left-4 right-4 top-3 z-[200]">
-      <View className={`rounded-xl border px-4 py-3 ${style.container}`}>
-        <Text className="text-[12px]" style={{ color: style.text, fontFamily: "Montserrat-SemiBold" }}>
-          {message}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function FilterDropdown({ value, options, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <View className="z-20">
-      <Text className="text-[12px] text-[#6c7ea7]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-        Filter by stage
-      </Text>
+      <View className="flex-row items-center justify-between">
+        <Text className="text-[12px] text-[#6c7ea7]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+          Filter by stage
+        </Text>
+        <Feather name="sliders" size={14} color="#6c7ea7" />
+      </View>
 
       <View className="relative mt-2">
         <Pressable
           onPress={() => setIsOpen((previous) => !previous)}
-          className="flex-row items-center justify-between rounded-xl border border-[#c8d6f1] bg-[#f7faff] px-3 py-2.5"
+          className="flex-row items-center justify-between rounded-2xl border border-[#c8d6f1] bg-[#f5f9ff] px-4 py-3"
           accessibilityRole="button"
           accessibilityLabel="Toggle gallery filter dropdown"
         >
@@ -110,7 +94,7 @@ function FilterDropdown({ value, options, onChange }) {
 
         {isOpen ? (
           <View
-            className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-[#d5e0f4] bg-white px-2 py-2"
+            className="absolute left-0 right-0 top-full mt-2 rounded-2xl border border-[#d5e0f4] bg-white px-2 py-2"
             style={{ zIndex: 50, elevation: 8 }}
           >
             {options.map((option) => {
@@ -143,7 +127,9 @@ function FilterDropdown({ value, options, onChange }) {
 }
 
 export default function Gallery({ project }) {
+  const { width } = useWindowDimensions();
   const router = useRouter();
+  const { session } = useAuth();
   const { fetchJsonWithFallback } = useWebAppRequest();
   const filterOptions = useMemo(() => GALLERY_FILTER_OPTIONS, []);
   const [selectedFilter, setSelectedFilter] = useState(filterOptions[0]);
@@ -176,6 +162,8 @@ export default function Gallery({ project }) {
     [project?.galleryImages]
   );
   const galleryImages = useMemo(() => serverImages, [serverImages]);
+  const isCompactScreen = width < 360;
+  const imageTileWidth = isCompactScreen ? "100%" : "48.5%";
 
   const showToast = (type, message) => {
     setToast({ visible: true, type, message: String(message || "") });
@@ -204,18 +192,6 @@ export default function Gallery({ project }) {
 
     requestLocationPermission();
   }, []);
-
-  useEffect(() => {
-    if (!toast.visible) {
-      return undefined;
-    }
-
-    const timer = setTimeout(() => {
-      setToast((current) => ({ ...current, visible: false }));
-    }, 2600);
-
-    return () => clearTimeout(timer);
-  }, [toast.visible, toast.message]);
 
   const pinchGesture = Gesture.Pinch()
     .onUpdate((event) => {
@@ -297,6 +273,8 @@ export default function Gallery({ project }) {
         imageId: String(image?.id || ""),
         imageUrl: String(image?.imageUrl || ""),
         stage: String(image?.category || "During"),
+        imageCreatedAt: image?.createdAt ? String(image.createdAt) : "",
+        imageCapturedBy: image?.capturedBy ? String(image.capturedBy) : "",
         latitude: image?.latitude === null || image?.latitude === undefined ? "" : String(image.latitude),
         longitude: image?.longitude === null || image?.longitude === undefined ? "" : String(image.longitude),
         accuracy: image?.accuracy === null || image?.accuracy === undefined ? "" : String(image.accuracy),
@@ -367,6 +345,11 @@ export default function Gallery({ project }) {
       type: mimeType,
     });
 
+    const uploaderId = Number(session?.id || 0);
+    if (Number.isFinite(uploaderId) && uploaderId > 0) {
+      formData.append("uploaded_by", String(uploaderId));
+    }
+
     if (deviceLocation.latitude !== null && deviceLocation.longitude !== null) {
       formData.append("latitude", String(deviceLocation.latitude));
       formData.append("longitude", String(deviceLocation.longitude));
@@ -389,6 +372,8 @@ export default function Gallery({ project }) {
       id: uploaded.id,
       category: uploaded.category || safeStage,
       image_url: uploaded.image_url,
+      uploaded_by: uploaded.uploaded_by ?? null,
+      uploaded_by_name: uploaded.uploaded_by_name ?? null,
       latitude: uploaded.latitude ?? null,
       longitude: uploaded.longitude ?? null,
       accuracy: uploaded.accuracy ?? null,
@@ -446,7 +431,7 @@ export default function Gallery({ project }) {
         return;
       }
 
-      showToast("warning", "No photo selected.");
+      // showToast("warning", "No photo selected.");
     } catch (_error) {
       showToast("error", "Unable to open photo library.");
     }
@@ -475,7 +460,7 @@ export default function Gallery({ project }) {
     }
 
     setIsUploadConfirmationOpen(true);
-    showToast("info", "Please confirm upload.");
+    // showToast("info", "Please confirm upload.");
   };
 
   const confirmUploadForm = async () => {
@@ -540,27 +525,56 @@ export default function Gallery({ project }) {
   };
 
   return (
-    <View className="mt-3 rounded-2xl border border-[#d7e2f5] bg-white px-4 py-4">
-      <ActionToast visible={toast.visible} type={toast.type} message={toast.message} />
-      <Text className="text-[16px] text-[#0f2f7a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-        Gallery
-      </Text>
+    <View className="mt-3 overflow-hidden rounded-3xl border border-[#d7e2f5] bg-white">
+      <View className="px-4 pt-4" style={{ backgroundColor: BRAND.primarySoft }}>
+        <View className="flex-row items-start justify-between">
+          <View className="flex-1 pr-3">
+            <Text className="text-[16px] text-[#0f2f7a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+              Gallery
+            </Text>
+            <Text className="mt-1 text-[12px] text-[#486192]" style={{ fontFamily: "Montserrat" }}>
+              Visual progress updates and site documentation.
+            </Text>
+          </View>
 
-      <View className="mt-3">
-        <FilterDropdown value={selectedFilter} options={filterOptions} onChange={setSelectedFilter} />
+          <View className="rounded-full border border-[#c3d3f2] bg-white px-3 py-1.5">
+            <Text className="text-[11px] text-[#0f2f7a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+              {filteredImages.length} item{filteredImages.length === 1 ? "" : "s"}
+            </Text>
+          </View>
+        </View>
+
+        <View className="mt-3 pb-4">
+          <FilterDropdown value={selectedFilter} options={filterOptions} onChange={setSelectedFilter} />
+        </View>
       </View>
 
-      <View className="mt-4">
+      <View className="px-4 pb-4 pt-4">
+      <FloatingToast
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        duration={2600}
+        onClose={() => setToast((current) => ({ ...current, visible: false }))}
+      />
+
+      <View className="mt-1">
         <View className="flex-row flex-wrap justify-between">
           <Pressable
             onPress={openAddImageSheet}
-            className="mb-3 h-[148px] w-[48%] items-center justify-center rounded-xl border border-[#bcd0f0] bg-[#eef4ff]"
+            className="mb-3 items-center justify-center rounded-2xl border border-[#b9cdf0] bg-[#edf4ff] px-3 py-4"
+            style={{ width: imageTileWidth, minHeight: 156 }}
             accessibilityRole="button"
             accessibilityLabel="Add image"
           >
-            <Feather name="plus-circle" size={24} color="#0f2f7a" />
-            <Text className="mt-2 text-[13px] text-[#0f2f7a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+            <View className="h-11 w-11 items-center justify-center rounded-full border border-[#adc2ec] bg-white">
+              <Feather name="plus" size={22} color="#0f2f7a" />
+            </View>
+            <Text className="mt-3 text-[13px] text-[#0f2f7a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
               Add image
+            </Text>
+            <Text className="mt-1 text-center text-[11px] text-[#6077a4]" style={{ fontFamily: "Montserrat" }}>
+              Upload or capture site progress
             </Text>
           </Pressable>
 
@@ -570,7 +584,8 @@ export default function Gallery({ project }) {
               onPress={() => openImageLocation(image)}
               accessibilityRole="button"
               accessibilityLabel="Open image location"
-              className="relative mb-3 w-[48%] overflow-hidden rounded-xl border border-[#d3dff3] bg-[#f8fbff]"
+              className="relative mb-3 overflow-hidden rounded-2xl border border-[#d3dff3] bg-[#f8fbff]"
+              style={{ width: imageTileWidth }}
             >
               <Pressable
                 onPress={(event) => {
@@ -585,10 +600,10 @@ export default function Gallery({ project }) {
               </Pressable>
               <Image
                 source={{ uri: image.imageUrl }}
-                className="h-28 w-full bg-[#e2e8f0]"
+                className="h-32 w-full bg-[#e2e8f0]"
                 resizeMode="cover"
               />
-              <View className="px-2 py-2">
+              <View className="px-3 pb-3 pt-2">
                 <Text className="text-[11px] text-[#21437f]" style={{ fontFamily: "Montserrat-SemiBold" }}>
                   {image.category || "During"}
                 </Text>
@@ -598,12 +613,16 @@ export default function Gallery({ project }) {
         </View>
 
         {filteredImages.length === 0 ? (
-          <View className="rounded-xl border border-dashed border-[#c7d8f2] bg-[#f8fbff] px-3 py-3">
+          <View className="items-center rounded-2xl border border-dashed border-[#c7d8f2] bg-[#f8fbff] px-4 py-5">
+            <View className="mb-2 h-10 w-10 items-center justify-center rounded-full bg-[#e9f1ff]">
+              <Feather name="image" size={18} color="#41619e" />
+            </View>
             <Text className="text-[12px] text-[#5c719b]" style={{ fontFamily: "Montserrat" }}>
               No images found for {selectedFilter}.
             </Text>
           </View>
         ) : null}
+      </View>
       </View>
 
       <Modal
@@ -693,7 +712,7 @@ export default function Gallery({ project }) {
 
                 <Pressable
                   onPress={handleUploadPhoto}
-                  className="mt-4 flex-row items-center rounded-xl border border-[#c7d8f2] bg-[#f7faff] px-4 py-3"
+                  className="mt-4 flex-row items-center rounded-2xl border border-[#c7d8f2] bg-[#f7faff] px-4 py-3.5"
                   accessibilityRole="button"
                   accessibilityLabel="Upload photo"
                 >
@@ -705,7 +724,7 @@ export default function Gallery({ project }) {
 
                 <Pressable
                   onPress={handleTakePhoto}
-                  className="mt-3 flex-row items-center rounded-xl border border-[#c7d8f2] bg-[#f7faff] px-4 py-3"
+                  className="mt-3 flex-row items-center rounded-2xl border border-[#c7d8f2] bg-[#f7faff] px-4 py-3.5"
                   accessibilityRole="button"
                   accessibilityLabel="Take photo"
                 >
@@ -717,7 +736,7 @@ export default function Gallery({ project }) {
 
                 <Pressable
                   onPress={cancelAddImageSheet}
-                  className="mt-3 items-center rounded-xl border border-[#d3dceb] bg-[#ffffff] px-4 py-3"
+                  className="mt-3 items-center rounded-2xl border border-[#d3dceb] bg-[#ffffff] px-4 py-3"
                   accessibilityRole="button"
                   accessibilityLabel="Cancel add image"
                 >
@@ -749,7 +768,7 @@ export default function Gallery({ project }) {
                   </Text>
                   <Pressable
                     onPress={pickPhotoForUploadForm}
-                    className="mt-2 flex-row items-center rounded-xl border border-[#c7d8f2] bg-[#f7faff] px-4 py-3"
+                    className="mt-2 flex-row items-center rounded-2xl border border-[#c7d8f2] bg-[#f7faff] px-4 py-3"
                     accessibilityRole="button"
                     accessibilityLabel="Select photo to upload"
                   >
@@ -806,7 +825,7 @@ export default function Gallery({ project }) {
 
                 <Pressable
                   onPress={submitUploadForm}
-                  className="mt-4 items-center rounded-xl border border-[#0f2f7a] bg-[#0f2f7a] px-4 py-3"
+                  className="mt-4 items-center rounded-2xl border border-[#0f2f7a] bg-[#0f2f7a] px-4 py-3"
                   accessibilityRole="button"
                   accessibilityLabel="Upload selected photo"
                 >
@@ -817,7 +836,7 @@ export default function Gallery({ project }) {
 
                 <Pressable
                   onPress={cancelAddImageSheet}
-                  className="mt-3 items-center rounded-xl border border-[#d3dceb] bg-[#ffffff] px-4 py-3"
+                  className="mt-3 items-center rounded-2xl border border-[#d3dceb] bg-[#ffffff] px-4 py-3"
                   accessibilityRole="button"
                   accessibilityLabel="Cancel add image"
                 >

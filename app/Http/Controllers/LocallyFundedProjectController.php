@@ -383,17 +383,20 @@ class LocallyFundedProjectController extends Controller
             ->values();
 
         if (Schema::hasTable('locally_funded_gallery_images') && $projectIds->isNotEmpty()) {
-            $galleryRows = DB::table('locally_funded_gallery_images')
-                ->whereIn('project_id', $projectIds)
-                ->orderByDesc('created_at')
+            $galleryRows = DB::table('locally_funded_gallery_images as lgi')
+                ->leftJoin('tbusers as uploader', 'uploader.idno', '=', 'lgi.uploaded_by')
+                ->whereIn('lgi.project_id', $projectIds)
+                ->orderByDesc('lgi.created_at')
                 ->get([
-                    'id',
-                    'project_id',
-                    'category',
-                    'latitude',
-                    'longitude',
-                    'accuracy',
-                    'created_at',
+                    'lgi.id',
+                    'lgi.project_id',
+                    'lgi.category',
+                    'lgi.uploaded_by',
+                    'lgi.latitude',
+                    'lgi.longitude',
+                    'lgi.accuracy',
+                    'lgi.created_at',
+                    DB::raw("NULLIF(TRIM(CONCAT(COALESCE(uploader.fname, ''), ' ', COALESCE(uploader.lname, ''))), '') as uploaded_by_name"),
                 ]);
 
             $galleryByProject = $galleryRows
@@ -407,6 +410,8 @@ class LocallyFundedProjectController extends Controller
                                 'project' => (int) $row->project_id,
                                 'galleryImage' => (int) $row->id,
                             ]),
+                            'uploaded_by' => $row->uploaded_by !== null ? (int) $row->uploaded_by : null,
+                            'uploaded_by_name' => $row->uploaded_by_name,
                             'latitude' => $row->latitude !== null ? (float) $row->latitude : null,
                             'longitude' => $row->longitude !== null ? (float) $row->longitude : null,
                             'accuracy' => $row->accuracy !== null ? (float) $row->accuracy : null,
@@ -501,6 +506,7 @@ class LocallyFundedProjectController extends Controller
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'accuracy' => ['nullable', 'numeric', 'min:0'],
+            'uploaded_by' => ['nullable', 'integer', 'exists:tbusers,idno'],
         ]);
 
         $category = InputSanitizer::sanitizeNullablePlainText($validated['gallery_category']) ?? 'During';
@@ -531,11 +537,21 @@ class LocallyFundedProjectController extends Controller
 
         $storedPath = $imageFile->storeAs($directory, $fileName, 'public');
 
+        $authenticatedUploaderId = Auth::id();
+        $requestUploaderId = isset($validated['uploaded_by']) ? (int) $validated['uploaded_by'] : null;
+        $uploaderId = $authenticatedUploaderId ? (int) $authenticatedUploaderId : $requestUploaderId;
+
+        if (!$uploaderId) {
+            return response()->json([
+                'message' => 'Unable to determine uploader. Please sign in again and retry.',
+            ], 422);
+        }
+
         $insertData = [
             'project_id' => $project->id,
             'category' => $category,
             'image_path' => $storedPath,
-            'uploaded_by' => Auth::id(),
+            'uploaded_by' => $uploaderId,
             'created_at' => $now,
             'updated_at' => $now,
         ];
@@ -557,10 +573,15 @@ class LocallyFundedProjectController extends Controller
             'Image',
             'Category: ' . $category . ' - Files: 1',
             $now,
-            Auth::id()
+            $uploaderId
         );
 
         $this->notifyLocallyFundedUpdateRecipients($project, 'uploaded Gallery images', true);
+
+        $uploader = DB::table('tbusers')
+            ->where('idno', $uploaderId)
+            ->first(['fname', 'lname']);
+        $uploaderName = trim((($uploader->fname ?? '') . ' ' . ($uploader->lname ?? '')));
 
         return response()->json([
             'message' => 'Gallery image uploaded successfully.',
@@ -571,6 +592,8 @@ class LocallyFundedProjectController extends Controller
                     'project' => (int) $project->id,
                     'galleryImage' => (int) $galleryImageId,
                 ]),
+                'uploaded_by' => $uploaderId,
+                'uploaded_by_name' => $uploaderName !== '' ? $uploaderName : null,
                 'latitude' => $validated['latitude'] ?? null,
                 'longitude' => $validated['longitude'] ?? null,
                 'accuracy' => $validated['accuracy'] ?? null,
@@ -2902,18 +2925,21 @@ $url = route('locally-funded-project.show', $project, false);
 
         $galleryImages = [];
         if (Schema::hasTable('locally_funded_gallery_images')) {
-            $galleryImages = DB::table('locally_funded_gallery_images')
-                ->where('project_id', $project->id)
-                ->whereNotNull('image_path')
-                ->orderByDesc('created_at')
+            $galleryImages = DB::table('locally_funded_gallery_images as lgi')
+                ->leftJoin('tbusers as uploader', 'uploader.idno', '=', 'lgi.uploaded_by')
+                ->where('lgi.project_id', $project->id)
+                ->whereNotNull('lgi.image_path')
+                ->orderByDesc('lgi.created_at')
                 ->get([
-                    'id',
-                    'category',
-                    'image_path',
-                    'latitude',
-                    'longitude',
-                    'accuracy',
-                    'created_at',
+                    'lgi.id',
+                    'lgi.category',
+                    'lgi.image_path',
+                    'lgi.uploaded_by',
+                    'lgi.latitude',
+                    'lgi.longitude',
+                    'lgi.accuracy',
+                    'lgi.created_at',
+                    DB::raw("NULLIF(TRIM(CONCAT(COALESCE(uploader.fname, ''), ' ', COALESCE(uploader.lname, ''))), '') as uploaded_by_name"),
                 ])
                 ->map(function ($image) use ($project) {
                     return [
@@ -2923,6 +2949,8 @@ $url = route('locally-funded-project.show', $project, false);
                             'project' => (int) $project->id,
                             'galleryImage' => (int) $image->id,
                         ]),
+                        'uploaded_by' => $image->uploaded_by !== null ? (int) $image->uploaded_by : null,
+                        'uploaded_by_name' => $image->uploaded_by_name,
                         'latitude' => $image->latitude !== null ? (float) $image->latitude : null,
                         'longitude' => $image->longitude !== null ? (float) $image->longitude : null,
                         'accuracy' => $image->accuracy !== null ? (float) $image->accuracy : null,

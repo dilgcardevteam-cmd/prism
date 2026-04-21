@@ -3,7 +3,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Linking, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import FloatingToast from "../../../../components/common/FloatingToast";
@@ -43,6 +49,27 @@ function formatCoordinate(value) {
   return Number(value).toFixed(6);
 }
 
+function formatCapturedAt(value) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) {
+    return "Not available";
+  }
+
+  const parsed = new Date(rawValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return rawValue;
+  }
+
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 export default function GalleryImageLocationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -51,6 +78,8 @@ export default function GalleryImageLocationScreen() {
   const projectCode = String(params.projectCode || "-");
   const stage = String(params.stage || "During");
   const imageUrl = String(params.imageUrl || "");
+  const imageCreatedAt = String(params.imageCreatedAt || "");
+  const imageCapturedBy = String(params.imageCapturedBy || "").trim();
   const markerTitle = String(projectTitle || "Locally Funded Project").trim() || "Locally Funded Project";
   const markerDescription = String(stage || "During").trim() || "During";
 
@@ -61,6 +90,7 @@ export default function GalleryImageLocationScreen() {
   const [toast, setToast] = useState({ visible: false, type: "info", message: "" });
   const [viewMode, setViewMode] = useState(VIEW_MODE.OVERVIEW);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [isMapFullscreenOpen, setIsMapFullscreenOpen] = useState(false);
 
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -68,6 +98,7 @@ export default function GalleryImageLocationScreen() {
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  const scrollY = useSharedValue(0);
 
   const hasCoordinates = latitude !== null && longitude !== null;
 
@@ -225,14 +256,54 @@ export default function GalleryImageLocationScreen() {
     ],
   }));
 
+  const handleScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const heroParallaxStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(scrollY.value, [0, 260], [0, 85], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+
+  const infoParallaxStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: interpolate(scrollY.value, [0, 260], [0, -18], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+
   const hasAccuracy = accuracy !== null;
+
+  const handleOpenMapFullscreen = () => {
+    if (!hasCoordinates) {
+      showToast("warning", "No coordinates available for this image.");
+      return;
+    }
+
+    setIsMapFullscreenOpen(true);
+  };
+
+  const handleCloseMapFullscreen = () => {
+    setIsMapFullscreenOpen(false);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-[#eceff3]" edges={["left", "right"]}>
       <FloatingToast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast((current) => ({ ...current, visible: false }))} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
-        <View className="relative">
+      <Animated.ScrollView
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 28 }}
+      >
+        <Animated.View className="relative" style={heroParallaxStyle}>
           <Pressable
             onPress={openImageViewer}
             accessibilityRole="button"
@@ -258,7 +329,7 @@ export default function GalleryImageLocationScreen() {
               onPress={handleBackToGallery}
               className="h-11 w-11 items-center justify-center rounded-full bg-white/95"
             >
-              <Feather name="chevron-left" size={21} color="#0f172a" />
+              <Feather name="chevron-left" size={21} color="#002C76" />
             </Pressable>
 
             {/* <View className="flex-row items-center gap-2">
@@ -288,10 +359,10 @@ export default function GalleryImageLocationScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        <View className=" -mt-7 rounded-[30px] border border-[#e2e8f0] bg-white px-5 py-5 shadow-xl shadow-black/10">
-          <Text className="text-[22px] leading-[30px] text-[#111827]" numberOfLines={3} style={{ fontFamily: "Montserrat-SemiBold" }}>
+        <Animated.View className="-mt-7 rounded-[30px] border border-[#e2e8f0] bg-white px-5 py-5 shadow-xl shadow-black/10" style={infoParallaxStyle}>
+          <Text className="text-[22px] leading-[30px] text-[#002C76]" numberOfLines={3} style={{ fontFamily: "Montserrat-SemiBold" }}>
             {projectTitle}
           </Text>
 
@@ -327,7 +398,7 @@ export default function GalleryImageLocationScreen() {
               accessibilityLabel="Switch to overview"
             >
               <Text
-                className={`text-[12px] ${viewMode === VIEW_MODE.OVERVIEW ? "text-[#111827]" : "text-[#6b7280]"}`}
+                className={`text-[12px] ${viewMode === VIEW_MODE.OVERVIEW ? "text-[#002C76]" : "text-[#6b7280]"}`}
                 style={{ fontFamily: "Montserrat-SemiBold" }}
               >
                 Overview
@@ -343,7 +414,7 @@ export default function GalleryImageLocationScreen() {
               accessibilityLabel="Switch to map"
             >
               <Text
-                className={`text-[12px] ${viewMode === VIEW_MODE.MAP ? "text-[#111827]" : "text-[#6b7280]"}`}
+                className={`text-[12px] ${viewMode === VIEW_MODE.MAP ? "text-[#002C76]" : "text-[#6b7280]"}`}
                 style={{ fontFamily: "Montserrat-SemiBold" }}
               >
                 Map
@@ -353,24 +424,31 @@ export default function GalleryImageLocationScreen() {
 
           {viewMode === VIEW_MODE.OVERVIEW ? (
             <View className="mt-5 rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-4">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-[18px] text-[#111827]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                  Location details
+              <View className="flex-row items-start">
+                <Text className="flex-1 pr-2 text-[18px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                  Image details
                 </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Open in Google Maps"
-                  onPress={handleOpenExternalMap}
-                  className="rounded-full bg-[#111827] px-3 py-1.5"
-                >
-                  <Text className="text-[11px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                    Open map
-                  </Text>
-                </Pressable>
               </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open in Google Maps"
+                onPress={handleOpenExternalMap}
+                className="mt-3 self-start rounded-full bg-[#002C76] px-3.5 py-2"
+              >
+                <Text className="text-[11px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                  Open in Google Maps
+                </Text>
+              </Pressable>
 
               {hasCoordinates ? (
                 <>
+                  <Text className="mt-4 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+                    Uploaded At: {formatCapturedAt(imageCreatedAt)}
+                  </Text>
+                  <Text className="mt-1.5 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+                    Uploaded By: {imageCapturedBy || "Not available"}
+                  </Text>
                   <Text className="mt-4 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
                     Latitude: {formatCoordinate(latitude)}
                   </Text>
@@ -388,8 +466,8 @@ export default function GalleryImageLocationScreen() {
                       accessibilityRole="button"
                       accessibilityLabel="Retry map"
                     >
-                      <Feather name="refresh-cw" size={14} color="#111827" />
-                      <Text className="ml-2 text-[13px] text-[#111827]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                      <Feather name="refresh-cw" size={14} color="#002C76" />
+                      <Text className="ml-2 text-[13px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
                         Retry map
                       </Text>
                     </Pressable>
@@ -406,6 +484,20 @@ export default function GalleryImageLocationScreen() {
           ) : (
             <View className="mt-5 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-[#dfe7f5]" style={{ height: 300 }}>
               {hasCoordinates ? (
+                <Pressable
+                  onPress={handleOpenMapFullscreen}
+                  className="absolute right-3 top-3 z-20 flex-row items-center rounded-full bg-white/95 px-3 py-1.5"
+                  accessibilityRole="button"
+                  accessibilityLabel="Open full screen map"
+                >
+                  <Feather name="maximize-2" size={13} color="#002C76" />
+                  <Text className="ml-1.5 text-[11px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                    Full screen
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {hasCoordinates ? (
                 <MapView
                   style={{ flex: 1 }}
                   initialRegion={initialRegion}
@@ -418,7 +510,7 @@ export default function GalleryImageLocationScreen() {
                   <Marker
                     coordinate={{ latitude, longitude }}
                     tappable
-                    pinColor="#0f172a"
+                    pinColor="#002C76"
                     title={markerTitle}
                     description={markerDescription}
                   />
@@ -433,8 +525,8 @@ export default function GalleryImageLocationScreen() {
               )}
             </View>
           )}
-        </View>
-      </ScrollView>
+        </Animated.View>
+      </Animated.ScrollView>
 
       <Modal
         visible={isViewerOpen}
@@ -492,6 +584,58 @@ export default function GalleryImageLocationScreen() {
             ) : null}
           </View>
         </GestureHandlerRootView>
+      </Modal>
+
+      <Modal
+        visible={isMapFullscreenOpen}
+        animationType="slide"
+        onRequestClose={handleCloseMapFullscreen}
+      >
+        <SafeAreaView className="flex-1 bg-[#0b1426]" edges={["top", "left", "right", "bottom"]}>
+          <View className="flex-row items-center justify-between px-4 pb-3 pt-2">
+            <Text className="text-[14px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
+              Full Screen Map
+            </Text>
+
+            <Pressable
+              onPress={handleCloseMapFullscreen}
+              className="h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-white/10"
+              accessibilityRole="button"
+              accessibilityLabel="Close full screen map"
+            >
+              <Feather name="x" size={18} color="#ffffff" />
+            </Pressable>
+          </View>
+
+          <View className="flex-1 overflow-hidden border-t border-white/15">
+            {hasCoordinates ? (
+              <MapView
+                style={{ flex: 1 }}
+                initialRegion={initialRegion}
+                showsCompass
+                showsScale
+                rotateEnabled={false}
+                pitchEnabled={false}
+                onMapReady={() => setLocationState(LOCATION_STATE.READY_ONLINE)}
+              >
+                <Marker
+                  coordinate={{ latitude, longitude }}
+                  tappable
+                  pinColor="#1d4ed8"
+                  title={markerTitle}
+                  description={markerDescription}
+                />
+              </MapView>
+            ) : (
+              <View className="h-full items-center justify-center px-6">
+                <Feather name="map" size={26} color="#93a7cf" />
+                <Text className="mt-3 text-center text-[13px] text-[#dbe6ff]" style={{ fontFamily: "Montserrat" }}>
+                  No coordinates available for map preview.
+                </Text>
+              </View>
+            )}
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );

@@ -240,10 +240,10 @@ Route::post('/api/mobile/login', function (Request $request) {
     return response()->json([
         'message' => 'Login successful.',
         'user' => [
-            'id' => $user->id,
+            'id' => $user->idno,
             'username' => $user->username,
-            'first_name' => $user->first_name ?? null,
-            'last_name' => $user->last_name ?? null,
+            'first_name' => $user->fname ?? null,
+            'last_name' => $user->lname ?? null,
             'status' => $user->status,
         ],
     ]);
