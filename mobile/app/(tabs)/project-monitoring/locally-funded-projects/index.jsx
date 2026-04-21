@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
+import * as SecureStore from "expo-secure-store";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -11,16 +12,49 @@ import {
   ScrollView,
   Text,
   TextInput,
+  Platform,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDebounce } from "../../../../hooks/useDebounce";
 import {
+  PINNED_PROJECTS_STORAGE_KEY,
+  normalizePinnedProjectIds,
   useLocallyFundedProjects,
 } from "../../../../hooks/useLocallyFundedProjects";
 import { APP_ROUTES } from "../../../../constants/routes";
+import FloatingToast from "../../../../components/common/FloatingToast";
 
 const FILTER_ALL_VALUE = "All";
+
+async function readPinnedProjectIds() {
+  try {
+    if (Platform.OS === "web") {
+      const rawValue = globalThis?.localStorage?.getItem(PINNED_PROJECTS_STORAGE_KEY);
+      return normalizePinnedProjectIds(rawValue ? JSON.parse(rawValue) : []);
+    }
+
+    const rawValue = await SecureStore.getItemAsync(PINNED_PROJECTS_STORAGE_KEY);
+    return normalizePinnedProjectIds(rawValue ? JSON.parse(rawValue) : []);
+  } catch (_error) {
+    return [];
+  }
+}
+
+async function savePinnedProjectIds(projectIds) {
+  try {
+    const serializedValue = JSON.stringify(normalizePinnedProjectIds(projectIds));
+
+    if (Platform.OS === "web") {
+      globalThis?.localStorage?.setItem(PINNED_PROJECTS_STORAGE_KEY, serializedValue);
+      return;
+    }
+
+    await SecureStore.setItemAsync(PINNED_PROJECTS_STORAGE_KEY, serializedValue);
+  } catch (_error) {
+    // Ignore persistence failures and keep the in-memory ordering.
+  }
+}
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -123,6 +157,9 @@ export default function LocallyFundedProjectsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [shouldRenderFilters, setShouldRenderFilters] = useState(false);
+  const [pinnedProjectIds, setPinnedProjectIds] = useState([]);
+  const [isPinnedReady, setIsPinnedReady] = useState(false);
+  const [pinToast, setPinToast] = useState({ visible: false, type: "success", message: "" });
   const [selectedFilters, setSelectedFilters] = useState({
     fundingYear: FILTER_ALL_VALUE,
     fundSource: FILTER_ALL_VALUE,
@@ -135,6 +172,64 @@ export default function LocallyFundedProjectsScreen() {
   const debouncedSearchQuery = useDebounce(searchQuery, 350);
   const filtersAnimation = useRef(new Animated.Value(0)).current;
 
+  // Load the saved pinned project ids when the screen mounts.
+  useEffect(() => {
+    let isActive = true;
+
+    readPinnedProjectIds().then((storedProjectIds) => {
+      if (!isActive) {
+        return;
+      }
+
+      setPinnedProjectIds(storedProjectIds);
+      setIsPinnedReady(true);
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  // Persist the pin order whenever the user changes it.
+  useEffect(() => {
+    if (!isPinnedReady) {
+      return;
+    }
+
+    savePinnedProjectIds(pinnedProjectIds);
+  }, [isPinnedReady, pinnedProjectIds]);
+
+  // Toggle a project's pinned state and keep pinned items at the top of the saved order.
+  const togglePinnedProject = useCallback((projectId) => {
+    const normalizedProjectId = String(projectId ?? "").trim();
+    if (!normalizedProjectId) {
+      return;
+    }
+
+    setPinnedProjectIds((currentPinnedProjectIds) => {
+      const currentIds = normalizePinnedProjectIds(currentPinnedProjectIds);
+
+      if (currentIds.includes(normalizedProjectId)) {
+        return currentIds.filter((id) => id !== normalizedProjectId);
+      }
+
+      return [normalizedProjectId, ...currentIds];
+    });
+  }, []);
+
+  const closePinToast = useCallback(() => {
+    setPinToast((current) => ({ ...current, visible: false }));
+  }, []);
+
+  const showPinToast = useCallback((message) => {
+    setPinToast({
+      visible: true,
+      type: "success",
+      message,
+    });
+  }, []);
+
+  // Animate the filter bar in and out when the user expands or collapses it.
   useEffect(() => {
     if (isFiltersExpanded) {
       setShouldRenderFilters(true);
@@ -232,6 +327,7 @@ export default function LocallyFundedProjectsScreen() {
     [backendFilterOptions, projects, selectedFilters.province]
   );
 
+  // Apply the active search and filter rules to the project list.
   const filteredProjects = useMemo(() => {
     const keyword = debouncedSearchQuery.trim().toLowerCase();
 
@@ -344,6 +440,30 @@ export default function LocallyFundedProjectsScreen() {
     });
   }, [debouncedSearchQuery, projects, selectedFilters]);
 
+  // Sort pinned projects ahead of the remaining filtered projects.
+  const displayedProjects = useMemo(() => {
+    const pinnedOrder = new Map(pinnedProjectIds.map((projectId, index) => [String(projectId), index]));
+
+    return filteredProjects
+      .map((project, index) => ({ project, index }))
+      .sort((left, right) => {
+        const leftPinnedOrder = pinnedOrder.has(String(left.project.id))
+          ? pinnedOrder.get(String(left.project.id))
+          : Number.POSITIVE_INFINITY;
+        const rightPinnedOrder = pinnedOrder.has(String(right.project.id))
+          ? pinnedOrder.get(String(right.project.id))
+          : Number.POSITIVE_INFINITY;
+
+        if (leftPinnedOrder !== rightPinnedOrder) {
+          return leftPinnedOrder - rightPinnedOrder;
+        }
+
+        return left.index - right.index;
+      })
+      .map(({ project }) => project);
+  }, [filteredProjects, pinnedProjectIds]);
+
+  // Track whether any filter is currently active.
   const hasActiveFilters =
     selectedFilters.fundingYear !== FILTER_ALL_VALUE ||
     selectedFilters.fundSource !== FILTER_ALL_VALUE ||
@@ -352,8 +472,10 @@ export default function LocallyFundedProjectsScreen() {
     selectedFilters.procurementType !== FILTER_ALL_VALUE ||
     selectedFilters.status !== FILTER_ALL_VALUE;
 
+  // Resolve the dropdown field that is currently open.
   const activeDropdownField = FILTER_FIELDS.find((field) => field.key === activeDropdownFilterKey) || null;
 
+  // Build the option list for the open dropdown.
   const activeDropdownOptions = useMemo(() => {
     if (!activeDropdownFilterKey) {
       return [];
@@ -371,13 +493,16 @@ export default function LocallyFundedProjectsScreen() {
     return mapping[activeDropdownFilterKey] || [];
   }, [activeDropdownFilterKey, filterOptions]);
 
+  // Store the trimmed query for highlight matching.
   const highlightedQuery = debouncedSearchQuery.trim();
   const filtersSlideY = filtersAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [-12, 0],
   });
 
+  // Build the project card and its navigation payload.
   const renderProjectCard = ({ item }) => {
+    const isPinned = pinnedProjectIds.includes(String(item.id));
     const serializedProject = JSON.stringify({
       id: item.id,
       title: item.title,
@@ -428,18 +553,20 @@ export default function LocallyFundedProjectsScreen() {
           });
         }}
       >
-      <View className="rounded-3xl border border-[#bfc3c9] bg-[#ebebeb] px-3 py-3">
-        <View className="flex-row items-start">
-          <View className="flex-1 pr-2">
-            <HighlightedText
-              text={item.code}
-              query={highlightedQuery}
-              className="text-[15px] text-[#404040]"
-              highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
-              style={{ fontFamily: "Montserrat-SemiBold" }}
-              highlightStyle={{ fontFamily: "Montserrat-SemiBold" }}
-              numberOfLines={1}
-            />
+      <View className={`rounded-3xl border px-3 py-3 ${isPinned ? "border-[#c0841a] bg-[#fff8e8]" : "border-[#bfc3c9] bg-[#ebebeb]"}`}>
+        <View className="flex-row items-start justify-between gap-2">
+          <View className="min-w-0 flex-1 pr-2">
+            <View className="flex-row flex-wrap items-center gap-2">
+              <HighlightedText
+                text={item.code}
+                query={highlightedQuery}
+                className="min-w-0 flex-1 text-[15px] text-[#404040]"
+                highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
+                style={{ fontFamily: "Montserrat-SemiBold" }}
+                highlightStyle={{ fontFamily: "Montserrat-SemiBold" }}
+                numberOfLines={1}
+              />
+            </View>
             <HighlightedText
               text={item.title}
               query={highlightedQuery}
@@ -449,7 +576,7 @@ export default function LocallyFundedProjectsScreen() {
               highlightStyle={{ fontFamily: "Montserrat" }}
             />
             <View className="mt-2 border-b border-[#bfc3c9]" />
-            <Text className="mt-2 text-[12px] text-[#4b4b4b]">
+            <Text className="mt-2 text-[12px] text-[#4b4b4b]" numberOfLines={2}>
               <HighlightedText
                 text={item.city}
                 query={highlightedQuery}
@@ -469,7 +596,22 @@ export default function LocallyFundedProjectsScreen() {
               />
             </Text>
           </View>
-          <Feather name="chevron-right" size={16} color="#64748b" style={{ marginTop: 4 }} />
+
+          <View className="ml-1 flex-row items-center gap-2 shrink-0">
+            <Pressable
+              onPress={(event) => {
+                event?.stopPropagation?.();
+                showPinToast(isPinned ? "Project successfully unpinned" : "Project successfully pinned");
+                togglePinnedProject(item.id);
+              }}
+              className={`h-9 w-9 items-center justify-center rounded-full border ${isPinned ? "border-[#b45309] bg-[#fef3c7]" : "border-[#cbd5e1] bg-white"}`}
+              accessibilityRole="button"
+              accessibilityLabel={isPinned ? `Unpin ${String(item.title ?? "project")}` : `Pin ${String(item.title ?? "project")}`}
+            >
+              <Feather name={isPinned ? "bookmark" : "bookmark"} size={14} color={isPinned ? "#b45309" : "#64748b"} />
+            </Pressable>
+            <Feather name="chevron-right" size={16} color="#64748b" style={{ marginTop: 4 }} />
+          </View>
         </View>
       </View>
       </Pressable>
@@ -478,6 +620,12 @@ export default function LocallyFundedProjectsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#f1f5f9]" edges={[]}>
+      <FloatingToast
+        visible={pinToast.visible}
+        type={pinToast.type}
+        message={pinToast.message}
+        onClose={closePinToast}
+      />
       {/* <View className="px-4 pt-4 pb-2">
         <Text className="text-[23px] font-bold text-[#002C76]">Locally Funded Projects</Text>
         <Text className="mt-1 text-[12px] text-[#475569]">
@@ -577,7 +725,7 @@ export default function LocallyFundedProjectsScreen() {
 
           <FlatList
             contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12 }}
-            data={filteredProjects}
+            data={displayedProjects}
             keyExtractor={(item, index) => `${item.id}-${index}`}
             renderItem={renderProjectCard}
             refreshControl={

@@ -114,6 +114,22 @@ export function formatUpdatedAt(value) {
   return `${month} ${day}, ${year} ${time}`;
 }
 
+export const PINNED_PROJECTS_STORAGE_KEY = "pdmuoms.mobile.locally-funded.pinned-projects.v1";
+
+export function normalizePinnedProjectIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .map((projectId) => String(projectId ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 export function useLocallyFundedProjects() {
   const { activeBaseUrl, fetchJsonWithFallback } = useWebAppRequest();
   const [projects, setProjects] = useState([]);
