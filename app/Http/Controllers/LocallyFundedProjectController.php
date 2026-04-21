@@ -2900,7 +2900,40 @@ $url = route('locally-funded-project.show', $project, false);
             'rssa_report_deadline'
         );
 
-        return view('projects.locally-funded-show', compact('project', 'provinces', 'provinceMunicipalities', 'fundSources', 'fundingYears', 'physicalByMonth', 'physicalTimelineByPeriod', 'currentPhysical', 'currentYear', 'currentMonth', 'actualCompletionUpdatedByName', 'financialByMonth', 'financialTotals', 'financialBalance', 'financialUtilizationRate', 'physicalRemarksUpdatedByName', 'physicalRemarksEncodedByName', 'financialRemarksUpdatedByName', 'financialRemarksEncodedByName', 'poMonitoringDateUpdatedByName', 'poFinalInspectionUpdatedByName', 'poRemarksUpdatedByName', 'roMonitoringDateUpdatedByName', 'roFinalInspectionUpdatedByName', 'roRemarksUpdatedByName', 'pcrSubmissionDeadlineUpdatedByName', 'pcrDateSubmittedToPoUpdatedByName', 'pcrMovUploadedByName', 'pcrDateReceivedByRoUpdatedByName', 'pcrRemarksUpdatedByName', 'rssaReportDeadlineUpdatedByName', 'rssaSubmissionStatusUpdatedByName', 'rssaDateSubmittedToPoUpdatedByName', 'rssaDateReceivedByRoUpdatedByName', 'rssaDateSubmittedToCoUpdatedByName', 'rssaRemarksUpdatedByName', 'activityLogs', 'effectivePcrSubmissionDeadline', 'effectiveRssaReportDeadline'));
+        $galleryImages = [];
+        if (Schema::hasTable('locally_funded_gallery_images')) {
+            $galleryImages = DB::table('locally_funded_gallery_images')
+                ->where('project_id', $project->id)
+                ->whereNotNull('image_path')
+                ->orderByDesc('created_at')
+                ->get([
+                    'id',
+                    'category',
+                    'image_path',
+                    'latitude',
+                    'longitude',
+                    'accuracy',
+                    'created_at',
+                ])
+                ->map(function ($image) use ($project) {
+                    return [
+                        'id' => (int) $image->id,
+                        'category' => trim((string) ($image->category ?? 'During')) ?: 'During',
+                        'image_url' => route('api.mobile.locally-funded.gallery-image', [
+                            'project' => (int) $project->id,
+                            'galleryImage' => (int) $image->id,
+                        ]),
+                        'latitude' => $image->latitude !== null ? (float) $image->latitude : null,
+                        'longitude' => $image->longitude !== null ? (float) $image->longitude : null,
+                        'accuracy' => $image->accuracy !== null ? (float) $image->accuracy : null,
+                        'created_at' => $image->created_at,
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        return view('projects.locally-funded-show', compact('project', 'provinces', 'provinceMunicipalities', 'fundSources', 'fundingYears', 'physicalByMonth', 'physicalTimelineByPeriod', 'currentPhysical', 'currentYear', 'currentMonth', 'actualCompletionUpdatedByName', 'financialByMonth', 'financialTotals', 'financialBalance', 'financialUtilizationRate', 'physicalRemarksUpdatedByName', 'physicalRemarksEncodedByName', 'financialRemarksUpdatedByName', 'financialRemarksEncodedByName', 'poMonitoringDateUpdatedByName', 'poFinalInspectionUpdatedByName', 'poRemarksUpdatedByName', 'roMonitoringDateUpdatedByName', 'roFinalInspectionUpdatedByName', 'roRemarksUpdatedByName', 'pcrSubmissionDeadlineUpdatedByName', 'pcrDateSubmittedToPoUpdatedByName', 'pcrMovUploadedByName', 'pcrDateReceivedByRoUpdatedByName', 'pcrRemarksUpdatedByName', 'rssaReportDeadlineUpdatedByName', 'rssaSubmissionStatusUpdatedByName', 'rssaDateSubmittedToPoUpdatedByName', 'rssaDateReceivedByRoUpdatedByName', 'rssaDateSubmittedToCoUpdatedByName', 'rssaRemarksUpdatedByName', 'activityLogs', 'effectivePcrSubmissionDeadline', 'effectiveRssaReportDeadline', 'galleryImages'));
     }
 
     public function viewPcrMov(LocallyFundedProject $project)

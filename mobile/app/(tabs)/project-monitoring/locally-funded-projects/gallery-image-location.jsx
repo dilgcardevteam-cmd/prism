@@ -383,7 +383,7 @@ export default function GalleryImageLocationScreen() {
         {viewMode === VIEW_MODE.LIST ? (
           <View className="mt-4 flex-1">
             <View className="rounded-2xl border border-[#d6e1f4] bg-white px-4 py-4">
-              <Text className="mt-1 text-[12px] text-[#4f648f]" style={{ fontFamily: "Montserrat" }}>
+              <Text className="mt-1 text-[12px] text-[#4f648f] font-bold" style={{ fontFamily: "Montserrat" }}>
                 {projectTitle}
               </Text>
               <Text className="mt-1 text-[12px] text-[#4f648f]" style={{ fontFamily: "Montserrat" }}>
