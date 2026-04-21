@@ -21,15 +21,15 @@ export const TAB_ROUTES = [
 export const PROJECT_MONITORING_ROUTES = [
   {
     route: "project-monitoring/locally-funded-projects/index",
-    title: "Locally Funded Projects",
+    title: "LFP",
   },
   {
     route: "project-monitoring/locally-funded-projects/view-locally-funded-projects",
-    title: "Locally Funded Project Details",
+    title: "LFP Details",
   },
   {
     route: "project-monitoring/locally-funded-projects/gallery-image-location",
-    title: "Image Location",
+    title: "",
   },
   {
     route: "project-monitoring/rlip-lime-20-development-fund",
