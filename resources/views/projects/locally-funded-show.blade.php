@@ -3100,10 +3100,23 @@
 
         @php
             $galleryButtons = ['All', 'Before', 'Project Billboard', 'Community Billboard', '20-40%', '50-70%', '90%', 'Completed', 'During'];
+            $galleryImageCollection = collect($galleryImages ?? []);
+            $formatGalleryDate = function ($value) {
+                if (empty($value)) {
+                    return null;
+                }
+
+                try {
+                    return \Illuminate\Support\Carbon::parse($value)->format('M d, Y h:i A');
+                } catch (\Throwable $exception) {
+                    return (string) $value;
+                }
+            };
         @endphp
         <div id="gallerySection" class="project-tab-panel" data-tab-key="gallery" role="tabpanel" aria-labelledby="tab-gallery" style="margin-bottom: 24px; padding: 20px; border: 1px solid #00267C; border-radius: 10px; background-color: #ffffff;">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid #00267C; padding-bottom: 10px;">
                 <h3 style="color: #00267C; font-size: 15px; font-weight: 700; margin: 0;">Gallery</h3>
+                <span style="font-size: 12px; color: #64748b; font-weight: 600;">{{ $galleryImageCollection->count() }} image{{ $galleryImageCollection->count() === 1 ? '' : 's' }}</span>
             </div>
 
             <div class="lfp-gallery-layout">
@@ -3114,6 +3127,11 @@
                                 $gallerySlug = \Illuminate\Support\Str::slug($buttonLabel);
                                 $galleryTabId = 'gallery-tab-' . $gallerySlug;
                                 $galleryPanelId = 'gallery-panel-' . $gallerySlug;
+                                $panelImages = $buttonLabel === 'All'
+                                    ? $galleryImageCollection
+                                    : $galleryImageCollection->filter(function ($image) use ($buttonLabel) {
+                                        return strcasecmp(trim((string) ($image['category'] ?? '')), $buttonLabel) === 0;
+                                    })->values();
                             @endphp
                             <button
                                 type="button"
@@ -3138,6 +3156,11 @@
                                 $gallerySlug = \Illuminate\Support\Str::slug($buttonLabel);
                                 $galleryTabId = 'gallery-tab-' . $gallerySlug;
                                 $galleryPanelId = 'gallery-panel-' . $gallerySlug;
+                                $panelImages = $buttonLabel === 'All'
+                                    ? $galleryImageCollection
+                                    : $galleryImageCollection->filter(function ($image) use ($buttonLabel) {
+                                        return strcasecmp(trim((string) ($image['category'] ?? '')), $buttonLabel) === 0;
+                                    })->values();
                             @endphp
                             <div
                                 id="{{ $galleryPanelId }}"
@@ -3145,7 +3168,39 @@
                                 role="tabpanel"
                                 aria-labelledby="{{ $galleryTabId }}"
                                 aria-hidden="{{ $index === 0 ? 'false' : 'true' }}"
-                            ></div>
+                            >
+                                @if($panelImages->isEmpty())
+                                    <div class="lfp-gallery-empty-state">
+                                        No images uploaded for {{ $buttonLabel === 'All' ? 'this project' : $buttonLabel }} yet.
+                                    </div>
+                                @else
+                                    <div class="lfp-gallery-card-grid">
+                                        @foreach ($panelImages as $image)
+                                            <article class="lfp-gallery-card">
+                                                <a href="{{ $image['image_url'] }}" target="_blank" rel="noopener noreferrer" aria-label="Open gallery image in a new tab">
+                                                    <img class="lfp-gallery-card-image" src="{{ $image['image_url'] }}" alt="{{ $project->project_name }} gallery image {{ $image['category'] }}">
+                                                </a>
+                                                <div class="lfp-gallery-card-body">
+                                                    <div style="display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;">
+                                                        <strong style="color: #0f2f7a; font-size: 13px;">{{ $image['category'] ?: 'During' }}</strong>
+                                                        @if(!empty($image['created_at']))
+                                                            <span style="font-size: 11px; color: #64748b; white-space: nowrap;">{{ $formatGalleryDate($image['created_at']) }}</span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="lfp-gallery-card-meta">
+                                                        @if($image['latitude'] !== null && $image['longitude'] !== null)
+                                                            <span>Lat {{ number_format((float) $image['latitude'], 5) }}, Lng {{ number_format((float) $image['longitude'], 5) }}</span>
+                                                        @endif
+                                                        @if($image['accuracy'] !== null)
+                                                            <span>Accuracy {{ number_format((float) $image['accuracy'], 2) }} m</span>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
                         @endforeach
                     </div>
                 </div>
@@ -3430,6 +3485,54 @@
 
         .lfp-gallery-panel.is-active {
             display: block;
+        }
+
+        .lfp-gallery-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            width: 100%;
+        }
+
+        .lfp-gallery-card {
+            overflow: hidden;
+            border: 1px solid #dbe3f0;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 8px 18px rgba(0, 44, 118, 0.08);
+        }
+
+        .lfp-gallery-card-image {
+            display: block;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
+            background: #e2e8f0;
+        }
+
+        .lfp-gallery-card-body {
+            display: grid;
+            gap: 6px;
+            padding: 10px 12px 12px;
+            color: #334155;
+            font-size: 12px;
+        }
+
+        .lfp-gallery-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .lfp-gallery-empty-state {
+            padding: 18px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            background: #f8fafc;
+            color: #64748b;
+            font-size: 13px;
         }
 
         #projectProfileSection,

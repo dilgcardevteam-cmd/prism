@@ -1,11 +1,14 @@
 <?php
 
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use App\Models\LocallyFundedProject;
+use App\Models\User;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Http\Controllers\RlipLimeProjectController;
@@ -203,6 +206,50 @@ Route::get('/api/municipality-projects', function () {
         return response()->json(['error' => $e->getMessage()], 500);
     }
 })->name('api.municipality-projects');
+
+//======================MOBILE ENDPOINTS=================
+Route::get('/api/mobile/locally-funded', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileIndex'])
+    ->name('api.mobile.locally-funded');
+Route::get('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [App\Http\Controllers\LocallyFundedProjectController::class, 'viewMobileGalleryImage'])
+    ->whereNumber('project')
+    ->whereNumber('galleryImage')
+    ->name('api.mobile.locally-funded.gallery-image');
+
+Route::post('/api/mobile/locally-funded/{project}/gallery', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileUploadGalleryImage'])
+    ->whereNumber('project')
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->name('api.mobile.locally-funded.gallery-upload');
+
+Route::post('/api/mobile/login', function (Request $request) {
+    $credentials = $request->validate([
+        'username' => ['required', 'string'],
+        'password' => ['required', 'string'],
+    ]);
+
+    $user = User::where('username', $credentials['username'])->first();
+
+    if (!$user || strtolower((string) $user->status) !== 'active' || !Hash::check($credentials['password'], $user->password)) {
+        return response()->json([
+            'message' => 'The username or password is incorrect.',
+        ], 422);
+    }
+
+    Auth::login($user, $request->boolean('remember'));
+    $request->session()->regenerate();
+
+    return response()->json([
+        'message' => 'Login successful.',
+        'user' => [
+            'id' => $user->idno,
+            'username' => $user->username,
+            'first_name' => $user->fname ?? null,
+            'last_name' => $user->lname ?? null,
+            'status' => $user->status,
+        ],
+    ]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+
+
 
 Route::middleware(['auth'])->group(function () {
     // PAGASA time endpoint for live clock display
