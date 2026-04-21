@@ -204,6 +204,50 @@ Route::get('/api/municipality-projects', function () {
     }
 })->name('api.municipality-projects');
 
+//======================MOBILE ENDPOINTS=================
+Route::get('/api/mobile/locally-funded', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileIndex'])
+    ->name('api.mobile.locally-funded');
+Route::get('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [App\Http\Controllers\LocallyFundedProjectController::class, 'viewMobileGalleryImage'])
+    ->whereNumber('project')
+    ->whereNumber('galleryImage')
+    ->name('api.mobile.locally-funded.gallery-image');
+
+Route::post('/api/mobile/locally-funded/{project}/gallery', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileUploadGalleryImage'])
+    ->whereNumber('project')
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->name('api.mobile.locally-funded.gallery-upload');
+
+Route::post('/api/mobile/login', function (Request $request) {
+    $credentials = $request->validate([
+        'username' => ['required', 'string'],
+        'password' => ['required', 'string'],
+    ]);
+
+    $user = User::where('username', $credentials['username'])->first();
+
+    if (!$user || strtolower((string) $user->status) !== 'active' || !Hash::check($credentials['password'], $user->password)) {
+        return response()->json([
+            'message' => 'The username or password is incorrect.',
+        ], 422);
+    }
+
+    Auth::login($user, $request->boolean('remember'));
+    $request->session()->regenerate();
+
+    return response()->json([
+        'message' => 'Login successful.',
+        'user' => [
+            'id' => $user->id,
+            'username' => $user->username,
+            'first_name' => $user->first_name ?? null,
+            'last_name' => $user->last_name ?? null,
+            'status' => $user->status,
+        ],
+    ]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+
+
+
 Route::middleware(['auth'])->group(function () {
     // PAGASA time endpoint for live clock display
     Route::get('/api/pagasa-time/current', [App\Http\Controllers\PagasaTimeController::class, 'current'])->name('pagasa-time.current');
