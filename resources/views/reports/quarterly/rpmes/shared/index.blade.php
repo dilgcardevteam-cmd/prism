@@ -495,12 +495,16 @@
                     updateFilterBodyHeight();
                     syncDropdownMenuPosition();
                 };
-                const renderDropdownOptions = () => {
+                const renderDropdownOptions = ({ preserveSearchFocus = false } = {}) => {
                     const selectOptions = getSelectOptions().filter((optionElement) => optionElement.value.trim() !== '');
                     const normalizedSearch = searchState.value.trim().toLowerCase();
                     const filteredOptions = normalizedSearch === ''
                         ? selectOptions
                         : selectOptions.filter((optionElement) => getOptionLabel(optionElement).toLowerCase().includes(normalizedSearch));
+                    const activeSearchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
+                    const shouldRestoreSearchFocus = preserveSearchFocus || document.activeElement === activeSearchInput;
+                    const previousSelectionStart = shouldRestoreSearchFocus ? activeSearchInput?.selectionStart : null;
+                    const previousSelectionEnd = shouldRestoreSearchFocus ? activeSearchInput?.selectionEnd : null;
 
                     dropdownMenu.innerHTML = '';
 
@@ -532,7 +536,7 @@
                         });
                         searchInput.addEventListener('input', (event) => {
                             searchState.value = event.target.value || '';
-                            renderDropdownOptions();
+                            renderDropdownOptions({ preserveSearchFocus: true });
                             syncDropdownMenuPosition();
                         });
 
@@ -540,6 +544,21 @@
                         searchField.appendChild(searchInput);
                         searchWrap.appendChild(searchField);
                         dropdownMenu.appendChild(searchWrap);
+
+                        if (shouldRestoreSearchFocus) {
+                            requestAnimationFrame(() => {
+                                searchInput.focus({ preventScroll: true });
+
+                                const selectionStart = Number.isInteger(previousSelectionStart)
+                                    ? Math.min(previousSelectionStart, searchInput.value.length)
+                                    : searchInput.value.length;
+                                const selectionEnd = Number.isInteger(previousSelectionEnd)
+                                    ? Math.min(previousSelectionEnd, searchInput.value.length)
+                                    : selectionStart;
+
+                                searchInput.setSelectionRange(selectionStart, selectionEnd);
+                            });
+                        }
                     }
 
                     if (!filteredOptions.length) {

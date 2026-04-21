@@ -4862,7 +4862,7 @@
                     syncDropdownMenuPosition();
                 };
 
-                const renderDropdownOptions = () => {
+                const renderDropdownOptions = ({ preserveSearchFocus = false } = {}) => {
                     const selectOptions = getSelectOptions();
                     const availableOptions = isMultiple
                         ? selectOptions.filter((optionEl) => optionEl.value.trim() !== '')
@@ -4871,6 +4871,10 @@
                     const filteredOptions = normalizedSearch === ''
                         ? availableOptions
                         : availableOptions.filter((optionEl) => getOptionLabel(optionEl).toLowerCase().includes(normalizedSearch));
+                    const activeSearchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
+                    const shouldRestoreSearchFocus = preserveSearchFocus || document.activeElement === activeSearchInput;
+                    const previousSelectionStart = shouldRestoreSearchFocus ? activeSearchInput?.selectionStart : null;
+                    const previousSelectionEnd = shouldRestoreSearchFocus ? activeSearchInput?.selectionEnd : null;
 
                     dropdownMenu.innerHTML = '';
                     if (availableOptions.length > 0) {
@@ -4903,7 +4907,7 @@
                         });
                         searchInput.addEventListener('input', (event) => {
                             searchState.value = event.target.value || '';
-                            renderDropdownOptions();
+                            renderDropdownOptions({ preserveSearchFocus: true });
                             syncDropdownMenuPosition();
                         });
 
@@ -4911,6 +4915,21 @@
                         searchField.appendChild(searchInput);
                         searchWrap.appendChild(searchField);
                         dropdownMenu.appendChild(searchWrap);
+
+                        if (shouldRestoreSearchFocus) {
+                            requestAnimationFrame(() => {
+                                searchInput.focus({ preventScroll: true });
+
+                                const selectionStart = Number.isInteger(previousSelectionStart)
+                                    ? Math.min(previousSelectionStart, searchInput.value.length)
+                                    : searchInput.value.length;
+                                const selectionEnd = Number.isInteger(previousSelectionEnd)
+                                    ? Math.min(previousSelectionEnd, searchInput.value.length)
+                                    : selectionStart;
+
+                                searchInput.setSelectionRange(selectionStart, selectionEnd);
+                            });
+                        }
                     }
 
                     if (!filteredOptions.length) {
@@ -4918,11 +4937,11 @@
                         emptyMenuItem.className = 'dashboard-stacked-filter-menu-empty';
                         emptyMenuItem.textContent = getEmptyMenuText();
                         dropdownMenu.appendChild(emptyMenuItem);
-                        const activeSearchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
-                        if (activeSearchInput && dropdownMenu.classList.contains('is-open')) {
+                        const nextSearchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
+                        if (nextSearchInput && dropdownMenu.classList.contains('is-open')) {
                             requestAnimationFrame(() => {
-                                activeSearchInput.focus();
-                                activeSearchInput.setSelectionRange(activeSearchInput.value.length, activeSearchInput.value.length);
+                                nextSearchInput.focus();
+                                nextSearchInput.setSelectionRange(nextSearchInput.value.length, nextSearchInput.value.length);
                             });
                         }
                         return;
