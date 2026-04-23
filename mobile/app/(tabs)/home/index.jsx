@@ -17,6 +17,8 @@ import DashboardQuickStats from "./components/DashboardQuickStats";
 import FundSourceSection from "./components/FundSourceSection";
 import FinancialAccomplishmentSection from "./components/FinancialAccomplishmentSection";
 import ProjectRiskSection from "./components/ProjectRiskSection";
+import ProjectAgingSection from "./components/ProjectAgingSection";
+import ProjectUpdateStatusSection from "./components/ProjectUpdateStatusSection";
 import ProjectStatusSection from "./components/ProjectStatusSection";
 import { FUND_SOURCE_META, FINANCIAL_METRIC_CARDS, formatCount } from "../../../constants/homeDashboardConfig";
 
@@ -35,6 +37,10 @@ export default function HomeScreen() {
     financialMetrics,
     projectAtRiskSlippageRows,
     projectAtRiskSlippageTotal,
+    projectAtRiskAgingRows,
+    projectAtRiskAgingTotal,
+    projectUpdateStatusRows,
+    projectUpdateStatusTotal,
   } = useDashboardSummary();
   const scrollY = useSharedValue(0);
 
@@ -157,6 +163,26 @@ export default function HomeScreen() {
             donutSize={donutSize}
             riskLegendWidth={riskLegendWidth}
             riskPanelHeight={riskPanelHeight}
+            isNarrowRiskLayout={isNarrowRiskLayout}
+          />
+
+          <ProjectAgingSection
+            isLoadingSummary={isLoadingSummary}
+            summaryError={summaryError}
+            projectAtRiskAgingRows={projectAtRiskAgingRows}
+            projectAtRiskAgingTotal={projectAtRiskAgingTotal}
+            donutSize={donutSize}
+            riskLegendWidth={riskLegendWidth}
+            isNarrowRiskLayout={isNarrowRiskLayout}
+          />
+
+          <ProjectUpdateStatusSection
+            isLoadingSummary={isLoadingSummary}
+            summaryError={summaryError}
+            projectUpdateStatusRows={projectUpdateStatusRows}
+            projectUpdateStatusTotal={projectUpdateStatusTotal}
+            donutSize={donutSize}
+            riskLegendWidth={riskLegendWidth}
             isNarrowRiskLayout={isNarrowRiskLayout}
           />
         </Animated.View>

@@ -4,6 +4,8 @@ import { formatUpdatedAt } from "./useLocallyFundedProjects";
 import { useWebAppRequest } from "./useWebAppRequest";
 
 const PROJECT_RISK_SUMMARY_ORDER = ["On Schedule", "Ahead", "No Risk", "Low Risk", "Moderate Risk", "High Risk"];
+const PROJECT_RISK_AGING_ORDER = ["High Risk", "Low Risk", "No Risk"];
+const PROJECT_UPDATE_STATUS_ORDER = ["High Risk", "Low Risk", "No Risk"];
 const DEFAULT_FINANCIAL = {
   allocation: 0,
   obligation: 0,
@@ -29,6 +31,26 @@ function formatCurrency(value) {
   }).format(toNumber(value))}`;
 }
 
+function normalizeRiskRows(rows, order) {
+  const mappedRows = Array.isArray(rows)
+    ? rows
+        .map((row) => ({
+          label: String(row?.label || "").trim(),
+          count: Number(row?.count || 0),
+        }))
+        .filter((row) => row.label && order.includes(row.label))
+    : [];
+
+  const countsByLabel = new Map(
+    mappedRows.map((row) => [row.label, Number.isFinite(row.count) ? row.count : 0])
+  );
+
+  return order.map((label) => ({
+    label,
+    count: countsByLabel.get(label) || 0,
+  }));
+}
+
 export function useDashboardSummary() {
   const { fetchJsonWithFallback } = useWebAppRequest();
   const [totalProjects, setTotalProjects] = useState(0);
@@ -40,6 +62,12 @@ export function useDashboardSummary() {
   const [projectAtRiskSlippageRows, setProjectAtRiskSlippageRows] = useState(
     PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 }))
   );
+  const [projectAtRiskAgingRows, setProjectAtRiskAgingRows] = useState(
+    PROJECT_RISK_AGING_ORDER.map((label) => ({ label, count: 0 }))
+  );
+  const [projectUpdateStatusRows, setProjectUpdateStatusRows] = useState(
+    PROJECT_UPDATE_STATUS_ORDER.map((label) => ({ label, count: 0 }))
+  );
   const [latestUpdatedAt, setLatestUpdatedAt] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState("");
@@ -49,9 +77,11 @@ export function useDashboardSummary() {
     setSummaryError("");
 
     try {
-      const [summaryPayload, projectAtRiskSummary] = await Promise.all([
+      const [summaryPayload, projectAtRiskSummary, projectAtRiskAgingSummary, projectUpdateStatusSummary] = await Promise.all([
         fetchJsonWithFallback("/api/mobile/locally-funded/dashboard-summary"),
-        fetchJsonWithFallback("/api/mobile/project-at-risk/slippage-summary"),
+        fetchJsonWithFallback("/api/mobile/project-at-risk/slippage-summary").catch(() => ({ data: [] })),
+        fetchJsonWithFallback("/api/mobile/project-at-risk/aging-summary").catch(() => ({ data: [] })),
+        fetchJsonWithFallback("/api/mobile/project-at-risk/project-update-status-summary").catch(() => ({ data: [] })),
       ]);
 
       const summaryData = summaryPayload?.data && typeof summaryPayload.data === "object"
@@ -103,26 +133,9 @@ export function useDashboardSummary() {
       });
       setLatestUpdatedAt(summaryData.latest_updated_at || null);
 
-      const riskRows = Array.isArray(projectAtRiskSummary?.data)
-        ? projectAtRiskSummary.data
-            .map((row) => ({
-              label: String(row?.label || "").trim(),
-              count: Number(row?.count || 0),
-            }))
-            .filter((row) => row.label && PROJECT_RISK_SUMMARY_ORDER.includes(row.label))
-        : [];
-
-      if (riskRows.length > 0) {
-        const countsByLabel = new Map(riskRows.map((row) => [row.label, Number.isFinite(row.count) ? row.count : 0]));
-        setProjectAtRiskSlippageRows(
-          PROJECT_RISK_SUMMARY_ORDER.map((label) => ({
-            label,
-            count: countsByLabel.get(label) || 0,
-          }))
-        );
-      } else {
-        setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
-      }
+      setProjectAtRiskSlippageRows(normalizeRiskRows(projectAtRiskSummary?.data, PROJECT_RISK_SUMMARY_ORDER));
+      setProjectAtRiskAgingRows(normalizeRiskRows(projectAtRiskAgingSummary?.data, PROJECT_RISK_AGING_ORDER));
+      setProjectUpdateStatusRows(normalizeRiskRows(projectUpdateStatusSummary?.data, PROJECT_UPDATE_STATUS_ORDER));
     } catch (error) {
       setTotalProjects(0);
       setFundSourceCounts([]);
@@ -131,6 +144,8 @@ export function useDashboardSummary() {
       setStatusSubaybayanMax(0);
       setFinancialSummary(DEFAULT_FINANCIAL);
       setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
+      setProjectAtRiskAgingRows(PROJECT_RISK_AGING_ORDER.map((label) => ({ label, count: 0 })));
+      setProjectUpdateStatusRows(PROJECT_UPDATE_STATUS_ORDER.map((label) => ({ label, count: 0 })));
       setLatestUpdatedAt(null);
       setSummaryError(error?.message || "Unable to load dashboard summary.");
     } finally {
@@ -163,6 +178,16 @@ export function useDashboardSummary() {
     [projectAtRiskSlippageRows]
   );
 
+  const projectAtRiskAgingTotal = useMemo(
+    () => projectAtRiskAgingRows.reduce((sum, row) => sum + row.count, 0),
+    [projectAtRiskAgingRows]
+  );
+
+  const projectUpdateStatusTotal = useMemo(
+    () => projectUpdateStatusRows.reduce((sum, row) => sum + row.count, 0),
+    [projectUpdateStatusRows]
+  );
+
   const summaryLabel = latestUpdatedAt
     ? `Project Status Summary as of ${formatUpdatedAt(latestUpdatedAt)}`
     : "Project Status Summary";
@@ -180,6 +205,10 @@ export function useDashboardSummary() {
     financialMetrics,
     projectAtRiskSlippageRows,
     projectAtRiskSlippageTotal,
+    projectAtRiskAgingRows,
+    projectAtRiskAgingTotal,
+    projectUpdateStatusRows,
+    projectUpdateStatusTotal,
     loadDashboardSummary,
   };
 }

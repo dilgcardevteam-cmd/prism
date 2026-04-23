@@ -39,7 +39,7 @@ class ProjectAtRiskController extends Controller
 
     public function __construct()
     {
-        $this->middleware('auth')->except(['mobileSlippageSummary']);
+        $this->middleware('auth')->except(['mobileSlippageSummary', 'mobileAgingSummary', 'mobileProjectUpdateStatusSummary']);
         $this->middleware('crud_permission:project_at_risk_projects,view')->only(['index', 'export']);
         $this->middleware('crud_permission:project_at_risk_data_uploads,view')->only(['uploadManager', 'downloadTemplate', 'downloadImport']);
         $this->middleware('crud_permission:project_at_risk_data_uploads,add')->only(['import']);
@@ -157,6 +157,177 @@ class ProjectAtRiskController extends Controller
                 'summary_order' => $summaryOrder,
             ],
         ]);
+    }
+
+    public function mobileAgingSummary()
+    {
+        $summaryOrder = ['High Risk', 'Low Risk', 'No Risk'];
+        $counts = array_fill_keys($summaryOrder, 0);
+
+        if (!Schema::hasTable('project_at_risks')) {
+            return response()->json([
+                'data' => collect($summaryOrder)->map(fn ($label) => ['label' => $label, 'count' => 0])->values(),
+                'meta' => ['total' => 0, 'summary_order' => $summaryOrder],
+            ]);
+        }
+
+        $riskBaseQuery = DB::table('project_at_risks as par')
+            ->selectRaw('UPPER(TRIM(par.project_code)) as project_code')
+            ->selectRaw('TRIM(COALESCE(par.aging, "")) as aging_value')
+            ->selectRaw("COALESCE(par.date_of_extraction, '1900-01-01') as extraction_date")
+            ->addSelect('par.id')
+            ->whereNotNull('par.project_code')
+            ->whereRaw('TRIM(par.project_code) <> ""');
+
+        if (Auth::check()) {
+            $this->applyUserScopeToProjectAtRiskQuery($riskBaseQuery);
+        }
+
+        $latestExtractionByProject = DB::query()
+            ->fromSub($riskBaseQuery, 'risk_base')
+            ->selectRaw('risk_base.project_code')
+            ->selectRaw('MAX(risk_base.extraction_date) as latest_extraction')
+            ->groupBy('risk_base.project_code');
+
+        $latestRowsByExtraction = DB::query()
+            ->fromSub($riskBaseQuery, 'risk_base')
+            ->joinSub($latestExtractionByProject, 'risk_latest', function ($join) {
+                $join->on('risk_base.project_code', '=', 'risk_latest.project_code')
+                    ->on('risk_base.extraction_date', '=', 'risk_latest.latest_extraction');
+            })
+            ->select('risk_base.project_code', 'risk_base.id', 'risk_base.aging_value');
+
+        $latestIdByProject = DB::query()
+            ->fromSub($latestRowsByExtraction, 'risk_rows')
+            ->selectRaw('risk_rows.project_code')
+            ->selectRaw('MAX(risk_rows.id) as latest_id')
+            ->groupBy('risk_rows.project_code');
+
+        $finalAgingRows = DB::query()
+            ->fromSub($riskBaseQuery, 'risk_base')
+            ->joinSub($latestIdByProject, 'risk_latest_id', function ($join) {
+                $join->on('risk_base.project_code', '=', 'risk_latest_id.project_code')
+                    ->on('risk_base.id', '=', 'risk_latest_id.latest_id');
+            })
+            ->select('risk_base.aging_value')
+            ->get();
+
+        foreach ($finalAgingRows as $row) {
+            $rawAging = trim((string) ($row->aging_value ?? ''));
+            if ($rawAging === '') {
+                continue;
+            }
+
+            if (is_numeric($rawAging)) {
+                $agingValue = (float) $rawAging;
+            } else {
+                $cleanedAging = preg_replace('/[^0-9\.\-]/', '', $rawAging);
+                if ($cleanedAging === null || $cleanedAging === '' || !is_numeric($cleanedAging)) {
+                    continue;
+                }
+                $agingValue = (float) $cleanedAging;
+            }
+
+            if ($agingValue >= 60) {
+                $riskLabel = 'High Risk';
+            } elseif ($agingValue > 30 && $agingValue < 60) {
+                $riskLabel = 'Low Risk';
+            } else {
+                $riskLabel = 'No Risk';
+            }
+
+            if (array_key_exists($riskLabel, $counts)) {
+                $counts[$riskLabel] += 1;
+            }
+        }
+
+        $rows = collect($summaryOrder)->map(function ($label) use ($counts) {
+            return [
+                'label' => $label,
+                'count' => (int) ($counts[$label] ?? 0),
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => $rows,
+            'meta' => [
+                'total' => (int) $rows->sum('count'),
+                'summary_order' => $summaryOrder,
+            ],
+        ]);
+    }
+
+    public function mobileProjectUpdateStatusSummary()
+    {
+        $summaryOrder = ['High Risk', 'Low Risk', 'No Risk'];
+        $counts = array_fill_keys($summaryOrder, 0);
+
+        if (!Schema::hasTable('subay_project_profiles')) {
+            return response()->json([
+                'data' => collect($summaryOrder)->map(fn ($label) => ['label' => $label, 'count' => 0])->values(),
+                'meta' => ['total' => 0, 'summary_order' => $summaryOrder],
+            ]);
+        }
+
+        $projectUpdateRowsQuery = DB::table('subay_project_profiles as spp')
+            ->whereNotNull('spp.project_code')
+            ->whereRaw('TRIM(COALESCE(spp.project_code, "")) <> ""')
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
+            ->selectRaw('LOWER(TRIM(COALESCE(spp.status, ""))) as status_raw')
+            ->selectRaw($this->projectUpdateParsedDateExpression() . ' as latest_update_date');
+
+        $aggregatedCounts = DB::query()
+            ->fromSub($projectUpdateRowsQuery, 'project_updates')
+            ->where('project_updates.status_raw', '!=', 'completed')
+            ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) >= 60 THEN 1 ELSE 0 END) as high_risk_total')
+            ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) > 30 AND DATEDIFF(CURDATE(), project_updates.latest_update_date) < 60 THEN 1 ELSE 0 END) as low_risk_total')
+            ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) <= 30 THEN 1 ELSE 0 END) as no_risk_total')
+            ->first();
+
+        $counts['High Risk'] = (int) ($aggregatedCounts->high_risk_total ?? 0);
+        $counts['Low Risk'] = (int) ($aggregatedCounts->low_risk_total ?? 0);
+        $counts['No Risk'] = (int) ($aggregatedCounts->no_risk_total ?? 0);
+
+        $rows = collect($summaryOrder)->map(function ($label) use ($counts) {
+            return [
+                'label' => $label,
+                'count' => (int) ($counts[$label] ?? 0),
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => $rows,
+            'meta' => [
+                'total' => (int) $rows->sum('count'),
+                'summary_order' => $summaryOrder,
+            ],
+        ]);
+    }
+
+    private function projectUpdateParsedDateExpression(): string
+    {
+        return "
+            COALESCE(
+                IF(
+                    TRIM(COALESCE(spp.date, '')) REGEXP '^[0-9]+(\\\\.[0-9]+)?$',
+                    DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE(spp.date, '')) AS DECIMAL(12,4))) DAY),
+                    NULL
+                ),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%Y-%m-%d'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%Y-%m-%d %H:%i:%s'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %H:%i'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %H:%i:%s'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %h:%i:%s %p'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d/%m/%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d-%m-%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d-%b-%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%b %e, %Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%M %e, %Y')
+            )
+        ";
     }
 
     public function index(Request $request)
