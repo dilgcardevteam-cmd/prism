@@ -1,40 +1,51 @@
 import { Feather } from "@expo/vector-icons";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 
 import { APP_COLORS } from "../../../../constants/theme";
 
-function FinancialMetricTile({ label, value, icon, backgroundColor, borderColor, accentColor, valueColor, width }) {
-  const isLongLabel = String(label).length > 11;
-
+function FinancialMetricRow({ label, value, icon, backgroundColor, accentColor, valueColor, isLast }) {
   return (
-    <View className="mr-3 overflow-hidden rounded-[26px] border px-4 py-4" style={{ backgroundColor, borderColor, width }}>
-      <View className="flex-row items-center">
-        <View className="flex-1 pr-4" style={{ borderRightWidth: 2, borderRightColor: accentColor }}>
-          <Text
-            className="uppercase"
-            style={{
-              fontFamily: "Montserrat-SemiBold",
-              color: accentColor,
-              fontSize: isLongLabel ? 14 : 16,
-              lineHeight: isLongLabel ? 19 : 21,
-              letterSpacing: 0.4,
-            }}
-            numberOfLines={2}
-          >
-            {label}
-          </Text>
-        </View>
-
-        <View className="pl-4">
-          <Text className="text-[40px]" style={{ color: accentColor, opacity: 0.16 }}>
-            <Feather name={icon} size={40} color={accentColor} />
-          </Text>
-        </View>
+    <View className={`flex-row items-center py-3 ${isLast ? "" : "border-b border-[#bfc0c4]"}`}>
+      <View
+        className="h-[66px] w-[66px] items-center justify-center rounded-full"
+        style={{ backgroundColor, marginRight: 14 }}
+      >
+        <Feather name={icon} size={32} color={accentColor} />
       </View>
 
-      <Text className="mt-2 text-right text-[33px]" style={{ fontFamily: "Montserrat", color: valueColor }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.55}>
-        {value}
-      </Text>
+      <View className="flex-1">
+        <Text
+          className="uppercase"
+          style={{
+            fontFamily: "Montserrat-SemiBold",
+            color: accentColor,
+            fontSize: String(label || "").length > 12 ? 13 : 15,
+            lineHeight: String(label || "").length > 12 ? 17 : 19,
+            letterSpacing: 0.3,
+          }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.75}
+        >
+          {label}
+        </Text>
+
+        <Text
+          className="mt-1 text-right"
+          style={{
+            fontFamily: "Montserrat-SemiBold",
+            color: valueColor,
+            fontSize: String(value || "").length > 12 ? 20 : 22,
+            lineHeight: String(value || "").length > 12 ? 24 : 26,
+            letterSpacing: -0.3,
+          }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.55}
+        >
+          {value}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -42,7 +53,7 @@ function FinancialMetricTile({ label, value, icon, backgroundColor, borderColor,
 export default function FinancialAccomplishmentSection({ isLoadingSummary, summaryError, financialMetrics, financialTileWidth, metricCards }) {
   return (
     <View className="mt-6">
-      <Text className="mb-3 text-[18px] uppercase tracking-[0.8px] text-[#173e8c]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+      <Text className="mb-2 text-[18px] uppercase tracking-[0.8px] text-[#173e8c]" style={{ fontFamily: "Montserrat-SemiBold" }}>
         Financial Accomplishment Status
       </Text>
 
@@ -63,25 +74,26 @@ export default function FinancialAccomplishmentSection({ isLoadingSummary, summa
           </Text>
         </View>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 4 }}>
-          {financialMetrics.map((metric) => {
-            const styleMeta = metricCards[metric.key];
+        <View className="overflow-hidden">
+          <View className="border-t border-[#bfc0c4]">
+            {financialMetrics.map((metric, index) => {
+              const styleMeta = metricCards[metric.key];
 
-            return (
-              <FinancialMetricTile
-                key={metric.key}
-                label={styleMeta.label}
-                value={metric.value}
-                icon={styleMeta.icon}
-                backgroundColor={styleMeta.backgroundColor}
-                borderColor={styleMeta.borderColor}
-                accentColor={styleMeta.accentColor}
-                valueColor={styleMeta.valueColor}
-                width={financialTileWidth}
-              />
-            );
-          })}
-        </ScrollView>
+              return (
+                <FinancialMetricRow
+                  key={metric.key}
+                  label={styleMeta.label}
+                  value={metric.value}
+                  icon={styleMeta.icon}
+                  backgroundColor={styleMeta.backgroundColor}
+                  accentColor={styleMeta.accentColor}
+                  valueColor={styleMeta.valueColor}
+                  isLast={index === financialMetrics.length - 1}
+                />
+              );
+            })}
+          </View>
+        </View>
       )}
     </View>
   );

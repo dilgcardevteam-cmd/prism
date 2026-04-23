@@ -128,6 +128,7 @@ export default function HomeScreen() {
             summaryError={summaryError}
             fundSourceCards={fundSourceCards}
             tileWidth={tileWidth}
+            screenWidth={screenWidth}
           />
 
           {/* ==============FINANCIAL ACCOMPLISHMENT STATUS============== */}
