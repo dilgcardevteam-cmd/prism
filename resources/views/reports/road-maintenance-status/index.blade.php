@@ -71,7 +71,7 @@
                 </div>
 
                 <div class="table-responsive report-table-shell" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-                    <table id="road-maintenance-table" style="width: 100%; border-collapse: collapse; min-width: 900px;">
+                    <table id="road-maintenance-table" style="width: 100%; border-collapse: collapse; min-width: 1360px;">
                         <thead>
                             <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                                 <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Province</th>
@@ -80,6 +80,9 @@
                                 <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q2</th>
                                 <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q3</th>
                                 <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Q4</th>
+                                <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Approval Status</th>
+                                <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Date Submitted</th>
+                                <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Validation Level</th>
                                 <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Actions</th>
                             </tr>
                         </thead>
@@ -87,6 +90,17 @@
                             @forelse ($officeRows as $row)
                                 @php
                                     $officeDocs = $documentsByOffice[$row['city_municipality']] ?? [];
+                                    $validationSummary = $officeValidationSummaryByOffice[$row['city_municipality']] ?? [
+                                        'approval_status_label' => 'Awaiting Upload',
+                                        'approval_status_text_color' => '#4b5563',
+                                        'approval_status_background_color' => '#f3f4f6',
+                                        'approval_status_border_color' => '#d1d5db',
+                                        'date_submitted_label' => '—',
+                                        'validation_level_label' => '—',
+                                        'validation_level_text_color' => '#4b5563',
+                                        'validation_level_background_color' => '#f3f4f6',
+                                        'validation_level_border_color' => '#d1d5db',
+                                    ];
                                     $statusIcon = function ($doc) {
                                         if (!$doc) {
                                             return '<span style="color: #9ca3af;">-</span>';
@@ -111,6 +125,19 @@
                                     <td style="padding: 12px; text-align: center; color: #111827; font-size: 14px;">{!! $statusIcon($officeDocs['road_maintenance_status|' . $reportingYear . '|Q3'] ?? null) !!}</td>
                                     <td style="padding: 12px; text-align: center; color: #111827; font-size: 14px;">{!! $statusIcon($officeDocs['road_maintenance_status|' . $reportingYear . '|Q4'] ?? null) !!}</td>
                                     <td style="padding: 12px; text-align: center;">
+                                        <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationSummary['approval_status_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationSummary['approval_status_background_color'] ?? '#f3f4f6' }}; color: {{ $validationSummary['approval_status_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                            {{ $validationSummary['approval_status_label'] ?? 'Awaiting Upload' }}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
+                                        {{ $validationSummary['date_submitted_label'] ?? '—' }}
+                                    </td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationSummary['validation_level_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationSummary['validation_level_background_color'] ?? '#f3f4f6' }}; color: {{ $validationSummary['validation_level_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                            {{ $validationSummary['validation_level_label'] ?? '—' }}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; text-align: center;">
                                         <a href="{{ route('road-maintenance-status.edit', ['roadMaintenance' => $row['city_municipality'], 'year' => $reportingYear]) }}" style="display: inline-block; padding: 8px 16px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-decoration: none; transition: all 0.3s ease;">
                                             <i class="fas fa-eye" style="margin-right: 4px;"></i> View
                                         </a>
@@ -118,7 +145,7 @@
                                 </tr>
                             @empty
                                 <tr style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
-                                    <td colspan="7" style="padding: 40px; text-align: center; color: #6b7280;">
+                                    <td colspan="10" style="padding: 40px; text-align: center; color: #6b7280;">
                                         <i class="fas fa-table" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
                                         No records found.
                                     </td>

@@ -9,39 +9,140 @@
         <p>View accessible SubayBayan LFP projects from 2024 onward and open each project profile to manage pre-implementation records.</p>
     </div>
 
-    <div style="background: white; padding: 16px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); margin-bottom: 20px; border: 1px solid #e5e7eb;">
-        <form method="GET" action="{{ route('pre-implementation-documents.index') }}" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-            <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
-            <div style="position: relative; flex: 2 1 220px; min-width: 200px;">
-                <i class="fas fa-search" style="position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 13px; pointer-events: none;"></i>
-                <input
-                    type="text"
-                    name="search"
-                    value="{{ $filters['search'] ?? '' }}"
-                    placeholder="Search project code, title, location..."
-                    style="width: 100%; height: 42px; padding: 0 12px 0 34px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background-color: #f9fafb; color: #374151; box-sizing: border-box; outline: none;"
-                >
+    <style>
+        .project-filter-form.collapsed .project-filter-body {
+            max-height: 0 !important;
+            opacity: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .project-filter-form.collapsed .project-filter-chevron {
+            transform: rotate(180deg);
+        }
+
+        .project-filter-body {
+            overflow: hidden;
+            transition: max-height 0.25s ease, opacity 0.2s ease;
+        }
+
+        .project-filter-chevron {
+            margin-left: auto;
+            transition: transform 0.2s ease;
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-filter-grid {
+                grid-template-columns: repeat(2, minmax(220px, 1fr)) !important;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .dashboard-filter-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            .dashboard-filter-reset {
+                grid-column: 1 / -1 !important;
+                justify-content: stretch !important;
+            }
+
+            .dashboard-filter-reset a {
+                width: 100%;
+            }
+        }
+    </style>
+
+    <form method="GET" action="{{ route('pre-implementation-documents.index') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
+        <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
+        <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="true" aria-controls="project-filter-body" style="width: 100%; border: 0; background: transparent; color: #002c76; font-size: 13px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 14px; padding: 0; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;">
+            <span style="font-size: 20px;">&#128269;</span>
+            <span>PROJECT FILTER</span>
+            <span class="project-filter-chevron">
+                <i class="fas fa-chevron-up"></i>
+            </span>
+        </button>
+
+        <div id="project-filter-body" class="project-filter-body">
+            <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px 22px; align-items: end;">
+                <div>
+                    <label for="province" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Province</label>
+                    <select id="province" name="province" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
+                        @foreach(($filterOptions['provinces'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) ($filters['province'] ?? '') === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="city_municipality" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">City/Municipality</label>
+                    <select id="city_municipality" name="city_municipality" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
+                        @foreach(($filterOptions['cities'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) ($filters['city_municipality'] ?? '') === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="barangay" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Barangay</label>
+                    <select id="barangay" name="barangay" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
+                        @foreach(($filterOptions['barangays'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) ($filters['barangay'] ?? '') === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="program" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Program</label>
+                    <select id="program" name="program" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
+                        @foreach(($filterOptions['programs'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) ($filters['program'] ?? '') === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year</label>
+                    <select id="funding_year" name="funding_year" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
+                        @foreach(($filterOptions['funding_years'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) ($filters['funding_year'] ?? '') === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="project_type" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Type</label>
+                    <select id="project_type" name="project_type" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
+                        @foreach(($filterOptions['project_types'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) ($filters['project_type'] ?? '') === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div>
+                    <label for="project_status" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Status</label>
+                    <select id="project_status" name="project_status" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
+                        @foreach(($filterOptions['project_statuses'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) ($filters['project_status'] ?? '') === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end;">
+                    <a href="{{ route('pre-implementation-documents.index') }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
+                        Reset Filter
+                    </a>
+                </div>
             </div>
-            <select name="province" style="flex: 1 1 150px; min-width: 140px; height: 42px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background-color: #f9fafb; color: #374151;">
-                <option value="">All Provinces</option>
-                @foreach(($filterOptions['provinces'] ?? []) as $option)
-                    <option value="{{ $option }}" {{ ($filters['province'] ?? '') === $option ? 'selected' : '' }}>{{ $option }}</option>
-                @endforeach
-            </select>
-            <select name="funding_year" style="flex: 1 1 120px; min-width: 110px; height: 42px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background-color: #f9fafb; color: #374151;">
-                <option value="">All Years</option>
-                @foreach(($filterOptions['funding_years'] ?? []) as $option)
-                    <option value="{{ $option }}" {{ (string) ($filters['funding_year'] ?? '') === (string) $option ? 'selected' : '' }}>{{ $option }}</option>
-                @endforeach
-            </select>
-            <button type="submit" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #2563eb; color: white; border: 1px solid #2563eb; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; transition: background-color 0.2s;">
-                <i class="fas fa-filter"></i> Apply
-            </button>
-            <a href="{{ route('pre-implementation-documents.index') }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none; transition: background-color 0.2s;">
-                Reset
-            </a>
-        </form>
-    </div>
+        </div>
+    </form>
 
     <div style="background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); border: 1px solid #e5e7eb; overflow: hidden;">
         <div style="overflow-x: auto;">
@@ -125,7 +226,12 @@
                     <form method="GET" action="{{ route('pre-implementation-documents.index') }}" style="display: inline-flex; align-items: center;">
                         <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
                         <input type="hidden" name="province" value="{{ $filters['province'] ?? '' }}">
+                        <input type="hidden" name="city_municipality" value="{{ $filters['city_municipality'] ?? '' }}">
+                        <input type="hidden" name="barangay" value="{{ $filters['barangay'] ?? '' }}">
+                        <input type="hidden" name="program" value="{{ $filters['program'] ?? '' }}">
                         <input type="hidden" name="funding_year" value="{{ $filters['funding_year'] ?? '' }}">
+                        <input type="hidden" name="project_type" value="{{ $filters['project_type'] ?? '' }}">
+                        <input type="hidden" name="project_status" value="{{ $filters['project_status'] ?? '' }}">
                         <select id="per-page" name="per_page" onchange="this.form.submit()" aria-label="Rows per page" title="Rows per page" style="padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
                             @foreach([10, 15, 25, 50] as $option)
                                 <option value="{{ $option }}" {{ (int) ($perPage ?? 10) === $option ? 'selected' : '' }}>{{ $option }}</option>
@@ -157,4 +263,35 @@
             </div>
         @endif
     </div>
+
+    <script>
+        function setProjectFilterBodyHeight(form) {
+            const body = form ? form.querySelector('.project-filter-body') : null;
+            if (!body) {
+                return;
+            }
+
+            body.style.maxHeight = form.classList.contains('collapsed') ? '0px' : `${body.scrollHeight}px`;
+        }
+
+        function toggleProjectFilter(button) {
+            const form = button.closest('.project-filter-form');
+            if (!form) {
+                return;
+            }
+
+            form.classList.toggle('collapsed');
+            const expanded = !form.classList.contains('collapsed');
+            button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            setProjectFilterBodyHeight(form);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.project-filter-form').forEach(setProjectFilterBodyHeight);
+
+            window.addEventListener('resize', () => {
+                document.querySelectorAll('.project-filter-form').forEach(setProjectFilterBodyHeight);
+            });
+        });
+    </script>
 @endsection

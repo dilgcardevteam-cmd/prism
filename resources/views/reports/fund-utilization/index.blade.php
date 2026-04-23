@@ -160,13 +160,16 @@
     <!-- Reports Card -->
     <div class="report-table-card" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
         <div class="report-table-scroll">
-            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 980px;">
+            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 1460px;">
             <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px; width: 220px; max-width: 220px;">Project Details</th>
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Location</th>
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Funding / Status</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Validation / Progress</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Approval Status</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Date Submitted</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Validation Level</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Actions</th>
                 </tr>
             </thead>
@@ -180,6 +183,17 @@
                             'text_color' => '#4b5563',
                             'background_color' => '#f3f4f6',
                             'border_color' => '#d1d5db',
+                        ];
+                        $validationListing = $report->validation_listing ?? [
+                            'approval_status_label' => 'Awaiting Upload',
+                            'approval_status_text_color' => '#4b5563',
+                            'approval_status_background_color' => '#f3f4f6',
+                            'approval_status_border_color' => '#d1d5db',
+                            'date_submitted_label' => '—',
+                            'validation_level_label' => '—',
+                            'validation_level_text_color' => '#4b5563',
+                            'validation_level_background_color' => '#f3f4f6',
+                            'validation_level_border_color' => '#d1d5db',
                         ];
                     @endphp
                     <tr style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
@@ -252,6 +266,19 @@
                             </div>
                         </td>
                         <td style="padding: 12px; text-align: center;">
+                            <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationListing['approval_status_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationListing['approval_status_background_color'] ?? '#f3f4f6' }}; color: {{ $validationListing['approval_status_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                {{ $validationListing['approval_status_label'] ?? 'Awaiting Upload' }}
+                            </span>
+                        </td>
+                        <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
+                            {{ $validationListing['date_submitted_label'] ?? '—' }}
+                        </td>
+                        <td style="padding: 12px; text-align: center;">
+                            <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationListing['validation_level_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationListing['validation_level_background_color'] ?? '#f3f4f6' }}; color: {{ $validationListing['validation_level_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                {{ $validationListing['validation_level_label'] ?? '—' }}
+                            </span>
+                        </td>
+                        <td style="padding: 12px; text-align: center;">
                             <a href="{{ route('fund-utilization.show', $report->project_code) }}" style="display: inline-block; padding: 8px 16px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-decoration: none; transition: all 0.3s ease;">
                                 <i class="fas fa-eye" style="margin-right: 4px;"></i> View
                             </a>
@@ -259,7 +286,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" style="padding: 40px; text-align: center; color: #6b7280;">
+                        <td colspan="8" style="padding: 40px; text-align: center; color: #6b7280;">
                             <i class="fas fa-inbox" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
                             No reports found. Create one to get started.
                         </td>
@@ -579,12 +606,16 @@
                     requestAnimationFrame(positionDropdownMenu);
                 };
 
-                const renderDropdownOptions = () => {
+                const renderDropdownOptions = ({ preserveSearchFocus = false } = {}) => {
                     const options = getSelectOptions().filter((optionElement) => optionElement.value.trim() !== '');
                     const normalizedSearch = searchState.value.trim().toLowerCase();
                     const filteredOptions = normalizedSearch === ''
                         ? options
                         : options.filter((optionElement) => getOptionLabel(optionElement).toLowerCase().includes(normalizedSearch));
+                    const activeSearchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
+                    const shouldRestoreSearchFocus = preserveSearchFocus || document.activeElement === activeSearchInput;
+                    const previousSelectionStart = shouldRestoreSearchFocus ? activeSearchInput?.selectionStart : null;
+                    const previousSelectionEnd = shouldRestoreSearchFocus ? activeSearchInput?.selectionEnd : null;
                     dropdownMenu.innerHTML = '';
 
                     if (options.length > 0) {
@@ -615,7 +646,7 @@
                         });
                         searchInput.addEventListener('input', (event) => {
                             searchState.value = event.target.value || '';
-                            renderDropdownOptions();
+                            renderDropdownOptions({ preserveSearchFocus: true });
                             requestAnimationFrame(positionDropdownMenu);
                         });
 
@@ -623,6 +654,21 @@
                         searchField.appendChild(searchInput);
                         searchWrap.appendChild(searchField);
                         dropdownMenu.appendChild(searchWrap);
+
+                        if (shouldRestoreSearchFocus) {
+                            requestAnimationFrame(() => {
+                                searchInput.focus({ preventScroll: true });
+
+                                const selectionStart = Number.isInteger(previousSelectionStart)
+                                    ? Math.min(previousSelectionStart, searchInput.value.length)
+                                    : searchInput.value.length;
+                                const selectionEnd = Number.isInteger(previousSelectionEnd)
+                                    ? Math.min(previousSelectionEnd, searchInput.value.length)
+                                    : selectionStart;
+
+                                searchInput.setSelectionRange(selectionStart, selectionEnd);
+                            });
+                        }
                     }
 
                     if (!filteredOptions.length) {
@@ -831,6 +877,10 @@
                 if (key !== 'format' && key !== 'quarter') {
                     url.searchParams.append(key, value);
                 }
+            }
+
+            if (window.AppUI && typeof window.AppUI.suppressPageLoaderForDownload === 'function') {
+                window.AppUI.suppressPageLoaderForDownload();
             }
 
             window.location.href = url.toString();

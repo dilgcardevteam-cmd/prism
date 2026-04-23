@@ -606,6 +606,120 @@ class LocalProjectMonitoringCommitteeController extends Controller
             return $this->normalizeOfficeDocumentStatus($document) === $normalizedFilter;
         });
     }
+
+    private function summarizeOfficeValidation(array $officeDocuments): array
+    {
+        $summary = [
+            'priority' => 3,
+            'approval_status_label' => 'Awaiting Upload',
+            'approval_status_text_color' => '#4b5563',
+            'approval_status_background_color' => '#f3f4f6',
+            'approval_status_border_color' => '#d1d5db',
+            'date_submitted_label' => '—',
+            'uploaded_at_timestamp' => 0,
+            'validation_level_label' => '—',
+            'validation_level_text_color' => '#4b5563',
+            'validation_level_background_color' => '#f3f4f6',
+            'validation_level_border_color' => '#d1d5db',
+        ];
+
+        $selectedDocument = collect($officeDocuments)
+            ->filter(function ($document) {
+                return $document instanceof LpmcDocument && trim((string) ($document->file_path ?? '')) !== '';
+            })
+            ->sort(function (LpmcDocument $left, LpmcDocument $right) {
+                $leftPriority = $this->resolveOfficeValidationPriority($left);
+                $rightPriority = $this->resolveOfficeValidationPriority($right);
+                if ($leftPriority !== $rightPriority) {
+                    return $leftPriority <=> $rightPriority;
+                }
+
+                $leftUploadedAt = $left->uploaded_at ? Carbon::parse($left->uploaded_at)->getTimestamp() : 0;
+                $rightUploadedAt = $right->uploaded_at ? Carbon::parse($right->uploaded_at)->getTimestamp() : 0;
+
+                return $rightUploadedAt <=> $leftUploadedAt;
+            })
+            ->first();
+
+        if (!$selectedDocument) {
+            return $summary;
+        }
+
+        $status = $this->normalizeOfficeDocumentStatus($selectedDocument);
+        $uploadedAtTimestamp = $selectedDocument->uploaded_at ? Carbon::parse($selectedDocument->uploaded_at)->getTimestamp() : 0;
+        $summary['priority'] = $this->resolveOfficeValidationPriority($selectedDocument);
+        $summary['uploaded_at_timestamp'] = $uploadedAtTimestamp;
+        $summary['date_submitted_label'] = $selectedDocument->uploaded_at
+            ? Carbon::parse($selectedDocument->uploaded_at)->setTimezone(config('app.timezone'))->format('M d, Y h:i A')
+            : '—';
+
+        if ($status === 'returned') {
+            $summary['approval_status_label'] = 'Returned';
+            $summary['approval_status_text_color'] = '#b91c1c';
+            $summary['approval_status_background_color'] = '#fef2f2';
+            $summary['approval_status_border_color'] = '#fca5a5';
+            $summary['validation_level_label'] = $selectedDocument->approved_at_dilg_po
+                ? 'Returned at DILG Regional Office'
+                : 'Returned at DILG Provincial Office';
+            $summary['validation_level_text_color'] = '#b91c1c';
+            $summary['validation_level_background_color'] = '#fef2f2';
+            $summary['validation_level_border_color'] = '#fca5a5';
+
+            return $summary;
+        }
+
+        if ($status === 'pending_ro') {
+            $summary['approval_status_label'] = 'For DILG Regional Office Validation';
+            $summary['approval_status_text_color'] = '#1d4ed8';
+            $summary['approval_status_background_color'] = '#dbeafe';
+            $summary['approval_status_border_color'] = '#60a5fa';
+            $summary['validation_level_label'] = 'DILG Regional Office';
+            $summary['validation_level_text_color'] = '#1d4ed8';
+            $summary['validation_level_background_color'] = '#dbeafe';
+            $summary['validation_level_border_color'] = '#60a5fa';
+
+            return $summary;
+        }
+
+        if ($status === 'pending_po') {
+            $summary['approval_status_label'] = 'For DILG Provincial Office Validation';
+            $summary['approval_status_text_color'] = '#1d4ed8';
+            $summary['approval_status_background_color'] = '#eff6ff';
+            $summary['approval_status_border_color'] = '#93c5fd';
+            $summary['validation_level_label'] = 'DILG Provincial Office';
+            $summary['validation_level_text_color'] = '#1d4ed8';
+            $summary['validation_level_background_color'] = '#eff6ff';
+            $summary['validation_level_border_color'] = '#93c5fd';
+
+            return $summary;
+        }
+
+        if ($status === 'approved') {
+            $summary['approval_status_label'] = 'Approved';
+            $summary['approval_status_text_color'] = '#047857';
+            $summary['approval_status_background_color'] = '#ecfdf5';
+            $summary['approval_status_border_color'] = '#6ee7b7';
+            $summary['validation_level_label'] = 'Completed';
+            $summary['validation_level_text_color'] = '#047857';
+            $summary['validation_level_background_color'] = '#ecfdf5';
+            $summary['validation_level_border_color'] = '#6ee7b7';
+        }
+
+        return $summary;
+    }
+
+    private function resolveOfficeValidationPriority(?LpmcDocument $document): int
+    {
+        $status = $this->normalizeOfficeDocumentStatus($document);
+
+        return match ($status) {
+            'pending_po', 'pending_ro' => 0,
+            'returned' => 1,
+            'approved' => 2,
+            default => 3,
+        };
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -724,6 +838,36 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         $page = LengthAwarePaginator::resolveCurrentPage('page');
         $officeRowsCollection = collect($officeRows);
+        $officeValidationSummaryByOffice = $officeRowsCollection
+            ->mapWithKeys(function (array $row) use ($documentsByOffice) {
+                $officeName = (string) ($row['city_municipality'] ?? '');
+                return [$officeName => $this->summarizeOfficeValidation($documentsByOffice[$officeName] ?? [])];
+            });
+
+        $officeRowsCollection = $officeRowsCollection
+            ->sort(function (array $leftRow, array $rightRow) use ($officeValidationSummaryByOffice) {
+                $leftSummary = $officeValidationSummaryByOffice->get($leftRow['city_municipality'], ['priority' => 3, 'uploaded_at_timestamp' => 0]);
+                $rightSummary = $officeValidationSummaryByOffice->get($rightRow['city_municipality'], ['priority' => 3, 'uploaded_at_timestamp' => 0]);
+
+                $priorityComparison = ((int) ($leftSummary['priority'] ?? 3)) <=> ((int) ($rightSummary['priority'] ?? 3));
+                if ($priorityComparison !== 0) {
+                    return $priorityComparison;
+                }
+
+                $uploadedAtComparison = ((int) ($rightSummary['uploaded_at_timestamp'] ?? 0)) <=> ((int) ($leftSummary['uploaded_at_timestamp'] ?? 0));
+                if ($uploadedAtComparison !== 0) {
+                    return $uploadedAtComparison;
+                }
+
+                $provinceComparison = strcasecmp((string) ($leftRow['province'] ?? ''), (string) ($rightRow['province'] ?? ''));
+                if ($provinceComparison !== 0) {
+                    return $provinceComparison;
+                }
+
+                return strcasecmp((string) ($leftRow['city_municipality'] ?? ''), (string) ($rightRow['city_municipality'] ?? ''));
+            })
+            ->values();
+
         $officeRows = (new LengthAwarePaginator(
             $officeRowsCollection->forPage($page, $perPage)->values(),
             $officeRowsCollection->count(),
@@ -735,7 +879,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ]
         ))->withQueryString();
 
-        return view('reports.local-project-monitoring-committee.index', compact('officeRows', 'documentsByOffice', 'perPage', 'filters', 'filterOptions'));
+        return view('reports.local-project-monitoring-committee.index', compact('officeRows', 'documentsByOffice', 'officeValidationSummaryByOffice', 'perPage', 'filters', 'filterOptions'));
     }
 
     /**

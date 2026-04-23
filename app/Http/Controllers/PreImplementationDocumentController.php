@@ -37,8 +37,21 @@ class PreImplementationDocumentController extends Controller
         $filters = [
             'search' => trim((string) $request->input('search', '')),
             'province' => trim((string) $request->input('province', '')),
+            'city_municipality' => trim((string) $request->input('city_municipality', '')),
+            'barangay' => trim((string) $request->input('barangay', '')),
+            'program' => trim((string) $request->input('program', '')),
             'funding_year' => trim((string) $request->input('funding_year', '')),
+            'project_type' => trim((string) $request->input('project_type', '')),
+            'project_status' => trim((string) $request->input('project_status', '')),
         ];
+
+        if ($filters['province'] === '') {
+            $filters['city_municipality'] = '';
+        }
+
+        if ($filters['city_municipality'] === '') {
+            $filters['barangay'] = '';
+        }
 
         if (!Schema::hasTable('subay_project_profiles')) {
             $projects = new LengthAwarePaginator([], 0, $perPage, 1, [
@@ -48,13 +61,19 @@ class PreImplementationDocumentController extends Controller
 
             $filterOptions = [
                 'provinces' => collect(),
+                'cities' => collect(),
+                'barangays' => collect(),
+                'programs' => collect(),
                 'funding_years' => collect(),
+                'project_types' => collect(),
+                'project_statuses' => collect(),
             ];
 
             return view('reports.pre-implementation-documents.index', compact('projects', 'filters', 'filterOptions', 'perPage'));
         }
 
         $baseQuery = $this->buildAccessibleSubayQuery(Auth::user());
+        $projectTypeExpression = $this->projectTypeExpression('spp');
 
         $filterOptions = [
             'provinces' => (clone $baseQuery)
@@ -64,6 +83,33 @@ class PreImplementationDocumentController extends Controller
                 ->distinct()
                 ->orderBy('spp.province')
                 ->pluck('spp.province'),
+            'cities' => $filters['province'] !== ''
+                ? (clone $baseQuery)
+                    ->select('spp.city_municipality')
+                    ->where('spp.province', $filters['province'])
+                    ->whereNotNull('spp.city_municipality')
+                    ->where('spp.city_municipality', '!=', '')
+                    ->distinct()
+                    ->orderBy('spp.city_municipality')
+                    ->pluck('spp.city_municipality')
+                : collect(),
+            'barangays' => $filters['city_municipality'] !== ''
+                ? (clone $baseQuery)
+                    ->select('spp.barangay')
+                    ->where('spp.city_municipality', $filters['city_municipality'])
+                    ->whereNotNull('spp.barangay')
+                    ->where('spp.barangay', '!=', '')
+                    ->distinct()
+                    ->orderBy('spp.barangay')
+                    ->pluck('spp.barangay')
+                : collect(),
+            'programs' => (clone $baseQuery)
+                ->select('spp.program')
+                ->whereNotNull('spp.program')
+                ->where('spp.program', '!=', '')
+                ->distinct()
+                ->orderBy('spp.program')
+                ->pluck('spp.program'),
             'funding_years' => (clone $baseQuery)
                 ->select('spp.funding_year')
                 ->whereNotNull('spp.funding_year')
@@ -71,6 +117,19 @@ class PreImplementationDocumentController extends Controller
                 ->distinct()
                 ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) DESC')
                 ->pluck('spp.funding_year'),
+            'project_types' => (clone $baseQuery)
+                ->select(DB::raw("{$projectTypeExpression} as project_type"))
+                ->whereRaw("{$projectTypeExpression} <> ''")
+                ->distinct()
+                ->orderBy('project_type')
+                ->pluck('project_type'),
+            'project_statuses' => (clone $baseQuery)
+                ->select('spp.status')
+                ->whereNotNull('spp.status')
+                ->where('spp.status', '!=', '')
+                ->distinct()
+                ->orderBy('spp.status')
+                ->pluck('spp.status'),
         ];
 
         $query = clone $baseQuery;
@@ -92,8 +151,28 @@ class PreImplementationDocumentController extends Controller
             $query->where('spp.province', $filters['province']);
         }
 
+        if ($filters['city_municipality'] !== '') {
+            $query->where('spp.city_municipality', $filters['city_municipality']);
+        }
+
+        if ($filters['barangay'] !== '') {
+            $query->where('spp.barangay', $filters['barangay']);
+        }
+
+        if ($filters['program'] !== '') {
+            $query->where('spp.program', $filters['program']);
+        }
+
         if ($filters['funding_year'] !== '') {
             $query->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) = ?', [(int) $filters['funding_year']]);
+        }
+
+        if ($filters['project_type'] !== '') {
+            $query->whereRaw("{$this->projectTypeExpression('spp')} = ?", [$filters['project_type']]);
+        }
+
+        if ($filters['project_status'] !== '') {
+            $query->where('spp.status', $filters['project_status']);
         }
 
         $fundSourceExpression = $this->fundSourceExpression('spp');
@@ -934,6 +1013,11 @@ $url = $projectCode !== ''
                 ELSE 'UNSPECIFIED'
             END
         ";
+    }
+
+    private function projectTypeExpression(string $alias = 'spp'): string
+    {
+        return "TRIM(COALESCE(NULLIF(TRIM({$alias}.type_of_project), ''), NULLIF(TRIM({$alias}.type), ''), ''))";
     }
 
     private function subaybayanLfpFundSources(): array
