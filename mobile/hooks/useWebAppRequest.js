@@ -12,8 +12,11 @@ export function useWebAppRequest() {
   const fetchJsonWithFallback = useCallback(
     async (path, init = {}) => {
       let lastError = null;
+      let preferredError = null;
+      const requestCandidates = [activeBaseUrl, ...candidateBaseUrls].filter(Boolean);
+      const uniqueRequestCandidates = Array.from(new Set(requestCandidates));
 
-      for (const baseUrl of candidateBaseUrls) {
+      for (const baseUrl of uniqueRequestCandidates) {
         const url = buildApiUrl(path, baseUrl);
 
         try {
@@ -41,12 +44,17 @@ export function useWebAppRequest() {
           return payload;
         } catch (error) {
           lastError = error;
+
+          const message = String(error?.message || "");
+          if (message.startsWith("Request failed") || message.startsWith("Endpoint responded")) {
+            preferredError = error;
+          }
         }
       }
 
-      throw lastError || new Error("Unable to connect to any local web app host.");
+      throw preferredError || lastError || new Error("Unable to connect to any local web app host.");
     },
-    [candidateBaseUrls]
+    [activeBaseUrl, candidateBaseUrls]
   );
 
   return {

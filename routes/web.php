@@ -210,6 +210,16 @@ Route::get('/api/municipality-projects', function () {
 //======================MOBILE ENDPOINTS=================
 Route::get('/api/mobile/locally-funded', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileIndex'])
     ->name('api.mobile.locally-funded');
+Route::get('/api/mobile/locally-funded/dashboard-summary', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileDashboardSummary'])
+    ->name('api.mobile.locally-funded.dashboard-summary');
+Route::get('/api/mobile/locally-funded/expected-completion', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileExpectedCompletionThisMonth'])
+    ->name('api.mobile.locally-funded.expected-completion');
+Route::get('/api/mobile/project-at-risk/slippage-summary', [App\Http\Controllers\ProjectAtRiskController::class, 'mobileSlippageSummary'])
+    ->name('api.mobile.project-at-risk.slippage-summary');
+Route::get('/api/mobile/project-at-risk/aging-summary', [App\Http\Controllers\ProjectAtRiskController::class, 'mobileAgingSummary'])
+    ->name('api.mobile.project-at-risk.aging-summary');
+Route::get('/api/mobile/project-at-risk/project-update-status-summary', [App\Http\Controllers\ProjectAtRiskController::class, 'mobileProjectUpdateStatusSummary'])
+    ->name('api.mobile.project-at-risk.project-update-status-summary');
 Route::get('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [App\Http\Controllers\LocallyFundedProjectController::class, 'viewMobileGalleryImage'])
     ->whereNumber('project')
     ->whereNumber('galleryImage')
