@@ -33,7 +33,6 @@ const STATUS_ALIASES = {
   "NOT STARTED": "NOT YET STARTED",
 };
 
-const PROJECT_RISK_CHART_ORDER = ["Ahead", "No Risk", "On Schedule", "High Risk", "Moderate Risk", "Low Risk"];
 const PROJECT_RISK_SUMMARY_ORDER = ["On Schedule", "Ahead", "No Risk", "Low Risk", "Moderate Risk", "High Risk"];
 
 function toNumber(value) {
@@ -89,43 +88,12 @@ function normalizeProjectStatus(value) {
   return STATUS_LABEL_BY_NORMALIZED[normalized] || null;
 }
 
-function classifySlippageRisk(value) {
-  const slippage = Number(value);
-
-  if (!Number.isFinite(slippage)) {
-    return null;
-  }
-
-  if (slippage > 0) {
-    return "Ahead";
-  }
-
-  if (slippage === 0) {
-    return "On Schedule";
-  }
-
-  if (slippage <= -15) {
-    return "High Risk";
-  }
-
-  if (slippage <= -10) {
-    return "Moderate Risk";
-  }
-
-  if (slippage <= -5) {
-    return "Low Risk";
-  }
-
-  if (slippage < 0) {
-    return "No Risk";
-  }
-
-  return null;
-}
-
 export function useDashboardSummary() {
   const { fetchJsonWithFallback } = useWebAppRequest();
   const [projects, setProjects] = useState([]);
+  const [projectAtRiskSlippageRows, setProjectAtRiskSlippageRows] = useState(
+    PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 }))
+  );
   const [latestUpdatedAt, setLatestUpdatedAt] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState("");
@@ -135,9 +103,33 @@ export function useDashboardSummary() {
     setSummaryError("");
 
     try {
-      const firstPage = await fetchJsonWithFallback("/api/mobile/locally-funded?per_page=100&page=1");
+      const [firstPage, projectAtRiskSummary] = await Promise.all([
+        fetchJsonWithFallback("/api/mobile/locally-funded?per_page=100&page=1"),
+        fetchJsonWithFallback("/api/mobile/project-at-risk/slippage-summary"),
+      ]);
       const totalPages = Math.max(1, Number(firstPage?.meta?.last_page || 1));
       const collectedRows = Array.isArray(firstPage?.data) ? [...firstPage.data] : [];
+
+      const riskRows = Array.isArray(projectAtRiskSummary?.data)
+        ? projectAtRiskSummary.data
+            .map((row) => ({
+              label: String(row?.label || "").trim(),
+              count: Number(row?.count || 0),
+            }))
+            .filter((row) => row.label && PROJECT_RISK_SUMMARY_ORDER.includes(row.label))
+        : [];
+
+      if (riskRows.length > 0) {
+        const countsByLabel = new Map(riskRows.map((row) => [row.label, Number.isFinite(row.count) ? row.count : 0]));
+        setProjectAtRiskSlippageRows(
+          PROJECT_RISK_SUMMARY_ORDER.map((label) => ({
+            label,
+            count: countsByLabel.get(label) || 0,
+          }))
+        );
+      } else {
+        setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
+      }
 
       if (totalPages > 1) {
         const remainingPages = await Promise.all(
@@ -174,6 +166,7 @@ export function useDashboardSummary() {
       setLatestUpdatedAt(latestRow?.updated_at || firstPage?.meta?.latest_updated_at || null);
     } catch (error) {
       setProjects([]);
+      setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
       setLatestUpdatedAt(null);
       setSummaryError(error?.message || "Unable to load dashboard summary.");
     } finally {
@@ -255,24 +248,6 @@ export function useDashboardSummary() {
       { key: "disbursement", value: formatCurrency(disbursement) },
       { key: "balance", value: formatCurrency(balance) },
     ];
-  }, [projects]);
-
-  const projectAtRiskSlippageRows = useMemo(() => {
-    const counts = new Map(PROJECT_RISK_CHART_ORDER.map((riskLabel) => [riskLabel, 0]));
-
-    projects.forEach((project) => {
-      const slippageValue = project?.current_physical?.slippage_ro;
-      const riskLabel = classifySlippageRisk(slippageValue);
-
-      if (riskLabel) {
-        counts.set(riskLabel, (counts.get(riskLabel) || 0) + 1);
-      }
-    });
-
-    return PROJECT_RISK_SUMMARY_ORDER.map((riskLabel) => ({
-      label: riskLabel,
-      count: counts.get(riskLabel) || 0,
-    }));
   }, [projects]);
 
   const projectAtRiskSlippageTotal = useMemo(

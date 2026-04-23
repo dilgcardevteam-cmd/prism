@@ -210,6 +210,8 @@ Route::get('/api/municipality-projects', function () {
 //======================MOBILE ENDPOINTS=================
 Route::get('/api/mobile/locally-funded', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileIndex'])
     ->name('api.mobile.locally-funded');
+Route::get('/api/mobile/project-at-risk/slippage-summary', [App\Http\Controllers\ProjectAtRiskController::class, 'mobileSlippageSummary'])
+    ->name('api.mobile.project-at-risk.slippage-summary');
 Route::get('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [App\Http\Controllers\LocallyFundedProjectController::class, 'viewMobileGalleryImage'])
     ->whereNumber('project')
     ->whereNumber('galleryImage')
