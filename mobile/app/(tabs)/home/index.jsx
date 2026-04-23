@@ -57,14 +57,11 @@ export default function HomeScreen() {
   const isCompactScreen = screenWidth < 390;
   const isNarrowRiskLayout = screenWidth < 430;
   const financialTileWidth = Math.max(screenWidth * 0.84, 290);
-  const riskPanelHeight = Math.max(250, Math.min(340, screenWidth * 0.76));
-  const riskChartWidth = isNarrowRiskLayout
-    ? Math.max(118, Math.min(148, screenWidth * 0.34))
-    : Math.max(148, Math.min(220, screenWidth * 0.42));
-  const riskLegendWidth = Math.max(195, screenWidth - riskChartWidth - 40);
+  const riskPanelHeight = Math.max(240, Math.min(320, screenWidth * 0.72));
+  const riskLegendWidth = Math.max(280, Math.min(screenWidth - 8, 420));
   const donutSize = isNarrowRiskLayout
-    ? Math.max(110, Math.min(148, riskPanelHeight - 84))
-    : Math.max(132, Math.min(188, riskPanelHeight - 30));
+    ? Math.max(136, Math.min(182, screenWidth * 0.46))
+    : Math.max(156, Math.min(220, screenWidth * 0.5));
   const fundSourceColumns = screenWidth >= 390 ? 3 : 2;
   const fundSourceGap = 8;
   const horizontalPadding = 16;

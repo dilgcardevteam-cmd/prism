@@ -74,12 +74,9 @@ function StatusSubaybayanRow({ status, count, total, maxCount, screenWidth }) {
 
 export default function ProjectStatusSection({ isLoadingSummary, summaryError, statusSubaybayanRows, statusSubaybayanTotal, statusSubaybayanMax, screenWidth, isCompactScreen }) {
   return (
-    <View className="mb-10 mt-6 rounded-[20px] border border-[#e2e8f0] bg-white py-4" style={{ paddingHorizontal: isCompactScreen ? 12 : 14 }}>
-      <Text
-        className="uppercase tracking-[0.8px] text-[#173e8c]"
-        style={{ fontFamily: "Montserrat-SemiBold", fontSize: isCompactScreen ? 16 : 18, lineHeight: isCompactScreen ? 22 : 24 }}
-      >
-        Status of Project (Subaybayan Status)
+    <View className="mt-6">
+      <Text className="mb-2 text-[18px] uppercase tracking-[0.8px] text-[#173e8c]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+        Status of Project (SUBAYBAYAN Status)
       </Text>
 
       {isLoadingSummary ? (
@@ -90,7 +87,7 @@ export default function ProjectStatusSection({ isLoadingSummary, summaryError, s
           </Text>
         </View>
       ) : summaryError ? (
-        <View className="mt-3 rounded-[14px] border border-[#f4c7c7] bg-[#fff5f5] px-4 py-4">
+        <View className="mt-3 rounded-[14px] bg-[#fff5f5] px-4 py-4">
           <Text className="text-[14px] text-[#991b1b]" style={{ fontFamily: "Montserrat-SemiBold" }}>
             Unable to load status summary.
           </Text>
@@ -112,7 +109,7 @@ export default function ProjectStatusSection({ isLoadingSummary, summaryError, s
           ))}
         </View>
       ) : (
-        <View className="mt-3 rounded-[14px] border border-[#e2e8f0] bg-[#f8fafc] px-4 py-4">
+        <View className="mt-3 rounded-[14px] bg-[#f8fafc] px-4 py-4">
           <Text className="text-[13px] text-[#475569]" style={{ fontFamily: "Montserrat" }}>
             No SubayBAYAN status records available yet.
           </Text>

@@ -9,11 +9,15 @@ function RiskLegendItem({ label, count, total, compact }) {
   const styleMeta = PROJECT_RISK_STYLES[label] || { bg: "#6b7280", text: "#f8fafc" };
   const percentage = total > 0 ? (count / total) * 100 : 0;
   const labelFontSize = compact ? 12 : 13;
-  const valueFontSize = compact ? 20 : 22;
-  const percentageFontSize = compact ? 12 : 13;
 
   return (
-    <View className="mb-2 flex-row items-center justify-between rounded-[10px] px-2.5 py-2" style={{ backgroundColor: styleMeta.bg }}>
+    <View className="mb-2 mr-2 flex-col items-center justify-between rounded-[10px] px-3 py-1" style={{ backgroundColor: styleMeta.bg }}>
+      <Text className="text-white"
+        style={{ fontFamily: "Montserrat-SemiBold", color: styleMeta.text}}
+      >
+        {formatCount(count)} | {formatPercentage(percentage)}
+      </Text>
+
       <Text
         className="pr-2"
         style={{ fontFamily: "Montserrat", color: styleMeta.text, flex: 1, fontSize: labelFontSize, lineHeight: labelFontSize + 4 }}
@@ -21,15 +25,6 @@ function RiskLegendItem({ label, count, total, compact }) {
       >
         {label}
       </Text>
-
-      <View style={{ borderLeftWidth: 2, borderLeftColor: "rgba(248,250,252,0.55)", paddingLeft: 8, alignItems: "flex-end", minWidth: compact ? 72 : 86 }}>
-        <Text className="text-right" style={{ fontFamily: "Montserrat-SemiBold", color: styleMeta.text, fontSize: valueFontSize, lineHeight: valueFontSize + 2 }}>
-          {formatCount(count)}
-        </Text>
-        <Text className="text-right" style={{ fontFamily: "Montserrat", color: styleMeta.text, fontSize: percentageFontSize, lineHeight: percentageFontSize + 2 }}>
-          {formatPercentage(percentage)}
-        </Text>
-      </View>
     </View>
   );
 }
@@ -68,8 +63,8 @@ export default function ProjectRiskSection({ isLoadingSummary, summaryError, pro
   }, [projectAtRiskSlippageRows, projectAtRiskSlippageTotal]);
 
   return (
-    <View className="mt-6 rounded-[18px] border border-[#dfe3ea] bg-white px-3 py-3">
-      <Text className="text-[18px] uppercase tracking-[0.7px] text-[#173e8c]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+    <View className="mt-6">
+      <Text className="mb-2 text-[18px] uppercase tracking-[0.8px] text-[#173e8c]" style={{ fontFamily: "Montserrat-SemiBold" }}>
         Project At Risk as to Slippage
       </Text>
       <Text className="mt-1 text-[13px] text-[#6b7280]" style={{ fontFamily: "Montserrat" }}>
@@ -84,7 +79,7 @@ export default function ProjectRiskSection({ isLoadingSummary, summaryError, pro
           </Text>
         </View>
       ) : summaryError ? (
-        <View className="mt-3 rounded-[14px] border border-[#f4c7c7] bg-[#fff5f5] px-4 py-4">
+        <View className="mt-3 rounded-[14px] bg-[#fff5f5] px-4 py-4">
           <Text className="text-[14px] text-[#991b1b]" style={{ fontFamily: "Montserrat-SemiBold" }}>
             Unable to load slippage risk summary.
           </Text>
@@ -93,8 +88,8 @@ export default function ProjectRiskSection({ isLoadingSummary, summaryError, pro
           </Text>
         </View>
       ) : projectAtRiskSlippageTotal > 0 ? (
-        <View className="mt-3 flex-col items-center">
-          <View className="items-center justify-center rounded-[12px] border border-[#e5e7eb] bg-[#f9fafb]">
+        <View className="mt-3 w-full items-center">
+          <View className="items-center justify-center rounded-[12px]">
             <Svg width={donutSize} height={donutSize} viewBox={`0 0 ${donutSize} ${donutSize}`}>
               {(() => {
                 const strokeWidth = Math.max(14, Math.round(donutSize * 0.14));
@@ -135,15 +130,15 @@ export default function ProjectRiskSection({ isLoadingSummary, summaryError, pro
             </Svg>
           </View>
 
-          <View style={{ width: riskLegendWidth, height: riskPanelHeight }}>
+          <View className="mt-3" style={{ width: "100%", minWidth: riskLegendWidth }}>
             <ScrollView
               horizontal
               nestedScrollEnabled
-              showsHorizontalScrollIndicator
-              style={{ height: riskPanelHeight }}
+              showsHorizontalScrollIndicator={true}
+              style={{ width: "100%" }}
               contentContainerStyle={{
                 flexDirection: "row",
-                paddingRight: 2,
+                paddingRight: 8,
               }}
             >
               {projectAtRiskSlippageRows.map((row) => (
@@ -159,7 +154,7 @@ export default function ProjectRiskSection({ isLoadingSummary, summaryError, pro
           </View>
         </View>
       ) : (
-        <View className="mt-3 rounded-[14px] border border-[#e2e8f0] bg-[#f8fafc] px-4 py-4">
+        <View className="mt-3 rounded-[14px] bg-[#f8fafc] px-4 py-4">
           <Text className="text-[13px] text-[#475569]" style={{ fontFamily: "Montserrat" }}>
             No slippage risk records available yet.
           </Text>
