@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo } from "react";
 import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import Animated, {
@@ -423,24 +424,34 @@ export default function HomeScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >
-        <Animated.View style={[{ backgroundColor: APP_COLORS.primaryBlue }, heroParallaxStyle]}>
-          <View className="px-4 pb-12 pt-6">
-            <Text className="text-[28px] leading-[32px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
-              {greeting}, {firstName}!
-            </Text>
-            <Text className="mt-2 text-[14px] leading-[20px] text-white/85" style={{ fontFamily: "Montserrat" }}>
-              {summaryLabel}
-            </Text>
+        <Animated.View style={heroParallaxStyle}>
 
-            <View className="mt-10">
-              <Text className="text-[58px] leading-[60px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                {isLoadingSummary ? "…" : formatCount(totalProjects)}
+          <LinearGradient
+            colors={['#4069ad', APP_COLORS.primaryBlue]}
+            locations={[0.2, 1]}
+            start={{ x: 1, y: 0 }}   // upper right
+            end={{ x: 0, y: 1 }}     // lower left
+            style={{ flex: 1 }}
+          >
+            <View className="px-4 pb-12 pt-6">
+              <Text className="text-[28px] leading-[32px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                {greeting}, {firstName}!
               </Text>
-              <Text className="mt-1 text-[14px] uppercase tracking-[1.5px] text-white/85" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                Total Number of Projects
+              <Text className="mt-2 text-[14px] leading-[20px] text-white/85" style={{ fontFamily: "Montserrat" }}>
+                {summaryLabel}
               </Text>
+
+              <View className="mt-10">
+                <Text className="text-[58px] leading-[60px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                  {isLoadingSummary ? "…" : formatCount(totalProjects)}
+                </Text>
+                <Text className="mt-1 text-[14px] uppercase tracking-[1.5px] text-white/85" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                  Total Number of Projects
+                </Text>
+              </View>
             </View>
-          </View>
+          </LinearGradient>
+
         </Animated.View>
 
         <Animated.View className="-mt-6 flex-1 rounded-t-[28px] bg-white px-4 pt-4" style={contentParallaxStyle}>
@@ -557,10 +568,10 @@ export default function HomeScreen() {
                 </Text>
               </View>
             ) : projectAtRiskSlippageTotal > 0 ? (
-              <View className="mt-3" style={{ flexDirection: "row", alignItems: "stretch", columnGap: 10 }}>
+              <View className="mt-3 flex-col bg-red-400 items-center">
+                {/* pie chart */}
                 <View
                   className="items-center justify-center rounded-[12px] border border-[#e5e7eb] bg-[#f9fafb]"
-                  style={{ width: riskChartWidth, height: riskPanelHeight }}
                 >
                   <Svg width={donutSize} height={donutSize} viewBox={`0 0 ${donutSize} ${donutSize}`}>
                     {(() => {
@@ -609,12 +620,17 @@ export default function HomeScreen() {
                   </Svg>
                 </View>
 
+                {/* legend (parang ako lang -carl) */}
                 <View style={{ width: riskLegendWidth, height: riskPanelHeight }}>
                   <ScrollView
+                    horizontal
                     nestedScrollEnabled
-                    showsVerticalScrollIndicator
+                    showsHorizontalScrollIndicator
                     style={{ height: riskPanelHeight }}
-                    contentContainerStyle={{ paddingRight: 2 }}
+                    contentContainerStyle={{
+                      flexDirection: 'row',
+                      paddingRight: 2,
+                    }}
                   >
                     {projectAtRiskSlippageRows.map((row) => (
                       <RiskLegendItem
