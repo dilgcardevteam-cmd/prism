@@ -1294,7 +1294,7 @@ $url = route('locally-funded-project.show', $project, false);
     {
         // Cache key: user + filters (5min TTL)
         $userId = Auth::id();
-        $filterHash = md5(serialize(request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir'])));
+        $filterHash = md5(serialize(request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'barangay', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir'])));
         $cacheKey = "lfp_index:{$userId}:{$filterHash}";
 
         if (Cache::has($cacheKey)) {
@@ -1480,6 +1480,7 @@ $url = route('locally-funded-project.show', $project, false);
             'fund_source' => trim((string) request('fund_source', '')),
             'province' => trim((string) request('province', '')),
             'city' => trim((string) request('city', '')),
+            'barangay' => trim((string) request('barangay', '')),
             'procurement' => trim((string) request('procurement', '')),
             'status' => trim((string) request('status', '')),
             'project_update_status' => trim((string) request('project_update_status', '')),
@@ -1517,6 +1518,35 @@ $url = route('locally-funded-project.show', $project, false);
             ->get()
             ->groupBy('province')
             ->map(fn ($rows) => $rows->pluck('city_municipality')->filter()->values()->all())
+            ->toArray();
+
+        $scopedCityBarangays = (clone $scopedLocationOptionsQuery)
+            ->selectRaw('TRIM(COALESCE(' . $projectCityExpression . ", '')) as city_municipality")
+            ->selectRaw("TRIM(COALESCE(COALESCE(lfp.barangay, spp.barangay), '')) as barangay")
+            ->whereRaw('TRIM(COALESCE(' . $projectCityExpression . ", '')) <> ''")
+            ->whereRaw("TRIM(COALESCE(COALESCE(lfp.barangay, spp.barangay), '')) <> ''")
+            ->orderBy('city_municipality')
+            ->get()
+            ->groupBy('city_municipality')
+            ->map(function ($rows) {
+                return $rows
+                    ->flatMap(function ($row) {
+                        $barangayText = trim((string) ($row->barangay ?? ''));
+                        if ($barangayText === '') {
+                            return [];
+                        }
+
+                        $normalized = preg_replace('/[\r\n;|]+/', ',', $barangayText);
+
+                        return collect(explode(',', (string) $normalized))
+                            ->map(fn ($item) => trim((string) $item))
+                            ->filter()
+                            ->values();
+                    })
+                    ->unique(fn ($value) => strtolower((string) $value))
+                    ->values()
+                    ->all();
+            })
             ->toArray();
 
         if ($filters['project_code'] !== '') {
@@ -1563,6 +1593,15 @@ $url = route('locally-funded-project.show', $project, false);
 
         if ($filters['city'] !== '') {
             $query->whereRaw('LOWER(TRIM(COALESCE(lfp.city_municipality, spp.city_municipality, \'\'))) = ?', [strtolower($filters['city'])]);
+        }
+
+        if ($filters['barangay'] !== '') {
+            $query->where(function ($subQuery) use ($filters) {
+                $barangayKeyword = strtolower($filters['barangay']);
+                $subQuery
+                    ->whereRaw('LOWER(TRIM(COALESCE(lfp.barangay, spp.barangay, \'\'))) = ?', [$barangayKeyword])
+                    ->orWhereRaw('LOWER(COALESCE(lfp.barangay, spp.barangay, \'\')) LIKE ?', ['%' . $barangayKeyword . '%']);
+            });
         }
 
         if ($filters['procurement'] !== '') {
@@ -1851,6 +1890,9 @@ $url = route('locally-funded-project.show', $project, false);
         $options['provinceMunicipalities'] = !empty($scopedProvinceMunicipalities)
             ? $scopedProvinceMunicipalities
             : ($options['provinceMunicipalities'] ?? []);
+        $options['cityBarangays'] = !empty($scopedCityBarangays)
+            ? $scopedCityBarangays
+            : ($options['cityBarangays'] ?? []);
         $options['fundSources'] = collect($options['fundSources'] ?? [])
             ->reject(function ($source) {
                 return strcasecmp((string) $source, 'SGLGIF') === 0;

@@ -26,22 +26,37 @@
                 'fund_source' => '',
                 'province' => '',
                 'city' => '',
+                'barangay' => '',
                 'procurement' => '',
                 'status' => '',
                 'project_update_status' => '',
             ], $filters ?? []);
 
             $selectedProvinceFilter = trim((string) ($activeFilters['province'] ?? ''));
+            $selectedCityFilter = trim((string) ($activeFilters['city'] ?? ''));
             if ($selectedProvinceFilter !== '' && array_key_exists($selectedProvinceFilter, $provinceMunicipalities)) {
                 $cityOptions = collect($provinceMunicipalities[$selectedProvinceFilter] ?? []);
             } else {
-                $cityOptions = collect($provinceMunicipalities)->flatten(1);
+                $cityOptions = collect();
             }
 
             $cityOptions = $cityOptions
                 ->map(fn($city) => trim((string) $city))
                 ->filter()
                 ->unique()
+                ->sort()
+                ->values();
+
+            if ($selectedCityFilter !== '' && array_key_exists($selectedCityFilter, ($cityBarangays ?? []))) {
+                $barangayOptions = collect($cityBarangays[$selectedCityFilter] ?? []);
+            } else {
+                $barangayOptions = collect();
+            }
+
+            $barangayOptions = $barangayOptions
+                ->map(fn($barangay) => trim((string) $barangay))
+                ->filter()
+                ->unique(fn ($barangay) => strtolower((string) $barangay))
                 ->sort()
                 ->values();
 
@@ -228,6 +243,15 @@
                         </select>
                     </div>
                     <div style="min-width: 170px;">
+                        <label for="filter-barangay" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Barangay</label>
+                        <select id="filter-barangay" name="barangay" data-selected-barangay="{{ $activeFilters['barangay'] }}" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
+                            <option value="">All</option>
+                            @foreach($barangayOptions as $barangay)
+                                <option value="{{ $barangay }}" {{ (string) $activeFilters['barangay'] === (string) $barangay ? 'selected' : '' }}>{{ $barangay }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div style="min-width: 170px;">
                         <label for="filter-procurement" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Procurement Type</label>
                         <select id="filter-procurement" name="procurement" style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
                             <option value="">All</option>
@@ -245,6 +269,9 @@
                             @endforeach
                         </select>
                     </div>
+                    <button type="submit" style="padding: 8px 12px; background-color: #1d4ed8; color: white; border: 0; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                        Apply Filter
+                    </button>
                     <a href="{{ route($listRouteName, ['sort_by' => $sortBy ?? 'funding_year', 'sort_dir' => $sortDir ?? 'asc', 'per_page' => $perPage ?? 10]) }}" style="padding: 8px 12px; background-color: #6b7280; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">
                         Clear
                     </a>
@@ -1142,31 +1169,24 @@
             let resultsContainer = document.querySelector('[data-results-container]');
             const provinceSelect = document.getElementById('filter-province');
             const citySelect = document.getElementById('filter-city');
+            const barangaySelect = document.getElementById('filter-barangay');
             const yearSelect = document.getElementById('filter-year');
             const fundSourceSelect = document.getElementById('filter-fund-source');
             const procurementSelect = document.getElementById('filter-procurement');
             const statusSelect = document.getElementById('filter-status');
             const locationData = @json($provinceMunicipalities);
+            const barangayData = @json($cityBarangays ?? []);
             const selectedCity = citySelect ? (citySelect.dataset.selectedCity || '') : '';
+            const selectedBarangay = barangaySelect ? (barangaySelect.dataset.selectedBarangay || '') : '';
             let isFetchingResults = false;
 
             if (filtersPanel && window.matchMedia('(max-width: 768px)').matches) {
                 filtersPanel.removeAttribute('open');
             }
 
-            if (!filtersForm || !provinceSelect || !citySelect) {
+            if (!filtersForm || !provinceSelect || !citySelect || !barangaySelect) {
                 return;
             }
-
-            const allCities = new Set();
-            Object.values(locationData).forEach(function (cities) {
-                if (!Array.isArray(cities)) {
-                    return;
-                }
-                cities.forEach(function (city) {
-                    allCities.add(city);
-                });
-            });
 
             function populateCityOptions(selectedProvince, preferredValue) {
                 const currentValue = preferredValue || citySelect.value || '';
@@ -1179,7 +1199,7 @@
 
                 const cities = selectedProvince && Array.isArray(locationData[selectedProvince])
                     ? locationData[selectedProvince]
-                    : Array.from(allCities);
+                    : [];
 
                 cities.sort().forEach(function (city) {
                     const option = document.createElement('option');
@@ -1190,6 +1210,31 @@
 
                 if (currentValue && cities.includes(currentValue)) {
                     citySelect.value = currentValue;
+                }
+            }
+
+            function populateBarangayOptions(selectedCity, preferredValue) {
+                const currentValue = preferredValue || barangaySelect.value || '';
+
+                barangaySelect.innerHTML = '';
+                const allOption = document.createElement('option');
+                allOption.value = '';
+                allOption.textContent = 'All';
+                barangaySelect.appendChild(allOption);
+
+                const barangays = selectedCity && Array.isArray(barangayData[selectedCity])
+                    ? barangayData[selectedCity]
+                    : [];
+
+                barangays.slice().sort().forEach(function (barangay) {
+                    const option = document.createElement('option');
+                    option.value = barangay;
+                    option.textContent = barangay;
+                    barangaySelect.appendChild(option);
+                });
+
+                if (currentValue && barangays.includes(currentValue)) {
+                    barangaySelect.value = currentValue;
                 }
             }
 
@@ -1306,16 +1351,17 @@
             provinceSelect.addEventListener('change', function () {
                 populateCityOptions(this.value);
                 citySelect.value = '';
-                submitFilters();
+                populateBarangayOptions('');
+                barangaySelect.value = '';
             });
 
-            [yearSelect, fundSourceSelect, citySelect, procurementSelect, statusSelect]
-                .filter(Boolean)
-                .forEach(function (select) {
-                    select.addEventListener('change', submitFilters);
-                });
+            citySelect.addEventListener('change', function () {
+                populateBarangayOptions(this.value);
+                barangaySelect.value = '';
+            });
 
             populateCityOptions(provinceSelect.value, selectedCity);
+            populateBarangayOptions(citySelect.value, selectedBarangay);
 
             document.addEventListener('click', function (event) {
                 const link = event.target.closest('.lfp-sort-link, .lfp-mobile-card-action, [data-results-container] a');

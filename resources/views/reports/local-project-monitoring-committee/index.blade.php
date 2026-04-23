@@ -132,7 +132,7 @@
                     </span>
                 </div>
                 <div class="table-responsive report-table-shell" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-                    <table id="lpmc-office-table" style="width: 100%; border-collapse: collapse; min-width: 1900px;">
+                    <table id="lpmc-office-table" style="width: 100%; border-collapse: collapse; min-width: 2500px;">
                         <thead>
                             <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                                 <th rowspan="3" style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Province</th>
@@ -144,6 +144,9 @@
                                 <th rowspan="3" style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Executive Order for 2026</th>
                                 <th rowspan="3" style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">CY 2026 Annual Work and Financial Plan</th>
                                 <th rowspan="3" style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">CY 2026 Monitoring and Evaluation Plan</th>
+                                <th rowspan="3" style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Approval Status</th>
+                                <th rowspan="3" style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Date Submitted</th>
+                                <th rowspan="3" style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Validation Level</th>
                                 <th rowspan="3" style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Actions</th>
                             </tr>
                             <tr>
@@ -170,6 +173,17 @@
                             @forelse ($officeRows as $row)
                                 @php
                                     $officeDocs = $documentsByOffice[$row['city_municipality']] ?? [];
+                                    $validationSummary = $officeValidationSummaryByOffice[$row['city_municipality']] ?? [
+                                        'approval_status_label' => 'Awaiting Upload',
+                                        'approval_status_text_color' => '#4b5563',
+                                        'approval_status_background_color' => '#f3f4f6',
+                                        'approval_status_border_color' => '#d1d5db',
+                                        'date_submitted_label' => '—',
+                                        'validation_level_label' => '—',
+                                        'validation_level_text_color' => '#4b5563',
+                                        'validation_level_background_color' => '#f3f4f6',
+                                        'validation_level_border_color' => '#d1d5db',
+                                    ];
                                     $statusIcon = function ($doc) {
                                         if (!$doc) {
                                             return '<span class="lpmc-status-chip lpmc-status-chip--empty" title="No upload yet"><i class="fas fa-minus"></i><span>-</span></span>';
@@ -220,6 +234,19 @@
                                     <td style="padding: 12px; text-align: center; color: #111827; font-size: 14px;">{!! $statusIcon($officeDocs['awfp|2026|'] ?? null) !!}</td>
                                     <td style="padding: 12px; text-align: center; color: #111827; font-size: 14px;">{!! $statusIcon($officeDocs['mep|2026|'] ?? null) !!}</td>
                                     <td style="padding: 12px; text-align: center;">
+                                        <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationSummary['approval_status_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationSummary['approval_status_background_color'] ?? '#f3f4f6' }}; color: {{ $validationSummary['approval_status_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                            {{ $validationSummary['approval_status_label'] ?? 'Awaiting Upload' }}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
+                                        {{ $validationSummary['date_submitted_label'] ?? '—' }}
+                                    </td>
+                                    <td style="padding: 12px; text-align: center;">
+                                        <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationSummary['validation_level_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationSummary['validation_level_background_color'] ?? '#f3f4f6' }}; color: {{ $validationSummary['validation_level_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                            {{ $validationSummary['validation_level_label'] ?? '—' }}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; text-align: center;">
                                         <a href="{{ route('local-project-monitoring-committee.edit', $row['city_municipality']) }}" style="display: inline-block; padding: 8px 16px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-decoration: none; transition: all 0.3s ease;">
                                             <i class="fas fa-eye" style="margin-right: 4px;"></i> View
                                         </a>
@@ -227,7 +254,7 @@
                                 </tr>
                             @empty
                                 <tr style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
-                                    <td colspan="21" style="padding: 40px; text-align: center; color: #6b7280;">
+                                    <td colspan="24" style="padding: 40px; text-align: center; color: #6b7280;">
                                         <i class="fas fa-table" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
                                         No records found.
                                     </td>

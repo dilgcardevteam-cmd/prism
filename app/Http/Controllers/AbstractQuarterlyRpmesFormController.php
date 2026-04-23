@@ -68,8 +68,12 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             ]);
 
         $this->applyProjectFilters($projectsQuery, $filters);
+        $this->applyValidationListMetadata($projectsQuery);
 
         $projects = $projectsQuery
+            ->orderBy('validation_priority')
+            ->orderByRaw('CASE WHEN latest_uploaded_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('latest_uploaded_at')
             ->orderByRaw("CASE WHEN spp.funding_year IS NULL OR TRIM(spp.funding_year) = '' THEN 1 ELSE 0 END")
             ->orderByRaw("CAST(COALESCE(NULLIF(TRIM(spp.funding_year), ''), '0') AS UNSIGNED) DESC")
             ->orderBy('spp.project_code')
@@ -720,6 +724,48 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         if (!empty($filters['project_status'])) {
             $query->whereIn(DB::raw("TRIM(COALESCE(spp.status, ''))"), $filters['project_status']);
         }
+    }
+
+    protected function applyValidationListMetadata($query): void
+    {
+        if (!Schema::hasTable($this->uploadTable())) {
+            $query->addSelect([
+                DB::raw('NULL as latest_report_file_path'),
+                DB::raw('NULL as latest_submission_status'),
+                DB::raw('NULL as latest_uploaded_at'),
+                DB::raw('NULL as latest_approved_at_dilg_po'),
+                DB::raw('NULL as latest_approved_at_dilg_ro'),
+                DB::raw('3 as validation_priority'),
+            ]);
+
+            return;
+        }
+
+        $table = $this->uploadTable();
+        $latestOrderExpression = "COALESCE(uploaded_at, updated_at, created_at)";
+        $filePathSubquery = "(SELECT file_path FROM {$table} WHERE project_code = spp.project_code ORDER BY {$latestOrderExpression} DESC, id DESC LIMIT 1)";
+        $statusSubquery = "(SELECT status FROM {$table} WHERE project_code = spp.project_code ORDER BY {$latestOrderExpression} DESC, id DESC LIMIT 1)";
+        $uploadedAtSubquery = "(SELECT uploaded_at FROM {$table} WHERE project_code = spp.project_code ORDER BY {$latestOrderExpression} DESC, id DESC LIMIT 1)";
+        $approvedAtPoSubquery = "(SELECT approved_at_dilg_po FROM {$table} WHERE project_code = spp.project_code ORDER BY {$latestOrderExpression} DESC, id DESC LIMIT 1)";
+        $approvedAtRoSubquery = "(SELECT approved_at_dilg_ro FROM {$table} WHERE project_code = spp.project_code ORDER BY {$latestOrderExpression} DESC, id DESC LIMIT 1)";
+
+        $query->addSelect([
+            DB::raw("{$filePathSubquery} as latest_report_file_path"),
+            DB::raw("{$statusSubquery} as latest_submission_status"),
+            DB::raw("{$uploadedAtSubquery} as latest_uploaded_at"),
+            DB::raw("{$approvedAtPoSubquery} as latest_approved_at_dilg_po"),
+            DB::raw("{$approvedAtRoSubquery} as latest_approved_at_dilg_ro"),
+            DB::raw("
+                CASE
+                    WHEN COALESCE({$filePathSubquery}, '') = '' THEN 3
+                    WHEN LOWER(COALESCE({$statusSubquery}, '')) <> 'returned'
+                        AND ({$approvedAtPoSubquery} IS NULL OR ({$approvedAtPoSubquery} IS NOT NULL AND {$approvedAtRoSubquery} IS NULL)) THEN 0
+                    WHEN LOWER(COALESCE({$statusSubquery}, '')) = 'returned' THEN 1
+                    WHEN {$approvedAtRoSubquery} IS NOT NULL THEN 2
+                    ELSE 3
+                END as validation_priority
+            "),
+        ]);
     }
 
     protected function deadlineReportingYear(): int

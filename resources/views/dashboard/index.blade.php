@@ -147,10 +147,45 @@
 
     @include('projects.partials.project-section-tabs', ['activeTab' => $activeProjectTab ?? 'locally-funded'])
 
+    <script>
+        window.toggleProjectFilter = window.toggleProjectFilter || function (button) {
+            if (!button) {
+                return;
+            }
+
+            var form = typeof button.closest === 'function'
+                ? button.closest('.project-filter-form')
+                : null;
+
+            if (!form) {
+                return;
+            }
+
+            var body = form.querySelector('.project-filter-body');
+            if (!body) {
+                return;
+            }
+
+            var isCollapsed = form.classList.contains('collapsed');
+            if (isCollapsed) {
+                form.classList.remove('collapsed');
+                body.style.maxHeight = body.scrollHeight + 'px';
+                button.setAttribute('aria-expanded', 'true');
+            } else {
+                body.style.maxHeight = body.scrollHeight + 'px';
+                requestAnimationFrame(function () {
+                    form.classList.add('collapsed');
+                    body.style.maxHeight = '0px';
+                    button.setAttribute('aria-expanded', 'false');
+                });
+            }
+        };
+    </script>
+
     <div class="dashboard-main-layout">
-        <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter collapsed" data-page-loading="true" data-loading-label="Updating dashboard" data-loading-detail="Applying the selected dashboard filters." style="background: #ffffff; padding: 16px 18px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 0;">
+        <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter collapsed" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
             <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="false" aria-controls="project-filter-body">
-                <i class="fas fa-filter" aria-hidden="true" style="font-size: 16px;"></i>
+                <span style="font-size: 20px;">&#128269;</span>
                 <span>PROJECT FILTER</span>
                 <span class="project-filter-chevron">
                     <i class="fas fa-chevron-up"></i>
@@ -158,317 +193,81 @@
             </button>
 
             <div id="project-filter-body" class="project-filter-body">
-                <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px 16px; align-items: end;">
-                <div
-                    class="dashboard-stacked-filter"
-                    data-stacked-filter
-                    data-source-select-id="province"
-                    data-badge-container-id="province_badges"
-                    data-dropdown-toggle-id="province_dropdown_toggle"
-                    data-dropdown-menu-id="province_dropdown_menu"
-                    data-empty-badge-text="All"
-                >
-                    <label for="province_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Province</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div
-                            id="province_dropdown_toggle"
-                            class="dashboard-stacked-filter-toggle"
-                            role="button"
-                            tabindex="0"
-                            aria-haspopup="listbox"
-                            aria-expanded="false"
-                            aria-controls="province_dropdown_menu"
-                        >
-                            <div id="province_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron">
-                                <i class="fas fa-chevron-down"></i>
-                            </span>
-                        </div>
-                        <div id="province_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select
-                        id="province"
-                        name="province[]"
-                        multiple
-                        class="dashboard-stacked-filter-source"
-                        data-filter-label="Province"
-                        aria-hidden="true"
-                    >
+                <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px 22px; align-items: end;">
+                <div>
+                    <label for="province" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Province</label>
+                    <select id="province" name="province" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
                         @foreach (($filterOptions['provinces'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['province'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div
-                    class="dashboard-stacked-filter"
-                    data-stacked-filter
-                    data-source-select-id="city_municipality"
-                    data-badge-container-id="city_municipality_badges"
-                    data-dropdown-toggle-id="city_municipality_dropdown_toggle"
-                    data-dropdown-menu-id="city_municipality_dropdown_menu"
-                    data-empty-badge-text="All"
-                    data-empty-menu-text="Select province first."
-                >
-                    <label for="city_municipality_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div
-                            id="city_municipality_dropdown_toggle"
-                            class="dashboard-stacked-filter-toggle"
-                            role="button"
-                            tabindex="0"
-                            aria-haspopup="listbox"
-                            aria-expanded="false"
-                            aria-controls="city_municipality_dropdown_menu"
-                        >
-                            <div id="city_municipality_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron">
-                                <i class="fas fa-chevron-down"></i>
-                            </span>
-                        </div>
-                        <div id="city_municipality_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select
-                        id="city_municipality"
-                        name="city_municipality[]"
-                        multiple
-                        class="dashboard-stacked-filter-source"
-                        data-filter-label="City/Municipality"
-                        aria-hidden="true"
-                    >
+                <div>
+                    <label for="city_municipality" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">City/Municipality</label>
+                    <select id="city_municipality" name="city_municipality" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
                         @foreach (($filterOptions['cities'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['city_municipality'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div
-                    class="dashboard-stacked-filter"
-                    data-stacked-filter
-                    data-source-select-id="barangay"
-                    data-badge-container-id="barangay_badges"
-                    data-dropdown-toggle-id="barangay_dropdown_toggle"
-                    data-dropdown-menu-id="barangay_dropdown_menu"
-                    data-empty-badge-text="All"
-                    data-empty-menu-text="Select city/municipality first."
-                >
-                    <label for="barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div
-                            id="barangay_dropdown_toggle"
-                            class="dashboard-stacked-filter-toggle"
-                            role="button"
-                            tabindex="0"
-                            aria-haspopup="listbox"
-                            aria-expanded="false"
-                            aria-controls="barangay_dropdown_menu"
-                        >
-                            <div id="barangay_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron">
-                                <i class="fas fa-chevron-down"></i>
-                            </span>
-                        </div>
-                        <div id="barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select
-                        id="barangay"
-                        name="barangay[]"
-                        multiple
-                        class="dashboard-stacked-filter-source"
-                        data-filter-label="Barangay"
-                        aria-hidden="true"
-                    >
+                <div>
+                    <label for="barangay" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Barangay</label>
+                    <select id="barangay" name="barangay" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
                         @foreach (($filterOptions['barangays'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['barangay'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div
-                    class="dashboard-stacked-filter"
-                    data-stacked-filter
-                    data-source-select-id="program"
-                    data-badge-container-id="program_badges"
-                    data-dropdown-toggle-id="program_dropdown_toggle"
-                    data-dropdown-menu-id="program_dropdown_menu"
-                    data-empty-badge-text="No program selected."
-                >
-                    <label for="program_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Program</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div
-                            id="program_dropdown_toggle"
-                            class="dashboard-stacked-filter-toggle"
-                            role="button"
-                            tabindex="0"
-                            aria-haspopup="listbox"
-                            aria-expanded="false"
-                            aria-controls="program_dropdown_menu"
-                        >
-                            <div id="program_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron">
-                                <i class="fas fa-chevron-down"></i>
-                            </span>
-                        </div>
-                        <div id="program_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select
-                        id="program"
-                        name="program[]"
-                        multiple
-                        class="dashboard-stacked-filter-source"
-                        data-filter-label="Program"
-                        aria-hidden="true"
-                    >
+                <div>
+                    <label for="program" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Program</label>
+                    <select id="program" name="program" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
                         @foreach (($filterOptions['programs'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['programs'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div
-                    class="dashboard-stacked-filter"
-                    data-stacked-filter
-                    data-source-select-id="funding_year"
-                    data-badge-container-id="funding_year_badges"
-                    data-dropdown-toggle-id="funding_year_dropdown_toggle"
-                    data-dropdown-menu-id="funding_year_dropdown_menu"
-                    data-empty-badge-text="All"
-                >
-                    <label for="funding_year_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Funding Year</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div
-                            id="funding_year_dropdown_toggle"
-                            class="dashboard-stacked-filter-toggle"
-                            role="button"
-                            tabindex="0"
-                            aria-haspopup="listbox"
-                            aria-expanded="false"
-                            aria-controls="funding_year_dropdown_menu"
-                        >
-                            <div id="funding_year_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron">
-                                <i class="fas fa-chevron-down"></i>
-                            </span>
-                        </div>
-                        <div id="funding_year_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select
-                        id="funding_year"
-                        name="funding_year[]"
-                        multiple
-                        class="dashboard-stacked-filter-source"
-                        data-filter-label="Funding Year"
-                        aria-hidden="true"
-                    >
+                <div>
+                    <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year</label>
+                    <select id="funding_year" name="funding_year" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
                         @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['funding_year'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div
-                    class="dashboard-stacked-filter"
-                    data-stacked-filter
-                    data-source-select-id="project_type"
-                    data-badge-container-id="project_type_badges"
-                    data-dropdown-toggle-id="project_type_dropdown_toggle"
-                    data-dropdown-menu-id="project_type_dropdown_menu"
-                    data-empty-badge-text="All"
-                >
-                    <label for="project_type_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Project Type</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div
-                            id="project_type_dropdown_toggle"
-                            class="dashboard-stacked-filter-toggle"
-                            role="button"
-                            tabindex="0"
-                            aria-haspopup="listbox"
-                            aria-expanded="false"
-                            aria-controls="project_type_dropdown_menu"
-                        >
-                            <div id="project_type_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron">
-                                <i class="fas fa-chevron-down"></i>
-                            </span>
-                        </div>
-                        <div id="project_type_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select
-                        id="project_type"
-                        name="project_type[]"
-                        multiple
-                        class="dashboard-stacked-filter-source"
-                        data-filter-label="Project Type"
-                        aria-hidden="true"
-                    >
+                <div>
+                    <label for="project_type" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Type</label>
+                    <select id="project_type" name="project_type" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
                         @foreach (($filterOptions['project_types'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['project_type'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div
-                    class="dashboard-stacked-filter"
-                    data-stacked-filter
-                    data-source-select-id="project_status"
-                    data-badge-container-id="project_status_badges"
-                    data-dropdown-toggle-id="project_status_dropdown_toggle"
-                    data-dropdown-menu-id="project_status_dropdown_menu"
-                    data-empty-badge-text="All"
-                >
-                    <label for="project_status_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Project Status</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div
-                            id="project_status_dropdown_toggle"
-                            class="dashboard-stacked-filter-toggle"
-                            role="button"
-                            tabindex="0"
-                            aria-haspopup="listbox"
-                            aria-expanded="false"
-                            aria-controls="project_status_dropdown_menu"
-                        >
-                            <div id="project_status_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron">
-                                <i class="fas fa-chevron-down"></i>
-                            </span>
-                        </div>
-                        <div id="project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select
-                        id="project_status"
-                        name="project_status[]"
-                        multiple
-                        class="dashboard-stacked-filter-source"
-                        data-filter-label="Project Status"
-                        aria-hidden="true"
-                    >
+                <div>
+                    <label for="project_status" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Status</label>
+                    <select id="project_status" name="project_status" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <option value="">All</option>
                         @foreach (($filterOptions['project_statuses'] ?? collect()) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['project_status'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
 
-                <div class="dashboard-filter-reset" style="display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-                    <a href="{{ route('dashboard') }}" class="dashboard-filter-reset-link" data-page-loading="true" data-loading-label="Resetting dashboard filters" data-loading-detail="Reloading the dashboard with the default filters." style="height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px;">
-                        <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end;">
+                    <a href="{{ route('dashboard') }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
                         Reset Filter
                     </a>
-                    <button
-                        type="submit"
-                        class="dashboard-filter-apply-btn"
-                    >
-                        <i class="fas fa-check" aria-hidden="true"></i>
-                        Apply Filter
-                    </button>
-                    <button
-                        type="button"
-                        class="dashboard-filter-export-btn"
-                        onclick="exportDashboardOverviewToExcel(this)"
-                        data-export-filename="status-of-projects-by-location.xls"
-                    >
-                        <i class="fas fa-file-excel" aria-hidden="true"></i>
-                        Export Report
-                    </button>
                 </div>
             </div>
             </div>

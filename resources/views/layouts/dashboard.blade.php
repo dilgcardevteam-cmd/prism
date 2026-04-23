@@ -3826,9 +3826,13 @@
         (function initializeGlobalPageLoader() {
             const loader = document.getElementById('globalPageLoader');
             const loaderRevealDelayMs = 90;
+            const loaderSafetyHideDelayMs = 10000;
+            const downloadNavigationSuppressMs = 3500;
             let loaderVisible = false;
             let loaderPending = false;
             let loaderTimer = null;
+            let loaderSafetyTimer = null;
+            let suppressBeforeUnloadLoaderUntil = 0;
 
             if (!loader) {
                 return;
@@ -3841,6 +3845,12 @@
                 loader.classList.add('is-visible');
                 loader.setAttribute('aria-hidden', 'false');
                 document.body.classList.add('page-loading');
+
+                if (loaderSafetyTimer) {
+                    window.clearTimeout(loaderSafetyTimer);
+                }
+
+                loaderSafetyTimer = window.setTimeout(hidePageLoader, loaderSafetyHideDelayMs);
             };
 
             const showPageLoader = function (options) {
@@ -3874,11 +3884,34 @@
                     loaderTimer = null;
                 }
 
+                if (loaderSafetyTimer) {
+                    window.clearTimeout(loaderSafetyTimer);
+                    loaderSafetyTimer = null;
+                }
+
                 loaderPending = false;
                 loaderVisible = false;
                 loader.classList.remove('is-visible');
                 loader.setAttribute('aria-hidden', 'true');
                 document.body.classList.remove('page-loading');
+            };
+
+            const isLikelyFileTransferUrl = function (url) {
+                const path = (url.pathname || '').toLowerCase();
+                const fileTransferPathPattern = /(^|\/)(export|download|template)(\/|$)/;
+                const fileExtensionPattern = /\.(csv|xls|xlsx|pdf|sql|zip|doc|docx)(\?|$)/;
+                const format = (url.searchParams.get('format') || '').toLowerCase();
+
+                return (
+                    fileTransferPathPattern.test(path)
+                    || fileExtensionPattern.test(path)
+                    || ['csv', 'xls', 'xlsx', 'excel', 'pdf', 'sql', 'zip'].includes(format)
+                );
+            };
+
+            const suppressPageLoaderForDownload = function () {
+                suppressBeforeUnloadLoaderUntil = Date.now() + downloadNavigationSuppressMs;
+                hidePageLoader();
             };
 
             const isSafeNavigableLink = function (link) {
@@ -3898,7 +3931,16 @@
 
                 try {
                     const url = new URL(link.href, window.location.href);
-                    return url.origin === window.location.origin;
+                    if (url.origin !== window.location.origin) {
+                        return false;
+                    }
+
+                    if (isLikelyFileTransferUrl(url)) {
+                        suppressPageLoaderForDownload();
+                        return false;
+                    }
+
+                    return true;
                 } catch (error) {
                     return false;
                 }
@@ -3958,6 +4000,11 @@
                     if (formActionUrl.origin !== window.location.origin) {
                         return false;
                     }
+
+                    if (isLikelyFileTransferUrl(formActionUrl)) {
+                        suppressPageLoaderForDownload();
+                        return false;
+                    }
                 } catch (error) {
                     return false;
                 }
@@ -3972,6 +4019,7 @@
             window.AppUI.hidePageLoader = hidePageLoader;
             window.AppUI.showPageLoaderForLink = showPageLoaderForLink;
             window.AppUI.showPageLoaderForForm = showPageLoaderForForm;
+            window.AppUI.suppressPageLoaderForDownload = suppressPageLoaderForDownload;
             window.showPageLoader = showPageLoader;
             window.hidePageLoader = hidePageLoader;
 
@@ -4020,6 +4068,10 @@
             });
 
             window.addEventListener('beforeunload', function () {
+                if (Date.now() <= suppressBeforeUnloadLoaderUntil) {
+                    return;
+                }
+
                 showPageLoader({ immediate: true });
             });
 

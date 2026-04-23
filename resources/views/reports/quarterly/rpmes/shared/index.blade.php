@@ -147,7 +147,7 @@
 
     <div style="background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); border: 1px solid #e5e7eb; overflow: hidden;">
         <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; min-width: 1040px;">
+            <table style="width: 100%; border-collapse: collapse; min-width: 1520px;">
                 <thead>
                     <tr style="background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);">
                         <th style="padding: 14px 16px; text-align: left; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Project Code</th>
@@ -157,6 +157,9 @@
                         <th style="padding: 14px 16px; text-align: left; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">City / Municipality</th>
                         <th style="padding: 14px 16px; text-align: left; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Province</th>
                         <th style="padding: 14px 16px; text-align: center; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Status</th>
+                        <th style="padding: 14px 16px; text-align: center; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Approval Status</th>
+                        <th style="padding: 14px 16px; text-align: center; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Date Submitted</th>
+                        <th style="padding: 14px 16px; text-align: center; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">Validation Level</th>
                         <th style="padding: 14px 16px; text-align: center; color: #ffffff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">View</th>
                     </tr>
                 </thead>
@@ -185,6 +188,74 @@
                                 $badgeColor = '#4b5563';
                                 $dotColor = '#9ca3af';
                             }
+
+                            $hasUploadedReport = !empty($project->latest_report_file_path);
+                            $isReturned = $project->latest_submission_status === 'returned';
+                            $isApprovedRo = !empty($project->latest_approved_at_dilg_ro);
+                            $isPendingDilgRoValidation = !empty($project->latest_approved_at_dilg_po) && empty($project->latest_approved_at_dilg_ro) && !$isReturned;
+
+                            $approvalStatusLabel = 'Awaiting Upload';
+                            $approvalStatusTextColor = '#4b5563';
+                            $approvalStatusBackgroundColor = '#f3f4f6';
+                            $approvalStatusBorderColor = '#d1d5db';
+                            $dateSubmittedLabel = '—';
+                            $validationLevelLabel = '—';
+                            $validationLevelTextColor = '#4b5563';
+                            $validationLevelBackgroundColor = '#f3f4f6';
+                            $validationLevelBorderColor = '#d1d5db';
+
+                            if ($hasUploadedReport) {
+                                $approvalStatusLabel = 'For DILG Provincial Office Validation';
+                                $approvalStatusTextColor = '#1d4ed8';
+                                $approvalStatusBackgroundColor = '#eff6ff';
+                                $approvalStatusBorderColor = '#93c5fd';
+                                $validationLevelLabel = 'DILG Provincial Office';
+                                $validationLevelTextColor = '#1d4ed8';
+                                $validationLevelBackgroundColor = '#eff6ff';
+                                $validationLevelBorderColor = '#93c5fd';
+                            }
+
+                            if (!empty($project->latest_uploaded_at)) {
+                                $dateSubmittedLabel = \Carbon\Carbon::parse($project->latest_uploaded_at)
+                                    ->setTimezone(config('app.timezone'))
+                                    ->format('M d, Y h:i A');
+                            }
+
+                            if ($isPendingDilgRoValidation) {
+                                $approvalStatusLabel = 'For DILG Regional Office Validation';
+                                $approvalStatusTextColor = '#1d4ed8';
+                                $approvalStatusBackgroundColor = '#dbeafe';
+                                $approvalStatusBorderColor = '#60a5fa';
+                                $validationLevelLabel = 'DILG Regional Office';
+                                $validationLevelTextColor = '#1d4ed8';
+                                $validationLevelBackgroundColor = '#dbeafe';
+                                $validationLevelBorderColor = '#60a5fa';
+                            }
+
+                            if ($isApprovedRo) {
+                                $approvalStatusLabel = 'Approved';
+                                $approvalStatusTextColor = '#047857';
+                                $approvalStatusBackgroundColor = '#ecfdf5';
+                                $approvalStatusBorderColor = '#6ee7b7';
+                                $validationLevelLabel = 'Completed';
+                                $validationLevelTextColor = '#047857';
+                                $validationLevelBackgroundColor = '#ecfdf5';
+                                $validationLevelBorderColor = '#6ee7b7';
+                            }
+
+                            if ($isReturned) {
+                                $approvalStatusLabel = 'Returned';
+                                $approvalStatusTextColor = '#b91c1c';
+                                $approvalStatusBackgroundColor = '#fef2f2';
+                                $approvalStatusBorderColor = '#fca5a5';
+                                $validationLevelLabel = !empty($project->latest_approved_at_dilg_po)
+                                    ? 'Returned at DILG Regional Office'
+                                    : 'Returned at DILG Provincial Office';
+                                $validationLevelTextColor = '#b91c1c';
+                                $validationLevelBackgroundColor = '#fef2f2';
+                                $validationLevelBorderColor = '#fca5a5';
+                            }
+
                             $rowBg = $index % 2 === 0 ? '#ffffff' : '#f9fafb';
                         @endphp
                         <tr style="background-color: {{ $rowBg }}; border-bottom: 1px solid #e5e7eb; transition: background-color 0.15s;"
@@ -207,6 +278,19 @@
                                     {{ $project->status ?: 'Unknown' }}
                                 </span>
                             </td>
+                            <td style="padding: 14px 16px; text-align: center;">
+                                <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $approvalStatusBorderColor }}; background-color: {{ $approvalStatusBackgroundColor }}; color: {{ $approvalStatusTextColor }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                    {{ $approvalStatusLabel }}
+                                </span>
+                            </td>
+                            <td style="padding: 14px 16px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
+                                {{ $dateSubmittedLabel }}
+                            </td>
+                            <td style="padding: 14px 16px; text-align: center;">
+                                <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationLevelBorderColor }}; background-color: {{ $validationLevelBackgroundColor }}; color: {{ $validationLevelTextColor }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                    {{ $validationLevelLabel }}
+                                </span>
+                            </td>
                             <td style="padding: 14px 16px; text-align: center; white-space: nowrap;">
                                 <a href="{{ route($formMeta['show_route'], ['projectCode' => $project->project_code]) }}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background-color: #002C76; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 600; transition: background-color 0.2s;"
                                    onmouseover="this.style.backgroundColor='#003d9e'" onmouseout="this.style.backgroundColor='#002C76'">
@@ -216,7 +300,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" style="padding: 60px 20px; text-align: center; color: #9ca3af;">
+                            <td colspan="11" style="padding: 60px 20px; text-align: center; color: #9ca3af;">
                                 <i class="fas fa-inbox" style="font-size: 36px; margin-bottom: 12px; display: block; color: #d1d5db;"></i>
                                 <div style="font-size: 14px; font-weight: 600; color: #6b7280;">No SubayBayan projects found.</div>
                                 <div style="font-size: 12px; margin-top: 4px;">The table will populate once matching SubayBayan data is available for your scope.</div>

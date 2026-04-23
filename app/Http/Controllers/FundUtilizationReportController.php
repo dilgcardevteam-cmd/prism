@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
 
 class FundUtilizationReportController extends Controller
 {
@@ -486,6 +487,7 @@ class FundUtilizationReportController extends Controller
             }
 
             $report->validation_summary = $this->summarizeFundUtilizationValidation($quarterDocuments);
+            $report->validation_listing = $this->summarizeFundUtilizationListing($quarterDocuments);
 
             return $report;
         }));
@@ -1039,6 +1041,185 @@ class FundUtilizationReportController extends Controller
     {
         return trim((string) $path) !== ''
             && strtolower(trim((string) $status)) === 'returned';
+    }
+
+    private function summarizeFundUtilizationListing(array $quarterDocuments): array
+    {
+        $summary = [
+            'approval_status_label' => 'Awaiting Upload',
+            'approval_status_text_color' => '#4b5563',
+            'approval_status_background_color' => '#f3f4f6',
+            'approval_status_border_color' => '#d1d5db',
+            'date_submitted_label' => '—',
+            'validation_level_label' => '—',
+            'validation_level_text_color' => '#4b5563',
+            'validation_level_background_color' => '#f3f4f6',
+            'validation_level_border_color' => '#d1d5db',
+        ];
+
+        $documents = collect();
+
+        foreach ($quarterDocuments as $quarter => $documentGroup) {
+            $movUpload = $documentGroup['mov'] ?? null;
+            $writtenNotice = $documentGroup['written_notice'] ?? null;
+            $fdpDocument = $documentGroup['fdp'] ?? null;
+
+            if ($movUpload && trim((string) ($movUpload->mov_file_path ?? '')) !== '') {
+                $documents->push([
+                    'path' => $movUpload->mov_file_path,
+                    'status' => $movUpload->status ?? null,
+                    'uploaded_at' => $movUpload->mov_uploaded_at ?? null,
+                    'approved_at_dilg_po' => $movUpload->approved_at_dilg_po ?? null,
+                    'approved_at_dilg_ro' => $movUpload->approved_at_dilg_ro ?? null,
+                ]);
+            }
+
+            if ($writtenNotice) {
+                foreach ([
+                    ['path' => $writtenNotice->secretary_dbm_path ?? null, 'status' => $writtenNotice->dbm_status ?? null, 'uploaded_at' => $writtenNotice->dbm_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->dbm_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dbm_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->secretary_dilg_path ?? null, 'status' => $writtenNotice->dilg_status ?? null, 'uploaded_at' => $writtenNotice->dilg_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->dilg_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dilg_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->speaker_house_path ?? null, 'status' => $writtenNotice->speaker_status ?? null, 'uploaded_at' => $writtenNotice->speaker_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->speaker_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->speaker_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->president_senate_path ?? null, 'status' => $writtenNotice->president_status ?? null, 'uploaded_at' => $writtenNotice->president_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->president_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->president_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->house_committee_path ?? null, 'status' => $writtenNotice->house_status ?? null, 'uploaded_at' => $writtenNotice->house_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->house_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->house_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->senate_committee_path ?? null, 'status' => $writtenNotice->senate_status ?? null, 'uploaded_at' => $writtenNotice->senate_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->senate_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->senate_approved_at_dilg_ro ?? null],
+                ] as $writtenNoticeDocument) {
+                    if (trim((string) ($writtenNoticeDocument['path'] ?? '')) === '') {
+                        continue;
+                    }
+
+                    $documents->push($writtenNoticeDocument);
+                }
+            }
+
+            if ($fdpDocument && trim((string) ($fdpDocument->fdp_file_path ?? '')) !== '') {
+                $documents->push([
+                    'path' => $fdpDocument->fdp_file_path,
+                    'status' => $fdpDocument->fdp_status ?? null,
+                    'uploaded_at' => $fdpDocument->fdp_uploaded_at ?? null,
+                    'approved_at_dilg_po' => $fdpDocument->approved_at_dilg_po ?? null,
+                    'approved_at_dilg_ro' => $fdpDocument->approved_at_dilg_ro ?? null,
+                ]);
+            }
+
+            if ($fdpDocument && trim((string) ($fdpDocument->posting_link ?? '')) !== '') {
+                $documents->push([
+                    'path' => $fdpDocument->posting_link,
+                    'status' => $fdpDocument->posting_status ?? null,
+                    'uploaded_at' => $fdpDocument->posting_uploaded_at ?? null,
+                    'approved_at_dilg_po' => $fdpDocument->posting_approved_at_dilg_po ?? null,
+                    'approved_at_dilg_ro' => $fdpDocument->posting_approved_at_dilg_ro ?? null,
+                ]);
+            }
+        }
+
+        $selectedDocument = $documents
+            ->sort(function (array $left, array $right) {
+                $leftPriority = $this->resolveFundUtilizationListingPriority($left);
+                $rightPriority = $this->resolveFundUtilizationListingPriority($right);
+                if ($leftPriority !== $rightPriority) {
+                    return $leftPriority <=> $rightPriority;
+                }
+
+                $leftUploadedAt = $left['uploaded_at'] ? Carbon::parse($left['uploaded_at'])->getTimestamp() : 0;
+                $rightUploadedAt = $right['uploaded_at'] ? Carbon::parse($right['uploaded_at'])->getTimestamp() : 0;
+
+                return $rightUploadedAt <=> $leftUploadedAt;
+            })
+            ->first();
+
+        if (!$selectedDocument) {
+            return $summary;
+        }
+
+        if (!empty($selectedDocument['uploaded_at'])) {
+            $summary['date_submitted_label'] = Carbon::parse($selectedDocument['uploaded_at'])
+                ->setTimezone(config('app.timezone'))
+                ->format('M d, Y h:i A');
+        }
+
+        if ($this->hasFundUtilizationReturned($selectedDocument['path'] ?? null, $selectedDocument['status'] ?? null)) {
+            $summary['approval_status_label'] = 'Returned';
+            $summary['approval_status_text_color'] = '#b91c1c';
+            $summary['approval_status_background_color'] = '#fef2f2';
+            $summary['approval_status_border_color'] = '#fca5a5';
+            $summary['validation_level_label'] = !empty($selectedDocument['approved_at_dilg_po'])
+                ? 'Returned at DILG Regional Office'
+                : 'Returned at DILG Provincial Office';
+            $summary['validation_level_text_color'] = '#b91c1c';
+            $summary['validation_level_background_color'] = '#fef2f2';
+            $summary['validation_level_border_color'] = '#fca5a5';
+
+            return $summary;
+        }
+
+        if ($this->hasFundUtilizationPendingRo(
+            $selectedDocument['path'] ?? null,
+            $selectedDocument['status'] ?? null,
+            $selectedDocument['approved_at_dilg_po'] ?? null,
+            $selectedDocument['approved_at_dilg_ro'] ?? null
+        )) {
+            $summary['approval_status_label'] = 'For DILG Regional Office Validation';
+            $summary['approval_status_text_color'] = '#1d4ed8';
+            $summary['approval_status_background_color'] = '#dbeafe';
+            $summary['approval_status_border_color'] = '#60a5fa';
+            $summary['validation_level_label'] = 'DILG Regional Office';
+            $summary['validation_level_text_color'] = '#1d4ed8';
+            $summary['validation_level_background_color'] = '#dbeafe';
+            $summary['validation_level_border_color'] = '#60a5fa';
+
+            return $summary;
+        }
+
+        if ($this->hasFundUtilizationPendingPo(
+            $selectedDocument['path'] ?? null,
+            $selectedDocument['status'] ?? null,
+            $selectedDocument['approved_at_dilg_po'] ?? null
+        )) {
+            $summary['approval_status_label'] = 'For DILG Provincial Office Validation';
+            $summary['approval_status_text_color'] = '#1d4ed8';
+            $summary['approval_status_background_color'] = '#eff6ff';
+            $summary['approval_status_border_color'] = '#93c5fd';
+            $summary['validation_level_label'] = 'DILG Provincial Office';
+            $summary['validation_level_text_color'] = '#1d4ed8';
+            $summary['validation_level_background_color'] = '#eff6ff';
+            $summary['validation_level_border_color'] = '#93c5fd';
+
+            return $summary;
+        }
+
+        if (!empty($selectedDocument['approved_at_dilg_ro'])) {
+            $summary['approval_status_label'] = 'Approved';
+            $summary['approval_status_text_color'] = '#047857';
+            $summary['approval_status_background_color'] = '#ecfdf5';
+            $summary['approval_status_border_color'] = '#6ee7b7';
+            $summary['validation_level_label'] = 'Completed';
+            $summary['validation_level_text_color'] = '#047857';
+            $summary['validation_level_background_color'] = '#ecfdf5';
+            $summary['validation_level_border_color'] = '#6ee7b7';
+        }
+
+        return $summary;
+    }
+
+    private function resolveFundUtilizationListingPriority(array $document): int
+    {
+        if ($this->hasFundUtilizationPendingPo($document['path'] ?? null, $document['status'] ?? null, $document['approved_at_dilg_po'] ?? null)) {
+            return 0;
+        }
+
+        if ($this->hasFundUtilizationPendingRo($document['path'] ?? null, $document['status'] ?? null, $document['approved_at_dilg_po'] ?? null, $document['approved_at_dilg_ro'] ?? null)) {
+            return 0;
+        }
+
+        if ($this->hasFundUtilizationReturned($document['path'] ?? null, $document['status'] ?? null)) {
+            return 1;
+        }
+
+        if (!empty($document['path'])) {
+            return 2;
+        }
+
+        return 3;
     }
 
     private function summarizeFundUtilizationValidation(array $quarterDocuments): array

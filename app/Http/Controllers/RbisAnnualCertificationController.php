@@ -639,20 +639,8 @@ class RbisAnnualCertificationController extends Controller
         }, $officeRows)));
         $totalOffices = count($officeRows);
 
-        $page = LengthAwarePaginator::resolveCurrentPage('page');
         $officeRowsCollection = collect($officeRows);
-        $officeRows = (new LengthAwarePaginator(
-            $officeRowsCollection->forPage($page, $perPage)->values(),
-            $officeRowsCollection->count(),
-            $perPage,
-            $page,
-            [
-                'path' => $request->url(),
-                'query' => $request->query(),
-            ]
-        ))->withQueryString();
-
-        $officeNames = $officeRows->getCollection()
+        $officeNames = $officeRowsCollection
             ->pluck('city_municipality')
             ->unique()
             ->values()
@@ -681,6 +669,72 @@ class RbisAnnualCertificationController extends Controller
                 ->unique('office')
                 ->keyBy('office');
         }
+
+        $resolveValidationPriority = function ($document): int {
+            if (!$document || !$document->file_path) {
+                return 3;
+            }
+
+            if (
+                $document->status !== 'returned'
+                && (
+                    !$document->approved_at_dilg_po
+                    || ($document->approved_at_dilg_po && !$document->approved_at_dilg_ro)
+                )
+            ) {
+                return 0;
+            }
+
+            if ($document->status === 'returned') {
+                return 1;
+            }
+
+            if ($document->approved_at_dilg_ro) {
+                return 2;
+            }
+
+            return 3;
+        };
+
+        $officeRowsCollection = $officeRowsCollection
+            ->sort(function (array $leftRow, array $rightRow) use ($latestDocumentsByOffice, $resolveValidationPriority) {
+                $leftDocument = $latestDocumentsByOffice->get($leftRow['city_municipality']);
+                $rightDocument = $latestDocumentsByOffice->get($rightRow['city_municipality']);
+
+                $priorityComparison = $resolveValidationPriority($leftDocument) <=> $resolveValidationPriority($rightDocument);
+                if ($priorityComparison !== 0) {
+                    return $priorityComparison;
+                }
+
+                $leftUploadedAt = $leftDocument?->uploaded_at ? Carbon::parse($leftDocument->uploaded_at)->getTimestamp() : 0;
+                $rightUploadedAt = $rightDocument?->uploaded_at ? Carbon::parse($rightDocument->uploaded_at)->getTimestamp() : 0;
+                if ($leftUploadedAt !== $rightUploadedAt) {
+                    return $rightUploadedAt <=> $leftUploadedAt;
+                }
+
+                $provinceComparison = strcasecmp((string) ($leftRow['province'] ?? ''), (string) ($rightRow['province'] ?? ''));
+                if ($provinceComparison !== 0) {
+                    return $provinceComparison;
+                }
+
+                return strcasecmp(
+                    (string) ($leftRow['city_municipality'] ?? ''),
+                    (string) ($rightRow['city_municipality'] ?? '')
+                );
+            })
+            ->values();
+
+        $page = LengthAwarePaginator::resolveCurrentPage('page');
+        $officeRows = (new LengthAwarePaginator(
+            $officeRowsCollection->forPage($page, $perPage)->values(),
+            $officeRowsCollection->count(),
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        ))->withQueryString();
 
         return view('reports.rbis-annual-certification.index', compact(
             'officeRows',
