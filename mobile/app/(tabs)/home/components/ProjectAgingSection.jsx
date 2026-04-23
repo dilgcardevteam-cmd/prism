@@ -71,8 +71,8 @@ export default function ProjectAgingSection({
   }, [projectAtRiskAgingRows, projectAtRiskAgingTotal]);
 
   return (
-    <View className="mt-6 rounded-[18px] border border-[#dfe3ea] bg-white px-3 py-3">
-      <Text className="text-[18px] uppercase tracking-[0.7px] text-[#173e8c]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+    <View className="mt-6">
+      <Text className="mb-2 text-[18px] uppercase tracking-[0.8px] text-[#173e8c]" style={{ fontFamily: "Montserrat-SemiBold" }}>
         Aging of the Projects with Slippage
       </Text>
       <Text className="mt-1 text-[13px] text-[#6b7280]" style={{ fontFamily: "Montserrat" }}>
@@ -87,7 +87,7 @@ export default function ProjectAgingSection({
           </Text>
         </View>
       ) : summaryError ? (
-        <View className="mt-3 rounded-[14px] border border-[#f4c7c7] bg-[#fff5f5] px-4 py-4">
+        <View className="mt-3 rounded-[14px] bg-[#fff5f5] px-4 py-4">
           <Text className="text-[14px] text-[#991b1b]" style={{ fontFamily: "Montserrat-SemiBold" }}>
             Unable to load project aging summary.
           </Text>
@@ -97,7 +97,7 @@ export default function ProjectAgingSection({
         </View>
       ) : projectAtRiskAgingTotal > 0 ? (
         <View className="mt-3 w-full items-center">
-          <View className="items-center justify-center rounded-[12px] border border-[#e5e7eb] bg-[#f9fafb]">
+          <View className="items-center justify-center rounded-[12px] bg-[#f9fafb]">
             <Svg width={donutSize} height={donutSize} viewBox={`0 0 ${donutSize} ${donutSize}`}>
               {(() => {
                 const strokeWidth = Math.max(14, Math.round(donutSize * 0.14));
@@ -162,7 +162,7 @@ export default function ProjectAgingSection({
           </View>
         </View>
       ) : (
-        <View className="mt-3 rounded-[14px] border border-[#e2e8f0] bg-[#f8fafc] px-4 py-4">
+        <View className="mt-3 rounded-[14px] bg-[#f8fafc] px-4 py-4">
           <Text className="text-[13px] text-[#475569]" style={{ fontFamily: "Montserrat" }}>
             No project aging records available yet.
           </Text>
