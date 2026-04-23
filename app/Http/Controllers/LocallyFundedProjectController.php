@@ -23,7 +23,7 @@ class LocallyFundedProjectController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage']);
+        $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileExpectedCompletionThisMonth', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['index']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['showSubaybayan', 'show']);
         $this->middleware('crud_permission:locally_funded_projects,add')->only(['create', 'store']);
@@ -302,6 +302,104 @@ class LocallyFundedProjectController extends Controller
                     'balance' => (float) $balance,
                     'utilization_rate' => (float) $utilizationRate,
                 ],
+            ],
+        ]);
+    }
+
+    public function mobileExpectedCompletionThisMonth()
+    {
+        $currentMonth = now()->month;
+        $currentYear = now()->year;
+        $monthLabel = now()->format('F Y');
+
+        if (!Schema::hasTable('subay_project_profiles')) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'total' => 0,
+                    'month_label' => $monthLabel,
+                ],
+            ]);
+        }
+
+        $query = DB::table('subay_project_profiles as spp')
+            ->leftJoin('locally_funded_projects as lfp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
+            ->whereNotNull('spp.project_code')
+            ->whereRaw('TRIM(COALESCE(spp.project_code, "")) <> ""')
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
+            ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+            ->selectRaw('TRIM(COALESCE(lfp.project_name, spp.project_title, "")) as project_title')
+            ->selectRaw('TRIM(COALESCE(lfp.province, spp.province, "")) as province')
+            ->selectRaw('TRIM(COALESCE(lfp.city_municipality, spp.city_municipality, "")) as city_municipality')
+            ->selectRaw('lfp.target_date_completion as lfp_target_date_completion')
+            ->selectRaw('lfp.revised_target_date_completion as lfp_revised_target_date_completion')
+            ->selectRaw('spp.intended_completion_date as spp_intended_completion_date')
+            ->selectRaw('spp.intended_completion_date_2 as spp_intended_completion_date_2')
+            ->selectRaw('spp.date_of_expiration_of_contract as spp_date_of_expiration_of_contract');
+
+        $parseCompletionDate = function ($value): ?Carbon {
+            $raw = trim((string) ($value ?? ''));
+            if ($raw === '') {
+                return null;
+            }
+
+            if (is_numeric($raw)) {
+                try {
+                    return Carbon::createFromDate(1899, 12, 30)->addDays((int) floor((float) $raw))->startOfDay();
+                } catch (\Exception $e) {
+                    return null;
+                }
+            }
+
+            try {
+                return Carbon::parse($raw)->startOfDay();
+            } catch (\Exception $e) {
+                return null;
+            }
+        };
+
+        $rows = $query->get()
+            ->map(function ($row) use ($parseCompletionDate, $currentMonth, $currentYear) {
+                $completionDate = $parseCompletionDate(
+                    $row->lfp_revised_target_date_completion
+                        ?: $row->lfp_target_date_completion
+                        ?: $row->spp_intended_completion_date
+                        ?: $row->spp_intended_completion_date_2
+                        ?: $row->spp_date_of_expiration_of_contract
+                        ?: null
+                );
+
+                if (!$completionDate || (int) $completionDate->month !== (int) $currentMonth || (int) $completionDate->year !== (int) $currentYear) {
+                    return null;
+                }
+
+                return [
+                    'project_code' => $row->project_code,
+                    'project_title' => $row->project_title !== '' ? $row->project_title : $row->project_code,
+                    'province' => $row->province !== '' ? $row->province : null,
+                    'city_municipality' => $row->city_municipality !== '' ? $row->city_municipality : null,
+                    'expected_completion_date' => $completionDate->format('M d, Y'),
+                    'expected_completion_date_iso' => $completionDate->toDateString(),
+                ];
+            })
+            ->filter()
+            ->sortBy([
+                ['expected_completion_date_iso', 'asc'],
+                ['project_code', 'asc'],
+                ['project_title', 'asc'],
+            ])
+            ->values()
+            ->map(function ($row) {
+                unset($row['expected_completion_date_iso']);
+                return $row;
+            });
+
+        return response()->json([
+            'data' => $rows,
+            'meta' => [
+                'total' => (int) $rows->count(),
+                'month_label' => $monthLabel,
             ],
         ]);
     }

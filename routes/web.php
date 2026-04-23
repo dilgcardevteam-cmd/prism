@@ -212,6 +212,8 @@ Route::get('/api/mobile/locally-funded', [App\Http\Controllers\LocallyFundedProj
     ->name('api.mobile.locally-funded');
 Route::get('/api/mobile/locally-funded/dashboard-summary', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileDashboardSummary'])
     ->name('api.mobile.locally-funded.dashboard-summary');
+Route::get('/api/mobile/locally-funded/expected-completion', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileExpectedCompletionThisMonth'])
+    ->name('api.mobile.locally-funded.expected-completion');
 Route::get('/api/mobile/project-at-risk/slippage-summary', [App\Http\Controllers\ProjectAtRiskController::class, 'mobileSlippageSummary'])
     ->name('api.mobile.project-at-risk.slippage-summary');
 Route::get('/api/mobile/project-at-risk/aging-summary', [App\Http\Controllers\ProjectAtRiskController::class, 'mobileAgingSummary'])

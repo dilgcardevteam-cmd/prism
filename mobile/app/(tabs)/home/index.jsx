@@ -41,6 +41,8 @@ export default function HomeScreen() {
     projectAtRiskAgingTotal,
     projectUpdateStatusRows,
     projectUpdateStatusTotal,
+    projectsExpectedCompletionThisMonth,
+    expectedCompletionMonthLabel,
   } = useDashboardSummary();
   const scrollY = useSharedValue(0);
 
@@ -123,7 +125,10 @@ export default function HomeScreen() {
         </Animated.View>
 
         <Animated.View className="-mt-6 flex-1 rounded-t-[28px] bg-white px-4 pt-4" style={contentParallaxStyle}>
-          <DashboardQuickStats />
+          <DashboardQuickStats
+            projectsExpectedCompletionThisMonth={projectsExpectedCompletionThisMonth}
+            expectedCompletionMonthLabel={expectedCompletionMonthLabel}
+          />
 
           {/* ==============PROJECTS BY FUND SOURCE============== */}
           <FundSourceSection

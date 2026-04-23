@@ -140,7 +140,6 @@ export default function ProjectUpdateStatusSection({
 
           <View className="mt-3" style={{ width: "100%", minWidth: riskLegendWidth }}>
             <ScrollView
-            
               horizontal
               nestedScrollEnabled
               showsHorizontalScrollIndicator

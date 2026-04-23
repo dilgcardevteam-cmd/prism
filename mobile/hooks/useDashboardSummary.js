@@ -68,6 +68,8 @@ export function useDashboardSummary() {
   const [projectUpdateStatusRows, setProjectUpdateStatusRows] = useState(
     PROJECT_UPDATE_STATUS_ORDER.map((label) => ({ label, count: 0 }))
   );
+  const [projectsExpectedCompletionThisMonth, setProjectsExpectedCompletionThisMonth] = useState([]);
+  const [expectedCompletionMonthLabel, setExpectedCompletionMonthLabel] = useState(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date()));
   const [latestUpdatedAt, setLatestUpdatedAt] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState("");
@@ -77,11 +79,12 @@ export function useDashboardSummary() {
     setSummaryError("");
 
     try {
-      const [summaryPayload, projectAtRiskSummary, projectAtRiskAgingSummary, projectUpdateStatusSummary] = await Promise.all([
+      const [summaryPayload, projectAtRiskSummary, projectAtRiskAgingSummary, projectUpdateStatusSummary, expectedCompletionPayload] = await Promise.all([
         fetchJsonWithFallback("/api/mobile/locally-funded/dashboard-summary"),
         fetchJsonWithFallback("/api/mobile/project-at-risk/slippage-summary").catch(() => ({ data: [] })),
         fetchJsonWithFallback("/api/mobile/project-at-risk/aging-summary").catch(() => ({ data: [] })),
         fetchJsonWithFallback("/api/mobile/project-at-risk/project-update-status-summary").catch(() => ({ data: [] })),
+        fetchJsonWithFallback("/api/mobile/locally-funded/expected-completion").catch(() => ({ data: [], meta: {} })),
       ]);
 
       const summaryData = summaryPayload?.data && typeof summaryPayload.data === "object"
@@ -136,6 +139,21 @@ export function useDashboardSummary() {
       setProjectAtRiskSlippageRows(normalizeRiskRows(projectAtRiskSummary?.data, PROJECT_RISK_SUMMARY_ORDER));
       setProjectAtRiskAgingRows(normalizeRiskRows(projectAtRiskAgingSummary?.data, PROJECT_RISK_AGING_ORDER));
       setProjectUpdateStatusRows(normalizeRiskRows(projectUpdateStatusSummary?.data, PROJECT_UPDATE_STATUS_ORDER));
+
+      const expectedCompletionData = Array.isArray(expectedCompletionPayload?.data)
+        ? expectedCompletionPayload.data
+            .map((entry) => ({
+              projectCode: String(entry?.project_code || "").trim(),
+              projectTitle: String(entry?.project_title || "").trim(),
+              province: String(entry?.province || "").trim(),
+              cityMunicipality: String(entry?.city_municipality || "").trim(),
+              expectedCompletionDate: String(entry?.expected_completion_date || "").trim(),
+            }))
+            .filter((entry) => entry.projectCode && entry.projectTitle && entry.expectedCompletionDate)
+        : [];
+
+      setProjectsExpectedCompletionThisMonth(expectedCompletionData);
+      setExpectedCompletionMonthLabel(String(expectedCompletionPayload?.meta?.month_label || "").trim() || new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date()));
     } catch (error) {
       setTotalProjects(0);
       setFundSourceCounts([]);
@@ -146,6 +164,8 @@ export function useDashboardSummary() {
       setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
       setProjectAtRiskAgingRows(PROJECT_RISK_AGING_ORDER.map((label) => ({ label, count: 0 })));
       setProjectUpdateStatusRows(PROJECT_UPDATE_STATUS_ORDER.map((label) => ({ label, count: 0 })));
+      setProjectsExpectedCompletionThisMonth([]);
+      setExpectedCompletionMonthLabel(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date()));
       setLatestUpdatedAt(null);
       setSummaryError(error?.message || "Unable to load dashboard summary.");
     } finally {
@@ -209,6 +229,8 @@ export function useDashboardSummary() {
     projectAtRiskAgingTotal,
     projectUpdateStatusRows,
     projectUpdateStatusTotal,
+    projectsExpectedCompletionThisMonth,
+    expectedCompletionMonthLabel,
     loadDashboardSummary,
   };
 }
