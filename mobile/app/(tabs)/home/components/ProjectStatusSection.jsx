@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { ActivityIndicator, Text, View } from "react-native";
 
 import { APP_COLORS } from "../../../../constants/theme";
-import { formatCount, formatPercentage, STATUS_META } from "./dashboardConfig";
+import { formatCount, formatPercentage, STATUS_META } from "../../../../constants/homeDashboardConfig";
 
 function StatusSubaybayanRow({ status, count, total, maxCount, screenWidth }) {
   const meta = STATUS_META[status] || {

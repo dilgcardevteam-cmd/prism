@@ -18,7 +18,7 @@ import FundSourceSection from "./components/FundSourceSection";
 import FinancialAccomplishmentSection from "./components/FinancialAccomplishmentSection";
 import ProjectRiskSection from "./components/ProjectRiskSection";
 import ProjectStatusSection from "./components/ProjectStatusSection";
-import { FUND_SOURCE_META, FINANCIAL_METRIC_CARDS, formatCount } from "./components/dashboardConfig";
+import { FUND_SOURCE_META, FINANCIAL_METRIC_CARDS, formatCount } from "../../../constants/homeDashboardConfig";
 
 export default function HomeScreen() {
   const { firstName, greeting } = useFetchLoggedUser();

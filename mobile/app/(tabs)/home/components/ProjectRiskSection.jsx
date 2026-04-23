@@ -3,7 +3,7 @@ import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 import { APP_COLORS } from "../../../../constants/theme";
-import { formatCount, formatPercentage, PROJECT_RISK_DONUT_ORDER, PROJECT_RISK_STYLES } from "./dashboardConfig";
+import { formatCount, formatPercentage, PROJECT_RISK_DONUT_ORDER, PROJECT_RISK_STYLES } from "../../../../constants/homeDashboardConfig";
 
 function RiskLegendItem({ label, count, total, compact }) {
   const styleMeta = PROJECT_RISK_STYLES[label] || { bg: "#6b7280", text: "#f8fafc" };

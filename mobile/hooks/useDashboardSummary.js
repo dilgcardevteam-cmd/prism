@@ -3,37 +3,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatUpdatedAt } from "./useLocallyFundedProjects";
 import { useWebAppRequest } from "./useWebAppRequest";
 
-const FUND_SOURCE_ORDER = ["SBDP", "FALGU", "CMGP", "GEF", "SAFPB"];
-const STATUS_DISPLAY_ORDER = [
-  "Completed",
-  "On-going",
-  "Bid Evaluation/Opening",
-  "NOA Issuance",
-  "DED Preparation",
-  "Not Yet Started",
-  "ITB/AD Posted",
-  "Terminated",
-  "Cancelled",
-];
-
-const STATUS_LABEL_BY_NORMALIZED = {
-  COMPLETED: "Completed",
-  ONGOING: "On-going",
-  "BID EVALUATION/OPENING": "Bid Evaluation/Opening",
-  "NOA ISSUANCE": "NOA Issuance",
-  "DED PREPARATION": "DED Preparation",
-  "NOT YET STARTED": "Not Yet Started",
-  "ITB/AD POSTED": "ITB/AD Posted",
-  TERMINATED: "Terminated",
-  CANCELLED: "Cancelled",
-};
-
-const STATUS_ALIASES = {
-  "ON-GOING": "ONGOING",
-  "NOT STARTED": "NOT YET STARTED",
-};
-
 const PROJECT_RISK_SUMMARY_ORDER = ["On Schedule", "Ahead", "No Risk", "Low Risk", "Moderate Risk", "High Risk"];
+const DEFAULT_FINANCIAL = {
+  allocation: 0,
+  obligation: 0,
+  disbursement: 0,
+  reverted: 0,
+  balance: 0,
+  utilizationRate: 0,
+};
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -51,46 +29,14 @@ function formatCurrency(value) {
   }).format(toNumber(value))}`;
 }
 
-function normalizeFundSource(value) {
-  const normalized = String(value ?? "").trim().toUpperCase() || "UNSPECIFIED";
-
-  if (normalized.startsWith("FALGU")) {
-    return "FALGU";
-  }
-
-  if (normalized.startsWith("CMGP")) {
-    return "CMGP";
-  }
-
-  if (normalized.startsWith("SBDP")) {
-    return "SBDP";
-  }
-
-  if (normalized.startsWith("GEF")) {
-    return "GEF";
-  }
-
-  if (normalized.startsWith("SAFPB")) {
-    return "SAFPB";
-  }
-
-  return normalized;
-}
-
-function normalizeProjectStatus(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw) {
-    return null;
-  }
-
-  const uppercase = raw.toUpperCase();
-  const normalized = STATUS_ALIASES[uppercase] || uppercase;
-  return STATUS_LABEL_BY_NORMALIZED[normalized] || null;
-}
-
 export function useDashboardSummary() {
   const { fetchJsonWithFallback } = useWebAppRequest();
-  const [projects, setProjects] = useState([]);
+  const [totalProjects, setTotalProjects] = useState(0);
+  const [fundSourceCounts, setFundSourceCounts] = useState([]);
+  const [statusSubaybayanRows, setStatusSubaybayanRows] = useState([]);
+  const [statusSubaybayanTotal, setStatusSubaybayanTotal] = useState(0);
+  const [statusSubaybayanMax, setStatusSubaybayanMax] = useState(0);
+  const [financialSummary, setFinancialSummary] = useState(DEFAULT_FINANCIAL);
   const [projectAtRiskSlippageRows, setProjectAtRiskSlippageRows] = useState(
     PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 }))
   );
@@ -103,12 +49,59 @@ export function useDashboardSummary() {
     setSummaryError("");
 
     try {
-      const [firstPage, projectAtRiskSummary] = await Promise.all([
-        fetchJsonWithFallback("/api/mobile/locally-funded?per_page=100&page=1"),
+      const [summaryPayload, projectAtRiskSummary] = await Promise.all([
+        fetchJsonWithFallback("/api/mobile/locally-funded/dashboard-summary"),
         fetchJsonWithFallback("/api/mobile/project-at-risk/slippage-summary"),
       ]);
-      const totalPages = Math.max(1, Number(firstPage?.meta?.last_page || 1));
-      const collectedRows = Array.isArray(firstPage?.data) ? [...firstPage.data] : [];
+
+      const summaryData = summaryPayload?.data && typeof summaryPayload.data === "object"
+        ? summaryPayload.data
+        : {};
+
+      const normalizedFundSourceCounts = Array.isArray(summaryData.fund_source_counts)
+        ? summaryData.fund_source_counts
+            .map((entry) => ({
+              fundSource: String(entry?.fund_source || "").trim(),
+              count: toNumber(entry?.count),
+            }))
+            .filter((entry) => entry.fundSource && entry.count > 0)
+        : [];
+
+      const normalizedStatusRows = Array.isArray(summaryData.status_subaybayan_rows)
+        ? summaryData.status_subaybayan_rows
+            .map((entry) => ({
+              status: String(entry?.status || "").trim(),
+              count: toNumber(entry?.count),
+            }))
+            .filter((entry) => entry.status && entry.count > 0)
+        : [];
+
+      const summaryFinancial = summaryData.financial && typeof summaryData.financial === "object"
+        ? summaryData.financial
+        : {};
+
+      const allocation = toNumber(summaryFinancial.allocation);
+      const obligation = toNumber(summaryFinancial.obligation);
+      const disbursement = toNumber(summaryFinancial.disbursement);
+      const reverted = toNumber(summaryFinancial.reverted);
+      const fallbackBalance = allocation - (disbursement + reverted);
+      const utilizationRate = toNumber(summaryFinancial.utilization_rate);
+      const hasExplicitBalance = summaryFinancial.balance !== null && summaryFinancial.balance !== undefined && summaryFinancial.balance !== "";
+
+      setTotalProjects(toNumber(summaryData.total_projects));
+      setFundSourceCounts(normalizedFundSourceCounts);
+      setStatusSubaybayanRows(normalizedStatusRows);
+      setStatusSubaybayanTotal(toNumber(summaryData.status_subaybayan_total));
+      setStatusSubaybayanMax(toNumber(summaryData.status_subaybayan_max));
+      setFinancialSummary({
+        allocation,
+        obligation,
+        disbursement,
+        reverted,
+        balance: hasExplicitBalance ? toNumber(summaryFinancial.balance) : fallbackBalance,
+        utilizationRate,
+      });
+      setLatestUpdatedAt(summaryData.latest_updated_at || null);
 
       const riskRows = Array.isArray(projectAtRiskSummary?.data)
         ? projectAtRiskSummary.data
@@ -130,42 +123,13 @@ export function useDashboardSummary() {
       } else {
         setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
       }
-
-      if (totalPages > 1) {
-        const remainingPages = await Promise.all(
-          Array.from({ length: totalPages - 1 }, (_value, index) => {
-            const pageNumber = index + 2;
-            return fetchJsonWithFallback(`/api/mobile/locally-funded?per_page=100&page=${pageNumber}`);
-          })
-        );
-
-        remainingPages.forEach((pagePayload) => {
-          if (Array.isArray(pagePayload?.data)) {
-            collectedRows.push(...pagePayload.data);
-          }
-        });
-      }
-
-      setProjects(collectedRows);
-
-      const latestRow = collectedRows.reduce((currentLatest, row) => {
-        const candidateDate = new Date(row?.updated_at || 0);
-
-        if (Number.isNaN(candidateDate.getTime())) {
-          return currentLatest;
-        }
-
-        if (!currentLatest) {
-          return row;
-        }
-
-        const currentLatestDate = new Date(currentLatest?.updated_at || 0);
-        return candidateDate > currentLatestDate ? row : currentLatest;
-      }, null);
-
-      setLatestUpdatedAt(latestRow?.updated_at || firstPage?.meta?.latest_updated_at || null);
     } catch (error) {
-      setProjects([]);
+      setTotalProjects(0);
+      setFundSourceCounts([]);
+      setStatusSubaybayanRows([]);
+      setStatusSubaybayanTotal(0);
+      setStatusSubaybayanMax(0);
+      setFinancialSummary(DEFAULT_FINANCIAL);
       setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
       setLatestUpdatedAt(null);
       setSummaryError(error?.message || "Unable to load dashboard summary.");
@@ -178,68 +142,12 @@ export function useDashboardSummary() {
     loadDashboardSummary();
   }, [loadDashboardSummary]);
 
-  const totalProjects = projects.length;
-
-  const fundSourceCounts = useMemo(() => {
-    const counts = new Map();
-
-    projects.forEach((project) => {
-      const fundSource = normalizeFundSource(project?.fund_source);
-      counts.set(fundSource, (counts.get(fundSource) || 0) + 1);
-    });
-
-    const orderedSources = FUND_SOURCE_ORDER.map((fundSource) => ({
-      fundSource,
-      count: counts.get(fundSource) || 0,
-    })).filter((entry) => entry.count > 0);
-
-    const remainingSources = Array.from(counts.entries())
-      .filter(([fundSource, count]) => count > 0 && !FUND_SOURCE_ORDER.includes(fundSource))
-      .sort(([leftSource], [rightSource]) => leftSource.localeCompare(rightSource))
-      .map(([fundSource, count]) => ({ fundSource, count }));
-
-    return [...orderedSources, ...remainingSources].slice(0, 5);
-  }, [projects]);
-
-  const statusSubaybayanRows = useMemo(() => {
-    const counts = new Map(STATUS_DISPLAY_ORDER.map((statusLabel) => [statusLabel, 0]));
-
-    projects.forEach((project) => {
-      const statusLabel = normalizeProjectStatus(project?.status_subaybayan || project?.status_subaybayan_current);
-      if (statusLabel) {
-        counts.set(statusLabel, (counts.get(statusLabel) || 0) + 1);
-      }
-    });
-
-    return Array.from(counts.entries())
-      .map(([status, count]) => ({ status, count }))
-      .filter((entry) => entry.count > 0)
-      .sort((left, right) => {
-        if (right.count !== left.count) {
-          return right.count - left.count;
-        }
-
-        return STATUS_DISPLAY_ORDER.indexOf(left.status) - STATUS_DISPLAY_ORDER.indexOf(right.status);
-      });
-  }, [projects]);
-
-  const statusSubaybayanTotal = useMemo(
-    () => statusSubaybayanRows.reduce((sum, row) => sum + row.count, 0),
-    [statusSubaybayanRows]
-  );
-
-  const statusSubaybayanMax = useMemo(
-    () => statusSubaybayanRows.reduce((max, row) => Math.max(max, row.count), 0),
-    [statusSubaybayanRows]
-  );
-
   const financialMetrics = useMemo(() => {
-    const allocation = projects.reduce((sum, project) => sum + toNumber(project?.lgsf_allocation), 0);
-    const obligation = projects.reduce((sum, project) => sum + toNumber(project?.obligation), 0);
-    const disbursement = projects.reduce((sum, project) => sum + toNumber(project?.disbursed_amount), 0);
-    const reverted = projects.reduce((sum, project) => sum + toNumber(project?.reverted_amount), 0);
-    const balance = allocation - (disbursement + reverted);
-    const utilizationRate = allocation > 0 ? ((disbursement + reverted) / allocation) * 100 : 0;
+    const allocation = toNumber(financialSummary.allocation);
+    const obligation = toNumber(financialSummary.obligation);
+    const disbursement = toNumber(financialSummary.disbursement);
+    const balance = toNumber(financialSummary.balance);
+    const utilizationRate = toNumber(financialSummary.utilizationRate);
 
     return [
       { key: "allocation", value: formatCurrency(allocation) },
@@ -248,7 +156,7 @@ export function useDashboardSummary() {
       { key: "disbursement", value: formatCurrency(disbursement) },
       { key: "balance", value: formatCurrency(balance) },
     ];
-  }, [projects]);
+  }, [financialSummary]);
 
   const projectAtRiskSlippageTotal = useMemo(
     () => projectAtRiskSlippageRows.reduce((sum, row) => sum + row.count, 0),
@@ -264,7 +172,7 @@ export function useDashboardSummary() {
     summaryError,
     summaryLabel,
     totalProjects,
-    projects,
+    projects: [],
     fundSourceCounts,
     statusSubaybayanRows,
     statusSubaybayanTotal,

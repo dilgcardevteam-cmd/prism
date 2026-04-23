@@ -23,7 +23,7 @@ class LocallyFundedProjectController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth')->except(['mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage']);
+        $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['index']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['showSubaybayan', 'show']);
         $this->middleware('crud_permission:locally_funded_projects,add')->only(['create', 'store']);
@@ -61,6 +61,249 @@ class LocallyFundedProjectController extends Controller
         $safeExtension = strtolower(trim($extension, '.'));
 
         return $projectCode . '-' . $stage . '-' . $datePart . '-' . $sequencePart . '.' . ($safeExtension !== '' ? $safeExtension : 'jpg');
+    }
+
+    public function mobileDashboardSummary()
+    {
+        $fundSourceOrder = ['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB'];
+        $statusDisplayOrder = [
+            'Completed',
+            'On-going',
+            'Bid Evaluation/Opening',
+            'NOA Issuance',
+            'DED Preparation',
+            'Not Yet Started',
+            'ITB/AD Posted',
+            'Terminated',
+            'Cancelled',
+        ];
+
+        $statusLabelByNormalized = [
+            'COMPLETED' => 'Completed',
+            'ONGOING' => 'On-going',
+            'BID EVALUATION/OPENING' => 'Bid Evaluation/Opening',
+            'NOA ISSUANCE' => 'NOA Issuance',
+            'DED PREPARATION' => 'DED Preparation',
+            'NOT YET STARTED' => 'Not Yet Started',
+            'ITB/AD POSTED' => 'ITB/AD Posted',
+            'TERMINATED' => 'Terminated',
+            'CANCELLED' => 'Cancelled',
+        ];
+
+        $statusAliases = [
+            'ON-GOING' => 'ONGOING',
+            'NOT STARTED' => 'NOT YET STARTED',
+        ];
+
+        $normalizeFundSource = static function ($value): string {
+            $normalized = strtoupper(trim((string) ($value ?? '')));
+
+            if ($normalized === '') {
+                return 'UNSPECIFIED';
+            }
+
+            if (str_starts_with($normalized, 'FALGU')) {
+                return 'FALGU';
+            }
+            if (str_starts_with($normalized, 'CMGP')) {
+                return 'CMGP';
+            }
+            if (str_starts_with($normalized, 'SBDP')) {
+                return 'SBDP';
+            }
+            if (str_starts_with($normalized, 'GEF')) {
+                return 'GEF';
+            }
+            if (str_starts_with($normalized, 'SAFPB')) {
+                return 'SAFPB';
+            }
+
+            return $normalized;
+        };
+
+        $normalizeStatus = static function ($value) use ($statusAliases, $statusLabelByNormalized): ?string {
+            $raw = trim((string) ($value ?? ''));
+            if ($raw === '') {
+                return null;
+            }
+
+            $upper = strtoupper($raw);
+            $normalized = $statusAliases[$upper] ?? $upper;
+
+            return $statusLabelByNormalized[$normalized] ?? null;
+        };
+
+        $toFloat = static function ($value): float {
+            if ($value === null) {
+                return 0.0;
+            }
+
+            $stringValue = trim((string) $value);
+            if ($stringValue === '') {
+                return 0.0;
+            }
+
+            $clean = preg_replace('/[^0-9\.-]/', '', $stringValue);
+            if ($clean === null || $clean === '' || $clean === '-' || $clean === '.') {
+                return 0.0;
+            }
+
+            return (float) $clean;
+        };
+
+        $hasLfpFundSourceColumn = Schema::hasColumn('locally_funded_projects', 'fund_source');
+        $hasLfpAllocationColumn = Schema::hasColumn('locally_funded_projects', 'lgsf_allocation');
+        $hasLfpObligationColumn = Schema::hasColumn('locally_funded_projects', 'obligation');
+        $hasLfpDisbursedAmountColumn = Schema::hasColumn('locally_funded_projects', 'disbursed_amount');
+        $hasLfpRevertedAmountColumn = Schema::hasColumn('locally_funded_projects', 'reverted_amount');
+        $hasLfpUpdatedAtColumn = Schema::hasColumn('locally_funded_projects', 'updated_at');
+
+        $hasPhysicalUpdatesTable = Schema::hasTable('locally_funded_physical_updates');
+
+        $query = DB::table('subay_project_profiles as spp')
+            ->leftJoin('locally_funded_projects as lfp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%']);
+
+        if ($hasPhysicalUpdatesTable) {
+            $query->leftJoin('locally_funded_physical_updates as lpu', function ($join) {
+                $join->on('lpu.project_id', '=', 'lfp.id')
+                    ->where('lpu.year', '=', now()->year)
+                    ->where('lpu.month', '=', now()->month);
+            });
+        }
+
+        $query->select([
+                $hasLfpFundSourceColumn
+                    ? 'lfp.fund_source as lfp_fund_source'
+                    : DB::raw('NULL as lfp_fund_source'),
+                'spp.program as spp_program',
+                'spp.status as spp_status',
+                $hasLfpAllocationColumn
+                    ? 'lfp.lgsf_allocation as lfp_lgsf_allocation'
+                    : DB::raw('NULL as lfp_lgsf_allocation'),
+                'spp.national_subsidy_original_allocation',
+                $hasLfpObligationColumn
+                    ? 'lfp.obligation as lfp_obligation'
+                    : DB::raw('NULL as lfp_obligation'),
+                'spp.obligation as spp_obligation',
+                $hasLfpDisbursedAmountColumn
+                    ? 'lfp.disbursed_amount as lfp_disbursed_amount'
+                    : DB::raw('NULL as lfp_disbursed_amount'),
+                'spp.disbursement as spp_disbursed_amount',
+                $hasLfpRevertedAmountColumn
+                    ? 'lfp.reverted_amount as lfp_reverted_amount'
+                    : DB::raw('NULL as lfp_reverted_amount'),
+                'spp.liquidations as spp_reverted_amount',
+                $hasLfpUpdatedAtColumn
+                    ? 'lfp.updated_at as lfp_updated_at'
+                    : DB::raw('NULL as lfp_updated_at'),
+                'spp.updated_at as spp_updated_at',
+            ]);
+
+        if ($hasPhysicalUpdatesTable) {
+            $query->addSelect('lpu.status_project_ro as status_project_ro');
+        } else {
+            $query->addSelect(DB::raw('NULL as status_project_ro'));
+        }
+
+        $rows = $query->get();
+
+        $fundSourceCountsMap = [];
+        $statusCountsMap = array_fill_keys($statusDisplayOrder, 0);
+
+        $allocation = 0.0;
+        $obligation = 0.0;
+        $disbursement = 0.0;
+        $reverted = 0.0;
+        $latestUpdatedAt = null;
+
+        foreach ($rows as $row) {
+            $fundSource = $normalizeFundSource($row->lfp_fund_source ?: $row->spp_program);
+            $fundSourceCountsMap[$fundSource] = ($fundSourceCountsMap[$fundSource] ?? 0) + 1;
+
+            $statusLabel = $normalizeStatus($row->status_project_ro ?: $row->spp_status);
+            if ($statusLabel !== null) {
+                $statusCountsMap[$statusLabel] = ($statusCountsMap[$statusLabel] ?? 0) + 1;
+            }
+
+            $allocation += $toFloat($row->lfp_lgsf_allocation ?? $row->national_subsidy_original_allocation);
+            $obligation += $toFloat($row->lfp_obligation ?? $row->spp_obligation);
+            $disbursement += $toFloat($row->lfp_disbursed_amount ?? $row->spp_disbursed_amount);
+            $reverted += $toFloat($row->lfp_reverted_amount ?? $row->spp_reverted_amount);
+
+            $candidateUpdatedAt = $row->lfp_updated_at ?: $row->spp_updated_at;
+            if ($candidateUpdatedAt) {
+                if ($latestUpdatedAt === null || strtotime((string) $candidateUpdatedAt) > strtotime((string) $latestUpdatedAt)) {
+                    $latestUpdatedAt = $candidateUpdatedAt;
+                }
+            }
+        }
+
+        $orderedFundSources = [];
+        foreach ($fundSourceOrder as $fundSource) {
+            $count = (int) ($fundSourceCountsMap[$fundSource] ?? 0);
+            if ($count > 0) {
+                $orderedFundSources[] = [
+                    'fund_source' => $fundSource,
+                    'count' => $count,
+                ];
+            }
+            unset($fundSourceCountsMap[$fundSource]);
+        }
+
+        ksort($fundSourceCountsMap);
+        foreach ($fundSourceCountsMap as $fundSource => $count) {
+            $intCount = (int) $count;
+            if ($intCount > 0) {
+                $orderedFundSources[] = [
+                    'fund_source' => (string) $fundSource,
+                    'count' => $intCount,
+                ];
+            }
+        }
+
+        $statusRows = collect($statusCountsMap)
+            ->map(function ($count, $status) {
+                return [
+                    'status' => (string) $status,
+                    'count' => (int) $count,
+                ];
+            })
+            ->filter(fn ($row) => $row['count'] > 0)
+            ->sort(function ($left, $right) use ($statusDisplayOrder) {
+                if ($left['count'] !== $right['count']) {
+                    return $right['count'] <=> $left['count'];
+                }
+
+                return array_search($left['status'], $statusDisplayOrder, true) <=> array_search($right['status'], $statusDisplayOrder, true);
+            })
+            ->values()
+            ->all();
+
+        $statusTotal = array_sum(array_column($statusRows, 'count'));
+        $statusMax = count($statusRows) > 0 ? max(array_column($statusRows, 'count')) : 0;
+        $balance = $allocation - ($disbursement + $reverted);
+        $utilizationRate = $allocation > 0 ? (($disbursement + $reverted) / $allocation) * 100 : 0.0;
+
+        return response()->json([
+            'data' => [
+                'total_projects' => count($rows),
+                'latest_updated_at' => $latestUpdatedAt,
+                'fund_source_counts' => $orderedFundSources,
+                'status_subaybayan_rows' => $statusRows,
+                'status_subaybayan_total' => $statusTotal,
+                'status_subaybayan_max' => $statusMax,
+                'financial' => [
+                    'allocation' => (float) $allocation,
+                    'obligation' => (float) $obligation,
+                    'disbursement' => (float) $disbursement,
+                    'reverted' => (float) $reverted,
+                    'balance' => (float) $balance,
+                    'utilization_rate' => (float) $utilizationRate,
+                ],
+            ],
+        ]);
     }
 
     public function mobileIndex(Request $request)
