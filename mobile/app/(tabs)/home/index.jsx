@@ -78,7 +78,7 @@ export default function HomeScreen() {
   });
 
   const heroParallaxInputRange = [0, 120];
-  const heroParallaxOutputRange = [0, -82];
+  const heroParallaxOutputRange = [0, 100]; //speed ng blue side
   const contentParallaxInputRange = [0, 180];
   const contentParallaxOutputRange = [0, -18];
 
@@ -121,12 +121,16 @@ export default function HomeScreen() {
 
         <Animated.View className="-mt-6 flex-1 rounded-t-[28px] bg-white px-4 pt-4" style={contentParallaxStyle}>
           <DashboardQuickStats />
+
+          {/* ==============PROJECTS BY FUND SOURCE============== */}
           <FundSourceSection
             isLoadingSummary={isLoadingSummary}
             summaryError={summaryError}
             fundSourceCards={fundSourceCards}
             tileWidth={tileWidth}
           />
+
+          {/* ==============FINANCIAL ACCOMPLISHMENT STATUS============== */}
           <FinancialAccomplishmentSection
             isLoadingSummary={isLoadingSummary}
             summaryError={summaryError}
@@ -134,6 +138,19 @@ export default function HomeScreen() {
             financialTileWidth={financialTileWidth}
             metricCards={FINANCIAL_METRIC_CARDS}
           />
+
+          {/* ==============STATUS OF PROJECT============== */}
+          <ProjectStatusSection
+            isLoadingSummary={isLoadingSummary}
+            summaryError={summaryError}
+            statusSubaybayanRows={statusSubaybayanRows}
+            statusSubaybayanTotal={statusSubaybayanTotal}
+            statusSubaybayanMax={statusSubaybayanMax}
+            screenWidth={screenWidth}
+            isCompactScreen={isCompactScreen}
+          />
+
+          {/* ==============PROJECT AT RISK AS TO SLIPPAGE============== */}
           <ProjectRiskSection
             isLoadingSummary={isLoadingSummary}
             summaryError={summaryError}
@@ -143,15 +160,6 @@ export default function HomeScreen() {
             riskLegendWidth={riskLegendWidth}
             riskPanelHeight={riskPanelHeight}
             isNarrowRiskLayout={isNarrowRiskLayout}
-          />
-          <ProjectStatusSection
-            isLoadingSummary={isLoadingSummary}
-            summaryError={summaryError}
-            statusSubaybayanRows={statusSubaybayanRows}
-            statusSubaybayanTotal={statusSubaybayanTotal}
-            statusSubaybayanMax={statusSubaybayanMax}
-            screenWidth={screenWidth}
-            isCompactScreen={isCompactScreen}
           />
         </Animated.View>
       </Animated.ScrollView>
