@@ -192,7 +192,7 @@ function StatusSubaybayanRow({ status, count, total, maxCount, screenWidth }) {
   );
 
   return (
-    <View className="mb-2.5 flex-row items-start">
+    <View className="mb-2.5 flex-row items-center">
       <View
         className="items-center justify-center rounded-full"
         style={{ backgroundColor: meta.iconBackground, height: iconCircleSize, width: iconCircleSize }}
