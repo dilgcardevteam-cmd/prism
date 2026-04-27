@@ -11,7 +11,7 @@
     @endphp
     <div class="content-header">
         <h1>Upload Project-at-Risk Data</h1>
-        <p>Upload CSV files, review the import history, then load the selected file to replace the current Project At Risk dataset.</p>
+        <p>Upload CSV or Excel .xls files, review the import history, then load the selected file to replace the current Project At Risk dataset.</p>
     </div>
 
     @if (session('success'))
@@ -45,7 +45,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
                 <div>
                     <h2 style="color: #002C76; font-size: 18px; margin: 0;">Imported Project-at-Risk Files</h2>
-                    <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 12px;">Loading a file will delete the current Project At Risk records first, then import the selected CSV.</p>
+                    <p style="margin: 6px 0 0 0; color: #6b7280; font-size: 12px;">Loading a file will delete the current Project At Risk records first, then import the selected spreadsheet.</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <a href="{{ route('system-management.upload-project-at-risk.template') }}" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; background: linear-gradient(180deg, #008c4d 0%, #007542 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none; box-shadow: 0 6px 16px rgba(0, 117, 66, 0.18);">
@@ -54,7 +54,7 @@
                     </a>
                     @if($canAddUpload)
                         <button type="button" onclick="openImportModal()" style="padding: 8px 14px; background: linear-gradient(180deg, #0a4cb3 0%, #002C76 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; box-shadow: 0 6px 16px rgba(0, 44, 118, 0.2);">
-                            Import CSV
+                            Import File
                         </button>
                     @endif
                 </div>
@@ -81,6 +81,8 @@
                                     $importedAt = !empty($historyRow->imported_at)
                                         ? \Carbon\Carbon::parse($historyRow->imported_at)->setTimezone(config('app.timezone'))
                                         : null;
+                                    $historyExtension = strtolower(pathinfo((string) ($historyRow->original_file_name ?? ''), PATHINFO_EXTENSION));
+                                    $downloadLabel = $historyExtension === 'xls' ? 'Download XLS' : 'Download CSV';
                                 @endphp
                                 <tr style="border-bottom: 1px solid #e5e7eb;">
                                     <td style="padding: 10px; color: #374151; vertical-align: top; white-space: nowrap;">
@@ -103,7 +105,7 @@
                                                 </form>
                                             @endif
                                             <a href="{{ route('system-management.upload-project-at-risk.download', ['importId' => $historyRow->id]) }}" style="display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background-color: #0f766e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none;">
-                                                Download CSV
+                                                {{ $downloadLabel }}
                                             </a>
                                             @if($canDeleteUpload)
                                                 <form method="POST" action="{{ route('system-management.upload-project-at-risk.delete', ['importId' => $historyRow->id]) }}" onsubmit="return confirm('Delete this imported file record?');">
@@ -164,13 +166,13 @@
     @if($canAddUpload)
         <div id="importModal" style="display: none; position: fixed; inset: 0; background-color: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center;">
             <div style="background: white; padding: 24px; border-radius: 10px; width: 100%; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Import Project-at-Risk Data (CSV)</h3>
+                <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Import Project-at-Risk Data</h3>
                 <form method="POST" action="{{ route('system-management.upload-project-at-risk.import') }}" enctype="multipart/form-data">
                     @csrf
                     <div style="margin-bottom: 16px;">
-                        <label for="import-file" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV File</label>
-                        <input id="import-file" class="dashboard-file-input" type="file" name="file" accept=".csv" required>
-                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">Excel users: Save As CSV first.</div>
+                        <label for="import-file" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV or Excel .xls File</label>
+                        <input id="import-file" class="dashboard-file-input" type="file" name="file" accept=".csv,.txt,.xls" required>
+                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">Accepted formats: .csv, .txt, and legacy Excel .xls.</div>
                     </div>
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
                         <button type="button" onclick="closeImportModal()" style="padding: 8px 14px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Cancel</button>

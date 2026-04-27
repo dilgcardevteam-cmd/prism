@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Shuchkin\SimpleXLS;
 
 class ProjectAtRiskController extends Controller
 {
@@ -16,16 +17,14 @@ class ProjectAtRiskController extends Controller
     private const IMPORT_STORAGE_DIRECTORY = 'project-at-risk-imports';
     private const TEMPLATE_HEADERS = [
         'Project Code',
-        'LGU',
         'Region',
         'Province',
         'City/Municipality',
-        'Barangays',
+        'Barangay/s',
         'Funding Year',
-        'Program',
+        'Name of Program',
         'Project Title',
-        'Procurement Type',
-        'National Subsidy (Original Allocation)',
+        'National Subsidy',
         'Status',
         'Target',
         'Actual',
@@ -33,8 +32,7 @@ class ProjectAtRiskController extends Controller
         'Date of Accomplishment',
         'Date of Extraction',
         'Aging',
-        'Risk Level as to Slippage',
-        'Risk Level as to Aging',
+        'Risk Level',
     ];
 
     public function __construct()
@@ -443,10 +441,10 @@ class ProjectAtRiskController extends Controller
 
         $request->validate(
             [
-                'file' => ['required', 'file', 'mimes:csv,txt', 'max:51200'],
+                'file' => ['required', 'file', 'mimes:csv,txt,xls', 'max:51200'],
             ],
             [
-                'file.mimes' => 'Please upload a CSV file. If your data is in Excel, save it as CSV first.',
+                'file.mimes' => 'Please upload a CSV or Excel .xls file.',
             ]
         );
 
@@ -481,7 +479,7 @@ class ProjectAtRiskController extends Controller
 
         return redirect()
             ->route('system-management.upload-project-at-risk')
-            ->with('success', 'CSV file added to import history. Click Load to replace the current Project At Risk data.');
+            ->with('success', 'Import file added to history. Click Load to replace the current Project At Risk data.');
     }
 
     public function loadImport($importId)
@@ -508,7 +506,7 @@ class ProjectAtRiskController extends Controller
         }
 
         try {
-            $inserted = $this->loadCsvSnapshot(Storage::disk('local')->path($storedPath));
+            $inserted = $this->loadImportedSnapshot(Storage::disk('local')->path($storedPath));
         } catch (\RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
         }
@@ -580,9 +578,11 @@ class ProjectAtRiskController extends Controller
         $downloadName = basename($downloadName);
 
         $extension = strtolower(pathinfo($downloadName, PATHINFO_EXTENSION));
-        $contentType = in_array($extension, ['csv', 'txt'], true)
-            ? 'text/csv; charset=UTF-8'
-            : 'application/octet-stream';
+        $contentType = match ($extension) {
+            'csv', 'txt' => 'text/csv; charset=UTF-8',
+            'xls' => 'application/vnd.ms-excel',
+            default => 'application/octet-stream',
+        };
 
         return response()->download(
             Storage::disk('local')->path($storedPath),
@@ -743,70 +743,123 @@ class ProjectAtRiskController extends Controller
         return $map;
     }
 
-    private function loadCsvSnapshot(string $path): int
+    private function loadImportedSnapshot(string $path): int
+    {
+        $rows = $this->readImportedRows($path);
+        if (empty($rows)) {
+            throw new \RuntimeException('The selected file appears to be empty.');
+        }
+
+        $headerRowIndex = $this->resolveHeaderRowIndex($rows);
+        if ($headerRowIndex === null) {
+            throw new \RuntimeException('No recognizable columns were found in the selected import file.');
+        }
+
+        $headerMap = $this->buildHeaderMap($rows[$headerRowIndex] ?? []);
+        if (empty($headerMap)) {
+            throw new \RuntimeException('No recognizable columns were found in the selected import file.');
+        }
+
+        return DB::transaction(function () use ($rows, $headerRowIndex, $headerMap) {
+            $now = now();
+            $batch = [];
+            $inserted = 0;
+
+            DB::table('project_at_risks')->delete();
+
+            for ($rowIndex = $headerRowIndex + 1; $rowIndex < count($rows); $rowIndex++) {
+                $data = $rows[$rowIndex] ?? [];
+                if (!is_array($data) || $this->rowIsEmpty($data)) {
+                    continue;
+                }
+
+                $row = $this->mapRow($data, $headerMap);
+                if (empty($row)) {
+                    continue;
+                }
+
+                $row['created_at'] = $now;
+                $row['updated_at'] = $now;
+                $batch[] = $row;
+
+                if (count($batch) >= 500) {
+                    DB::table('project_at_risks')->insert($batch);
+                    $inserted += count($batch);
+                    $batch = [];
+                }
+            }
+
+            if (!empty($batch)) {
+                DB::table('project_at_risks')->insert($batch);
+                $inserted += count($batch);
+            }
+
+            if ($inserted === 0) {
+                throw new \RuntimeException('No valid rows were found in the selected import file.');
+            }
+
+            return $inserted;
+        });
+    }
+
+    private function readImportedRows(string $path): array
     {
         if (!is_readable($path)) {
             throw new \RuntimeException('Unable to read the selected file.');
         }
 
-        $handle = fopen($path, 'r');
-        if ($handle === false) {
-            throw new \RuntimeException('Unable to open the selected file.');
-        }
-
-        try {
-            $header = fgetcsv($handle);
-            if ($header === false) {
-                throw new \RuntimeException('The selected file appears to be empty.');
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        if (in_array($extension, ['csv', 'txt'], true)) {
+            $handle = fopen($path, 'r');
+            if ($handle === false) {
+                throw new \RuntimeException('Unable to open the selected CSV file.');
             }
 
-            $headerMap = $this->buildHeaderMap($header);
-            if (empty($headerMap)) {
-                throw new \RuntimeException('No recognizable columns were found in the CSV file.');
-            }
-
-            return DB::transaction(function () use ($handle, $headerMap) {
-                $now = now();
+            try {
                 $rows = [];
-                $inserted = 0;
-
-                DB::table('project_at_risks')->delete();
-
-                while (($data = fgetcsv($handle)) !== false) {
-                    if ($this->rowIsEmpty($data)) {
-                        continue;
-                    }
-
-                    $row = $this->mapRow($data, $headerMap);
-                    if (empty($row)) {
-                        continue;
-                    }
-
-                    $row['created_at'] = $now;
-                    $row['updated_at'] = $now;
+                while (($row = fgetcsv($handle)) !== false) {
                     $rows[] = $row;
-
-                    if (count($rows) >= 500) {
-                        DB::table('project_at_risks')->insert($rows);
-                        $inserted += count($rows);
-                        $rows = [];
-                    }
                 }
 
-                if (!empty($rows)) {
-                    DB::table('project_at_risks')->insert($rows);
-                    $inserted += count($rows);
-                }
-
-                if ($inserted === 0) {
-                    throw new \RuntimeException('No valid rows were found in the selected import file.');
-                }
-
-                return $inserted;
-            });
-        } finally {
-            fclose($handle);
+                return $rows;
+            } finally {
+                fclose($handle);
+            }
         }
+
+        if ($extension === 'xls') {
+            $xls = SimpleXLS::parse($path);
+            if (!$xls) {
+                throw new \RuntimeException('Unable to parse the uploaded Excel file: ' . (SimpleXLS::parseError() ?: 'Unknown parser error'));
+            }
+
+            return $xls->rows();
+        }
+
+        throw new \RuntimeException('Unsupported file type. Please upload a CSV or Excel .xls file.');
+    }
+
+    private function resolveHeaderRowIndex(array $rows): ?int
+    {
+        $limit = min(count($rows), 10);
+
+        for ($rowIndex = 0; $rowIndex < $limit; $rowIndex++) {
+            $row = $rows[$rowIndex] ?? null;
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $headerMap = $this->buildHeaderMap($row);
+            if (
+                count($headerMap) >= 5
+                && in_array('project_code', $headerMap, true)
+                && in_array('project_title', $headerMap, true)
+            ) {
+                return $rowIndex;
+            }
+        }
+
+        return null;
     }
 
     private function generateImportStorageFileName(string $originalFileName): string
