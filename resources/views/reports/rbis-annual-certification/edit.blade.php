@@ -1,17 +1,33 @@
 @extends('layouts.dashboard')
 
-@section('title', 'RBIS Annual Certification - Update')
-@section('page-title', 'Update RBIS Annual Certification')
+@php
+    $reportConfig = array_merge([
+        'pageTitle' => 'Update RBIS Annual Certification',
+        'browserTitle' => 'RBIS Annual Certification - Update',
+        'headingDescription' => 'Upload or update RBIS Annual Certification documents.',
+        'indexRoute' => 'rbis-annual-certification.index',
+        'uploadRoute' => 'rbis-annual-certification.upload',
+        'documentRoute' => 'rbis-annual-certification.document',
+        'deleteRoute' => 'rbis-annual-certification.delete-document',
+        'approveRoute' => 'rbis-annual-certification.approve',
+        'documentTitleShort' => 'RBIS Annual Certification',
+        'uploadSectionTitle' => 'RBIS Annual Certification Upload',
+        'uploadFieldLabel' => 'Annual Certification Upload',
+    ], $reportConfig ?? []);
+@endphp
+
+@section('title', $reportConfig['browserTitle'])
+@section('page-title', $reportConfig['pageTitle'])
 
 @section('content')
     <div class="ops-detail-page">
     <div class="content-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
         <div>
             <h1>Update - {{ $officeName }}</h1>
-            <p>Upload or update RBIS Annual Certification documents.</p>
+            <p>{{ $reportConfig['headingDescription'] }}</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-            <a href="{{ route('rbis-annual-certification.index', ['year' => $reportingYear]) }}" style="display: inline-flex; padding: 10px 18px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; align-items: center; gap: 6px; white-space: nowrap;">
+            <a href="{{ route($reportConfig['indexRoute'], ['year' => $reportingYear]) }}" style="display: inline-flex; padding: 10px 18px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; align-items: center; gap: 6px; white-space: nowrap;">
                 <i class="fas fa-arrow-left"></i> Back to List
             </a>
         </div>
@@ -82,7 +98,7 @@
 
     <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
         <h2 style="color: #002C76; font-size: 18px; margin-bottom: 20px; font-weight: 600;">
-            RBIS Annual Certification Upload (CY {{ $reportingYear }})
+            {{ $reportConfig['uploadSectionTitle'] }} (CY {{ $reportingYear }})
         </h2>
 
         <div style="display: grid; gap: 12px;">
@@ -239,11 +255,11 @@
                     </span>
                 </button>
                 <div id="rbis-annual-slot" style="display: block; padding: 16px; background-color: #ffffff;">
-                    <form method="POST" action="{{ route('rbis-annual-certification.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 16px; border-radius: 8px; background-color: #f9fafb;">
+                    <form method="POST" action="{{ route($reportConfig['uploadRoute'], $officeName) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 16px; border-radius: 8px; background-color: #f9fafb;">
                         @csrf
                         <input type="hidden" name="year" value="{{ $reportingYear }}">
                         <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0 0 8px 0;">
-                            Annual Certification Upload (CY {{ $reportingYear }})
+                            {{ $reportConfig['uploadFieldLabel'] }} (CY {{ $reportingYear }})
                         </label>
                         <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">
                             Allowed format: PDF (max 15MB).
@@ -354,7 +370,7 @@
                         </div>
                             @if ($doc && $doc->file_path)
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-                                    <a href="{{ route('rbis-annual-certification.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
+                                    <a href="{{ route($reportConfig['documentRoute'], [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
                                         <i class="fas fa-file"></i>&nbsp;View current file
                                     </a>
                                     @if ($submissionTimeliness)
@@ -363,7 +379,7 @@
                                         </span>
                                     @endif
                                     @if (Auth::user()->isSuperAdmin())
-                                        <form method="POST" action="{{ route('rbis-annual-certification.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
+                                        <form method="POST" action="{{ route($reportConfig['deleteRoute'], ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                             @csrf
                                         @method('DELETE')
                                         <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
@@ -717,7 +733,7 @@
             const remarks = document.getElementById('rbisApprovalRemarks');
             const submitBtn = document.getElementById('rbisApprovalSubmit');
 
-            form.action = '{{ route('rbis-annual-certification.approve', [$officeName, '__DOC_ID__']) }}'.replace('__DOC_ID__', docId);
+            form.action = '{{ route($reportConfig['approveRoute'], [$officeName, '__DOC_ID__']) }}'.replace('__DOC_ID__', docId);
             actionInput.value = action;
             remarks.value = '';
 

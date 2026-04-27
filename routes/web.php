@@ -2341,6 +2341,14 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.quarterly.rpmes.form-6.delete-document');
     Route::get('/reports/quarterly/rpmes/form-6/{projectCode}', [App\Http\Controllers\QuarterlyRpmesForm6Controller::class, 'show'])
         ->name('reports.quarterly.rpmes.form-6.show');
+    Route::view(
+        '/reports/quarterly/dilg-mc-2018-19',
+        'reports.quarterly.dilg-mc-2018-19.index'
+    )->name('reports.quarterly.dilg-mc-2018-19');
+    Route::view(
+        '/reports/quarterly/dilg-mc-2018-30',
+        'reports.quarterly.dilg-mc-2018-30.index'
+    )->name('reports.quarterly.dilg-mc-2018-30');
     Route::get('/reports/annual/rpmes/form-4', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'index'])
         ->name('reports.annual.rpmes.form-4');
     Route::post('/reports/annual/rpmes/form-4/{projectCode}/upload', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'upload'])
@@ -2353,6 +2361,66 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.annual.rpmes.form-4.delete-document');
     Route::get('/reports/annual/rpmes/form-4/{projectCode}', [App\Http\Controllers\AnnualRpmesForm4Controller::class, 'show'])
         ->name('reports.annual.rpmes.form-4.show');
+    Route::get('/reports/annual/amwp', [App\Http\Controllers\AnnualMaintenanceWorkProgramController::class, 'index'])
+        ->name('reports.annual.amwp');
+    Route::get('/reports/annual/amwp/{office}/edit', [App\Http\Controllers\AnnualMaintenanceWorkProgramController::class, 'edit'])
+        ->name('reports.annual.amwp.edit');
+    Route::post('/reports/annual/amwp/{office}/upload', [App\Http\Controllers\AnnualMaintenanceWorkProgramController::class, 'upload'])
+        ->name('reports.annual.amwp.upload');
+    Route::post('/reports/annual/amwp/{office}/approve/{docId}', [App\Http\Controllers\AnnualMaintenanceWorkProgramController::class, 'approveDocument'])
+        ->name('reports.annual.amwp.approve');
+    Route::get('/reports/annual/amwp/{office}/document/{docId}', [App\Http\Controllers\AnnualMaintenanceWorkProgramController::class, 'viewDocument'])
+        ->name('reports.annual.amwp.document');
+    Route::delete('/reports/annual/amwp/{office}/document/{docId}', [App\Http\Controllers\AnnualMaintenanceWorkProgramController::class, 'deleteDocument'])
+        ->name('reports.annual.amwp.delete-document');
+    Route::view(
+        '/reports/one-time/confirmation-of-fund-receipt',
+        'reports.one-time.shared.show',
+        [
+            'pageTitle' => 'Confirmation of Fund Receipt',
+            'pageSubtitle' => 'Dedicated one-time report page for Confirmation of Fund Receipt.',
+        ]
+    )->name('reports.one-time.confirmation-of-fund-receipt');
+    Route::view(
+        '/reports/one-time/project-initial-documents',
+        'reports.one-time.shared.show',
+        [
+            'pageTitle' => 'Project Initial Documents',
+            'pageSubtitle' => 'Dedicated one-time report page for Project Initial Documents.',
+        ]
+    )->name('reports.one-time.project-initial-documents');
+    Route::view(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp',
+        'reports.one-time.shared.show',
+        [
+            'pageTitle' => 'Project Completion Reports - FALGU, GEF, SBDP',
+            'pageSubtitle' => 'Dedicated one-time report page for Project Completion Reports covering FALGU, GEF, and SBDP.',
+        ]
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp');
+    Route::view(
+        '/reports/one-time/project-completion-reports/safpb',
+        'reports.one-time.shared.show',
+        [
+            'pageTitle' => 'Project Completion Reports - SAFPB',
+            'pageSubtitle' => 'Dedicated one-time report page for Project Completion Reports covering SAFPB.',
+        ]
+    )->name('reports.one-time.project-completion-reports.safpb');
+    Route::view(
+        '/reports/one-time/project-completion-reports/sglgif',
+        'reports.one-time.shared.show',
+        [
+            'pageTitle' => 'Project Completion Reports - SGLGIF',
+            'pageSubtitle' => 'Dedicated one-time report page for Project Completion Reports covering SGLGIF.',
+        ]
+    )->name('reports.one-time.project-completion-reports.sglgif');
+    Route::view(
+        '/reports/one-time/pisat',
+        'reports.one-time.shared.show',
+        [
+            'pageTitle' => 'PISAT',
+            'pageSubtitle' => 'Dedicated one-time report page for PISAT.',
+        ]
+    )->name('reports.one-time.pisat');
 
     Route::get('/reports/rbis-annual-certification', [App\Http\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');
@@ -2366,4 +2434,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('rbis-annual-certification.document');
     Route::delete('/reports/rbis-annual-certification/{office}/document/{docId}', [App\Http\Controllers\RbisAnnualCertificationController::class, 'deleteDocument'])
         ->name('rbis-annual-certification.delete-document');
+    Route::view(
+        '/nadai-management',
+        'nadai-management.index'
+    )->name('nadai-management.index');
 });

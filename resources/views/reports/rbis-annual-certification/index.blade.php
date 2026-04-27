@@ -1,11 +1,22 @@
 @extends('layouts.dashboard')
 
-@section('page-title', 'RBIS Annual Certification')
+@php
+    $reportConfig = array_merge([
+        'pageTitle' => 'RBIS Annual Certification',
+        'headingTitle' => 'RBIS Annual Certification',
+        'headingDescription' => 'Each city/municipality and PLGU has its own profile page for document uploads.',
+        'indexRoute' => 'rbis-annual-certification.index',
+        'editRoute' => 'rbis-annual-certification.edit',
+        'documentTitleShort' => 'RBIS Annual Certification',
+    ], $reportConfig ?? []);
+@endphp
+
+@section('page-title', $reportConfig['pageTitle'])
 
 @section('content')
 <div class="content-header">
-    <h1>RBIS Annual Certification</h1>
-    <p>Each city/municipality and PLGU has its own profile page for document uploads.</p>
+    <h1>{{ $reportConfig['headingTitle'] }}</h1>
+    <p>{{ $reportConfig['headingDescription'] }}</p>
 </div>
 
 @if (session('success'))
@@ -124,7 +135,7 @@
 </div>
 
 <div style="background: #ffffff; padding: 16px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); margin-bottom: 20px; border: 1px solid #e5e7eb;">
-    <form id="rbis-filters-form" method="GET" action="{{ route('rbis-annual-certification.index') }}" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+    <form id="rbis-filters-form" method="GET" action="{{ route($reportConfig['indexRoute']) }}" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
         <input type="hidden" name="per_page" value="{{ $perPage ?? 15 }}">
         <div style="flex: 0 0 120px; min-width: 120px;">
             <label for="rbis-reporting-year" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 600;">Year</label>
@@ -155,7 +166,7 @@
         <button type="submit" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #2563eb; color: white; border: 1px solid #2563eb; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
             <i class="fas fa-filter"></i> Apply
         </button>
-        <a href="{{ route('rbis-annual-certification.index', ['year' => $reportingYear, 'per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
+        <a href="{{ route($reportConfig['indexRoute'], ['year' => $reportingYear, 'per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
             Clear
         </a>
     </form>
@@ -285,7 +296,7 @@
                             </span>
                         </td>
                         <td style="padding: 12px; text-align: center;">
-                            <a href="{{ route('rbis-annual-certification.edit', ['office' => $row['city_municipality'], 'year' => $reportingYear]) }}" style="display: inline-block; padding: 8px 14px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none;">
+                            <a href="{{ route($reportConfig['editRoute'], ['office' => $row['city_municipality'], 'year' => $reportingYear]) }}" style="display: inline-block; padding: 8px 14px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none;">
                                 <i class="fas fa-eye" style="margin-right: 4px;"></i> View Profile
                             </a>
                         </td>

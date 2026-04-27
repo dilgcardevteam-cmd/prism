@@ -1996,6 +1996,7 @@
                 $canViewSglgifPortal = Auth::user()->hasCrudPermission('sglgif_portal', 'view');
                 $canViewPreImplementationDocuments = Auth::user()->hasCrudPermission('pre_implementation_documents', 'view');
                 $canViewRbisAnnualCertification = Auth::user()->hasCrudPermission('rbis_annual_certification', 'view');
+                $canViewAnnualAmwp = $canViewRbisAnnualCertification;
                 $canViewAnnualRpmesBase = $canViewRbisAnnualCertification;
                 $canViewAnnualRpmesForm4 = $canViewAnnualRpmesBase
                     || Auth::user()->hasCrudPermission('annual_rpmes_form_4', 'view');
@@ -2130,26 +2131,34 @@
                 </li>
             @endif
             @if($hasAnyReportorialAccess)
-            <li>
+                <li>
                 @php
                     $reportsAnnualRpmesActive = request()->routeIs('reports.annual.rpmes.form-4*');
+                    $reportsAnnualAmwpActive = request()->routeIs('reports.annual.amwp*');
                     $reportsAnnualActive = request()->routeIs('rbis-annual-certification.*')
+                        || $reportsAnnualAmwpActive
                         || $reportsAnnualRpmesActive;
+                    $reportsQuarterlyMemorandumCircularActive = request()->routeIs('reports.quarterly.dilg-mc-2018-19')
+                        || request()->routeIs('reports.quarterly.dilg-mc-2018-30');
                     $reportsQuarterlyRpmesActive = request()->routeIs('reports.quarterly.rpmes.form-2*')
                         || request()->routeIs('reports.quarterly.rpmes.form-5*')
                         || request()->routeIs('reports.quarterly.rpmes.form-6*');
                     $reportsQuarterlyActive = request()->routeIs('fund-utilization.*')
                         || request()->routeIs('local-project-monitoring-committee.*')
                         || request()->routeIs('road-maintenance-status.*')
+                        || $reportsQuarterlyMemorandumCircularActive
                         || $reportsQuarterlyRpmesActive;
                     $reportsSwaAnnexFActive = request()->routeIs('reports.monthly.swa-annex-f*');
                     $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
                     $reportsMonthlyRpmesActive = false;
+                    $reportsProjectCompletionActive = request()->routeIs('reports.one-time.project-completion-reports.*');
+                    $reportsOneTimeActive = request()->routeIs('reports.one-time.*');
                     $reportsMonthlyActive = $reportsMonthlyReportActive || $reportsSwaAnnexFActive;
                     $reportsMenuActive = Route::currentRouteName() == 'reports'
                         || $reportsAnnualActive
                         || $reportsQuarterlyActive
-                        || $reportsMonthlyActive;
+                        || $reportsMonthlyActive
+                        || $reportsOneTimeActive;
                 @endphp
                 <a href="#" class="@if($reportsMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsMenu')">
                     <i class="fas fa-file-alt"></i>
@@ -2173,6 +2182,14 @@
                                         </a>
                                     </li>
                                 @endif
+                                @if($canViewAnnualAmwp)
+                                <li>
+                                    <a href="{{ route('reports.annual.amwp') }}" class="@if(request()->routeIs('reports.annual.amwp*')) active @endif" title="Annual Maintenance Work Program">
+                                        <i class="fas fa-file-lines"></i>
+                                        <span>AMWP</span>
+                                    </a>
+                                </li>
+                                @endif
                                 @if($canViewAnyAnnualRpmesForm)
                                     <li>
                                         <a href="#" class="@if($reportsAnnualRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualRpmesMenu')">
@@ -2183,7 +2200,7 @@
                                         <ul id="reportsAnnualRpmesMenu" class="submenu" style="display: {{ $reportsAnnualRpmesActive ? 'block' : 'none' }};">
                                             @if($canViewAnnualRpmesForm4)
                                                 <li>
-                                                    <a href="{{ route('reports.annual.rpmes.form-4') }}" class="@if(request()->routeIs('reports.annual.rpmes.form-4*')) active @endif">
+                                                    <a href="{{ route('reports.annual.rpmes.form-4') }}" class="@if(request()->routeIs('reports.annual.rpmes.form-4*')) active @endif" title="Project Result">
                                                         <i class="fas fa-diagram-project"></i>
                                                         <span>RPMES FORM 4</span>
                                                     </a>
@@ -2227,6 +2244,18 @@
                                         </a>
                                     </li>
                                 @endif
+                                <li>
+                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-19') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-19')) active @endif" title="Monitoring of Roads and Other Similar Public Works in Compliance with DILG MC No. 2018-19">
+                                        <i class="fas fa-file-lines"></i>
+                                        <span>DILG MC No. 2018-19</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-30') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-30')) active @endif" title="Report on Monitoring of Local Government Projects on Contractor's Compliance to Inform the Public before Commencement of Road Projects">
+                                        <i class="fas fa-file-lines"></i>
+                                        <span>DILG MC No. 2018-30</span>
+                                    </a>
+                                </li>
                                 @if($canViewAnyQuarterlyRpmesForm)
                                     <li>
                                         <a href="#" class="@if($reportsQuarterlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyRpmesMenu')">
@@ -2237,7 +2266,7 @@
                                         <ul id="reportsQuarterlyRpmesMenu" class="submenu" style="display: {{ $reportsQuarterlyRpmesActive ? 'block' : 'none' }};">
                                             @if($canViewQuarterlyRpmesForm2)
                                                 <li>
-                                                    <a href="{{ route('reports.quarterly.rpmes.form-2') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-2*')) active @endif">
+                                                    <a href="{{ route('reports.quarterly.rpmes.form-2') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-2*')) active @endif" title="Physical and Financial Accomplishment Report">
                                                         <i class="fas fa-file-signature"></i>
                                                         <span>RPMES FORM 2</span>
                                                     </a>
@@ -2245,7 +2274,7 @@
                                             @endif
                                             @if($canViewQuarterlyRpmesForm5)
                                                 <li>
-                                                    <a href="{{ route('reports.quarterly.rpmes.form-5') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-5*')) active @endif">
+                                                    <a href="{{ route('reports.quarterly.rpmes.form-5') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-5*')) active @endif" title="Summary of Financial and Physical Accomplishments Including Project Results">
                                                         <i class="fas fa-chart-column"></i>
                                                         <span>RPMES FORM 5</span>
                                                     </a>
@@ -2253,7 +2282,7 @@
                                             @endif
                                             @if($canViewQuarterlyRpmesForm6)
                                                 <li>
-                                                    <a href="{{ route('reports.quarterly.rpmes.form-6') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-6*')) active @endif">
+                                                    <a href="{{ route('reports.quarterly.rpmes.form-6') }}" class="@if(request()->routeIs('reports.quarterly.rpmes.form-6*')) active @endif" title="Report on the Status of Projects Encountering Problems">
                                                         <i class="fas fa-triangle-exclamation"></i>
                                                         <span>RPMES FORM 6</span>
                                                     </a>
@@ -2283,7 +2312,7 @@
                                 @endif
                                 @if($canViewSwaAnnexFMonthlyReports)
                                     <li>
-                                        <a href="#" class="@if($reportsSwaAnnexFActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsSglgifMenu')">
+                                        <a href="#" class="@if($reportsSwaAnnexFActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsSglgifMenu')" title="Seal of Good Local Governance Incentive Funds">
                                             <i class="fas fa-award"></i>
                                             <span>SGLGIF</span>
                                             <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
@@ -2310,6 +2339,60 @@
                             </ul>
                         </li>
                     @endif
+                    <li>
+                        <a href="#" class="@if($reportsOneTimeActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsOneTimeMenu')">
+                            <i class="fas fa-file-circle-check"></i>
+                            <span>One-Time Report</span>
+                            <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                        </a>
+                        <ul id="reportsOneTimeMenu" class="submenu" style="display: {{ $reportsOneTimeActive ? 'block' : 'none' }};">
+                            <li>
+                                <a href="{{ route('reports.one-time.confirmation-of-fund-receipt') }}" class="@if(request()->routeIs('reports.one-time.confirmation-of-fund-receipt')) active @endif">
+                                    <i class="fas fa-receipt"></i>
+                                    <span>Confirmation of Fund Receipt</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents')) active @endif">
+                                    <i class="fas fa-folder-tree"></i>
+                                    <span>Project Initial Documents</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="@if($reportsProjectCompletionActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsProjectCompletionMenu')">
+                                    <i class="fas fa-flag-checkered"></i>
+                                    <span>Project Completion Reports</span>
+                                    <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                </a>
+                                <ul id="reportsProjectCompletionMenu" class="submenu" style="display: {{ $reportsProjectCompletionActive ? 'block' : 'none' }};">
+                                    <li>
+                                        <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp')) active @endif">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>FALGU, GEF, SBDP</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('reports.one-time.project-completion-reports.safpb') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.safpb')) active @endif">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>SAFPB</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif')) active @endif">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>SGLGIF</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li>
+                                <a href="{{ route('reports.one-time.pisat') }}" class="@if(request()->routeIs('reports.one-time.pisat')) active @endif">
+                                    <i class="fas fa-clipboard-check"></i>
+                                    <span>PISAT</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
                 </ul>
             </li>
             @endif
@@ -2318,6 +2401,12 @@
                     <a href="{{ route('pre-implementation-documents.index') }}" class="@if(request()->routeIs('pre-implementation-documents.*')) active @endif">
                         <i class="fas fa-folder-open"></i>
                         <span>Pre-Implementation Documents</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ route('nadai-management.index') }}" class="@if(request()->routeIs('nadai-management.*')) active @endif">
+                        <i class="fas fa-folder-tree"></i>
+                        <span>NADAI Management</span>
                     </a>
                 </li>
             @endif
