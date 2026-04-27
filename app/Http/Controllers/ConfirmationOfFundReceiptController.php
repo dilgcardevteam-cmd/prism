@@ -197,30 +197,50 @@ class ConfirmationOfFundReceiptController extends Controller
         $submissionCountsByOffice = collect();
         $latestDocumentsByOffice = collect();
         $latestConfirmationDocumentsByOffice = collect();
+        $pendingAcceptanceCountsByOffice = collect();
+        $pendingCfrUploadCountsByOffice = collect();
         if (!empty($officeNames)) {
-            $submissionCountsByOffice = NadaiManagementDocument::query()
-                ->whereIn('office', $officeNames)
-                ->selectRaw('office, COUNT(*) as total')
-                ->groupBy('office')
-                ->pluck('total', 'office');
-
-            $latestDocumentsByOffice = NadaiManagementDocument::query()
+            $nadaiDocuments = NadaiManagementDocument::query()
                 ->whereIn('office', $officeNames)
                 ->orderByDesc('uploaded_at')
                 ->orderByDesc('nadai_date')
                 ->orderByDesc('id')
-                ->get()
+                ->get();
+
+            $submissionCountsByOffice = $nadaiDocuments
+                ->groupBy('office')
+                ->map(fn ($documents) => $documents->count());
+
+            $latestDocumentsByOffice = $nadaiDocuments
                 ->unique('office')
                 ->keyBy('office');
 
-            $latestConfirmationDocumentsByOffice = ConfirmationOfFundReceiptDocument::query()
-                ->whereIn('office', $officeNames)
+            $confirmationDocuments = ConfirmationOfFundReceiptDocument::query()
+                ->whereIn('nadai_document_id', $nadaiDocuments->pluck('id')->all())
                 ->orderByDesc('uploaded_at')
                 ->orderByDesc('confirmation_date')
                 ->orderByDesc('id')
-                ->get()
+                ->get();
+
+            $confirmationDocumentsByNadaiId = $confirmationDocuments
+                ->unique('nadai_document_id')
+                ->keyBy('nadai_document_id');
+
+            $latestConfirmationDocumentsByOffice = $confirmationDocuments
                 ->unique('office')
                 ->keyBy('office');
+
+            $pendingAcceptanceCountsByOffice = $nadaiDocuments
+                ->groupBy('office')
+                ->map(fn ($documents) => $documents->whereNull('confirmation_accepted_at')->count());
+
+            $pendingCfrUploadCountsByOffice = $nadaiDocuments
+                ->groupBy('office')
+                ->map(function ($documents) use ($confirmationDocumentsByNadaiId) {
+                    return $documents->filter(function ($document) use ($confirmationDocumentsByNadaiId) {
+                        return $document->confirmation_accepted_at && !$confirmationDocumentsByNadaiId->has($document->id);
+                    })->count();
+                });
         }
 
         $officeRowsCollection = $officeRowsCollection
@@ -266,6 +286,8 @@ class ConfirmationOfFundReceiptController extends Controller
             'submissionCountsByOffice',
             'latestDocumentsByOffice',
             'latestConfirmationDocumentsByOffice',
+            'pendingAcceptanceCountsByOffice',
+            'pendingCfrUploadCountsByOffice',
             'totalProvinces',
             'totalOffices',
             'perPage',

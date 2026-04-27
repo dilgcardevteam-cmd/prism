@@ -43,9 +43,9 @@ class VerifyEmailNotification extends VerifyEmail
         $verificationUrl = $this->verificationUrl($notifiable);
 
         return (new \Illuminate\Notifications\Messages\MailMessage)
-            ->subject('Verify Your Email Address - PDMU PDMUOMS')
+            ->subject('Verify Your Email Address - PRISM')
             ->greeting('Hello ' . $notifiable->fname . ' ' . $notifiable->lname . '!')
-            ->line('Thank you for registering with the PDMU Operations Management System (PDMUOMS).')
+            ->line('Thank you for registering with PRISM.')
             ->line('Your account has been successfully created. Please verify your email address by clicking the button below.')
             ->line('After verification, your account will remain pending until an administrator approves it.')
             ->action('Verify Email Address', $verificationUrl, '#ffffff')

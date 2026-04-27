@@ -62,7 +62,7 @@ export default function LoginScreen() {
               />
             </View>
             <Text className="mb-1.5 text-[38px] font-extrabold tracking-[0.4px] text-[#002c76]">
-              PDMUOMS
+              PRISM
             </Text>
             <Text className="text-center text-[17px] leading-[22px] text-[#1e3a8a]">
               PDMU Operations Management System

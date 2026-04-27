@@ -104,7 +104,7 @@
     $groupInfoShouldOpen = $selectedIsGroup && ($renameGroupErrors->isNotEmpty() || (string) old('group_rename_open') === '1');
 
     $latestConversationMessage = $conversation->last();
-    $bannerAuthor = 'PDMU OMS';
+    $bannerAuthor = 'PRISM';
     $bannerPreview = 'Messages stay inside the platform so teams can coordinate from one workspace.';
     if ($latestConversationMessage) {
         $bannerAuthor = (int) ($latestConversationMessage->sender_id ?? 0) === (int) auth()->id() ? 'You' : $selectedName;

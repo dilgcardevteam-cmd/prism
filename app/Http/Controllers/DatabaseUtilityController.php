@@ -828,7 +828,7 @@ class DatabaseUtilityController extends Controller
             $sender?->lname,
         ])));
         if ($senderName === '') {
-            $senderName = trim((string) ($sender?->username ?? 'PDMU PDMUOMS'));
+            $senderName = trim((string) ($sender?->username ?? 'PRISM'));
         }
 
         $actionUrl = $redirectPath ? url($redirectPath) : route('dashboard', [], false);

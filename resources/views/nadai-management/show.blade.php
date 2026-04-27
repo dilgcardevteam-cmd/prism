@@ -109,6 +109,9 @@
                                 <a href="{{ route('nadai-management.document', ['office' => $officeName, 'docId' => $document->id]) }}" target="_blank" style="display: inline-flex; padding: 8px 12px; background-color: #2563eb; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; align-items: center; gap: 5px;">
                                     <i class="fas fa-file-pdf"></i> View
                                 </a>
+                                <a href="{{ route('nadai-management.download-document', ['office' => $officeName, 'docId' => $document->id]) }}" style="display: inline-flex; padding: 8px 12px; background-color: #0f766e; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; align-items: center; gap: 5px;">
+                                    <i class="fas fa-download"></i> Download
+                                </a>
                                 @if ($canDelete)
                                     <form method="POST" action="{{ route('nadai-management.delete-document', ['office' => $officeName, 'docId' => $document->id]) }}" onsubmit="return confirm('Delete this NADAI document?');">
                                         @csrf

@@ -2446,6 +2446,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('nadai-management.store');
     Route::get('/nadai-management/{office}/document/{docId}', [App\Http\Controllers\NadaiManagementController::class, 'viewDocument'])
         ->name('nadai-management.document');
+    Route::get('/nadai-management/{office}/document/{docId}/open', [App\Http\Controllers\NadaiManagementController::class, 'openDocumentAndRedirect'])
+        ->name('nadai-management.open-document');
+    Route::get('/nadai-management/{office}/document/{docId}/download', [App\Http\Controllers\NadaiManagementController::class, 'downloadDocument'])
+        ->name('nadai-management.download-document');
     Route::delete('/nadai-management/{office}/document/{docId}', [App\Http\Controllers\NadaiManagementController::class, 'deleteDocument'])
         ->name('nadai-management.delete-document');
 });

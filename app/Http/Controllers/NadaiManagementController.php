@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\NadaiUploadedMail;
 use App\Models\NadaiManagementDocument;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -14,7 +17,7 @@ class NadaiManagementController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show', 'viewDocument']);
+        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show', 'viewDocument', 'downloadDocument', 'openDocumentAndRedirect']);
         $this->middleware('crud_permission:pre_implementation_documents,add')->only(['store']);
     }
 
@@ -143,6 +146,64 @@ class NadaiManagementController extends Controller
         return $user
             && $user->isDilgUser()
             && $user->isRegionalOfficeAssignment();
+    }
+
+    private function sendNadaiUploadEmailNotifications(
+        NadaiManagementDocument $document,
+        string $officeName,
+        string $province,
+    ): array {
+        $recipients = User::query()
+            ->whereNotNull('emailaddress')
+            ->get()
+            ->filter(function (User $user) use ($officeName) {
+                return $user->isActive()
+                    && $user->isLguScopedUser()
+                    && $user->matchesAssignedOffice($officeName);
+            })
+            ->values();
+
+        $emailedCount = 0;
+        $failedCount = 0;
+        $skippedCount = 0;
+
+        foreach ($recipients as $recipient) {
+            $emailAddress = strtolower(trim((string) $recipient->emailaddress));
+
+            if (!filter_var($emailAddress, FILTER_VALIDATE_EMAIL)) {
+                $skippedCount++;
+                continue;
+            }
+
+            try {
+                Mail::to($emailAddress)->send(new NadaiUploadedMail(
+                    recipient: $recipient,
+                    document: $document,
+                    officeName: $officeName,
+                    province: $province,
+                    actionUrl: route('nadai-management.open-document', ['office' => $officeName, 'docId' => $document->id]),
+                    senderName: auth()->user()?->fullName() ?: 'DILG Regional Office',
+                ));
+
+                $emailedCount++;
+            } catch (\Throwable $exception) {
+                $failedCount++;
+
+                Log::warning('NADAI upload email delivery failed.', [
+                    'recipient_id' => $recipient->idno,
+                    'email' => $emailAddress,
+                    'office' => $officeName,
+                    'document_id' => $document->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'emailed' => $emailedCount,
+            'failed' => $failedCount,
+            'skipped' => $skippedCount,
+        ];
     }
 
     public function index(Request $request)
@@ -335,7 +396,7 @@ class NadaiManagementController extends Controller
         $storedFilename = $timestamp . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), '_') . '.pdf';
         $path = $file->storeAs('nadai-management/' . $officeSlug, $storedFilename, 'public');
 
-        NadaiManagementDocument::create([
+        $document = NadaiManagementDocument::create([
             'office' => $officeName,
             'province' => $province,
             'project_title' => trim((string) $validated['project_title']),
@@ -346,9 +407,22 @@ class NadaiManagementController extends Controller
             'uploaded_at' => now(),
         ]);
 
+        $emailResults = $this->sendNadaiUploadEmailNotifications($document, $officeName, $province);
+
+        $summaryParts = ['NADAI document uploaded successfully.'];
+        if ($emailResults['emailed'] > 0) {
+            $summaryParts[] = 'Email sent to ' . number_format($emailResults['emailed']) . ' LGU user(s).';
+        }
+        if ($emailResults['skipped'] > 0) {
+            $summaryParts[] = number_format($emailResults['skipped']) . ' recipient(s) were skipped because no valid email address was available.';
+        }
+        if ($emailResults['failed'] > 0) {
+            $summaryParts[] = 'Email delivery failed for ' . number_format($emailResults['failed']) . ' recipient(s). Check the mail configuration or logs.';
+        }
+
         return redirect()
             ->route('nadai-management.show', ['office' => $officeName])
-            ->with('success', 'NADAI document uploaded successfully.');
+            ->with('success', implode(' ', $summaryParts));
     }
 
     public function viewDocument(string $office, int $docId)
@@ -379,6 +453,62 @@ class NadaiManagementController extends Controller
                 'Content-Disposition' => 'inline; filename="' . ($document->original_filename ?: basename($document->file_path)) . '"',
             ]
         );
+    }
+
+    public function downloadDocument(string $office, int $docId)
+    {
+        $officeName = $office;
+        $province = $this->findProvinceByOffice($officeName);
+        if (!$province) {
+            abort(404);
+        }
+
+        if (!$this->canAccessOffice($officeName, $province)) {
+            abort(403);
+        }
+
+        $document = NadaiManagementDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        if (!$document->file_path || !Storage::disk('public')->exists($document->file_path)) {
+            abort(404, 'Document file not found.');
+        }
+
+        return Storage::disk('public')->download(
+            $document->file_path,
+            $document->original_filename ?: basename($document->file_path)
+        );
+    }
+
+    public function openDocumentAndRedirect(string $office, int $docId)
+    {
+        $officeName = $office;
+        $province = $this->findProvinceByOffice($officeName);
+        if (!$province) {
+            abort(404);
+        }
+
+        if (!$this->canAccessOffice($officeName, $province)) {
+            abort(403);
+        }
+
+        $document = NadaiManagementDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        if (!$document->file_path || !Storage::disk('public')->exists($document->file_path)) {
+            abort(404, 'Document file not found.');
+        }
+
+        return view('nadai-management.open-document', [
+            'officeName' => $officeName,
+            'document' => $document,
+            'downloadUrl' => route('nadai-management.download-document', ['office' => $officeName, 'docId' => $document->id]),
+            'redirectUrl' => route('nadai-management.show', ['office' => $officeName]),
+        ]);
     }
 
     public function deleteDocument(string $office, int $docId)

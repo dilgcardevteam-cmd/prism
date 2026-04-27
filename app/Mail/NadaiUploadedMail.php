@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Models\NadaiManagementDocument;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -10,14 +11,15 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class BulkNotificationMail extends Mailable
+class NadaiUploadedMail extends Mailable
 {
     use Queueable, SerializesModels;
 
     public function __construct(
         public User $recipient,
-        public string $titleText,
-        public string $messageText,
+        public NadaiManagementDocument $document,
+        public string $officeName,
+        public string $province,
         public string $actionUrl,
         public string $senderName,
     ) {
@@ -30,18 +32,19 @@ class BulkNotificationMail extends Mailable
                 config('mail.from.address'),
                 config('mail.from.name')
             ),
-            subject: 'Bulk Notification - ' . $this->titleText,
+            subject: 'Received Notice of Authority to Debit Account Issued - ' . $this->officeName,
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.bulk-notification',
+            view: 'emails.nadai-uploaded',
             with: [
                 'recipient' => $this->recipient,
-                'titleText' => $this->titleText,
-                'messageText' => $this->messageText,
+                'document' => $this->document,
+                'officeName' => $this->officeName,
+                'province' => $this->province,
                 'actionUrl' => $this->actionUrl,
                 'senderName' => $this->senderName,
             ],

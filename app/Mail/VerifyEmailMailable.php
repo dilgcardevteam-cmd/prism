@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Recipient;
@@ -38,9 +39,12 @@ class VerifyEmailMailable extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            from: config('mail.from.address'),
+            from: new Address(
+                config('mail.from.address'),
+                config('mail.from.name')
+            ),
             to: [$this->user->emailaddress],
-            subject: 'Verify Your Email Address - PDMU PDMUOMS',
+            subject: 'Verify Your Email Address - PRISM',
         );
     }
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify Your Email Address</title>
+    <title>Received Notice of Authority to Debit Account Issued</title>
 </head>
 @php
     $emailLogoPath = public_path('email-dilg-logo.png');
@@ -38,38 +38,48 @@
                     <tr>
                         <td style="padding: 10px 16px 8px;">
                             <div style="font-size: 17px; line-height: 1.2; font-weight: 700; color: #4b5563; text-align: center;">
-                                Verify Your Email Address
+                                Received Notice of Authority to Debit Account Issued
                             </div>
                             <div style="height: 2px; background: #123b84; margin-top: 6px;"></div>
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 0 16px 8px; font-size: 13px; line-height: 1.6; color: #4b5563;">
-                            <p style="margin: 0 0 10px;">Hello {{ trim(($user->fname ?? '') . ' ' . ($user->lname ?? '')) ?: 'User' }},</p>
-                            <p style="margin: 0 0 10px;">Thank you for registering with the <strong>PDMU Reporting, Inspection and Monitoring System (PRISM)</strong>.</p>
-                            <p style="margin: 0 0 10px;">Your account has been successfully created. Please verify your email address by clicking the button below.</p>
-                            <p style="margin: 0 0 10px;">After verification, your account will remain pending until an administrator approves it.</p>
+                        <td style="padding: 0 16px 8px; font-size: 13px; line-height: 1.5; color: #4b5563;">
+                            <p style="margin: 0 0 10px;">Good Day {{ trim(($recipient->fname ?? '') . ' ' . ($recipient->lname ?? '')) ?: ($recipient->username ?? 'User') }},</p>
+                            <p style="margin: 0;">{{ $senderName }} uploaded a Notice of Authority to Debit Account Issued for <span style="font-weight: 700; color: #334155;">{{ $officeName }}</span>, {{ $province }}.</p>
                         </td>
                     </tr>
                     <tr>
-                        <td align="center" style="padding: 4px 16px 10px;">
-                            <a href="{{ $verificationUrl }}" style="display: inline-block; padding: 10px 20px; background: #123b84; color: #ffffff; text-decoration: none; border-radius: 9px; font-size: 13px; font-weight: 700;">
-                                Verify Email Address
+                        <td style="padding: 0 16px 8px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #eaf2ff; border: 1px solid #c7dcff; border-radius: 10px;">
+                                <tr>
+                                    <td style="padding: 10px 14px; font-size: 12px; line-height: 1.5; color: #334155;">
+                                        <div style="margin-bottom: 8px;">
+                                            <div style="font-weight: 700; color: #0f172a;">Project Title:</div>
+                                            <div style="padding-top: 1px; word-break: break-word; overflow-wrap: anywhere;">{{ $document->project_title }}</div>
+                                        </div>
+                                        <div style="margin-bottom: 8px;">
+                                            <div style="font-weight: 700; color: #0f172a;">Date of NADAI:</div>
+                                            <div style="padding-top: 1px;">{{ $document->nadai_date?->format('F d, Y') ?? '—' }}</div>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; color: #0f172a;">Document:</div>
+                                            <div style="padding-top: 1px; font-size: 11px; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere;">{{ $document->original_filename }}</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding: 4px 16px 8px;">
+                            <a href="{{ $actionUrl }}" style="display: inline-block; padding: 9px 18px; background: #123b84; color: #ffffff; text-decoration: none; border-radius: 9px; font-size: 13px; font-weight: 700;">
+                                View NADAI
                             </a>
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 0 16px 8px; font-size: 13px; line-height: 1.6; color: #4b5563;">
-                            <p style="margin: 0 0 10px;"><strong>This verification link will expire in 60 minutes.</strong></p>
-                            <p style="margin: 0 0 10px;">If you did not create an account, no further action is required.</p>
-                            <p style="margin: 0 0 8px;">If the button above does not work, copy and paste this URL into your web browser:</p>
-                            <div style="word-break: break-all; background: #f8fafc; border: 1px solid #dbe4f0; border-radius: 8px; padding: 10px; color: #334155;">
-                                {{ $verificationUrl }}
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px 16px 14px; font-size: 10px; line-height: 1.45; color: #6b7280;">
+                        <td style="padding: 0 16px 14px; font-size: 10px; line-height: 1.4; color: #6b7280;">
                             This is an automated email from PRISM. Please do not reply directly to this message.
                         </td>
                     </tr>

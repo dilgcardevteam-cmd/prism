@@ -216,7 +216,7 @@ class DatabaseBackupService
         $pdo = $connectionInstance->getPdo();
 
         $sql = [];
-        $sql[] = '-- PDMUOMS database backup';
+        $sql[] = '-- PRISM database backup';
         $sql[] = '-- Generated at ' . now()->toDateTimeString();
         $sql[] = 'SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";';
         $sql[] = 'SET FOREIGN_KEY_CHECKS=0;';

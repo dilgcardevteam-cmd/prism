@@ -95,8 +95,10 @@
                     @php
                         $latestDocument = $latestDocumentsByOffice->get($row['city_municipality']);
                         $submissionCount = (int) ($submissionCountsByOffice[$row['city_municipality']] ?? 0);
-                        $accepted = (bool) $latestDocument?->confirmation_accepted_at;
                         $latestConfirmationDocument = $latestConfirmationDocumentsByOffice->get($row['city_municipality']);
+                        $pendingAcceptanceCount = (int) ($pendingAcceptanceCountsByOffice[$row['city_municipality']] ?? 0);
+                        $pendingCfrUploadCount = (int) ($pendingCfrUploadCountsByOffice[$row['city_municipality']] ?? 0);
+                        $hasPendingAction = $pendingAcceptanceCount > 0 || $pendingCfrUploadCount > 0;
                     @endphp
                     <tr style="border-bottom: 1px solid #e5e7eb;">
                         <td style="padding: 12px; color: #111827; font-size: 13px;">{{ $row['province'] }}</td>
@@ -110,9 +112,25 @@
                         </td>
                         <td style="padding: 12px; text-align: center;">
                             @if ($latestDocument)
-                                <span style="display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $accepted ? '#6ee7b7' : '#fcd34d' }}; background-color: {{ $accepted ? '#ecfdf5' : '#fffbeb' }}; color: {{ $accepted ? '#047857' : '#92400e' }}; font-size: 11px; font-weight: 700; white-space: nowrap;">
-                                    {{ $accepted ? 'Accepted by LGU' : 'Pending LGU Acceptance' }}
-                                </span>
+                                <div style="display: inline-flex; flex-direction: column; gap: 6px; align-items: center;">
+                                    @if ($pendingAcceptanceCount > 0)
+                                        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f59e0b; color: #fff; font-size: 11px; font-weight: 800; white-space: nowrap;">
+                                            <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 999px; background: rgba(255,255,255,0.22);">{{ $pendingAcceptanceCount }}</span>
+                                            For NADAI Acceptance
+                                        </span>
+                                    @endif
+                                    @if ($pendingCfrUploadCount > 0)
+                                        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #2563eb; color: #fff; font-size: 11px; font-weight: 800; white-space: nowrap;">
+                                            <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 999px; background: rgba(255,255,255,0.22);">{{ $pendingCfrUploadCount }}</span>
+                                            For Upload of CFR
+                                        </span>
+                                    @endif
+                                    @if (!$hasPendingAction)
+                                        <span style="display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #6ee7b7; background-color: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; white-space: nowrap;">
+                                            Complete
+                                        </span>
+                                    @endif
+                                </div>
                             @else
                                 <span style="display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #d1d5db; background-color: #f3f4f6; color: #6b7280; font-size: 11px; font-weight: 700; white-space: nowrap;">
                                     No Upload
