@@ -2373,14 +2373,14 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.annual.amwp.document');
     Route::delete('/reports/annual/amwp/{office}/document/{docId}', [App\Http\Controllers\AnnualMaintenanceWorkProgramController::class, 'deleteDocument'])
         ->name('reports.annual.amwp.delete-document');
-    Route::view(
-        '/reports/one-time/confirmation-of-fund-receipt',
-        'reports.one-time.shared.show',
-        [
-            'pageTitle' => 'Confirmation of Fund Receipt',
-            'pageSubtitle' => 'Dedicated one-time report page for Confirmation of Fund Receipt.',
-        ]
-    )->name('reports.one-time.confirmation-of-fund-receipt');
+    Route::get('/reports/one-time/confirmation-of-fund-receipt', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'index'])
+        ->name('reports.one-time.confirmation-of-fund-receipt.index');
+    Route::get('/reports/one-time/confirmation-of-fund-receipt/{office}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'show'])
+        ->name('reports.one-time.confirmation-of-fund-receipt.show');
+    Route::post('/reports/one-time/confirmation-of-fund-receipt/{office}/accept/{docId}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'acceptDocument'])
+        ->name('reports.one-time.confirmation-of-fund-receipt.accept');
+    Route::get('/reports/one-time/confirmation-of-fund-receipt/{office}/document/{docId}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'viewDocument'])
+        ->name('reports.one-time.confirmation-of-fund-receipt.document');
     Route::view(
         '/reports/one-time/project-initial-documents',
         'reports.one-time.shared.show',
@@ -2434,8 +2434,14 @@ Route::middleware(['auth'])->group(function () {
         ->name('rbis-annual-certification.document');
     Route::delete('/reports/rbis-annual-certification/{office}/document/{docId}', [App\Http\Controllers\RbisAnnualCertificationController::class, 'deleteDocument'])
         ->name('rbis-annual-certification.delete-document');
-    Route::view(
-        '/nadai-management',
-        'nadai-management.index'
-    )->name('nadai-management.index');
+    Route::get('/nadai-management', [App\Http\Controllers\NadaiManagementController::class, 'index'])
+        ->name('nadai-management.index');
+    Route::get('/nadai-management/{office}', [App\Http\Controllers\NadaiManagementController::class, 'show'])
+        ->name('nadai-management.show');
+    Route::post('/nadai-management/{office}/upload', [App\Http\Controllers\NadaiManagementController::class, 'store'])
+        ->name('nadai-management.store');
+    Route::get('/nadai-management/{office}/document/{docId}', [App\Http\Controllers\NadaiManagementController::class, 'viewDocument'])
+        ->name('nadai-management.document');
+    Route::delete('/nadai-management/{office}/document/{docId}', [App\Http\Controllers\NadaiManagementController::class, 'deleteDocument'])
+        ->name('nadai-management.delete-document');
 });

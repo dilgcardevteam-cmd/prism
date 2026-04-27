@@ -1,7 +1,7 @@
 @extends('layouts.dashboard')
 
-@section('title', 'NADAI Management')
-@section('page-title', 'NADAI Management')
+@section('title', 'Confirmation of Fund Receipt')
+@section('page-title', 'Confirmation of Fund Receipt')
 
 @section('content')
 @php
@@ -24,9 +24,9 @@
         ->values();
 @endphp
 
-<div class="content-header nadai-header">
-    <h1>NADAI Management</h1>
-    <p>Track Notice of Authority to Debit Account Issued submissions per LGU and PLGU.</p>
+<div class="content-header">
+    <h1>Confirmation of Fund Receipt</h1>
+    <p>Adopt the uploaded NADAI records from NADAI Management and track LGU acceptance per LGU and PLGU.</p>
 </div>
 
 @if (session('success'))
@@ -36,21 +36,21 @@
     </div>
 @endif
 
-<div class="nadai-metrics" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
-    <div class="nadai-metric-pill" style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 9999px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: #374151;">
+<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+    <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 9999px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: #374151;">
         Provinces: {{ $totalProvinces }}
     </div>
-    <div class="nadai-metric-pill" style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 9999px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: #374151;">
+    <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 9999px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: #374151;">
         Offices: {{ $totalOffices }}
     </div>
 </div>
 
-<div class="nadai-filter-card" style="background: #ffffff; padding: 16px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); margin-bottom: 20px; border: 1px solid #e5e7eb;">
-    <form method="GET" action="{{ route('nadai-management.index') }}" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+<div style="background: #ffffff; padding: 16px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); margin-bottom: 20px; border: 1px solid #e5e7eb;">
+    <form method="GET" action="{{ route('reports.one-time.confirmation-of-fund-receipt.index') }}" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
         <input type="hidden" name="per_page" value="{{ $perPage ?? 15 }}">
         <div style="flex: 1 1 180px; min-width: 180px;">
-            <label for="nadai-filter-province" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 600;">Province</label>
-            <select id="nadai-filter-province" name="province" style="width: 100%; height: 42px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background-color: #f9fafb; color: #374151;">
+            <label for="cfr-filter-province" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 600;">Province</label>
+            <select id="cfr-filter-province" name="province" style="width: 100%; height: 42px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background-color: #f9fafb; color: #374151;">
                 <option value="">All Provinces</option>
                 @foreach(($filterOptions['provinces'] ?? []) as $option)
                     <option value="{{ $option }}" @selected((string) $activeFilters['province'] === (string) $option)>{{ $option }}</option>
@@ -58,8 +58,8 @@
             </select>
         </div>
         <div style="flex: 1 1 220px; min-width: 220px;">
-            <label for="nadai-filter-city" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 600;">City / Municipality</label>
-            <select id="nadai-filter-city" name="city" style="width: 100%; height: 42px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background-color: #f9fafb; color: #374151;">
+            <label for="cfr-filter-city" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 600;">City / Municipality</label>
+            <select id="cfr-filter-city" name="city" style="width: 100%; height: 42px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background-color: #f9fafb; color: #374151;">
                 <option value="">All Cities / Municipalities</option>
                 @foreach($cityOptions as $city)
                     <option value="{{ $city }}" @selected((string) $activeFilters['city'] === (string) $city)>{{ $city }}</option>
@@ -69,15 +69,15 @@
         <button type="submit" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #2563eb; color: white; border: 1px solid #2563eb; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
             <i class="fas fa-filter"></i> Apply
         </button>
-        <a href="{{ route('nadai-management.index', ['per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
+        <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.index', ['per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
             Clear
         </a>
     </form>
 </div>
 
-<div class="report-table-card nadai-table-card" style="background: white; padding: 24px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
+<div class="report-table-card" style="background: white; padding: 24px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
     <div class="report-table-scroll">
-        <table style="width: 100%; border-collapse: collapse; min-width: 1100px;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 1340px;">
             <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Province</th>
@@ -86,6 +86,8 @@
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Latest Project Title</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Latest NADAI Date</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Last Uploaded</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Acceptance Status</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Submitted Confirmation of Fund Receipt</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Actions</th>
                 </tr>
             </thead>
@@ -94,14 +96,13 @@
                     @php
                         $latestDocument = $latestDocumentsByOffice->get($row['city_municipality']);
                         $submissionCount = (int) ($submissionCountsByOffice[$row['city_municipality']] ?? 0);
+                        $accepted = (bool) $latestDocument?->confirmation_accepted_at;
                     @endphp
                     <tr style="border-bottom: 1px solid #e5e7eb;">
                         <td style="padding: 12px; color: #111827; font-size: 13px;">{{ $row['province'] }}</td>
                         <td style="padding: 12px; color: #111827; font-size: 13px;">{{ $row['city_municipality'] }}</td>
                         <td style="padding: 12px; color: #111827; font-size: 13px; text-align: center;">{{ $submissionCount }}</td>
-                        <td style="padding: 12px; color: #111827; font-size: 13px;">
-                            {{ $latestDocument?->project_title ?: 'No NADAI uploaded yet' }}
-                        </td>
+                        <td style="padding: 12px; color: #111827; font-size: 13px;">{{ $latestDocument?->project_title ?: 'No NADAI uploaded yet' }}</td>
                         <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
                             {{ $latestDocument?->nadai_date ? $latestDocument->nadai_date->format('M d, Y') : '—' }}
                         </td>
@@ -109,14 +110,28 @@
                             {{ $latestDocument?->uploaded_at ? $latestDocument->uploaded_at->setTimezone(config('app.timezone'))->format('M d, Y h:i A') : '—' }}
                         </td>
                         <td style="padding: 12px; text-align: center;">
-                            <a href="{{ route('nadai-management.show', ['office' => $row['city_municipality']]) }}" class="nadai-view-profile-btn" style="display: inline-block; padding: 8px 14px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none;">
+                            @if ($latestDocument)
+                                <span style="display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $accepted ? '#6ee7b7' : '#fcd34d' }}; background-color: {{ $accepted ? '#ecfdf5' : '#fffbeb' }}; color: {{ $accepted ? '#047857' : '#92400e' }}; font-size: 11px; font-weight: 700; white-space: nowrap;">
+                                    {{ $accepted ? 'Accepted by LGU' : 'Pending LGU Acceptance' }}
+                                </span>
+                            @else
+                                <span style="display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #d1d5db; background-color: #f3f4f6; color: #6b7280; font-size: 11px; font-weight: 700; white-space: nowrap;">
+                                    No Upload
+                                </span>
+                            @endif
+                        </td>
+                        <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
+                            {{ $latestDocument?->confirmation_accepted_at ? $latestDocument->confirmation_accepted_at->setTimezone(config('app.timezone'))->format('M d, Y h:i A') : '—' }}
+                        </td>
+                        <td style="padding: 12px; text-align: center;">
+                            <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.show', ['office' => $row['city_municipality']]) }}" style="display: inline-block; padding: 8px 14px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none;">
                                 <i class="fas fa-eye" style="margin-right: 4px;"></i> View Profile
                             </a>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" style="padding: 40px; text-align: center; color: #6b7280;">
+                        <td colspan="9" style="padding: 40px; text-align: center; color: #6b7280;">
                             <i class="fas fa-inbox" style="font-size: 30px; margin-bottom: 8px; display: block;"></i>
                             No offices found.
                         </td>
@@ -174,67 +189,4 @@
         </div>
     @endif
 </div>
-
-<style>
-    .nadai-header {
-        background: linear-gradient(145deg, #ffffff 0%, #f6f8fc 100%);
-        border: 1px solid #dbe5f2;
-        border-radius: 14px;
-        padding: 18px 20px;
-        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
-        margin-bottom: 16px;
-    }
-
-    .nadai-header h1 {
-        color: #0f2a5d;
-    }
-
-    .nadai-header p {
-        color: #4b5563;
-        margin-top: 4px;
-    }
-
-    .nadai-metric-pill {
-        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
-    }
-
-    .nadai-filter-card {
-        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08) !important;
-    }
-
-    .nadai-table-card {
-        border: 1px solid #e6edf6;
-        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1) !important;
-    }
-
-    .nadai-view-profile-btn {
-        border-radius: 999px !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-    }
-
-    .nadai-view-profile-btn:hover {
-        background-color: #1d4ed8 !important;
-        transform: translateY(-1px);
-        box-shadow: 0 10px 18px rgba(29, 78, 216, 0.24);
-    }
-
-    @media (max-width: 768px) {
-        .nadai-header {
-            padding: 15px 16px;
-        }
-
-        .nadai-filter-card {
-            padding: 14px 14px !important;
-        }
-
-        .nadai-table-card {
-            padding: 16px !important;
-        }
-
-        .table-pagination-row {
-            flex-direction: column;
-            align-items: flex-start !important;
-        }
-    }
-</style>
 @endsection

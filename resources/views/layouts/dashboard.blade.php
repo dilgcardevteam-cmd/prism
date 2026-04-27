@@ -2347,7 +2347,7 @@
                         </a>
                         <ul id="reportsOneTimeMenu" class="submenu" style="display: {{ $reportsOneTimeActive ? 'block' : 'none' }};">
                             <li>
-                                <a href="{{ route('reports.one-time.confirmation-of-fund-receipt') }}" class="@if(request()->routeIs('reports.one-time.confirmation-of-fund-receipt')) active @endif">
+                                <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.index') }}" class="@if(request()->routeIs('reports.one-time.confirmation-of-fund-receipt.*')) active @endif">
                                     <i class="fas fa-receipt"></i>
                                     <span>Confirmation of Fund Receipt</span>
                                 </a>
@@ -2404,7 +2404,7 @@
                     </a>
                 </li>
                 <li>
-                    <a href="{{ route('nadai-management.index') }}" class="@if(request()->routeIs('nadai-management.*')) active @endif">
+                    <a href="{{ route('nadai-management.index') }}" class="@if(request()->routeIs('nadai-management.*')) active @endif" title="Notice of Authority to Debit Account Issued">
                         <i class="fas fa-folder-tree"></i>
                         <span>NADAI Management</span>
                     </a>
