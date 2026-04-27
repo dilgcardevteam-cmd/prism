@@ -155,13 +155,13 @@
 
                         <div id="importModal-{{ $dataset['key'] }}" style="display: none; position: fixed; inset: 0; background-color: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center;">
                             <div style="background: white; padding: 24px; border-radius: 10px; width: 100%; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                                <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Import {{ $dataset['label'] }} Data (CSV)</h3>
-                                <form method="POST" action="{{ $dataset['route'] }}" enctype="multipart/form-data" data-page-loading="true" data-loading-label="Uploading {{ $dataset['label'] }} CSV" data-loading-detail="Importing the selected CSV file into the {{ strtolower($dataset['label']) }} dataset.">
+                                <h3 style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Import {{ $dataset['label'] }} Data</h3>
+                                <form method="POST" action="{{ $dataset['route'] }}" enctype="multipart/form-data" data-page-loading="true" data-loading-label="Uploading {{ $dataset['label'] }} file" data-loading-detail="Importing the selected file into the {{ strtolower($dataset['label']) }} dataset.">
                                     @csrf
                                     <div style="margin-bottom: 16px;">
-                                        <label for="upload-{{ $dataset['key'] }}" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV File</label>
-                                        <input id="upload-{{ $dataset['key'] }}" class="dashboard-file-input" type="file" name="file" accept=".csv" required>
-                                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">Excel users: Save As CSV first.</div>
+                                        <label for="upload-{{ $dataset['key'] }}" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV or Excel File</label>
+                                        <input id="upload-{{ $dataset['key'] }}" class="dashboard-file-input" type="file" name="file" accept=".csv,.xlsx" required>
+                                        <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">Accepted formats: .csv and .xlsx.</div>
                                     </div>
                                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
                                         <button type="button" onclick="closeLocationImportModal('{{ $dataset['key'] }}')" style="padding: 8px 14px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Cancel</button>

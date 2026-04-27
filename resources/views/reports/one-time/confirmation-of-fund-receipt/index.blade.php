@@ -26,7 +26,7 @@
 
 <div class="content-header">
     <h1>Confirmation of Fund Receipt</h1>
-    <p>Adopt the uploaded NADAI records from NADAI Management and track LGU acceptance per LGU and PLGU.</p>
+    <p>Adopt the uploaded NADAI records from NADAI Management and track LGU acceptance plus Confirmation of Fund Receipt attachments per LGU and PLGU.</p>
 </div>
 
 @if (session('success'))
@@ -77,17 +77,16 @@
 
 <div class="report-table-card" style="background: white; padding: 24px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
     <div class="report-table-scroll">
-        <table style="width: 100%; border-collapse: collapse; min-width: 1340px;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 1260px;">
             <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Province</th>
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">City / Municipality / PLGU</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Total NADAI Submissions</th>
-                    <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Latest Project Title</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Latest NADAI Date</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Last Uploaded</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Acceptance Status</th>
-                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Submitted Confirmation of Fund Receipt</th>
+                    <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Latest Submission of CFR</th>
                     <th style="padding: 12px; text-align: center; color: #374151; font-weight: 600; font-size: 14px;">Actions</th>
                 </tr>
             </thead>
@@ -97,12 +96,12 @@
                         $latestDocument = $latestDocumentsByOffice->get($row['city_municipality']);
                         $submissionCount = (int) ($submissionCountsByOffice[$row['city_municipality']] ?? 0);
                         $accepted = (bool) $latestDocument?->confirmation_accepted_at;
+                        $latestConfirmationDocument = $latestConfirmationDocumentsByOffice->get($row['city_municipality']);
                     @endphp
                     <tr style="border-bottom: 1px solid #e5e7eb;">
                         <td style="padding: 12px; color: #111827; font-size: 13px;">{{ $row['province'] }}</td>
                         <td style="padding: 12px; color: #111827; font-size: 13px;">{{ $row['city_municipality'] }}</td>
                         <td style="padding: 12px; color: #111827; font-size: 13px; text-align: center;">{{ $submissionCount }}</td>
-                        <td style="padding: 12px; color: #111827; font-size: 13px;">{{ $latestDocument?->project_title ?: 'No NADAI uploaded yet' }}</td>
                         <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
                             {{ $latestDocument?->nadai_date ? $latestDocument->nadai_date->format('M d, Y') : '—' }}
                         </td>
@@ -121,7 +120,7 @@
                             @endif
                         </td>
                         <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
-                            {{ $latestDocument?->confirmation_accepted_at ? $latestDocument->confirmation_accepted_at->setTimezone(config('app.timezone'))->format('M d, Y h:i A') : '—' }}
+                            {{ $latestConfirmationDocument?->uploaded_at ? $latestConfirmationDocument->uploaded_at->setTimezone(config('app.timezone'))->format('M d, Y h:i A') : '—' }}
                         </td>
                         <td style="padding: 12px; text-align: center;">
                             <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.show', ['office' => $row['city_municipality']]) }}" style="display: inline-block; padding: 8px 14px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none;">

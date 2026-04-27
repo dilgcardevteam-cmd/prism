@@ -403,18 +403,7 @@
             }
 
             function getOfficeOptionsByProvince(provinceName){
-                const items = [];
-                if(provinceName && provinceName.toLowerCase() !== 'city of baguio'){
-                    items.push(`PLGU ${provinceName}`);
-                }
-
-                (locationOptions.officesByProvince?.[provinceName] || []).forEach(function(office){
-                    if(office !== `PLGU ${provinceName}`){
-                        items.push(office);
-                    }
-                });
-
-                return items;
+                return locationOptions.officesByProvince?.[provinceName] || [];
             }
 
             function updateOfficeDropdown(){

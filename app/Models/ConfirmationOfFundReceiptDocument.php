@@ -9,6 +9,7 @@ class ConfirmationOfFundReceiptDocument extends Model
     protected $table = 'tblconfirmation_of_fund_receipt_documents';
 
     protected $fillable = [
+        'nadai_document_id',
         'office',
         'province',
         'project_title',

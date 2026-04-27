@@ -17,10 +17,14 @@ class NadaiManagementDocument extends Model
         'file_path',
         'uploaded_by',
         'uploaded_at',
+        'confirmation_accepted_by',
+        'confirmation_accepted_at',
+        'confirmation_acceptance_remarks',
     ];
 
     protected $casts = [
         'nadai_date' => 'date',
         'uploaded_at' => 'datetime',
+        'confirmation_accepted_at' => 'datetime',
     ];
 }

@@ -2,18 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConfirmationOfFundReceiptDocument;
 use App\Models\NadaiManagementDocument;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ConfirmationOfFundReceiptController extends Controller
 {
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show', 'viewDocument']);
+        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show', 'viewDocument', 'viewConfirmationDocument']);
     }
 
     private function getOffices(): array
@@ -135,6 +137,11 @@ class ConfirmationOfFundReceiptController extends Controller
             && $user->matchesAssignedOffice($officeName);
     }
 
+    private function canUploadConfirmationDocument(string $officeName): bool
+    {
+        return $this->canAcceptDocument($officeName);
+    }
+
     public function index(Request $request)
     {
         $perPage = (int) $request->query('per_page', 15);
@@ -189,6 +196,7 @@ class ConfirmationOfFundReceiptController extends Controller
 
         $submissionCountsByOffice = collect();
         $latestDocumentsByOffice = collect();
+        $latestConfirmationDocumentsByOffice = collect();
         if (!empty($officeNames)) {
             $submissionCountsByOffice = NadaiManagementDocument::query()
                 ->whereIn('office', $officeNames)
@@ -200,6 +208,15 @@ class ConfirmationOfFundReceiptController extends Controller
                 ->whereIn('office', $officeNames)
                 ->orderByDesc('uploaded_at')
                 ->orderByDesc('nadai_date')
+                ->orderByDesc('id')
+                ->get()
+                ->unique('office')
+                ->keyBy('office');
+
+            $latestConfirmationDocumentsByOffice = ConfirmationOfFundReceiptDocument::query()
+                ->whereIn('office', $officeNames)
+                ->orderByDesc('uploaded_at')
+                ->orderByDesc('confirmation_date')
                 ->orderByDesc('id')
                 ->get()
                 ->unique('office')
@@ -248,6 +265,7 @@ class ConfirmationOfFundReceiptController extends Controller
             'officeRows',
             'submissionCountsByOffice',
             'latestDocumentsByOffice',
+            'latestConfirmationDocumentsByOffice',
             'totalProvinces',
             'totalOffices',
             'perPage',
@@ -275,8 +293,45 @@ class ConfirmationOfFundReceiptController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $confirmationDocumentsByNadaiId = $documents->isEmpty()
+            ? collect()
+            : ConfirmationOfFundReceiptDocument::query()
+                ->whereIn('nadai_document_id', $documents->pluck('id')->all())
+                ->orderByDesc('uploaded_at')
+                ->orderByDesc('confirmation_date')
+                ->orderByDesc('id')
+                ->get()
+                ->unique('nadai_document_id')
+                ->keyBy('nadai_document_id');
+
+        $documents = $documents
+            ->sort(function ($leftDocument, $rightDocument) use ($confirmationDocumentsByNadaiId) {
+                $leftPendingAction = $leftDocument->confirmation_accepted_at && !$confirmationDocumentsByNadaiId->has($leftDocument->id) ? 1 : 0;
+                $rightPendingAction = $rightDocument->confirmation_accepted_at && !$confirmationDocumentsByNadaiId->has($rightDocument->id) ? 1 : 0;
+
+                if ($leftPendingAction !== $rightPendingAction) {
+                    return $rightPendingAction <=> $leftPendingAction;
+                }
+
+                $leftUploadedAt = $leftDocument->uploaded_at?->getTimestamp() ?? 0;
+                $rightUploadedAt = $rightDocument->uploaded_at?->getTimestamp() ?? 0;
+                if ($leftUploadedAt !== $rightUploadedAt) {
+                    return $rightUploadedAt <=> $leftUploadedAt;
+                }
+
+                $leftNadaiDate = $leftDocument->nadai_date?->getTimestamp() ?? 0;
+                $rightNadaiDate = $rightDocument->nadai_date?->getTimestamp() ?? 0;
+                if ($leftNadaiDate !== $rightNadaiDate) {
+                    return $rightNadaiDate <=> $leftNadaiDate;
+                }
+
+                return $rightDocument->id <=> $leftDocument->id;
+            })
+            ->values();
+
         $usersById = $documents->pluck('uploaded_by')
             ->merge($documents->pluck('confirmation_accepted_by'))
+            ->merge($confirmationDocumentsByNadaiId->pluck('uploaded_by'))
             ->filter()
             ->unique()
             ->pipe(function ($ids) {
@@ -286,19 +341,83 @@ class ConfirmationOfFundReceiptController extends Controller
             });
 
         $canAccept = $this->canAcceptDocument($officeName);
+        $canUploadConfirmation = $this->canUploadConfirmationDocument($officeName);
 
         return view('reports.one-time.confirmation-of-fund-receipt.show', compact(
             'officeName',
             'province',
             'documents',
+            'confirmationDocumentsByNadaiId',
             'usersById',
-            'canAccept'
+            'canAccept',
+            'canUploadConfirmation'
         ));
     }
 
-    public function store(Request $request, string $office)
+    public function store(Request $request, string $office, int $docId)
     {
-        abort(404);
+        $officeName = $office;
+        $province = $this->findProvinceByOffice($officeName);
+        if (!$province) {
+            abort(404);
+        }
+
+        if (!$this->canAccessOffice($officeName, $province)) {
+            abort(403);
+        }
+
+        if (!$this->canUploadConfirmationDocument($officeName)) {
+            abort(403, 'Only the assigned LGU user can upload the Confirmation of Fund Receipt attachment.');
+        }
+
+        $nadaiDocument = NadaiManagementDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        if (!$nadaiDocument->confirmation_accepted_at) {
+            return redirect()
+                ->route('reports.one-time.confirmation-of-fund-receipt.show', ['office' => $officeName])
+                ->withErrors(['confirmation_document' => 'Please accept the uploaded NADAI before uploading the Confirmation of Fund Receipt attachment.']);
+        }
+
+        $validated = $request->validate([
+            'project_title' => ['required', 'string', 'max:255'],
+            'confirmation_date' => ['required', 'date'],
+            'document' => ['required', 'file', 'mimes:pdf', 'max:15360'],
+        ]);
+
+        $file = $request->file('document');
+        $officeSlug = Str::slug($officeName, '_');
+        $timestamp = now()->format('Ymd_His');
+        $storedFilename = $timestamp . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), '_') . '.pdf';
+        $path = $file->storeAs('confirmation-of-fund-receipt/' . $officeSlug, $storedFilename, 'public');
+
+        $existingDocument = ConfirmationOfFundReceiptDocument::query()
+            ->where('nadai_document_id', $nadaiDocument->id)
+            ->first();
+
+        if ($existingDocument && $existingDocument->file_path && Storage::disk('public')->exists($existingDocument->file_path)) {
+            Storage::disk('public')->delete($existingDocument->file_path);
+        }
+
+        ConfirmationOfFundReceiptDocument::updateOrCreate(
+            ['nadai_document_id' => $nadaiDocument->id],
+            [
+                'office' => $officeName,
+                'province' => $province,
+                'project_title' => trim((string) $validated['project_title']),
+                'confirmation_date' => $validated['confirmation_date'],
+                'original_filename' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'uploaded_by' => auth()->id(),
+                'uploaded_at' => now(),
+            ]
+        );
+
+        return redirect()
+            ->route('reports.one-time.confirmation-of-fund-receipt.show', ['office' => $officeName])
+            ->with('success', 'Confirmation of Fund Receipt attachment uploaded successfully.');
     }
 
     public function acceptDocument(string $office, int $docId)
@@ -317,6 +436,10 @@ class ConfirmationOfFundReceiptController extends Controller
             abort(403, 'Only the assigned LGU user can accept this uploaded NADAI document.');
         }
 
+        $validated = request()->validate([
+            'acceptance_remarks' => ['nullable', 'string', 'max:1000'],
+        ]);
+
         $document = NadaiManagementDocument::query()
             ->where('office', $officeName)
             ->where('id', $docId)
@@ -326,6 +449,7 @@ class ConfirmationOfFundReceiptController extends Controller
             $document->update([
                 'confirmation_accepted_at' => now(),
                 'confirmation_accepted_by' => auth()->id(),
+                'confirmation_acceptance_remarks' => $validated['acceptance_remarks'] ?? null,
             ]);
         }
 
@@ -349,6 +473,36 @@ class ConfirmationOfFundReceiptController extends Controller
         $document = NadaiManagementDocument::query()
             ->where('office', $officeName)
             ->where('id', $docId)
+            ->firstOrFail();
+
+        if (!$document->file_path || !Storage::disk('public')->exists($document->file_path)) {
+            abort(404, 'Document file not found.');
+        }
+
+        return response()->file(
+            Storage::disk('public')->path($document->file_path),
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . ($document->original_filename ?: basename($document->file_path)) . '"',
+            ]
+        );
+    }
+
+    public function viewConfirmationDocument(string $office, int $attachmentId)
+    {
+        $officeName = $office;
+        $province = $this->findProvinceByOffice($officeName);
+        if (!$province) {
+            abort(404);
+        }
+
+        if (!$this->canAccessOffice($officeName, $province)) {
+            abort(403);
+        }
+
+        $document = ConfirmationOfFundReceiptDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $attachmentId)
             ->firstOrFail();
 
         if (!$document->file_path || !Storage::disk('public')->exists($document->file_path)) {

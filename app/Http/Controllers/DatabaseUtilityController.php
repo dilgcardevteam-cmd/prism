@@ -50,6 +50,7 @@ class DatabaseUtilityController extends Controller
             'required' => ['region_name'],
             'sql_aliases' => ['location_regions', 'regions', 'region'],
             'aliases' => [
+                'psgc_code' => 'region_code',
                 'region' => 'region_name',
                 'name' => 'region_name',
                 'region_name' => 'region_name',
@@ -72,6 +73,7 @@ class DatabaseUtilityController extends Controller
             'source_columns' => ['region_lookup_code', 'region_lookup_name'],
             'sql_aliases' => ['location_provinces', 'provinces', 'province'],
             'aliases' => [
+                'psgc_code' => 'province_code',
                 'region_id' => 'region_id',
                 'reg_id' => 'region_id',
                 'regionid' => 'region_id',
@@ -98,11 +100,20 @@ class DatabaseUtilityController extends Controller
             'columns' => ['province_id', 'citymun_code', 'citymun_name'],
             'required' => ['citymun_name'],
             'integer_columns' => ['province_id'],
+            'source_columns' => ['province_lookup_code', 'province_lookup_name', 'region_lookup_code', 'region_lookup_name'],
             'sql_aliases' => ['location_city_municipalities', 'city_municipalities', 'cities', 'municipalities', 'city_municipality'],
             'aliases' => [
+                'psgc_code' => 'citymun_code',
                 'province_id' => 'province_id',
                 'prov_id' => 'province_id',
                 'provinceid' => 'province_id',
+                'province_code' => 'province_lookup_code',
+                'prov_code' => 'province_lookup_code',
+                'province_name' => 'province_lookup_name',
+                'region_code' => 'region_lookup_code',
+                'reg_code' => 'region_lookup_code',
+                'region_name' => 'region_lookup_name',
+                'region' => 'region_lookup_name',
                 'citymun_code' => 'citymun_code',
                 'city_municipality_code' => 'citymun_code',
                 'municipality_code' => 'citymun_code',
@@ -1311,11 +1322,11 @@ class DatabaseUtilityController extends Controller
         }
 
         $extension = strtolower((string) $file->getClientOriginalExtension());
-        if ($extension !== 'csv') {
+        if (!in_array($extension, ['csv', 'xlsx'], true)) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->withErrors([
-                    'file' => 'Upload a .csv file for ' . $config['label'] . '.',
+                    'file' => 'Upload a .csv or .xlsx file for ' . $config['label'] . '.',
                 ]);
         }
 
@@ -1356,7 +1367,7 @@ class DatabaseUtilityController extends Controller
 
         return redirect()
             ->route('utilities.location-configuration.index')
-            ->with('success', 'CSV file added to import history. Click Load to replace the current ' . Str::lower($config['label']) . ' dataset.');
+            ->with('success', 'File added to import history. Click Load to replace the current ' . Str::lower($config['label']) . ' dataset.');
     }
 
     public function loadLocationDatasetImport(string $dataset, $importId): RedirectResponse
@@ -1390,7 +1401,7 @@ class DatabaseUtilityController extends Controller
         }
 
         try {
-            $inserted = $this->importLocationCsvFromPath(
+            $inserted = $this->importLocationFileFromPath(
                 Storage::disk('local')->path($storedPath),
                 $config
             );
@@ -1737,10 +1748,10 @@ class DatabaseUtilityController extends Controller
             ->first();
     }
 
-    private function importLocationCsvFromPath(string $path, array $config): int
+    private function importLocationFileFromPath(string $path, array $config): int
     {
         if (!is_readable($path)) {
-            throw new \RuntimeException('Unable to read the selected CSV file.');
+            throw new \RuntimeException('Unable to read the selected import file.');
         }
 
         $destinationTables = $this->resolveLocationDestinationTables($config);
@@ -1749,110 +1760,287 @@ class DatabaseUtilityController extends Controller
         }
 
         $lookupContext = $this->buildLocationLookupContext($config);
+        $importRows = $this->readLocationImportRows($path);
+        $headerRow = $importRows->current();
 
+        if ($headerRow === false) {
+            throw new \RuntimeException('The selected import file is empty.');
+        }
+
+        $headerMap = $this->buildLocationHeaderMap($headerRow['values'], $config);
+        if ($headerMap === []) {
+            throw new \RuntimeException('No recognized columns were found in the uploaded file.');
+        }
+
+        foreach ($config['required'] as $requiredColumn) {
+            if (!in_array($requiredColumn, $headerMap, true)) {
+                throw new \RuntimeException('The uploaded file must include a column for ' . str_replace('_', ' ', $requiredColumn) . '.');
+            }
+        }
+
+        $importRows->next();
+
+        return DB::transaction(function () use ($config, $destinationTables, $lookupContext, $headerMap, $importRows) {
+            foreach ($destinationTables as $table) {
+                DB::table($table)->delete();
+            }
+
+            $now = now();
+            $rows = [];
+            $inserted = 0;
+
+            while ($importRows->valid()) {
+                $importRow = $importRows->current();
+                $data = $importRow['values'];
+                $rowNumber = (int) ($importRow['row_number'] ?? 0);
+
+                if ($this->locationRowIsEmpty($data)) {
+                    $importRows->next();
+                    continue;
+                }
+
+                $row = [];
+                foreach ($headerMap as $index => $column) {
+                    $value = $this->normalizeLocationValue($data[$index] ?? null);
+                    if ($column === 'sort_order') {
+                        $row[$column] = is_numeric($value) ? (int) $value : null;
+                        continue;
+                    }
+
+                    if (in_array($column, $config['integer_columns'] ?? [], true)) {
+                        $row[$column] = is_numeric($value) ? (int) $value : null;
+                        continue;
+                    }
+
+                    $row[$column] = $value !== '' ? $value : null;
+                }
+
+                try {
+                    $row = $this->prepareLocationImportRow($row, $config, $destinationTables, $lookupContext);
+                } catch (\RuntimeException $exception) {
+                    throw new \RuntimeException('Row ' . $rowNumber . ': ' . $exception->getMessage());
+                }
+
+                $hasRequiredValues = true;
+                foreach ($config['required'] as $requiredColumn) {
+                    $requiredValue = $row[$requiredColumn] ?? null;
+                    if ($requiredValue === null || trim((string) $requiredValue) === '') {
+                        $hasRequiredValues = false;
+                        break;
+                    }
+                }
+
+                if (!$hasRequiredValues) {
+                    $importRows->next();
+                    continue;
+                }
+
+                $row['created_at'] = $now;
+                $row['updated_at'] = $now;
+                $rows[] = $row;
+
+                if (count($rows) >= 500) {
+                    foreach ($destinationTables as $table) {
+                        DB::table($table)->insert($rows);
+                    }
+                    $inserted += count($rows);
+                    $rows = [];
+                }
+
+                $importRows->next();
+            }
+
+            if ($rows !== []) {
+                foreach ($destinationTables as $table) {
+                    DB::table($table)->insert($rows);
+                }
+                $inserted += count($rows);
+            }
+
+            if ($inserted === 0) {
+                throw new \RuntimeException('No valid rows were found in the selected import file.');
+            }
+
+            return $inserted;
+        });
+    }
+
+    private function readLocationImportRows(string $path): \Generator
+    {
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        return match ($extension) {
+            'csv' => $this->readCsvLocationImportRows($path),
+            'xlsx' => $this->readXlsxLocationImportRows($path),
+            default => throw new \RuntimeException('Only .csv and .xlsx files are supported for location imports.'),
+        };
+    }
+
+    private function readCsvLocationImportRows(string $path): \Generator
+    {
         $handle = fopen($path, 'r');
         if ($handle === false) {
             throw new \RuntimeException('Unable to open the selected CSV file.');
         }
 
         try {
-            $headers = fgetcsv($handle);
-            if ($headers === false) {
-                throw new \RuntimeException('The selected CSV file is empty.');
+            $rowNumber = 0;
+            while (($row = fgetcsv($handle)) !== false) {
+                $rowNumber++;
+
+                yield [
+                    'row_number' => $rowNumber,
+                    'values' => $row,
+                ];
             }
-
-            $headerMap = $this->buildLocationHeaderMap($headers, $config);
-            if ($headerMap === []) {
-                throw new \RuntimeException('No recognized columns were found in the uploaded CSV file.');
-            }
-
-            foreach ($config['required'] as $requiredColumn) {
-                if (!in_array($requiredColumn, $headerMap, true)) {
-                    throw new \RuntimeException('The uploaded CSV file must include a column for ' . str_replace('_', ' ', $requiredColumn) . '.');
-                }
-            }
-
-            return DB::transaction(function () use ($config, $handle, $headerMap, $destinationTables, $lookupContext) {
-                foreach ($destinationTables as $table) {
-                    DB::table($table)->delete();
-                }
-
-                $now = now();
-                $rows = [];
-                $inserted = 0;
-                $rowNumber = 1;
-
-                while (($data = fgetcsv($handle)) !== false) {
-                    $rowNumber++;
-
-                    if ($this->locationRowIsEmpty($data)) {
-                        continue;
-                    }
-
-                    $row = [];
-                    foreach ($headerMap as $index => $column) {
-                        $value = $this->normalizeLocationValue($data[$index] ?? null);
-                        if ($column === 'sort_order') {
-                            $row[$column] = is_numeric($value) ? (int) $value : null;
-                            continue;
-                        }
-
-                        if (in_array($column, $config['integer_columns'] ?? [], true)) {
-                            $row[$column] = is_numeric($value) ? (int) $value : null;
-                            continue;
-                        }
-
-                        $row[$column] = $value !== '' ? $value : null;
-                    }
-
-                    try {
-                        $row = $this->prepareLocationImportRow($row, $config, $destinationTables, $lookupContext);
-                    } catch (\RuntimeException $exception) {
-                        throw new \RuntimeException('Row ' . $rowNumber . ': ' . $exception->getMessage());
-                    }
-
-                    $hasRequiredValues = true;
-                    foreach ($config['required'] as $requiredColumn) {
-                        $requiredValue = $row[$requiredColumn] ?? null;
-                        if ($requiredValue === null || trim((string) $requiredValue) === '') {
-                            $hasRequiredValues = false;
-                            break;
-                        }
-                    }
-
-                    if (!$hasRequiredValues) {
-                        continue;
-                    }
-
-                    $row['created_at'] = $now;
-                    $row['updated_at'] = $now;
-                    $rows[] = $row;
-
-                    if (count($rows) >= 500) {
-                        foreach ($destinationTables as $table) {
-                            DB::table($table)->insert($rows);
-                        }
-                        $inserted += count($rows);
-                        $rows = [];
-                    }
-                }
-
-                if ($rows !== []) {
-                    foreach ($destinationTables as $table) {
-                        DB::table($table)->insert($rows);
-                    }
-                    $inserted += count($rows);
-                }
-
-                if ($inserted === 0) {
-                    throw new \RuntimeException('No valid rows were found in the selected import file.');
-                }
-
-                return $inserted;
-            });
         } finally {
             fclose($handle);
         }
+    }
+
+    private function readXlsxLocationImportRows(string $path): \Generator
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($path) !== true) {
+            throw new \RuntimeException('Unable to open the selected Excel file.');
+        }
+
+        try {
+            $worksheetXml = $this->firstWorksheetXmlFromXlsx($zip);
+            if ($worksheetXml === null || $worksheetXml === '') {
+                throw new \RuntimeException('The selected Excel file does not contain a readable worksheet.');
+            }
+
+            $sharedStrings = $this->xlsxSharedStrings($zip);
+            $sheetXml = new \SimpleXMLElement($worksheetXml);
+            $rows = $sheetXml->xpath('//*[local-name()="sheetData"]/*[local-name()="row"]') ?: [];
+
+            foreach ($rows as $row) {
+                $rowValues = [];
+                foreach ($row->xpath('./*[local-name()="c"]') ?: [] as $cell) {
+                    $cellReference = (string) ($cell['r'] ?? '');
+                    $columnIndex = $this->xlsxColumnReferenceToIndex($cellReference);
+                    if ($columnIndex === null) {
+                        $columnIndex = count($rowValues);
+                    }
+
+                    while (count($rowValues) < $columnIndex) {
+                        $rowValues[] = '';
+                    }
+
+                    $rowValues[$columnIndex] = $this->xlsxCellValue($cell, $sharedStrings);
+                }
+
+                yield [
+                    'row_number' => (int) ($row['r'] ?? 0),
+                    'values' => array_values($rowValues),
+                ];
+            }
+        } finally {
+            $zip->close();
+        }
+    }
+
+    private function firstWorksheetXmlFromXlsx(\ZipArchive $zip): ?string
+    {
+        $workbookXml = $zip->getFromName('xl/workbook.xml');
+        $relationshipsXml = $zip->getFromName('xl/_rels/workbook.xml.rels');
+
+        if ($workbookXml === false || $relationshipsXml === false) {
+            return null;
+        }
+
+        $workbook = new \SimpleXMLElement($workbookXml);
+        $relationships = new \SimpleXMLElement($relationshipsXml);
+        $sheet = $workbook->xpath('//*[local-name()="sheet"]')[0] ?? null;
+        if (!$sheet) {
+            return null;
+        }
+
+        $relationshipId = '';
+        foreach ($sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships') as $attribute => $value) {
+            if ((string) $attribute === 'id') {
+                $relationshipId = (string) $value;
+                break;
+            }
+        }
+
+        if ($relationshipId === '') {
+            return null;
+        }
+
+        $target = null;
+        foreach ($relationships->xpath('//*[local-name()="Relationship"]') ?: [] as $relationship) {
+            if ((string) ($relationship['Id'] ?? '') === $relationshipId) {
+                $target = (string) ($relationship['Target'] ?? '');
+                break;
+            }
+        }
+
+        if ($target === null || trim($target) === '') {
+            return null;
+        }
+
+        return $zip->getFromName(ltrim($target, '/')) ?: null;
+    }
+
+    private function xlsxSharedStrings(\ZipArchive $zip): array
+    {
+        $sharedStringsXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($sharedStringsXml === false || trim($sharedStringsXml) === '') {
+            return [];
+        }
+
+        $sharedStrings = [];
+        $sharedStringsDocument = new \SimpleXMLElement($sharedStringsXml);
+        foreach ($sharedStringsDocument->xpath('//*[local-name()="si"]') ?: [] as $sharedString) {
+            $parts = [];
+            foreach ($sharedString->xpath('.//*[local-name()="t"]') ?: [] as $textNode) {
+                $parts[] = (string) $textNode;
+            }
+
+            $sharedStrings[] = implode('', $parts);
+        }
+
+        return $sharedStrings;
+    }
+
+    private function xlsxColumnReferenceToIndex(string $cellReference): ?int
+    {
+        if (!preg_match('/^([A-Z]+)/i', $cellReference, $matches)) {
+            return null;
+        }
+
+        $letters = strtoupper($matches[1]);
+        $index = 0;
+        $length = strlen($letters);
+        for ($position = 0; $position < $length; $position++) {
+            $index = ($index * 26) + (ord($letters[$position]) - 64);
+        }
+
+        return $index > 0 ? $index - 1 : null;
+    }
+
+    private function xlsxCellValue(\SimpleXMLElement $cell, array $sharedStrings = []): string
+    {
+        $type = (string) ($cell['t'] ?? '');
+        if ($type === 'inlineStr') {
+            $parts = [];
+            foreach ($cell->xpath('.//*[local-name()="t"]') ?: [] as $textNode) {
+                $parts[] = (string) $textNode;
+            }
+
+            return implode('', $parts);
+        }
+
+        $valueNode = $cell->xpath('./*[local-name()="v"]')[0] ?? null;
+        if ($type === 's' && $valueNode) {
+            $sharedStringIndex = (int) ((string) $valueNode);
+
+            return (string) ($sharedStrings[$sharedStringIndex] ?? '');
+        }
+
+        return $valueNode ? (string) $valueNode : '';
     }
 
     private function generateLocationImportStorageFileName(string $originalFileName, string $fallbackBaseName): string
@@ -1920,40 +2108,72 @@ class DatabaseUtilityController extends Controller
 
     private function buildLocationLookupContext(array $config): array
     {
-        if (($config['key'] ?? null) !== 'provinces' || !Schema::hasTable('regions')) {
-            return [];
-        }
+        $datasetKey = (string) ($config['key'] ?? '');
+        $context = [];
 
-        $byId = [];
-        $byCode = [];
-        $byName = [];
+        if ($datasetKey === 'provinces' && Schema::hasTable('location_regions')) {
+            $byId = [];
+            $byCode = [];
+            $byName = [];
 
-        foreach (DB::table('regions')->get(['id', 'region_code', 'region_name']) as $region) {
-            $regionId = (int) ($region->id ?? 0);
-            if ($regionId < 1) {
-                continue;
+            foreach (DB::table('location_regions')->get(['id', 'region_code', 'region_name']) as $region) {
+                $regionId = (int) ($region->id ?? 0);
+                if ($regionId < 1) {
+                    continue;
+                }
+
+                $byId[$regionId] = true;
+
+                $codeKey = $this->normalizeLocationLookupKey($region->region_code ?? null);
+                if ($codeKey !== '') {
+                    $byCode[$codeKey] = $regionId;
+                }
+
+                $nameKey = $this->normalizeLocationLookupKey($region->region_name ?? null);
+                if ($nameKey !== '') {
+                    $byName[$nameKey] = $regionId;
+                }
             }
 
-            $byId[$regionId] = true;
-
-            $codeKey = $this->normalizeLocationLookupKey($region->region_code ?? null);
-            if ($codeKey !== '') {
-                $byCode[$codeKey] = $regionId;
-            }
-
-            $nameKey = $this->normalizeLocationLookupKey($region->region_name ?? null);
-            if ($nameKey !== '') {
-                $byName[$nameKey] = $regionId;
-            }
-        }
-
-        return [
-            'regions' => [
+            $context['regions'] = [
                 'by_id' => $byId,
                 'by_code' => $byCode,
                 'by_name' => $byName,
-            ],
-        ];
+            ];
+        }
+
+        if ($datasetKey === 'city-municipalities' && Schema::hasTable('location_provinces')) {
+            $byId = [];
+            $byCode = [];
+            $byName = [];
+
+            foreach (DB::table('location_provinces')->get(['id', 'province_code', 'province_name']) as $province) {
+                $provinceId = (int) ($province->id ?? 0);
+                if ($provinceId < 1) {
+                    continue;
+                }
+
+                $byId[$provinceId] = true;
+
+                $codeKey = $this->normalizeLocationLookupKey($province->province_code ?? null);
+                if ($codeKey !== '') {
+                    $byCode[$codeKey] = $provinceId;
+                }
+
+                $nameKey = $this->normalizeLocationLookupKey($province->province_name ?? null);
+                if ($nameKey !== '') {
+                    $byName[$nameKey] = $provinceId;
+                }
+            }
+
+            $context['provinces'] = [
+                'by_id' => $byId,
+                'by_code' => $byCode,
+                'by_name' => $byName,
+            ];
+        }
+
+        return $context;
     }
 
     private function prepareLocationImportRow(
@@ -1964,6 +2184,8 @@ class DatabaseUtilityController extends Controller
     ): array {
         if (($config['key'] ?? null) === 'provinces') {
             $row = $this->prepareProvinceImportRow($row, $destinationTables, $lookupContext);
+        } elseif (($config['key'] ?? null) === 'city-municipalities') {
+            $row = $this->prepareCityMunicipalityImportRow($row, $lookupContext);
         }
 
         return $this->filterLocationInsertableColumns($row, $config);
@@ -1989,6 +2211,13 @@ class DatabaseUtilityController extends Controller
         $regionNameKey = $this->normalizeLocationLookupKey($row['region_lookup_name'] ?? null);
         if ($resolvedRegionId === null && $regionNameKey !== '' && isset($regions['by_name'][$regionNameKey])) {
             $resolvedRegionId = $regions['by_name'][$regionNameKey];
+        }
+
+        $derivedRegionCodeKey = $this->normalizeLocationLookupKey(
+            $this->deriveRegionLookupCodeFromPsgcCode($row['province_code'] ?? null)
+        );
+        if ($resolvedRegionId === null && $derivedRegionCodeKey !== '' && isset($regions['by_code'][$derivedRegionCodeKey])) {
+            $resolvedRegionId = $regions['by_code'][$derivedRegionCodeKey];
         }
 
         $candidateRegionId = $row['region_id'] ?? null;
@@ -2022,6 +2251,53 @@ class DatabaseUtilityController extends Controller
         return $row;
     }
 
+    private function prepareCityMunicipalityImportRow(array $row, array $lookupContext): array
+    {
+        $provinces = $lookupContext['provinces'] ?? [
+            'by_id' => [],
+            'by_code' => [],
+            'by_name' => [],
+        ];
+
+        $resolvedProvinceId = null;
+
+        $provinceCodeKey = $this->normalizeLocationLookupKey($row['province_lookup_code'] ?? null);
+        if ($provinceCodeKey !== '' && isset($provinces['by_code'][$provinceCodeKey])) {
+            $resolvedProvinceId = $provinces['by_code'][$provinceCodeKey];
+        }
+
+        $provinceNameKey = $this->normalizeLocationLookupKey($row['province_lookup_name'] ?? null);
+        if ($resolvedProvinceId === null && $provinceNameKey !== '' && isset($provinces['by_name'][$provinceNameKey])) {
+            $resolvedProvinceId = $provinces['by_name'][$provinceNameKey];
+        }
+
+        $derivedProvinceCodeKey = $this->normalizeLocationLookupKey(
+            $this->deriveProvinceLookupCodeFromPsgcCode($row['citymun_code'] ?? null)
+        );
+        if ($resolvedProvinceId === null && $derivedProvinceCodeKey !== '' && isset($provinces['by_code'][$derivedProvinceCodeKey])) {
+            $resolvedProvinceId = $provinces['by_code'][$derivedProvinceCodeKey];
+        }
+
+        $candidateProvinceId = $row['province_id'] ?? null;
+        if ($resolvedProvinceId === null && is_numeric($candidateProvinceId)) {
+            $candidateProvinceId = (int) $candidateProvinceId;
+            if ($candidateProvinceId > 0 && isset($provinces['by_id'][$candidateProvinceId])) {
+                $resolvedProvinceId = $candidateProvinceId;
+            }
+        }
+
+        $row['province_id'] = $resolvedProvinceId;
+
+        unset(
+            $row['province_lookup_code'],
+            $row['province_lookup_name'],
+            $row['region_lookup_code'],
+            $row['region_lookup_name']
+        );
+
+        return $row;
+    }
+
     private function filterLocationInsertableColumns(array $row, array $config): array
     {
         $filtered = [];
@@ -2037,7 +2313,48 @@ class DatabaseUtilityController extends Controller
 
     private function normalizeLocationLookupKey(mixed $value): string
     {
-        return Str::lower($this->normalizeLocationValue($value));
+        $normalizedValue = $this->normalizeLocationValue($value);
+        if ($normalizedValue === '') {
+            return '';
+        }
+
+        if (preg_match('/^\d+$/', $normalizedValue) === 1) {
+            $trimmed = ltrim($normalizedValue, '0');
+
+            return $trimmed !== '' ? $trimmed : '0';
+        }
+
+        return Str::lower(preg_replace('/\s+/', ' ', $normalizedValue) ?? $normalizedValue);
+    }
+
+    private function deriveRegionLookupCodeFromPsgcCode(mixed $value): ?string
+    {
+        $psgcCode = $this->normalizePsgcCode($value);
+        if ($psgcCode === null) {
+            return null;
+        }
+
+        return ltrim(substr($psgcCode, 0, 2) . '00000000', '0') ?: '0';
+    }
+
+    private function deriveProvinceLookupCodeFromPsgcCode(mixed $value): ?string
+    {
+        $psgcCode = $this->normalizePsgcCode($value);
+        if ($psgcCode === null) {
+            return null;
+        }
+
+        return ltrim(substr($psgcCode, 0, 5) . '00000', '0') ?: '0';
+    }
+
+    private function normalizePsgcCode(mixed $value): ?string
+    {
+        $digitsOnly = preg_replace('/\D+/', '', $this->normalizeLocationValue($value)) ?? '';
+        if ($digitsOnly === '') {
+            return null;
+        }
+
+        return str_pad(substr($digitsOnly, 0, 10), 10, '0', STR_PAD_LEFT);
     }
 
     private function resolveLocationDestinationTables(array $config): array

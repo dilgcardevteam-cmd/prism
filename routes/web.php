@@ -2379,8 +2379,12 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.one-time.confirmation-of-fund-receipt.show');
     Route::post('/reports/one-time/confirmation-of-fund-receipt/{office}/accept/{docId}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'acceptDocument'])
         ->name('reports.one-time.confirmation-of-fund-receipt.accept');
+    Route::post('/reports/one-time/confirmation-of-fund-receipt/{office}/upload/{docId}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'store'])
+        ->name('reports.one-time.confirmation-of-fund-receipt.upload');
     Route::get('/reports/one-time/confirmation-of-fund-receipt/{office}/document/{docId}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'viewDocument'])
         ->name('reports.one-time.confirmation-of-fund-receipt.document');
+    Route::get('/reports/one-time/confirmation-of-fund-receipt/{office}/attachment/{attachmentId}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'viewConfirmationDocument'])
+        ->name('reports.one-time.confirmation-of-fund-receipt.attachment');
     Route::view(
         '/reports/one-time/project-initial-documents',
         'reports.one-time.shared.show',

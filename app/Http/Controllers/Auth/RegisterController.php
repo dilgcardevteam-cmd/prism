@@ -210,6 +210,7 @@ class RegisterController extends Controller
         $regions = [];
         $currentRegionIds = [];
         $regionIdToName = [];
+        $regionCodeToName = [];
 
         foreach ($regionRows as $regionRow) {
             $regionId = (int) ($regionRow->id ?? 0);
@@ -221,6 +222,11 @@ class RegisterController extends Controller
             $regions[] = $regionName;
             $currentRegionIds[] = $regionId;
             $regionIdToName[$regionId] = $regionName;
+
+            $normalizedRegionCode = $this->normalizeLocationLookupKey($regionRow->region_code ?? null);
+            if ($normalizedRegionCode !== '') {
+                $regionCodeToName[$normalizedRegionCode] = $regionName;
+            }
         }
 
         sort($currentRegionIds);
@@ -235,6 +241,7 @@ class RegisterController extends Controller
         $currentProvinceIds = [];
         $provinceIdToName = [];
         $provincesByRegion = [];
+        $officesByProvince = [];
 
         foreach ($provinceRows as $provinceRow) {
             $provinceId = (int) ($provinceRow->id ?? 0);
@@ -267,6 +274,7 @@ class RegisterController extends Controller
             $regionName = $regionIdToName[$resolvedRegionId];
             $provincesByRegion[$regionName] ??= [];
             $provincesByRegion[$regionName][$provinceName] = $provinceName;
+            $officesByProvince[$provinceName] ??= [];
         }
 
         foreach ($provincesByRegion as $regionName => $provinceNames) {
@@ -276,12 +284,10 @@ class RegisterController extends Controller
         }
 
         $cityRows = DB::table('location_city_municipalities')
-            ->select('province_id', 'citymun_name')
+            ->select('province_id', 'citymun_code', 'citymun_name')
             ->whereNotNull('citymun_name')
             ->orderBy('citymun_name')
             ->get();
-
-        $officesByProvince = [];
 
         foreach ($cityRows as $cityRow) {
             $cityName = $this->formatLocationName((string) ($cityRow->citymun_name ?? ''));
@@ -295,6 +301,20 @@ class RegisterController extends Controller
             );
 
             if ($resolvedProvinceId === null || !isset($provinceIdToName[$resolvedProvinceId])) {
+                $regionName = $regionCodeToName[
+                    $this->normalizeLocationLookupKey(
+                        $this->deriveRegionLookupCodeFromPsgcCode($cityRow->citymun_code ?? null)
+                    )
+                ] ?? null;
+
+                if ($regionName === null) {
+                    continue;
+                }
+
+                $provincesByRegion[$regionName] ??= [];
+                $provincesByRegion[$regionName][$cityName] = $cityName;
+                $officesByProvince[$cityName] ??= [];
+                $officesByProvince[$cityName][$cityName] = $cityName;
                 continue;
             }
 
@@ -303,9 +323,21 @@ class RegisterController extends Controller
             $officesByProvince[$provinceName][$cityName] = $cityName;
         }
 
+        foreach ($provincesByRegion as $regionName => $provinceNames) {
+            $items = array_values($provinceNames);
+            sort($items, SORT_NATURAL | SORT_FLAG_CASE);
+            $provincesByRegion[$regionName] = $items;
+        }
+
         foreach ($officesByProvince as $provinceName => $officeNames) {
             $items = array_values($officeNames);
+            $items = array_values(array_unique($items));
             sort($items, SORT_NATURAL | SORT_FLAG_CASE);
+
+            if (strcasecmp($provinceName, 'City of Baguio') !== 0) {
+                array_unshift($items, 'PLGU ' . $provinceName);
+            }
+
             $officesByProvince[$provinceName] = $items;
         }
 
@@ -359,6 +391,34 @@ class RegisterController extends Controller
             static fn (array $matches): string => Str::lower($matches[0]),
             $formatted
         ) ?? $formatted;
+    }
+
+    private function normalizeLocationLookupKey(mixed $value): string
+    {
+        $normalizedValue = trim((string) $value);
+        if ($normalizedValue === '') {
+            return '';
+        }
+
+        if (preg_match('/^\d+$/', $normalizedValue) === 1) {
+            $trimmed = ltrim($normalizedValue, '0');
+
+            return $trimmed !== '' ? $trimmed : '0';
+        }
+
+        return Str::lower(preg_replace('/\s+/', ' ', $normalizedValue) ?? $normalizedValue);
+    }
+
+    private function deriveRegionLookupCodeFromPsgcCode(mixed $value): ?string
+    {
+        $digitsOnly = preg_replace('/\D+/', '', trim((string) $value)) ?? '';
+        if ($digitsOnly === '') {
+            return null;
+        }
+
+        $psgcCode = str_pad(substr($digitsOnly, 0, 10), 10, '0', STR_PAD_LEFT);
+
+        return ltrim(substr($psgcCode, 0, 2) . '00000000', '0') ?: '0';
     }
 
     private function resolveRegistrationIpAddress(Request $request): ?string
