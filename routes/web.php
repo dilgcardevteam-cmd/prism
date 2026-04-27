@@ -531,6 +531,7 @@ Route::middleware(['auth'])->group(function () {
             $projectAtRiskCounts = array_fill_keys($projectAtRiskOrder, 0);
             $projectAtRiskAgingCounts = array_fill_keys($projectAtRiskAgingOrder, 0);
             $projectUpdateStatusCounts = array_fill_keys($projectUpdateStatusOrder, 0);
+            $projectAtRiskSlippageProjects = array_fill_keys($projectAtRiskOrder, collect());
             $projectUpdateRiskProjects = [
                 'High Risk' => collect(),
                 'Low Risk' => collect(),
@@ -911,6 +912,145 @@ Route::middleware(['auth'])->group(function () {
                 foreach (array_keys($rowsByRisk) as $riskLabel) {
                     $projectsByRisk[$riskLabel] = collect($rowsByRisk[$riskLabel])
                         ->sortByDesc('aging_days')
+                        ->values();
+                }
+
+                return $projectsByRisk;
+            };
+
+            $fetchProjectAtRiskSlippageProjects = function ($projectCodesQuery) use ($normalizeRiskLevel, $projectAtRiskOrder) {
+                $projectsByRisk = array_fill_keys($projectAtRiskOrder, collect());
+
+                if (!Schema::hasTable('project_at_risks')) {
+                    return $projectsByRisk;
+                }
+
+                $riskBaseQuery = DB::table('project_at_risks as par')
+                    ->joinSub($projectCodesQuery, 'filtered_codes', function ($join) {
+                        $join->on(DB::raw('UPPER(TRIM(par.project_code))'), '=', 'filtered_codes.project_code');
+                    })
+                    ->selectRaw('UPPER(TRIM(par.project_code)) as project_code')
+                    ->selectRaw('TRIM(COALESCE(par.project_title, "")) as project_title')
+                    ->selectRaw('TRIM(COALESCE(par.province, "")) as province')
+                    ->selectRaw('TRIM(COALESCE(par.city_municipality, "")) as city_municipality')
+                    ->selectRaw('TRIM(COALESCE(par.risk_level, "")) as risk_level_value')
+                    ->selectRaw('TRIM(COALESCE(par.slippage, "")) as slippage_value')
+                    ->selectRaw("COALESCE(par.date_of_extraction, '1900-01-01') as extraction_date")
+                    ->addSelect('par.id')
+                    ->whereNotNull('par.project_code')
+                    ->whereRaw('TRIM(par.project_code) <> ""');
+
+                $latestExtractionByProject = DB::query()
+                    ->fromSub($riskBaseQuery, 'risk_base')
+                    ->selectRaw('risk_base.project_code')
+                    ->selectRaw('MAX(risk_base.extraction_date) as latest_extraction')
+                    ->groupBy('risk_base.project_code');
+
+                $latestRowsByExtraction = DB::query()
+                    ->fromSub($riskBaseQuery, 'risk_base')
+                    ->joinSub($latestExtractionByProject, 'risk_latest', function ($join) {
+                        $join->on('risk_base.project_code', '=', 'risk_latest.project_code')
+                            ->on('risk_base.extraction_date', '=', 'risk_latest.latest_extraction');
+                    })
+                    ->select(
+                        'risk_base.project_code',
+                        'risk_base.project_title',
+                        'risk_base.province',
+                        'risk_base.city_municipality',
+                        'risk_base.risk_level_value',
+                        'risk_base.slippage_value',
+                        'risk_base.extraction_date',
+                        'risk_base.id'
+                    );
+
+                $latestIdByProject = DB::query()
+                    ->fromSub($latestRowsByExtraction, 'risk_rows')
+                    ->selectRaw('risk_rows.project_code')
+                    ->selectRaw('MAX(risk_rows.id) as latest_id')
+                    ->groupBy('risk_rows.project_code');
+
+                $finalRiskRows = DB::query()
+                    ->fromSub($riskBaseQuery, 'risk_base')
+                    ->joinSub($latestIdByProject, 'risk_latest_id', function ($join) {
+                        $join->on('risk_base.project_code', '=', 'risk_latest_id.project_code')
+                            ->on('risk_base.id', '=', 'risk_latest_id.latest_id');
+                    })
+                    ->select(
+                        'risk_base.project_code',
+                        'risk_base.project_title',
+                        'risk_base.province',
+                        'risk_base.city_municipality',
+                        'risk_base.risk_level_value',
+                        'risk_base.slippage_value',
+                        'risk_base.extraction_date'
+                    )
+                    ->get();
+
+                $rowsByRisk = array_fill_keys($projectAtRiskOrder, []);
+
+                foreach ($finalRiskRows as $row) {
+                    $riskLabel = $normalizeRiskLevel($row->risk_level_value ?? null);
+                    if ($riskLabel === null || !array_key_exists($riskLabel, $rowsByRisk)) {
+                        continue;
+                    }
+
+                    $rawSlippage = trim((string) ($row->slippage_value ?? ''));
+                    $normalizedSlippage = null;
+                    if ($rawSlippage !== '') {
+                        if (is_numeric($rawSlippage)) {
+                            $normalizedSlippage = (float) $rawSlippage;
+                        } else {
+                            $cleanedSlippage = preg_replace('/[^0-9\.\-]/', '', $rawSlippage);
+                            if ($cleanedSlippage !== null && $cleanedSlippage !== '' && is_numeric($cleanedSlippage)) {
+                                $normalizedSlippage = (float) $cleanedSlippage;
+                            }
+                        }
+                    }
+
+                    $rowsByRisk[$riskLabel][] = (object) [
+                        'project_code' => $row->project_code ?? null,
+                        'project_title' => $row->project_title ?? null,
+                        'province' => $row->province ?? null,
+                        'city_municipality' => $row->city_municipality ?? null,
+                        'latest_update_date' => $row->extraction_date ?? null,
+                        'slippage_value' => $normalizedSlippage,
+                        'slippage_display' => $rawSlippage,
+                        'risk_level' => $riskLabel,
+                    ];
+                }
+
+                foreach (array_keys($rowsByRisk) as $riskLabel) {
+                    $projectsByRisk[$riskLabel] = collect($rowsByRisk[$riskLabel])
+                        ->sort(function ($leftRow, $rightRow) {
+                            $leftSlippage = $leftRow->slippage_value;
+                            $rightSlippage = $rightRow->slippage_value;
+
+                            if ($leftSlippage !== null && $rightSlippage !== null && $leftSlippage !== $rightSlippage) {
+                                return $leftSlippage <=> $rightSlippage;
+                            }
+                            if ($leftSlippage === null && $rightSlippage !== null) {
+                                return 1;
+                            }
+                            if ($leftSlippage !== null && $rightSlippage === null) {
+                                return -1;
+                            }
+
+                            $leftCode = strtoupper(trim((string) ($leftRow->project_code ?? '')));
+                            $rightCode = strtoupper(trim((string) ($rightRow->project_code ?? '')));
+
+                            if ($leftCode !== $rightCode) {
+                                return $leftCode < $rightCode ? -1 : 1;
+                            }
+
+                            $leftTitle = strtoupper(trim((string) ($leftRow->project_title ?? '')));
+                            $rightTitle = strtoupper(trim((string) ($rightRow->project_title ?? '')));
+
+                            if ($leftTitle === $rightTitle) {
+                                return 0;
+                            }
+
+                            return $leftTitle < $rightTitle ? -1 : 1;
+                        })
                         ->values();
                 }
 
@@ -1585,6 +1725,7 @@ Route::middleware(['auth'])->group(function () {
                     ->selectRaw('DISTINCT UPPER(TRIM(spp.project_code)) as project_code');
                 $computeProjectAtRiskCounts(clone $filteredProjectCodesQuery, 'risk_level', $projectAtRiskCounts);
                 $computeProjectAtRiskAgingCounts(clone $filteredProjectCodesQuery, $projectAtRiskAgingCounts);
+                $projectAtRiskSlippageProjects = $fetchProjectAtRiskSlippageProjects(clone $filteredProjectCodesQuery);
                 $projectAtRiskAgingProjects = $fetchProjectAtRiskAgingProjects(clone $filteredProjectCodesQuery);
                 $computeProjectUpdateStatusCountsFromSubay(clone $subayDashboardQuery, $projectUpdateStatusCounts);
                 foreach ($projectUpdateStatusOrder as $riskLabel) {
@@ -1804,6 +1945,7 @@ Route::middleware(['auth'])->group(function () {
                     ->selectRaw('DISTINCT UPPER(TRIM(subaybayan_project_code)) as project_code');
                 $computeProjectAtRiskCounts(clone $fallbackProjectCodesQuery, 'risk_level', $projectAtRiskCounts);
                 $computeProjectAtRiskAgingCounts(clone $fallbackProjectCodesQuery, $projectAtRiskAgingCounts);
+                $projectAtRiskSlippageProjects = $fetchProjectAtRiskSlippageProjects(clone $fallbackProjectCodesQuery);
                 $projectAtRiskAgingProjects = $fetchProjectAtRiskAgingProjects(clone $fallbackProjectCodesQuery);
 
                 $fallbackProvinceFundingYearProgramStatusRows = (clone $fallbackQuery)
@@ -1887,6 +2029,7 @@ Route::middleware(['auth'])->group(function () {
                 'projectsExpectedCompletionThisMonth',
                 'projectAtRiskCounts',
                 'projectAtRiskAgingCounts',
+                'projectAtRiskSlippageProjects',
                 'projectAtRiskAgingProjects',
                 'projectUpdateStatusCounts',
                 'projectUpdateRiskProjects',

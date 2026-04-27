@@ -1232,8 +1232,13 @@
                         $projectAtRiskFilterUrl = route('projects.at-risk', [
                             'risk_level' => $riskLabel,
                         ]);
+                        $slippageModalId = 'project-risk-slippage-' . strtolower(str_replace(' ', '-', $riskLabel)) . '-modal';
                     @endphp
-                    <div class="dashboard-tile clickable-dashboard-card project-update-status-tile project-risk-status-tile" data-card-url="{{ $projectAtRiskFilterUrl }}">
+                    <div
+                        class="dashboard-tile clickable-dashboard-card project-update-status-tile project-risk-status-tile"
+                        data-card-url="{{ $projectAtRiskFilterUrl }}"
+                        data-modal-target="{{ $slippageModalId }}"
+                    >
                         <div class="project-update-status-label project-risk-summary-label">
                             <span
                                 class="project-update-status-badge project-risk-summary-badge"
@@ -1464,11 +1469,20 @@
     </div>
 
     @php
+        $projectAtRiskSlippageProjectsModal = $projectAtRiskSlippageProjects ?? [];
         $projectAtRiskAgingProjectsModal = $projectAtRiskAgingProjects ?? [];
         $statusSubaybayanProjectsModalMap = $statusSubaybayanProjectsMap ?? [];
         $fundSourceProjectsModalMap = $fundSourceProjectsMap ?? [];
         $balanceProjectsModal = collect($projectsWithBalance ?? []);
         $balanceProjectsModalSubtitle = 'Projects with remaining balance from SubayBAYAN. Balance formula: Original Allocation - (Disbursement + Reverted Allocation). LGU Counterpart is shown as a separate column.';
+        $projectAtRiskSlippageModalSubtitles = [
+            'Ahead' => 'Projects marked Ahead based on the latest Project at Risk extraction data.',
+            'No Risk' => 'Projects marked No Risk based on the latest Project at Risk extraction data.',
+            'On Schedule' => 'Projects marked On Schedule based on the latest Project at Risk extraction data.',
+            'High Risk' => 'Projects marked High Risk based on the latest Project at Risk extraction data.',
+            'Moderate Risk' => 'Projects marked Moderate Risk based on the latest Project at Risk extraction data.',
+            'Low Risk' => 'Projects marked Low Risk based on the latest Project at Risk extraction data.',
+        ];
         $projectAtRiskAgingModalSubtitles = [
             'High Risk' => 'Aging is greater than or equal to 60 days based on the latest Project at Risk extraction data.',
             'Low Risk' => 'Aging is greater than 30 days but less than 60 days based on the latest Project at Risk extraction data.',
@@ -1777,6 +1791,89 @@
                         class="dashboard-modal-export-btn"
                         onclick="exportDashboardModalTableToExcel(this)"
                         data-export-filename="aging-of-projects-with-slippage-{{ $riskKey }}.xls"
+                        @disabled($modalProjects->isEmpty())
+                    >
+                        Export Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endforeach
+    @foreach ($projectAtRiskSummaryOrder as $riskLabel)
+        @php
+            $riskKey = strtolower(str_replace(' ', '-', $riskLabel));
+            $modalId = 'project-risk-slippage-' . $riskKey . '-modal';
+            $modalTitleId = $modalId . '-title';
+            $modalProjects = collect($projectAtRiskSlippageProjectsModal[$riskLabel] ?? []);
+            $subtitleText = $projectAtRiskSlippageModalSubtitles[$riskLabel] ?? '';
+        @endphp
+        <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true">
+            <div class="dashboard-modal-backdrop" data-close-modal></div>
+            <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $modalTitleId }}">
+                <div class="dashboard-modal-header">
+                    <h3 id="{{ $modalTitleId }}">{{ $riskLabel }} Slippage Projects</h3>
+                    <button type="button" class="dashboard-modal-close" data-close-modal aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <p class="dashboard-modal-subtitle">
+                    {{ $subtitleText }}
+                </p>
+                <div class="dashboard-modal-body">
+                    @if ($modalProjects->isNotEmpty())
+                        <div class="dashboard-modal-table-wrap">
+                            <table class="dashboard-modal-table">
+                                <thead>
+                                    <tr>
+                                        <th>Project Code</th>
+                                        <th>Project Title</th>
+                                        <th>Province</th>
+                                        <th>City/Municipality</th>
+                                        <th>Extraction Date</th>
+                                        <th>Slippage</th>
+                                        <th>Risk Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($modalProjects as $projectRow)
+                                        @php
+                                            $latestUpdateDateRaw = trim((string) ($projectRow->latest_update_date ?? ''));
+                                            $latestUpdateDate = $latestUpdateDateRaw !== ''
+                                                ? \Illuminate\Support\Carbon::parse($latestUpdateDateRaw)->format('M d, Y')
+                                                : '-';
+                                            $slippageDisplay = trim((string) ($projectRow->slippage_display ?? ''));
+                                            if ($slippageDisplay === '' && $projectRow->slippage_value !== null) {
+                                                $slippageDisplay = rtrim(rtrim(number_format((float) $projectRow->slippage_value, 2, '.', ''), '0'), '.');
+                                            }
+                                            if ($slippageDisplay !== '' && !str_contains($slippageDisplay, '%')) {
+                                                $slippageDisplay .= '%';
+                                            }
+                                        @endphp
+                                        <tr>
+                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
+                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
+                                            <td>{{ $projectRow->province ?: '-' }}</td>
+                                            <td>{{ $projectRow->city_municipality ?: '-' }}</td>
+                                            <td>{{ $latestUpdateDate }}</td>
+                                            <td>{{ $slippageDisplay !== '' ? $slippageDisplay : '-' }}</td>
+                                            <td>{{ $projectRow->risk_level ?: '-' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="dashboard-modal-empty-state">
+                            No {{ strtolower($riskLabel) }} slippage projects found for the current dashboard filters.
+                        </div>
+                    @endif
+                </div>
+                <div class="dashboard-modal-footer">
+                    <button
+                        type="button"
+                        class="dashboard-modal-export-btn"
+                        onclick="exportDashboardModalTableToExcel(this)"
+                        data-export-filename="risk-level-as-to-slippage-{{ $riskKey }}.xls"
                         @disabled($modalProjects->isEmpty())
                     >
                         Export Excel
@@ -5605,6 +5702,45 @@
         }
 
         function initializeClickableDashboardCards() {
+            const slugifyDashboardLabel = (value) => {
+                return String(value || '')
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+            };
+
+            const resolveDashboardCardModalElement = (card) => {
+                const explicitModalTargetId = card.dataset.modalTarget;
+                if (explicitModalTargetId) {
+                    return document.getElementById(explicitModalTargetId);
+                }
+
+                if (!card.classList.contains('project-risk-status-tile')) {
+                    return null;
+                }
+
+                const riskLabelElement = card.querySelector('.project-risk-summary-badge, .project-update-status-badge');
+                const riskLabelSlug = slugifyDashboardLabel(riskLabelElement ? riskLabelElement.textContent : '');
+                if (!riskLabelSlug) {
+                    return null;
+                }
+
+                const modalPrefixes = [
+                    'project-risk-slippage-',
+                    'project-risk-aging-',
+                ];
+
+                for (const prefix of modalPrefixes) {
+                    const modalElement = document.getElementById(`${prefix}${riskLabelSlug}-modal`);
+                    if (modalElement) {
+                        return modalElement;
+                    }
+                }
+
+                return null;
+            };
+
             const clickableCards = document.querySelectorAll('.clickable-dashboard-card[data-card-url]');
             clickableCards.forEach((card) => {
                 if (card.dataset.cardLinkInitialized === '1') {
@@ -5620,13 +5756,10 @@
                         return;
                     }
 
-                    const modalTargetId = card.dataset.modalTarget;
-                    if (modalTargetId) {
-                        const modalElement = document.getElementById(modalTargetId);
-                        if (modalElement) {
-                            openDashboardModal(modalElement);
-                            return;
-                        }
+                    const modalElement = resolveDashboardCardModalElement(card);
+                    if (modalElement) {
+                        openDashboardModal(modalElement);
+                        return;
                     }
 
                     const destinationUrl = card.dataset.cardUrl;
@@ -5647,13 +5780,10 @@
                     }
 
                     event.preventDefault();
-                    const modalTargetId = card.dataset.modalTarget;
-                    if (modalTargetId) {
-                        const modalElement = document.getElementById(modalTargetId);
-                        if (modalElement) {
-                            openDashboardModal(modalElement);
-                            return;
-                        }
+                    const modalElement = resolveDashboardCardModalElement(card);
+                    if (modalElement) {
+                        openDashboardModal(modalElement);
+                        return;
                     }
 
                     const destinationUrl = card.dataset.cardUrl;
