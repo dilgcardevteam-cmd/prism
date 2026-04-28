@@ -411,9 +411,13 @@
                                     $buttonId = 'lpmc-q-btn-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $filenameId = 'lpmc-q-file-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
+                                    $disableQuarterUpload = is_array($configuredQuarterDeadline)
+                                        && !empty($configuredQuarterDeadline['is_closed']);
                                     $hasFile = $doc && $doc->file_path;
                                     $isReturned = $doc && $doc->status === 'returned';
-                                    $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
+                                    $disableUploadInput = ($hasFile && !$isReturned)
+                                        || $isRegionalOfficeUserForUpload
+                                        || $disableQuarterUpload;
                                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
                                     $statusLabel = 'Pending Upload';

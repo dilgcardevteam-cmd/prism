@@ -1,12 +1,12 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Pre-Implementation Documents')
-@section('page-title', 'Pre-Implementation Documents')
+@section('title', $pageConfig['title'])
+@section('page-title', $pageConfig['title'])
 
 @section('content')
     <div class="content-header">
-        <h1>Pre-Implementation Documents</h1>
-        <p>View accessible SubayBayan LFP projects from 2024 onward and open each project profile to manage pre-implementation records.</p>
+        <h1>{{ $pageConfig['index_heading'] }}</h1>
+        <p>{{ $pageConfig['index_description'] }}</p>
     </div>
 
     <style>
@@ -53,7 +53,7 @@
         }
     </style>
 
-    <form method="GET" action="{{ route('pre-implementation-documents.index') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
+    <form method="GET" action="{{ route($routeConfig['index'], $scopeQuery) }}" class="dashboard-card project-filter-form dashboard-main-layout-filter" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
         <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
         <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="true" aria-controls="project-filter-body" style="width: 100%; border: 0; background: transparent; color: #002c76; font-size: 13px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 14px; padding: 0; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;">
             <span style="font-size: 20px;">&#128269;</span>
@@ -136,7 +136,7 @@
                 </div>
 
                 <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end;">
-                    <a href="{{ route('pre-implementation-documents.index') }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
+                    <a href="{{ route($routeConfig['index'], $scopeQuery) }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
                         Reset Filter
                     </a>
                 </div>
@@ -197,7 +197,7 @@
                             </span>
                         </td>
                         <td style="padding: 14px 16px; text-align: center; white-space: nowrap;">
-                            <a href="{{ route('pre-implementation-documents.show', $project->project_code) }}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background-color: #002C76; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 600; transition: background-color 0.2s;"
+                            <a href="{{ route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery)) }}" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background-color: #002C76; color: white; text-decoration: none; border-radius: 6px; font-size: 12px; font-weight: 600; transition: background-color 0.2s;"
                                onmouseover="this.style.backgroundColor='#003d9e'" onmouseout="this.style.backgroundColor='#002C76'">
                                 <i class="fas fa-folder-open"></i> Open
                             </a>
@@ -207,7 +207,7 @@
                     <tr>
                         <td colspan="8" style="padding: 60px 20px; text-align: center; color: #9ca3af;">
                             <i class="fas fa-inbox" style="font-size: 36px; margin-bottom: 12px; display: block; color: #d1d5db;"></i>
-                            <div style="font-size: 14px; font-weight: 600; color: #6b7280;">No SubayBayan LFP projects found from 2024 onward.</div>
+                            <div style="font-size: 14px; font-weight: 600; color: #6b7280;">{{ $pageConfig['empty_state'] }}</div>
                             <div style="font-size: 12px; margin-top: 4px;">Try adjusting your filters.</div>
                         </td>
                     </tr>
@@ -223,7 +223,7 @@
                         Page {{ $projects->currentPage() }} of {{ $projects->lastPage() }} ·
                         Showing {{ $projects->firstItem() ?? 0 }}–{{ $projects->lastItem() ?? 0 }} of {{ $projects->total() }}
                     </div>
-                    <form method="GET" action="{{ route('pre-implementation-documents.index') }}" style="display: inline-flex; align-items: center;">
+                    <form method="GET" action="{{ route($routeConfig['index'], $scopeQuery) }}" style="display: inline-flex; align-items: center;">
                         <input type="hidden" name="search" value="{{ $filters['search'] ?? '' }}">
                         <input type="hidden" name="province" value="{{ $filters['province'] ?? '' }}">
                         <input type="hidden" name="city_municipality" value="{{ $filters['city_municipality'] ?? '' }}">

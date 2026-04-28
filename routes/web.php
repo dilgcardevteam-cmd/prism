@@ -2223,10 +2223,16 @@ Route::middleware(['auth'])->group(function () {
         ->name('pre-implementation-documents.show');
     Route::get('/pre-implementation-documents/projects/{projectCode}/document/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'viewDocument'])
         ->name('pre-implementation-documents.document');
+    Route::get('/pre-implementation-documents/projects/{projectCode}/document-file/{fileId}', [App\Http\Controllers\PreImplementationDocumentController::class, 'viewDocumentFile'])
+        ->name('pre-implementation-documents.document-file');
     Route::post('/pre-implementation-documents/projects/{projectCode}', [App\Http\Controllers\PreImplementationDocumentController::class, 'save'])
         ->name('pre-implementation-documents.save');
+    Route::post('/pre-implementation-documents/projects/{projectCode}/upload/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'uploadMultiDocument'])
+        ->name('pre-implementation-documents.upload-multi');
     Route::post('/pre-implementation-documents/projects/{projectCode}/validate/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'validateDocument'])
         ->name('pre-implementation-documents.validate');
+    Route::post('/pre-implementation-documents/projects/{projectCode}/validate-file/{fileId}', [App\Http\Controllers\PreImplementationDocumentController::class, 'validateDocumentFile'])
+        ->name('pre-implementation-documents.validate-file');
     Route::get('/pre-implementation-documents/sbdp-projects', function () {
         return redirect()->route('pre-implementation-documents.index', request()->query());
     });
@@ -2238,6 +2244,23 @@ Route::middleware(['auth'])->group(function () {
     });
     Route::post('/pre-implementation-documents/sbdp-projects/{projectCode}', [App\Http\Controllers\PreImplementationDocumentController::class, 'save']);
     Route::post('/pre-implementation-documents/sbdp-projects/{projectCode}/validate/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'validateDocument']);
+
+    Route::get('/initial-project-documents/projects', [App\Http\Controllers\PreImplementationDocumentController::class, 'index'])
+        ->name('initial-project-documents.index');
+    Route::get('/initial-project-documents/projects/{projectCode}', [App\Http\Controllers\PreImplementationDocumentController::class, 'show'])
+        ->name('initial-project-documents.show');
+    Route::get('/initial-project-documents/projects/{projectCode}/document/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'viewDocument'])
+        ->name('initial-project-documents.document');
+    Route::get('/initial-project-documents/projects/{projectCode}/document-file/{fileId}', [App\Http\Controllers\PreImplementationDocumentController::class, 'viewDocumentFile'])
+        ->name('initial-project-documents.document-file');
+    Route::post('/initial-project-documents/projects/{projectCode}', [App\Http\Controllers\PreImplementationDocumentController::class, 'save'])
+        ->name('initial-project-documents.save');
+    Route::post('/initial-project-documents/projects/{projectCode}/upload/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'uploadMultiDocument'])
+        ->name('initial-project-documents.upload-multi');
+    Route::post('/initial-project-documents/projects/{projectCode}/validate/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'validateDocument'])
+        ->name('initial-project-documents.validate');
+    Route::post('/initial-project-documents/projects/{projectCode}/validate-file/{fileId}', [App\Http\Controllers\PreImplementationDocumentController::class, 'validateDocumentFile'])
+        ->name('initial-project-documents.validate-file');
 
     // Projects routes
     Route::get('/projects/locally-funded', [App\Http\Controllers\LocallyFundedProjectController::class, 'index'])->name('projects.locally-funded');
@@ -2528,14 +2551,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('reports.one-time.confirmation-of-fund-receipt.document');
     Route::get('/reports/one-time/confirmation-of-fund-receipt/{office}/attachment/{attachmentId}', [App\Http\Controllers\ConfirmationOfFundReceiptController::class, 'viewConfirmationDocument'])
         ->name('reports.one-time.confirmation-of-fund-receipt.attachment');
-    Route::view(
-        '/reports/one-time/project-initial-documents',
-        'reports.one-time.shared.show',
-        [
-            'pageTitle' => 'Project Initial Documents',
-            'pageSubtitle' => 'Dedicated one-time report page for Project Initial Documents.',
-        ]
-    )->name('reports.one-time.project-initial-documents');
+    Route::get('/reports/one-time/project-initial-documents', function () {
+        return redirect()->route('initial-project-documents.index', request()->query());
+    })->name('reports.one-time.project-initial-documents');
     Route::view(
         '/reports/one-time/project-completion-reports/falgu-gef-sbdp',
         'reports.one-time.shared.show',

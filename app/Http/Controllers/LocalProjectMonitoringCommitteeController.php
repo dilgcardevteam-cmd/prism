@@ -990,6 +990,27 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $docType = $request->input('doc_type');
         $year = $request->input('year');
         $quarter = $request->input('quarter');
+        $isQuarterlyLpmcDocument = in_array($docType, ['meetings', 'monitoring', 'training'], true);
+
+        if ($isQuarterlyLpmcDocument && $quarter) {
+            $configuredQuarterDeadline = app(LguReportorialDeadlineResolver::class)->resolve(
+                'local_project_monitoring_committee',
+                (int) now()->year,
+                $quarter
+            );
+
+            if (is_array($configuredQuarterDeadline) && !empty($configuredQuarterDeadline['is_closed'])) {
+                $deadlineDisplay = trim((string) ($configuredQuarterDeadline['display'] ?? ''));
+
+                return redirect()
+                    ->back()
+                    ->with(
+                        'error',
+                        'Uploads are closed for ' . $quarter . ' based on the superadmin deadline'
+                        . ($deadlineDisplay !== '' ? ' (' . $deadlineDisplay . ').' : '.')
+                    );
+            }
+        }
 
         $existingDocument = LpmcDocument::where('office', $officeName)
             ->where('doc_type', $docType)

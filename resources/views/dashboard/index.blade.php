@@ -128,11 +128,195 @@
         ];
         $balanceProjectsModalId = 'financial-balance-projects-modal';
         $balanceProjectsModalTitleId = $balanceProjectsModalId . '-title';
+        $allocationProjectsModalId = 'financial-allocation-projects-modal';
+        $allocationProjectsModalTitleId = $allocationProjectsModalId . '-title';
+        $percentageProjectsModalId = 'financial-percentage-projects-modal';
+        $percentageProjectsModalTitleId = $percentageProjectsModalId . '-title';
+        $obligationProjectsModalId = 'financial-obligation-projects-modal';
+        $obligationProjectsModalTitleId = $obligationProjectsModalId . '-title';
+        $disbursementProjectsModalId = 'financial-disbursement-projects-modal';
+        $disbursementProjectsModalTitleId = $disbursementProjectsModalId . '-title';
     @endphp
 
     @include('projects.partials.project-section-tabs', ['activeTab' => $activeProjectTab ?? 'locally-funded'])
 
     <script>
+        window.openDashboardModalById = window.openDashboardModalById || function (modalId, event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            if (event && typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
+            }
+
+            var modalElement = document.getElementById(modalId);
+            if (!modalElement) {
+                return false;
+            }
+
+            modalElement.classList.add('is-open');
+            modalElement.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            if (typeof window.runDashboardModalFilters === 'function') {
+                window.runDashboardModalFilters(modalElement);
+            }
+            return false;
+        };
+
+        window.closeDashboardModalByElement = window.closeDashboardModalByElement || function (modalElement) {
+            if (!modalElement) {
+                return;
+            }
+
+            modalElement.classList.remove('is-open');
+            modalElement.setAttribute('aria-hidden', 'true');
+
+            if (!document.querySelector('.dashboard-modal.is-open')) {
+                document.body.style.overflow = '';
+            }
+        };
+
+        document.addEventListener('click', function (event) {
+            var closeControl = event.target.closest('[data-close-modal]');
+            if (!closeControl) {
+                return;
+            }
+
+            window.closeDashboardModalByElement(closeControl.closest('.dashboard-modal'));
+        }, true);
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+
+            window.closeDashboardModalByElement(document.querySelector('.dashboard-modal.is-open'));
+        }, true);
+
+        window.normalizeDashboardModalFilterText = window.normalizeDashboardModalFilterText || function (value) {
+            return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        };
+
+        window.parseDashboardModalFilterNumber = window.parseDashboardModalFilterNumber || function (value) {
+            const cleanedValue = String(value || '').replace(/[^0-9.\-]/g, '').trim();
+            if (cleanedValue === '' || Number.isNaN(Number.parseFloat(cleanedValue))) {
+                return null;
+            }
+
+            return Number.parseFloat(cleanedValue);
+        };
+
+        window.runDashboardModalFilters = window.runDashboardModalFilters || function (sourceElement) {
+            const filterPanel = sourceElement
+                ? (sourceElement.matches && sourceElement.matches('[data-modal-filter-panel]')
+                    ? sourceElement
+                    : sourceElement.closest && sourceElement.closest('[data-modal-filter-panel]'))
+                : null;
+            const modalElement = sourceElement
+                ? (sourceElement.matches && sourceElement.matches('.dashboard-modal')
+                    ? sourceElement
+                    : sourceElement.closest && sourceElement.closest('.dashboard-modal'))
+                : null;
+            const resolvedModalElement = modalElement || (filterPanel ? filterPanel.closest('.dashboard-modal') : null);
+            const resolvedFilterPanel = filterPanel || (resolvedModalElement ? resolvedModalElement.querySelector('[data-modal-filter-panel]') : null);
+
+            if (!resolvedModalElement || !resolvedFilterPanel) {
+                return false;
+            }
+
+            const tableElement = resolvedModalElement.querySelector('.dashboard-modal-table');
+            const tableBody = tableElement ? tableElement.querySelector('tbody') : null;
+            if (!tableElement || !tableBody) {
+                return false;
+            }
+
+            const filterControls = Array.from(resolvedFilterPanel.querySelectorAll('[data-modal-filter-control]'));
+            const countElement = resolvedFilterPanel.querySelector('[data-modal-filter-count]');
+            const emptyElement = resolvedModalElement.querySelector('[data-modal-filter-empty]');
+            const exportButton = resolvedModalElement.querySelector('.dashboard-modal-export-btn');
+            const rows = Array.from(tableBody.querySelectorAll('tr'))
+                .filter((row) => !row.classList.contains('dashboard-modal-total-row'));
+            const totalCount = rows.length;
+            const activeFilters = filterControls
+                .map((filterElement) => ({
+                    columnIndex: Number.parseInt(filterElement.dataset.columnIndex || '-1', 10),
+                    mode: String(filterElement.dataset.filterMode || 'exact').trim(),
+                    rawValue: String(filterElement.value || '').trim(),
+                }))
+                .filter((filterConfig) => filterConfig.columnIndex >= 0 && filterConfig.rawValue !== '');
+
+            let visibleCount = 0;
+
+            rows.forEach((row) => {
+                const matchesColumns = activeFilters.every((filterConfig) => {
+                    const cell = row.children.item(filterConfig.columnIndex);
+                    const cellText = String(cell ? cell.textContent : '').trim();
+                    const normalizedCellText = window.normalizeDashboardModalFilterText(cellText);
+                    const normalizedFilterValue = window.normalizeDashboardModalFilterText(filterConfig.rawValue);
+
+                    if (filterConfig.mode === 'contains') {
+                        return normalizedCellText.includes(normalizedFilterValue);
+                    }
+
+                    if (filterConfig.mode === 'number-min') {
+                        const cellNumber = window.parseDashboardModalFilterNumber(cellText);
+                        const filterNumber = window.parseDashboardModalFilterNumber(filterConfig.rawValue);
+                        if (cellNumber === null || filterNumber === null) {
+                            return false;
+                        }
+                        return cellNumber >= filterNumber;
+                    }
+
+                    if (filterConfig.mode === 'number-max') {
+                        const cellNumber = window.parseDashboardModalFilterNumber(cellText);
+                        const filterNumber = window.parseDashboardModalFilterNumber(filterConfig.rawValue);
+                        if (cellNumber === null || filterNumber === null) {
+                            return false;
+                        }
+                        return cellNumber <= filterNumber;
+                    }
+
+                    return normalizedCellText === normalizedFilterValue;
+                });
+
+                row.style.display = matchesColumns ? '' : 'none';
+                row.dataset.modalFilterHidden = matchesColumns ? '0' : '1';
+
+                if (matchesColumns) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (countElement) {
+                countElement.textContent = `Showing ${visibleCount} of ${totalCount}`;
+            }
+
+            if (emptyElement) {
+                emptyElement.hidden = visibleCount !== 0;
+            }
+
+            if (exportButton) {
+                exportButton.disabled = visibleCount === 0;
+            }
+
+            return false;
+        };
+
+        window.clearDashboardModalFilters = window.clearDashboardModalFilters || function (sourceElement) {
+            const filterPanel = sourceElement && sourceElement.closest
+                ? sourceElement.closest('[data-modal-filter-panel]')
+                : null;
+            if (!filterPanel) {
+                return false;
+            }
+
+            filterPanel.querySelectorAll('[data-modal-filter-control]').forEach((filterElement) => {
+                filterElement.value = '';
+            });
+
+            return window.runDashboardModalFilters(filterPanel);
+        };
+
         window.toggleProjectFilter = window.toggleProjectFilter || function (button) {
             if (!button) {
                 return;
@@ -319,6 +503,13 @@
                             class="dashboard-tile fund-source-link-tile clickable-dashboard-card"
                             data-card-url="{{ $fundSourceFilterUrl }}"
                             data-modal-target="{{ $fundSourceModalId }}"
+                            data-modal-only="true"
+                            role="button"
+                            tabindex="0"
+                            aria-controls="{{ $fundSourceModalId }}"
+                            aria-haspopup="dialog"
+                            onclick="return window.openDashboardModalById('{{ $fundSourceModalId }}', event)"
+                            onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $fundSourceModalId }}', event); }"
                             @style([
                                 'padding: 12px',
                                 'border: 1px solid ' . $fundSourceStyles['border'],
@@ -386,6 +577,14 @@
                 <div
                     class="dashboard-tile financial-metric-tile financial-allocation-tile clickable-dashboard-card"
                     data-card-url="{{ route('fund-utilization.index') }}"
+                    data-modal-target="{{ $allocationProjectsModalId }}"
+                    data-modal-only="true"
+                    role="button"
+                    tabindex="0"
+                    aria-controls="{{ $allocationProjectsModalId }}"
+                    aria-haspopup="dialog"
+                    onclick="return window.openDashboardModalById('{{ $allocationProjectsModalId }}', event)"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $allocationProjectsModalId }}', event); }"
                     @style([
                         'padding: 12px',
                         'border: 1px solid ' . $allocationStyle['border'],
@@ -441,6 +640,14 @@
                 <div
                     class="dashboard-tile financial-metric-tile financial-percentage-tile clickable-dashboard-card"
                     data-card-url="{{ route('fund-utilization.index') }}"
+                    data-modal-target="{{ $percentageProjectsModalId }}"
+                    data-modal-only="true"
+                    role="button"
+                    tabindex="0"
+                    aria-controls="{{ $percentageProjectsModalId }}"
+                    aria-haspopup="dialog"
+                    onclick="return window.openDashboardModalById('{{ $percentageProjectsModalId }}', event)"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $percentageProjectsModalId }}', event); }"
                     @style([
                         'padding: 12px',
                         'border: 1px solid ' . $percentageStyle['border'],
@@ -497,6 +704,14 @@
                 <div
                     class="dashboard-tile financial-metric-tile financial-obligation-tile clickable-dashboard-card"
                     data-card-url="{{ route('fund-utilization.index') }}"
+                    data-modal-target="{{ $obligationProjectsModalId }}"
+                    data-modal-only="true"
+                    role="button"
+                    tabindex="0"
+                    aria-controls="{{ $obligationProjectsModalId }}"
+                    aria-haspopup="dialog"
+                    onclick="return window.openDashboardModalById('{{ $obligationProjectsModalId }}', event)"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $obligationProjectsModalId }}', event); }"
                     @style([
                         'padding: 12px',
                         'border: 1px solid ' . $obligationStyle['border'],
@@ -552,6 +767,14 @@
                 <div
                     class="dashboard-tile financial-metric-tile financial-disbursement-tile clickable-dashboard-card"
                     data-card-url="{{ route('fund-utilization.index') }}"
+                    data-modal-target="{{ $disbursementProjectsModalId }}"
+                    data-modal-only="true"
+                    role="button"
+                    tabindex="0"
+                    aria-controls="{{ $disbursementProjectsModalId }}"
+                    aria-haspopup="dialog"
+                    onclick="return window.openDashboardModalById('{{ $disbursementProjectsModalId }}', event)"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $disbursementProjectsModalId }}', event); }"
                     @style([
                         'padding: 12px',
                         'border: 1px solid ' . $disbursementStyle['border'],
@@ -608,6 +831,13 @@
                     class="dashboard-tile financial-metric-tile financial-balance-tile clickable-dashboard-card"
                     data-card-url="{{ route('fund-utilization.index') }}"
                     data-modal-target="{{ $balanceProjectsModalId }}"
+                    data-modal-only="true"
+                    role="button"
+                    tabindex="0"
+                    aria-controls="{{ $balanceProjectsModalId }}"
+                    aria-haspopup="dialog"
+                    onclick="return window.openDashboardModalById('{{ $balanceProjectsModalId }}', event)"
+                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $balanceProjectsModalId }}', event); }"
                     @style([
                         'padding: 12px',
                         'border: 1px solid ' . $balanceStyle['border'],
@@ -1238,6 +1468,13 @@
                         class="dashboard-tile clickable-dashboard-card project-update-status-tile project-risk-status-tile"
                         data-card-url="{{ $projectAtRiskFilterUrl }}"
                         data-modal-target="{{ $slippageModalId }}"
+                        data-modal-only="true"
+                        role="button"
+                        tabindex="0"
+                        aria-controls="{{ $slippageModalId }}"
+                        aria-haspopup="dialog"
+                        onclick="return window.openDashboardModalById('{{ $slippageModalId }}', event)"
+                        onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $slippageModalId }}', event); }"
                     >
                         <div class="project-update-status-label project-risk-summary-label">
                             <span
@@ -1445,6 +1682,13 @@
                         class="dashboard-tile clickable-dashboard-card project-update-status-tile project-risk-status-tile"
                         data-card-url="{{ route('projects.at-risk') }}"
                         data-modal-target="{{ $agingModalId }}"
+                        data-modal-only="true"
+                        role="button"
+                        tabindex="0"
+                        aria-controls="{{ $agingModalId }}"
+                        aria-haspopup="dialog"
+                        onclick="return window.openDashboardModalById('{{ $agingModalId }}', event)"
+                        onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $agingModalId }}', event); }"
                     >
                         <div class="project-update-status-label project-risk-summary-label">
                             <span
@@ -1473,7 +1717,14 @@
         $projectAtRiskAgingProjectsModal = $projectAtRiskAgingProjects ?? [];
         $statusSubaybayanProjectsModalMap = $statusSubaybayanProjectsMap ?? [];
         $fundSourceProjectsModalMap = $fundSourceProjectsMap ?? [];
+        $financialStatusProjectsModal = collect($financialStatusProjects ?? []);
         $balanceProjectsModal = collect($projectsWithBalance ?? []);
+        $financialStatusModalSubtitles = [
+            'allocation' => 'Projects included in the current LGSF allocation totals based on the active dashboard filters.',
+            'percentage' => 'Projects included in the current financial utilization percentage based on the active dashboard filters.',
+            'obligation' => 'Projects included in the current obligation totals based on the active dashboard filters.',
+            'disbursement' => 'Projects included in the current disbursement totals based on the active dashboard filters.',
+        ];
         $balanceProjectsModalSubtitle = 'Projects with remaining balance from SubayBAYAN. Balance formula: Original Allocation - (Disbursement + Reverted Allocation). LGU Counterpart is shown as a separate column.';
         $projectAtRiskSlippageModalSubtitles = [
             'Ahead' => 'Projects marked Ahead based on the latest Project at Risk extraction data.',
@@ -1584,10 +1835,77 @@
                         </button>
                     </div>
                     <p class="dashboard-modal-subtitle">
-                        Projects under {{ $fundSource }} based on the current dashboard filters.
+                        Basic project information under {{ $fundSource }} based on the current dashboard filters.
                     </p>
                     <div class="dashboard-modal-body">
                         @if ($fundSourceModalProjects->isNotEmpty())
+                            @php
+                                $fundSourceProvinceOptions = $fundSourceModalProjects
+                                    ->pluck('province')
+                                    ->map(fn ($value) => trim((string) $value))
+                                    ->filter(fn ($value) => $value !== '')
+                                    ->unique()
+                                    ->sort()
+                                    ->values();
+                                $fundSourceCityOptions = $fundSourceModalProjects
+                                    ->pluck('city_municipality')
+                                    ->map(fn ($value) => trim((string) $value))
+                                    ->filter(fn ($value) => $value !== '')
+                                    ->unique()
+                                    ->sort()
+                                    ->values();
+                                $fundSourceStatusOptions = $fundSourceModalProjects
+                                    ->pluck('status')
+                                    ->map(fn ($value) => trim((string) $value))
+                                    ->filter(fn ($value) => $value !== '')
+                                    ->unique()
+                                    ->sort()
+                                    ->values();
+                            @endphp
+                            <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $fundSourceModalProjects->count() }}">
+                                <label class="dashboard-modal-filter-field">
+                                    <span>Project Code</span>
+                                    <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
+                                </label>
+                                <label class="dashboard-modal-filter-field">
+                                    <span>Project Title</span>
+                                    <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
+                                </label>
+                                <label class="dashboard-modal-filter-field">
+                                    <span>Province</span>
+                                    <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
+                                        <option value="">All</option>
+                                        @foreach ($fundSourceProvinceOptions as $provinceOption)
+                                            <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <label class="dashboard-modal-filter-field">
+                                    <span>City/Municipality</span>
+                                    <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
+                                        <option value="">All</option>
+                                        @foreach ($fundSourceCityOptions as $cityOption)
+                                            <option value="{{ $cityOption }}">{{ $cityOption }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <label class="dashboard-modal-filter-field">
+                                    <span>Status</span>
+                                    <select data-modal-filter-control data-filter-mode="exact" data-column-index="4" onchange="return window.runDashboardModalFilters(this)">
+                                        <option value="">All</option>
+                                        @foreach ($fundSourceStatusOptions as $statusOption)
+                                            <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <div class="dashboard-modal-filter-actions">
+                                    <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
+                                    <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
+                                </div>
+                            </div>
+                            <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
+                                No projects match the selected modal filters.
+                            </div>
                             <div class="dashboard-modal-table-wrap">
                                 <table class="dashboard-modal-table">
                                     <thead>
@@ -1633,6 +1951,140 @@
             </div>
         @endforeach
     @endif
+    @php
+        $financialStatusModalConfigs = [
+            [
+                'modal_id' => $allocationProjectsModalId,
+                'title_id' => $allocationProjectsModalTitleId,
+                'title' => 'LGSF Allocation Projects',
+                'subtitle' => $financialStatusModalSubtitles['allocation'],
+                'export_filename' => 'financial-allocation-projects.xls',
+            ],
+            [
+                'modal_id' => $percentageProjectsModalId,
+                'title_id' => $percentageProjectsModalTitleId,
+                'title' => 'Financial Percentage Projects',
+                'subtitle' => $financialStatusModalSubtitles['percentage'],
+                'export_filename' => 'financial-percentage-projects.xls',
+            ],
+            [
+                'modal_id' => $obligationProjectsModalId,
+                'title_id' => $obligationProjectsModalTitleId,
+                'title' => 'Obligation Projects',
+                'subtitle' => $financialStatusModalSubtitles['obligation'],
+                'export_filename' => 'financial-obligation-projects.xls',
+            ],
+            [
+                'modal_id' => $disbursementProjectsModalId,
+                'title_id' => $disbursementProjectsModalTitleId,
+                'title' => 'Disbursement Projects',
+                'subtitle' => $financialStatusModalSubtitles['disbursement'],
+                'export_filename' => 'financial-disbursement-projects.xls',
+            ],
+        ];
+        $financialStatusFilterOptions = [
+            'status' => $financialStatusProjectsModal
+                ->pluck('status')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values(),
+        ];
+    @endphp
+    @foreach ($financialStatusModalConfigs as $financialModalConfig)
+        <div id="{{ $financialModalConfig['modal_id'] }}" class="dashboard-modal" aria-hidden="true">
+            <div class="dashboard-modal-backdrop" data-close-modal></div>
+            <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $financialModalConfig['title_id'] }}">
+                <div class="dashboard-modal-header">
+                    <h3 id="{{ $financialModalConfig['title_id'] }}">{{ $financialModalConfig['title'] }}</h3>
+                    <button type="button" class="dashboard-modal-close" data-close-modal aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <p class="dashboard-modal-subtitle">
+                    {{ $financialModalConfig['subtitle'] }}
+                </p>
+                <div class="dashboard-modal-body">
+                    @if ($financialStatusProjectsModal->isNotEmpty())
+                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $financialStatusProjectsModal->count() }}">
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Code</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Title</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Status</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($financialStatusFilterOptions['status'] as $statusOption)
+                                        <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <div class="dashboard-modal-filter-actions">
+                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
+                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
+                            </div>
+                        </div>
+                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
+                            No projects match the selected modal filters.
+                        </div>
+                        <div class="dashboard-modal-table-wrap">
+                            <table class="dashboard-modal-table">
+                                <thead>
+                                    <tr>
+                                        <th>Project Code</th>
+                                        <th>Project Title</th>
+                                        <th>Status</th>
+                                        <th>Original Allocation</th>
+                                        <th>LGU Counterpart</th>
+                                        <th>Obligation</th>
+                                        <th>Disbursement</th>
+                                        <th>Reverted Allocation</th>
+                                        <th>Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($financialStatusProjectsModal as $projectRow)
+                                        <tr>
+                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
+                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
+                                            <td>{{ $projectRow->status ?: '-' }}</td>
+                                            <td>{{ $projectRow->original_allocation !== null ? number_format((float) $projectRow->original_allocation, 2) : '-' }}</td>
+                                            <td>{{ $projectRow->lgu_counterpart !== null ? number_format((float) $projectRow->lgu_counterpart, 2) : '-' }}</td>
+                                            <td>{{ $projectRow->obligation !== null ? number_format((float) $projectRow->obligation, 2) : '-' }}</td>
+                                            <td>{{ $projectRow->disbursement !== null ? number_format((float) $projectRow->disbursement, 2) : '-' }}</td>
+                                            <td>{{ $projectRow->reverted_allocation !== null ? number_format((float) $projectRow->reverted_allocation, 2) : '-' }}</td>
+                                            <td>{{ $projectRow->balance !== null ? number_format((float) $projectRow->balance, 2) : '-' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="dashboard-modal-empty-state">
+                            No financial status projects found for the current dashboard filters.
+                        </div>
+                    @endif
+                </div>
+                <div class="dashboard-modal-footer">
+                    <button
+                        type="button"
+                        class="dashboard-modal-export-btn"
+                        onclick="exportDashboardModalTableToExcel(this)"
+                        data-export-filename="{{ $financialModalConfig['export_filename'] }}"
+                        @disabled($financialStatusProjectsModal->isEmpty())
+                    >
+                        Export Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endforeach
     <div id="{{ $balanceProjectsModalId }}" class="dashboard-modal" aria-hidden="true">
         <div class="dashboard-modal-backdrop" data-close-modal></div>
         <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $balanceProjectsModalTitleId }}">
@@ -1647,6 +2099,41 @@
             </p>
             <div class="dashboard-modal-body">
                 @if ($balanceProjectsModal->isNotEmpty())
+                    @php
+                        $balanceStatusOptions = $balanceProjectsModal
+                            ->pluck('status')
+                            ->map(fn ($value) => trim((string) $value))
+                            ->filter(fn ($value) => $value !== '')
+                            ->unique()
+                            ->sort()
+                            ->values();
+                    @endphp
+                    <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $balanceProjectsModal->count() }}">
+                        <label class="dashboard-modal-filter-field">
+                            <span>Project Code</span>
+                            <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
+                        </label>
+                        <label class="dashboard-modal-filter-field">
+                            <span>Project Title</span>
+                            <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
+                        </label>
+                        <label class="dashboard-modal-filter-field">
+                            <span>Status</span>
+                            <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
+                                <option value="">All</option>
+                                @foreach ($balanceStatusOptions as $statusOption)
+                                    <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <div class="dashboard-modal-filter-actions">
+                            <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
+                            <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
+                        </div>
+                    </div>
+                    <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
+                        No projects match the selected modal filters.
+                    </div>
                     <div class="dashboard-modal-table-wrap">
                         @php
                             $balanceTotals = [
@@ -1747,6 +2234,65 @@
                 </p>
                 <div class="dashboard-modal-body">
                     @if ($modalProjects->isNotEmpty())
+                        @php
+                            $modalProvinceOptions = $modalProjects
+                                ->pluck('province')
+                                ->map(fn ($value) => trim((string) $value))
+                                ->filter(fn ($value) => $value !== '')
+                                ->unique()
+                                ->sort()
+                                ->values();
+                            $modalCityOptions = $modalProjects
+                                ->pluck('city_municipality')
+                                ->map(fn ($value) => trim((string) $value))
+                                ->filter(fn ($value) => $value !== '')
+                                ->unique()
+                                ->sort()
+                                ->values();
+                        @endphp
+                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $modalProjects->count() }}">
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Code</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Title</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Province</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($modalProvinceOptions as $provinceOption)
+                                        <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>City/Municipality</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($modalCityOptions as $cityOption)
+                                        <option value="{{ $cityOption }}">{{ $cityOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Min Aging</span>
+                                <input type="number" step="0.01" data-modal-filter-control data-filter-mode="number-min" data-column-index="5" placeholder="0" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Max Aging</span>
+                                <input type="number" step="0.01" data-modal-filter-control data-filter-mode="number-max" data-column-index="5" placeholder="999" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <div class="dashboard-modal-filter-actions">
+                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
+                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
+                            </div>
+                        </div>
+                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
+                            No projects match the selected modal filters.
+                        </div>
                         <div class="dashboard-modal-table-wrap">
                             <table class="dashboard-modal-table">
                                 <thead>
@@ -1821,6 +2367,73 @@
                 </p>
                 <div class="dashboard-modal-body">
                     @if ($modalProjects->isNotEmpty())
+                        @php
+                            $modalProvinceOptions = $modalProjects
+                                ->pluck('province')
+                                ->map(fn ($value) => trim((string) $value))
+                                ->filter(fn ($value) => $value !== '')
+                                ->unique()
+                                ->sort()
+                                ->values();
+                            $modalCityOptions = $modalProjects
+                                ->pluck('city_municipality')
+                                ->map(fn ($value) => trim((string) $value))
+                                ->filter(fn ($value) => $value !== '')
+                                ->unique()
+                                ->sort()
+                                ->values();
+                            $modalRiskOptions = $modalProjects
+                                ->pluck('risk_level')
+                                ->map(fn ($value) => trim((string) $value))
+                                ->filter(fn ($value) => $value !== '')
+                                ->unique()
+                                ->sort()
+                                ->values();
+                        @endphp
+                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $modalProjects->count() }}">
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Code</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Title</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Province</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($modalProvinceOptions as $provinceOption)
+                                        <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>City/Municipality</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($modalCityOptions as $cityOption)
+                                        <option value="{{ $cityOption }}">{{ $cityOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Risk Level</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="6" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($modalRiskOptions as $riskOption)
+                                        <option value="{{ $riskOption }}">{{ $riskOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <div class="dashboard-modal-filter-actions">
+                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
+                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
+                            </div>
+                        </div>
+                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
+                            No projects match the selected modal filters.
+                        </div>
                         <div class="dashboard-modal-table-wrap">
                             <table class="dashboard-modal-table">
                                 <thead>
@@ -3521,6 +4134,76 @@
             overflow: auto;
         }
 
+        .dashboard-modal-filter-panel {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+            align-items: end;
+            padding: 12px 16px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .dashboard-modal-filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .dashboard-modal-filter-field span {
+            color: #374151;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .dashboard-modal-filter-field input,
+        .dashboard-modal-filter-field select {
+            width: 100%;
+            height: 34px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #ffffff;
+            color: #111827;
+            font-size: 12px;
+            padding: 0 10px;
+        }
+
+        .dashboard-modal-filter-clear {
+            height: 34px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #f9fafb;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 0 12px;
+            cursor: pointer;
+        }
+
+        .dashboard-modal-filter-clear:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .dashboard-modal-filter-count {
+            color: #4b5563;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            align-self: center;
+        }
+
+        .dashboard-modal-filter-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
         .dashboard-modal-table-wrap {
             overflow: auto;
         }
@@ -3561,6 +4244,10 @@
             font-size: 13px;
         }
 
+        .dashboard-modal-filter-empty[hidden] {
+            display: none;
+        }
+
         .dashboard-modal-footer {
             padding: 12px 16px;
             border-top: 1px solid #e5e7eb;
@@ -3585,6 +4272,12 @@
         .dashboard-modal-export-btn:disabled {
             background: #9ca3af;
             cursor: not-allowed;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-modal-filter-count {
+                justify-self: start;
+            }
         }
 
         /* ================================================================
@@ -4012,6 +4705,10 @@
 
             const appendRowsToSection = (rowSource, sectionElement) => {
                 rowSource.querySelectorAll('tr').forEach((row) => {
+                    if (row.dataset.modalFilterHidden === '1') {
+                        return;
+                    }
+
                     const exportRow = document.createElement('tr');
                     row.querySelectorAll('th, td').forEach((cell) => {
                         const exportCell = document.createElement(cell.tagName.toLowerCase() === 'th' ? 'th' : 'td');
@@ -4055,6 +4752,129 @@
 
             return exportTable.outerHTML;
         }
+
+        function normalizeDashboardModalFilterText(value) {
+            return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        }
+
+        function parseDashboardModalFilterNumber(value) {
+            const cleanedValue = String(value || '').replace(/[^0-9.\-]/g, '').trim();
+            if (cleanedValue === '' || Number.isNaN(Number.parseFloat(cleanedValue))) {
+                return null;
+            }
+
+            return Number.parseFloat(cleanedValue);
+        }
+
+        function initializeDashboardModalTableFilters() {
+            document.querySelectorAll('[data-modal-filter-panel]').forEach((filterPanel) => {
+                if (filterPanel.dataset.modalFilterInitialized === '1') {
+                    return;
+                }
+
+                const modalElement = filterPanel.closest('.dashboard-modal');
+                const tableElement = modalElement ? modalElement.querySelector('.dashboard-modal-table') : null;
+                const tableBody = tableElement ? tableElement.querySelector('tbody') : null;
+                if (!modalElement || !tableElement || !tableBody) {
+                    return;
+                }
+
+                filterPanel.dataset.modalFilterInitialized = '1';
+
+                const filterControls = Array.from(filterPanel.querySelectorAll('[data-modal-filter-control]'));
+                const clearButton = filterPanel.querySelector('[data-modal-filter-clear]');
+                const countElement = filterPanel.querySelector('[data-modal-filter-count]');
+                const emptyElement = modalElement.querySelector('[data-modal-filter-empty]');
+                const exportButton = modalElement.querySelector('.dashboard-modal-export-btn');
+                const rows = Array.from(tableBody.querySelectorAll('tr'))
+                    .filter((row) => !row.classList.contains('dashboard-modal-total-row'));
+                const totalCount = rows.length;
+
+                const updateFilters = () => {
+                    const activeFilters = filterControls
+                        .map((filterElement) => ({
+                            columnIndex: Number.parseInt(filterElement.dataset.columnIndex || '-1', 10),
+                            mode: String(filterElement.dataset.filterMode || 'exact').trim(),
+                            rawValue: String(filterElement.value || '').trim(),
+                        }))
+                        .filter((filterConfig) => filterConfig.columnIndex >= 0 && filterConfig.rawValue !== '');
+
+                    let visibleCount = 0;
+
+                    rows.forEach((row) => {
+                        const matchesColumns = activeFilters.every((filterConfig) => {
+                            const cell = row.children.item(filterConfig.columnIndex);
+                            const cellText = String(cell ? cell.textContent : '').trim();
+                            const normalizedCellText = normalizeDashboardModalFilterText(cellText);
+                            const normalizedFilterValue = normalizeDashboardModalFilterText(filterConfig.rawValue);
+
+                            if (filterConfig.mode === 'contains') {
+                                return normalizedCellText.includes(normalizedFilterValue);
+                            }
+
+                            if (filterConfig.mode === 'number-min') {
+                                const cellNumber = parseDashboardModalFilterNumber(cellText);
+                                const filterNumber = parseDashboardModalFilterNumber(filterConfig.rawValue);
+                                if (cellNumber === null || filterNumber === null) {
+                                    return false;
+                                }
+                                return cellNumber >= filterNumber;
+                            }
+
+                            if (filterConfig.mode === 'number-max') {
+                                const cellNumber = parseDashboardModalFilterNumber(cellText);
+                                const filterNumber = parseDashboardModalFilterNumber(filterConfig.rawValue);
+                                if (cellNumber === null || filterNumber === null) {
+                                    return false;
+                                }
+                                return cellNumber <= filterNumber;
+                            }
+
+                            return normalizedCellText === normalizedFilterValue;
+                        });
+                        const shouldShow = matchesColumns;
+
+                        row.style.display = shouldShow ? '' : 'none';
+                        row.dataset.modalFilterHidden = shouldShow ? '0' : '1';
+
+                        if (shouldShow) {
+                            visibleCount += 1;
+                        }
+                    });
+
+                    if (countElement) {
+                        countElement.textContent = `Showing ${visibleCount} of ${totalCount}`;
+                    }
+
+                    if (emptyElement) {
+                        emptyElement.hidden = visibleCount !== 0;
+                    }
+
+                    if (exportButton) {
+                        exportButton.disabled = visibleCount === 0;
+                    }
+                };
+
+                filterControls.forEach((filterElement) => {
+                    const eventName = filterElement.tagName === 'SELECT' ? 'change' : 'input';
+                    filterElement.addEventListener(eventName, updateFilters);
+                });
+
+                if (clearButton) {
+                    clearButton.addEventListener('click', () => {
+                        filterControls.forEach((filterElement) => {
+                            filterElement.value = '';
+                        });
+
+                        updateFilters();
+                    });
+                }
+
+                updateFilters();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeDashboardModalTableFilters);
 
         function readProjectFilterCollapsedState() {
             try {
@@ -4236,6 +5056,9 @@
             modalElement.classList.add('is-open');
             modalElement.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
+            if (typeof window.runDashboardModalFilters === 'function') {
+                window.runDashboardModalFilters(modalElement);
+            }
         }
 
         function closeDashboardModal(modalElement) {
@@ -4251,6 +5074,56 @@
                 document.body.style.overflow = '';
             }
         }
+
+        function resolveDashboardModalTargetElement(triggerElement) {
+            const modalTargetId = triggerElement ? triggerElement.dataset.modalTarget : '';
+            if (!modalTargetId) {
+                return null;
+            }
+
+            return document.getElementById(modalTargetId);
+        }
+
+        document.addEventListener('click', (event) => {
+            const modalTrigger = event.target.closest('[data-modal-target]');
+            if (!modalTrigger) {
+                return;
+            }
+
+            const nestedInteractiveElement = event.target.closest('a, button, input, select, textarea, label, summary');
+            if (nestedInteractiveElement && nestedInteractiveElement !== modalTrigger) {
+                return;
+            }
+
+            const modalElement = resolveDashboardModalTargetElement(modalTrigger);
+            if (!modalElement) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            openDashboardModal(modalElement);
+        }, true);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+
+            const modalTrigger = event.target.closest('[data-modal-target]');
+            if (!modalTrigger) {
+                return;
+            }
+
+            const modalElement = resolveDashboardModalTargetElement(modalTrigger);
+            if (!modalElement) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            openDashboardModal(modalElement);
+        }, true);
 
         function triggerDashboardExcelDownload(blob, filename) {
             const downloadUrl = URL.createObjectURL(blob);
@@ -5711,9 +6584,9 @@
             };
 
             const resolveDashboardCardModalElement = (card) => {
-                const explicitModalTargetId = card.dataset.modalTarget;
-                if (explicitModalTargetId) {
-                    return document.getElementById(explicitModalTargetId);
+                const explicitModalTargetElement = resolveDashboardModalTargetElement(card);
+                if (explicitModalTargetElement) {
+                    return explicitModalTargetElement;
                 }
 
                 if (!card.classList.contains('project-risk-status-tile')) {
@@ -5748,17 +6621,24 @@
                 }
 
                 card.dataset.cardLinkInitialized = '1';
-                card.setAttribute('role', 'link');
+                card.setAttribute('role', card.dataset.modalOnly === 'true' ? 'button' : 'link');
                 card.setAttribute('tabindex', '0');
+                const modalElement = resolveDashboardCardModalElement(card);
+                if (modalElement) {
+                    card.setAttribute('aria-controls', modalElement.id);
+                    card.setAttribute('aria-haspopup', 'dialog');
+                }
 
                 card.addEventListener('click', (event) => {
-                    if (event.target.closest('a, button, input, select, textarea, label, summary, [role="button"]')) {
+                    const nestedInteractiveElement = event.target.closest('a, button, input, select, textarea, label, summary, [role="button"]');
+                    if (nestedInteractiveElement && nestedInteractiveElement !== card) {
                         return;
                     }
 
-                    const modalElement = resolveDashboardCardModalElement(card);
-                    if (modalElement) {
-                        openDashboardModal(modalElement);
+                    const targetModalElement = resolveDashboardCardModalElement(card);
+                    if (targetModalElement) {
+                        event.preventDefault();
+                        openDashboardModal(targetModalElement);
                         return;
                     }
 
@@ -5780,9 +6660,9 @@
                     }
 
                     event.preventDefault();
-                    const modalElement = resolveDashboardCardModalElement(card);
-                    if (modalElement) {
-                        openDashboardModal(modalElement);
+                    const targetModalElement = resolveDashboardCardModalElement(card);
+                    if (targetModalElement) {
+                        openDashboardModal(targetModalElement);
                         return;
                     }
 

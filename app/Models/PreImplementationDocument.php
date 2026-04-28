@@ -36,7 +36,13 @@ class PreImplementationDocument extends Model
         'land_ownership_path',
         'right_of_way_path',
         'moa_rural_electrification_path',
+        'program_of_works_path',
+        'design_and_engineering_documents_path',
+        'variation_orders_path',
+        'suspensions_path',
+        'work_resumptions_path',
+        'time_extensions_path',
+        'cancellation_termination_path',
         'updated_by',
     ];
 }
-

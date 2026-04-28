@@ -28,6 +28,10 @@ class PreImplementationDocumentController extends Controller
 
     public function index(Request $request)
     {
+        $allProjectsScope = $this->hasAllProjectsScope($request);
+        $pageConfig = $this->pageConfig($request);
+        $routeConfig = $this->routeConfig($request);
+        $scopeQuery = $this->scopeQuery($request);
         $perPage = (int) $request->input('per_page', 10);
         $allowedPerPage = [10, 15, 25, 50];
         if (!in_array($perPage, $allowedPerPage, true)) {
@@ -69,10 +73,10 @@ class PreImplementationDocumentController extends Controller
                 'project_statuses' => collect(),
             ];
 
-            return view('reports.pre-implementation-documents.index', compact('projects', 'filters', 'filterOptions', 'perPage'));
+            return view('reports.pre-implementation-documents.index', compact('projects', 'filters', 'filterOptions', 'perPage', 'pageConfig', 'routeConfig', 'scopeQuery'));
         }
 
-        $baseQuery = $this->buildAccessibleSubayQuery(Auth::user());
+        $baseQuery = $this->buildAccessibleSubayQuery(Auth::user(), $allProjectsScope);
         $projectTypeExpression = $this->projectTypeExpression('spp');
 
         $filterOptions = [
@@ -177,7 +181,7 @@ class PreImplementationDocumentController extends Controller
 
         $fundSourceExpression = $this->fundSourceExpression('spp');
 
-        $projects = $query
+        $projectsQuery = $query
             ->select([
                 'spp.project_code',
                 'spp.project_title',
@@ -189,28 +193,52 @@ class PreImplementationDocumentController extends Controller
                 'spp.updated_at',
                 DB::raw("{$fundSourceExpression} as fund_source"),
             ])
-            ->orderByRaw("CASE WHEN spp.funding_year IS NULL OR TRIM(spp.funding_year) = '' THEN 1 ELSE 0 END")
-            ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) ASC')
-            ->orderBy('spp.project_code')
+            ->orderByRaw("CASE WHEN spp.funding_year IS NULL OR TRIM(spp.funding_year) = '' THEN 1 ELSE 0 END");
+
+        if ($allProjectsScope) {
+            $projectsQuery
+                ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) DESC')
+                ->orderBy('spp.project_code');
+        } else {
+            $projectsQuery
+                ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) ASC')
+                ->orderBy('spp.project_code');
+        }
+
+        $projects = $projectsQuery
             ->paginate($perPage)
             ->withQueryString();
 
-        return view('reports.pre-implementation-documents.index', compact('projects', 'filters', 'filterOptions', 'perPage'));
+        return view('reports.pre-implementation-documents.index', compact('projects', 'filters', 'filterOptions', 'perPage', 'pageConfig', 'routeConfig', 'scopeQuery'));
     }
 
-    public function show(string $projectCode)
+    public function show(Request $request, string $projectCode)
     {
-        $project = $this->resolveProjectForUser($projectCode, Auth::user());
+        $pageConfig = $this->pageConfig($request);
+        $routeConfig = $this->routeConfig($request);
+        $scopeQuery = $this->scopeQuery($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
         if (!$project) {
             abort(404);
         }
 
         $document = PreImplementationDocument::where('project_code', $project->project_code)->first();
         $documentFiles = PreImplementationDocumentFile::where('project_code', $project->project_code)->get();
-        $documentFilesByType = $documentFiles->keyBy('document_type');
+        $documentFilesByType = $documentFiles
+            ->groupBy('document_type')
+            ->map(function ($group) {
+                return $group->sortByDesc(function ($file) {
+                    return optional($file->uploaded_at)->getTimestamp()
+                        ?? optional($file->created_at)->getTimestamp()
+                        ?? 0;
+                })->values();
+            });
+        $latestDocumentFilesByType = $documentFilesByType->map(function ($group) {
+            return $group->first();
+        });
         $activityLogs = $this->buildActivityLogs($documentFiles, $project->project_code);
 
-        $documentUserIds = $documentFilesByType
+        $documentUserIds = $documentFiles
             ->flatMap(function ($row) {
                 return [
                     $row->uploaded_by,
@@ -234,16 +262,25 @@ class PreImplementationDocumentController extends Controller
             'project' => $project,
             'document' => $document,
             'documentFilesByType' => $documentFilesByType,
+            'latestDocumentFilesByType' => $latestDocumentFilesByType,
             'usersById' => $usersById,
             'activityLogs' => $activityLogs,
             'documentFields' => $this->documentFieldMap(),
+            'documentGroups' => $this->documentFieldGroups(),
+            'multiUploadDocumentTypes' => $this->multiUploadDocumentTypes(),
             'allowedModeOfContract' => ['By Contract', 'By Administration'],
+            'pageConfig' => $pageConfig,
+            'routeConfig' => $routeConfig,
+            'scopeQuery' => $scopeQuery,
         ]);
     }
 
     public function save(Request $request, string $projectCode)
     {
-        $project = $this->resolveProjectForUser($projectCode, Auth::user());
+        $scopeQuery = $this->scopeQuery($request);
+        $pageConfig = $this->pageConfig($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
         if (!$project) {
             abort(404);
         }
@@ -252,7 +289,7 @@ class PreImplementationDocumentController extends Controller
             'mode_of_contract' => ['nullable', 'in:By Contract,By Administration'],
         ];
 
-        foreach (array_keys($this->documentFieldMap()) as $field) {
+        foreach ($this->singleUploadDocumentTypes() as $field) {
             $validationRules[$field] = ['nullable', 'file', 'mimes:pdf', 'max:15360'];
         }
 
@@ -271,7 +308,7 @@ class PreImplementationDocumentController extends Controller
         $userId = Auth::user()->idno ?? null;
         $uploadedDocumentTypes = [];
 
-        foreach (array_keys($this->documentFieldMap()) as $field) {
+        foreach ($this->singleUploadDocumentTypes() as $field) {
             if (!$request->hasFile($field)) {
                 continue;
             }
@@ -322,15 +359,80 @@ class PreImplementationDocumentController extends Controller
         $document->save();
 
         if (!empty($uploadedDocumentTypes)) {
-            $this->notifyUploadInterventionRecipients($project, $uploadedDocumentTypes);
+            $this->notifyUploadInterventionRecipients($project, $uploadedDocumentTypes, $routeConfig, $scopeQuery);
         }
 
         return redirect()
-            ->route('pre-implementation-documents.show', $project->project_code)
-            ->with('success', 'Pre-implementation documents saved successfully.');
+            ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+            ->with('success', $pageConfig['save_success_message']);
     }
 
-    private function notifyUploadInterventionRecipients(object $project, array $documentTypes): void
+    public function uploadMultiDocument(Request $request, string $projectCode, string $documentType)
+    {
+        if (!$this->isMultiUploadDocumentType($documentType) || !array_key_exists($documentType, $this->documentFieldMap())) {
+            abort(404);
+        }
+
+        $scopeQuery = $this->scopeQuery($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        if (!$project) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'document_file' => ['required', 'file', 'mimes:pdf', 'max:15360'],
+        ]);
+
+        $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
+        $document->project_title = $project->project_title;
+        $document->province = $project->province;
+        $document->city_municipality = $project->city_municipality;
+        $document->funding_year = $project->funding_year;
+        $document->updated_by = Auth::user()->idno ?? null;
+
+        $folder = 'pre-implementation/projects/' . Str::slug((string) $project->project_code, '_') . '/' . Str::slug($documentType, '_');
+        $now = now();
+        $userId = Auth::user()->idno ?? null;
+        $path = $validated['document_file']->store($folder, 'public');
+
+        $fileRecord = new PreImplementationDocumentFile();
+        $fileRecord->project_code = $project->project_code;
+        $fileRecord->document_type = $documentType;
+        $fileRecord->file_path = $path;
+        $fileRecord->uploaded_at = $now;
+        $fileRecord->uploaded_by = $userId;
+        $fileRecord->status = 'pending';
+        $fileRecord->approved_at = null;
+        $fileRecord->approved_by = null;
+        $fileRecord->approved_at_dilg_po = null;
+        $fileRecord->approved_by_dilg_po = null;
+        $fileRecord->approved_at_dilg_ro = null;
+        $fileRecord->approved_by_dilg_ro = null;
+        $fileRecord->approval_remarks = null;
+        $fileRecord->user_remarks = null;
+        $fileRecord->save();
+
+        $document->{$documentType} = $path;
+        $document->save();
+
+        $this->logActivity(
+            $project->project_code,
+            'upload',
+            'Uploaded',
+            $fileRecord,
+            null,
+            $now
+        );
+
+        $this->notifyUploadInterventionRecipients($project, [$documentType], $routeConfig, $scopeQuery);
+
+        return redirect()
+            ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+            ->with('success', $this->documentFieldMap()[$documentType] . ' uploaded successfully.');
+    }
+
+    private function notifyUploadInterventionRecipients(object $project, array $documentTypes, array $routeConfig, array $scopeQuery = []): void
     {
         try {
             $actor = Auth::user();
@@ -364,7 +466,7 @@ class PreImplementationDocumentController extends Controller
                 $messageContext .= ' - ' . $targetProvince;
             }
 
-$url = route('pre-implementation-documents.show', ['projectCode' => $project->project_code], false);
+            $url = route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery), false);
             $notificationService = app(InterventionNotificationService::class);
 
             if ($actor->isLguScopedUser() && $targetProvince !== '') {
@@ -410,9 +512,9 @@ $url = route('pre-implementation-documents.show', ['projectCode' => $project->pr
         }
     }
 
-    public function viewDocument(string $projectCode, string $documentType)
+    public function viewDocument(Request $request, string $projectCode, string $documentType)
     {
-        $project = $this->resolveProjectForUser($projectCode, Auth::user());
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
         if (!$project) {
             abort(404);
         }
@@ -424,6 +526,8 @@ $url = route('pre-implementation-documents.show', ['projectCode' => $project->pr
         $document = PreImplementationDocument::where('project_code', $project->project_code)->first();
         $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
             ->where('document_type', $documentType)
+            ->orderByDesc('uploaded_at')
+            ->orderByDesc('created_at')
             ->first();
 
         $path = $fileRecord->file_path ?? ($document?->{$documentType} ?? null);
@@ -448,9 +552,44 @@ $url = route('pre-implementation-documents.show', ['projectCode' => $project->pr
         return response()->file($filePath, $headers);
     }
 
+    public function viewDocumentFile(Request $request, string $projectCode, int $fileId)
+    {
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        if (!$project) {
+            abort(404);
+        }
+
+        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+            ->where('id', $fileId)
+            ->firstOrFail();
+
+        $path = $fileRecord->file_path;
+        if (!$path || !Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        $filePath = Storage::disk('public')->path($path);
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+        $mimeType = @mime_content_type($filePath) ?: 'application/octet-stream';
+        $headers = [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+        ];
+
+        if (!in_array($extension, $inlineExtensions, true)) {
+            return response()->download($filePath, basename($filePath), $headers);
+        }
+
+        return response()->file($filePath, $headers);
+    }
+
     public function validateDocument(Request $request, string $projectCode, string $documentType)
     {
-        $project = $this->resolveProjectForUser($projectCode, Auth::user());
+        $scopeQuery = $this->scopeQuery($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
         if (!$project) {
             abort(404);
         }
@@ -472,12 +611,47 @@ $url = route('pre-implementation-documents.show', ['projectCode' => $project->pr
 
         $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
             ->where('document_type', $documentType)
+            ->orderByDesc('uploaded_at')
+            ->orderByDesc('created_at')
             ->firstOrFail();
+
+        return $this->handleDocumentValidation($request, $project, $fileRecord, $routeConfig, $scopeQuery);
+    }
+
+    public function validateDocumentFile(Request $request, string $projectCode, int $fileId)
+    {
+        $scopeQuery = $this->scopeQuery($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        if (!$project) {
+            abort(404);
+        }
+
+        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+            ->where('id', $fileId)
+            ->firstOrFail();
+
+        return $this->handleDocumentValidation($request, $project, $fileRecord, $routeConfig, $scopeQuery);
+    }
+
+    private function handleDocumentValidation(Request $request, object $project, PreImplementationDocumentFile $fileRecord, array $routeConfig, array $scopeQuery)
+    {
+        $user = Auth::user();
+        $isDilg = strtoupper(trim((string) ($user->agency ?? ''))) === 'DILG';
+        if (!$isDilg) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'action' => ['required', 'in:approve,return'],
+            'remarks' => ['nullable', 'string', 'max:1000', 'required_if:action,return'],
+        ]);
 
         if (empty($fileRecord->file_path)) {
             return back()->with('error', 'No file uploaded for this document yet.');
         }
 
+        $documentType = (string) $fileRecord->document_type;
         $action = $validated['action'];
         $remarks = trim((string) ($validated['remarks'] ?? ''));
         $isRegionalOffice = strcasecmp(trim((string) ($user->province ?? '')), 'Regional Office') === 0;
@@ -670,9 +844,9 @@ $url = route('pre-implementation-documents.show', ['projectCode' => $project->pr
                 $projectLabel .= ' (' . $projectTitle . ')';
             }
 
-$url = $projectCode !== ''
-                ? route('pre-implementation-documents.show', ['projectCode' => $projectCode], false)
-                : route('pre-implementation-documents.index', [], false);
+            $url = $projectCode !== ''
+                ? route($routeConfig['show'], array_merge(['projectCode' => $projectCode], $scopeQuery), false)
+                : route($routeConfig['index'], $scopeQuery, false);
             $actorId = (int) Auth::id();
             $notificationService = app(InterventionNotificationService::class);
 
@@ -920,7 +1094,7 @@ $url = $projectCode !== ''
         ]);
     }
 
-    private function buildAccessibleSubayQuery($user)
+    private function buildAccessibleSubayQuery($user, bool $includeAllProjects = false)
     {
         $province = trim((string) ($user->province ?? ''));
         $office = trim((string) ($user->office ?? ''));
@@ -934,9 +1108,13 @@ $url = $projectCode !== ''
         $lfpSourcePlaceholders = implode(', ', array_fill(0, count($lfpSources), '?'));
         $cityComparableExpression = "TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(SUBSTRING_INDEX(COALESCE(spp.city_municipality, ''), ',', 1)), '(capital)', ''), 'municipality of ', ''), 'city of ', ''), ' municipality', ''), ' city', ''), '  ', ' '))";
 
-        $query = DB::table('subay_project_profiles as spp')
-            ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2024')
-            ->whereRaw("{$fundSourceExpression} IN ({$lfpSourcePlaceholders})", $lfpSources);
+        $query = DB::table('subay_project_profiles as spp');
+
+        if (!$includeAllProjects) {
+            $query
+                ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2024')
+                ->whereRaw("{$fundSourceExpression} IN ({$lfpSourcePlaceholders})", $lfpSources);
+        }
 
         if ($user->isLguScopedUser()) {
             if ($office !== '') {
@@ -976,14 +1154,14 @@ $url = $projectCode !== ''
         return $query;
     }
 
-    private function resolveProjectForUser(string $projectCode, $user): ?object
+    private function resolveProjectForUser(string $projectCode, $user, bool $includeAllProjects = false): ?object
     {
         $projectCode = trim($projectCode);
         if ($projectCode === '') {
             return null;
         }
 
-        return $this->buildAccessibleSubayQuery($user)
+        return $this->buildAccessibleSubayQuery($user, $includeAllProjects)
             ->where('spp.project_code', $projectCode)
             ->select([
                 'spp.project_code',
@@ -1025,27 +1203,165 @@ $url = $projectCode !== ''
         return ['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB'];
     }
 
+    private function hasAllProjectsScope(?Request $request = null): bool
+    {
+        $request = $request ?: request();
+
+        if ($request->routeIs('initial-project-documents.*')) {
+            return true;
+        }
+
+        return strtolower(trim((string) $request->query('scope', ''))) === 'all';
+    }
+
+    private function scopeQuery(?Request $request = null): array
+    {
+        $request = $request ?: request();
+
+        if ($request->routeIs('initial-project-documents.*')) {
+            return [];
+        }
+
+        return $this->hasAllProjectsScope($request) ? ['scope' => 'all'] : [];
+    }
+
+    private function pageConfig(?Request $request = null): array
+    {
+        if ($this->hasAllProjectsScope($request)) {
+            return [
+                'title' => 'Initial Project Documents',
+                'index_heading' => 'Initial Project Documents',
+                'index_description' => 'View all accessible projects and open each project profile to manage initial project document records.',
+                'show_description' => 'Upload and validate initial project documents for this project.',
+                'empty_state' => 'No accessible projects found.',
+                'save_success_message' => 'Initial project documents saved successfully.',
+            ];
+        }
+
+        return [
+            'title' => 'Pre-Implementation Documents',
+            'index_heading' => 'Pre-Implementation Documents',
+            'index_description' => 'View accessible SubayBayan LFP projects from 2024 onward and open each project profile to manage pre-implementation records.',
+            'show_description' => 'Upload and validate pre-implementation documents for this project.',
+            'empty_state' => 'No SubayBayan LFP projects found from 2024 onward.',
+            'save_success_message' => 'Pre-implementation documents saved successfully.',
+        ];
+    }
+
+    private function routeConfig(?Request $request = null): array
+    {
+        if ($this->hasAllProjectsScope($request)) {
+            return [
+                'index' => 'initial-project-documents.index',
+                'show' => 'initial-project-documents.show',
+                'document' => 'initial-project-documents.document',
+                'document_file' => 'initial-project-documents.document-file',
+                'save' => 'initial-project-documents.save',
+                'validate' => 'initial-project-documents.validate',
+                'validate_file' => 'initial-project-documents.validate-file',
+                'upload_multi' => 'initial-project-documents.upload-multi',
+            ];
+        }
+
+        return [
+            'index' => 'pre-implementation-documents.index',
+            'show' => 'pre-implementation-documents.show',
+            'document' => 'pre-implementation-documents.document',
+            'document_file' => 'pre-implementation-documents.document-file',
+            'save' => 'pre-implementation-documents.save',
+            'validate' => 'pre-implementation-documents.validate',
+            'validate_file' => 'pre-implementation-documents.validate-file',
+            'upload_multi' => 'pre-implementation-documents.upload-multi',
+        ];
+    }
+
+    private function multiUploadDocumentTypes(): array
+    {
+        return [
+            'variation_orders_path',
+            'suspensions_path',
+            'work_resumptions_path',
+            'time_extensions_path',
+        ];
+    }
+
+    private function singleUploadDocumentTypes(): array
+    {
+        return array_values(array_diff(array_keys($this->documentFieldMap()), $this->multiUploadDocumentTypes()));
+    }
+
+    private function isMultiUploadDocumentType(string $documentType): bool
+    {
+        return in_array($documentType, $this->multiUploadDocumentTypes(), true);
+    }
+
     private function documentFieldMap(): array
     {
         return [
-            'signed_lgu_letter_path' => 'Signed LGU Letter',
-            'signed_lgu_contact_details_path' => 'Signed LGU Contact Details',
             'nadai_path' => 'NADAI',
             'confirmation_receipt_fund_path' => 'Confirmation on the Receipt of Fund',
             'proof_transfer_trust_fund_path' => 'Proof on the Transfer of Fund to LGU Trust Fund',
+            'signed_lgu_letter_path' => 'Signed LGU Letter (if any)',
+            'signed_lgu_contact_details_path' => 'Signed LGU Contract Details (if any)',
             'approved_ldip_path' => 'Approved LDIP',
             'approved_aip_path' => 'Approved AIP',
             'approved_dtp_path' => 'Approved DTP',
             'ecc_or_cnc_path' => 'ECC or CNC',
             'water_permit_or_application_path' => 'Water Permit or Application',
             'fpic_or_ncip_certification_path' => 'FPIC / NCIP Certification',
-            'itb_posting_philgeps_path' => 'ITB Posting on PhilGEPS',
-            'noa_path' => 'NOA',
-            'contract_path' => 'Contract',
-            'ntp_path' => 'NTP',
             'land_ownership_path' => 'Land Ownership',
             'right_of_way_path' => 'Right of Way',
             'moa_rural_electrification_path' => 'MOA (For Rural Electrification Projects)',
+            'itb_posting_philgeps_path' => 'ITB Posting on PhilGEPS',
+            'noa_path' => 'NOA Issuances',
+            'contract_path' => 'Contract',
+            'ntp_path' => 'Notice to Proceed',
+            'program_of_works_path' => 'Program of Works (POW)',
+            'design_and_engineering_documents_path' => 'Design and Engineering Documents (DEDs)',
+            'variation_orders_path' => 'Variation Orders',
+            'suspensions_path' => 'Suspensions',
+            'work_resumptions_path' => 'Work Resumptions',
+            'time_extensions_path' => 'Time Extensions',
+            'cancellation_termination_path' => 'Cancellation / Termination',
+        ];
+    }
+
+    private function documentFieldGroups(): array
+    {
+        return [
+            'Initial Project Documents' => [
+                'nadai_path',
+                'confirmation_receipt_fund_path',
+                'proof_transfer_trust_fund_path',
+                'signed_lgu_letter_path',
+                'signed_lgu_contact_details_path',
+            ],
+            'Permits and Certifications' => [
+                'approved_ldip_path',
+                'approved_aip_path',
+                'approved_dtp_path',
+                'ecc_or_cnc_path',
+                'water_permit_or_application_path',
+                'fpic_or_ncip_certification_path',
+                'land_ownership_path',
+                'right_of_way_path',
+                'moa_rural_electrification_path',
+            ],
+            'Contract Implementation Documents' => [
+                'itb_posting_philgeps_path',
+                'noa_path',
+                'contract_path',
+                'ntp_path',
+            ],
+            'Implementation Documents' => [
+                'program_of_works_path',
+                'design_and_engineering_documents_path',
+                'variation_orders_path',
+                'suspensions_path',
+                'work_resumptions_path',
+                'time_extensions_path',
+                'cancellation_termination_path',
+            ],
         ];
     }
 }

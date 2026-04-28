@@ -2353,9 +2353,9 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents')) active @endif">
+                                <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents') || request()->routeIs('initial-project-documents.*') || (request()->routeIs('pre-implementation-documents.*') && request()->query('scope') === 'all')) active @endif">
                                     <i class="fas fa-folder-tree"></i>
-                                    <span>Project Initial Documents</span>
+                                    <span>Initial Project Documents</span>
                                 </a>
                             </li>
                             <li>
@@ -2397,12 +2397,6 @@
             </li>
             @endif
             @if($canViewPreImplementationDocuments)
-                <li>
-                    <a href="{{ route('pre-implementation-documents.index') }}" class="@if(request()->routeIs('pre-implementation-documents.*')) active @endif">
-                        <i class="fas fa-folder-open"></i>
-                        <span>Pre-Implementation Documents</span>
-                    </a>
-                </li>
                 <li>
                     <a href="{{ route('nadai-management.index') }}" class="@if(request()->routeIs('nadai-management.*')) active @endif" title="Notice of Authority to Debit Account Issued">
                         <i class="fas fa-folder-tree"></i>

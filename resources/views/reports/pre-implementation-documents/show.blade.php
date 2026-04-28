@@ -1,16 +1,16 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Pre-Implementation Documents')
-@section('page-title', 'Pre-Implementation Documents')
+@section('title', $pageConfig['title'])
+@section('page-title', $pageConfig['title'])
 
 @section('content')
     <div class="content-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
         <div>
             <h1>Update - {{ $project->project_code }}</h1>
-            <p>Upload and validate pre-implementation documents for this project.</p>
+            <p>{{ $pageConfig['show_description'] }}</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <a href="{{ route('pre-implementation-documents.index') }}" style="display: inline-flex; padding: 10px 18px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; align-items: center; gap: 6px; white-space: nowrap;">
+            <a href="{{ route($routeConfig['index'], $scopeQuery) }}" style="display: inline-flex; padding: 10px 18px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; align-items: center; gap: 6px; white-space: nowrap;">
                 <i class="fas fa-arrow-left"></i> Back to List
             </a>
         </div>
@@ -99,6 +99,37 @@
 
             return \Carbon\Carbon::parse($value)->setTimezone(config('app.timezone'));
         };
+
+        $documentGroupMeta = [
+            'Initial Project Documents' => [
+                'icon' => 'fas fa-folder-open',
+                'accent' => '#2563eb',
+                'soft' => '#eff6ff',
+                'border' => '#bfdbfe',
+                'subtitle' => 'Base project setup and initial fund-transfer records.',
+            ],
+            'Permits and Certifications' => [
+                'icon' => 'fas fa-stamp',
+                'accent' => '#7c3aed',
+                'soft' => '#f5f3ff',
+                'border' => '#ddd6fe',
+                'subtitle' => 'Regulatory clearances, ownership, and supporting certifications.',
+            ],
+            'Contract Implementation Documents' => [
+                'icon' => 'fas fa-file-signature',
+                'accent' => '#d97706',
+                'soft' => '#fff7ed',
+                'border' => '#fed7aa',
+                'subtitle' => 'Procurement and contract award documentation.',
+            ],
+            'Implementation Documents' => [
+                'icon' => 'fas fa-person-digging',
+                'accent' => '#059669',
+                'soft' => '#ecfdf5',
+                'border' => '#a7f3d0',
+                'subtitle' => 'Implementation-phase records, adjustments, and project actions.',
+            ],
+        ];
     @endphp
 
     <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
@@ -106,19 +137,51 @@
             <h2 style="color: #002C76; font-size: 18px; margin: 0; font-weight: 600;">Uploading of Documents</h2>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px;">
-            @foreach ($documentFields as $field => $label)
+        @foreach ($documentGroups as $groupTitle => $groupFields)
+            @php
+                $groupMeta = $documentGroupMeta[$groupTitle] ?? [
+                    'icon' => 'fas fa-folder',
+                    'accent' => '#1d4ed8',
+                    'soft' => '#eff6ff',
+                    'border' => '#bfdbfe',
+                    'subtitle' => 'Project document requirements.',
+                ];
+            @endphp
+            <div style="{{ $loop->first ? '' : 'margin-top: 28px;' }}">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 14px 16px; border: 1px solid {{ $groupMeta['border'] }}; border-radius: 10px; background: linear-gradient(180deg, {{ $groupMeta['soft'] }} 0%, #ffffff 100%);">
+                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                        <div style="width: 38px; height: 38px; border-radius: 10px; background-color: {{ $groupMeta['accent'] }}; color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0;">
+                            <i class="{{ $groupMeta['icon'] }}"></i>
+                        </div>
+                        <div style="min-width: 0;">
+                            <h3 style="margin: 0; color: #111827; font-size: 16px; font-weight: 700;">{{ $groupTitle }}</h3>
+                            <div style="margin-top: 3px; color: #4b5563; font-size: 12px; line-height: 1.4;">{{ $groupMeta['subtitle'] }}</div>
+                        </div>
+                    </div>
+                    <div style="display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; background-color: #ffffff; border: 1px solid {{ $groupMeta['border'] }}; color: {{ $groupMeta['accent'] }}; font-size: 12px; font-weight: 700; flex-shrink: 0;">
+                        {{ count($groupFields) }}
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(4, minmax(210px, 1fr)); gap: 14px;">
+            @foreach ($groupFields as $field)
                 @php
-                    $fileRecord = $documentFilesByType[$field] ?? null;
+                    $label = $documentFields[$field] ?? $field;
+                @endphp
+                @php
+                    $fileRecordsForField = $documentFilesByType[$field] ?? collect();
+                    $fileRecord = $latestDocumentFilesByType[$field] ?? null;
                     $path = $fileRecord->file_path ?? ($document->{$field} ?? null);
                     $fileName = $path ? basename($path) : null;
 
+                    $isMultiUpload = in_array($field, $multiUploadDocumentTypes, true);
+                    $uploadCount = $fileRecordsForField instanceof \Illuminate\Support\Collection ? $fileRecordsForField->count() : 0;
                     $hasFile = !empty($path);
-                    $fileViewUrl = $hasFile ? route('pre-implementation-documents.document', [$project->project_code, $field]) : null;
+                    $fileViewUrl = $hasFile ? route($routeConfig['document'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) : null;
                     $isReturned = $fileRecord && $fileRecord->status === 'returned';
                     $isApprovedRo = $fileRecord && $fileRecord->approved_at_dilg_ro;
                     $isPendingRo = $fileRecord && $fileRecord->approved_at_dilg_po && !$fileRecord->approved_at_dilg_ro;
-                    $disableUpload = $hasFile || $isRegionalDilg;
+                    $disableUpload = $isMultiUpload ? $isRegionalDilg : ($hasFile || $isRegionalDilg);
                     $uploadDisabledMessage = $isRegionalDilg && !$hasFile
                         ? 'Regional Office cannot upload files. Choose file is disabled.'
                         : null;
@@ -258,7 +321,39 @@
                         && !($isProvincialDilg && $isApproved);
                 @endphp
 
-                <form method="POST" action="{{ route('pre-implementation-documents.save', $project->project_code) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
+                @if ($isMultiUpload)
+                    <button
+                        type="button"
+                        onclick="openPreImplementationMultiUploadModal('{{ $field }}')"
+                        style="width: 100%; text-align: left; border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb; cursor: pointer;"
+                    >
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
+                            <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0; cursor: pointer;">{{ $label }}</label>
+                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                {{ $statusLabel }}
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
+                            <div style="font-size: 11px; color: #6b7280;">
+                                {{ $uploadCount }} {{ \Illuminate\Support\Str::plural('upload', $uploadCount) }}
+                            </div>
+                            <div style="display: inline-flex; align-items: center; gap: 6px; color: #002C76; font-size: 11px; font-weight: 700;">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Manage Files</span>
+                            </div>
+                        </div>
+                        <div style="font-size: 11px; color: #6b7280; min-height: 40px;">
+                            @if (empty($timelineEvents))
+                                <div style="color: #9ca3af;">No upload activity yet.</div>
+                            @else
+                                <div style="display: block; font-size: {{ $timelineEvents[0]['font_size'] ?? '11px' }}; font-weight: {{ $timelineEvents[0]['font_weight'] ?? 'normal' }}; color: {{ $timelineEvents[0]['color'] ?? '#6b7280' }};">
+                                    {{ $timelineEvents[0]['message'] ?? '' }}
+                                </div>
+                            @endif
+                        </div>
+                    </button>
+                @else
+                <form method="POST" action="{{ route($routeConfig['save'], array_merge(['projectCode' => $project->project_code], $scopeQuery)) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
                     @csrf
 
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
@@ -366,24 +461,132 @@
 
                     @if ($showApprovalButtons)
                         <div style="display: flex; gap: 8px; margin-top: 8px;">
-                            <button type="button" onclick="openPreImplementationApprovalModal('{{ $field }}', 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                            <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                 Approve
                             </button>
                             @if (!$hideReturnButton)
-                                <button type="button" onclick="openPreImplementationApprovalModal('{{ $field }}', 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                     Return
                                 </button>
                             @endif
                         </div>
                     @endif
                 </form>
+                @endif
             @endforeach
-        </div>
+                </div>
+            </div>
+        @endforeach
 
         <div style="margin-top: 12px; font-size: 11px; color: #6b7280;">
             Accepted format: PDF only. Maximum file size per document: 15 MB.
         </div>
     </div>
+
+    @foreach ($multiUploadDocumentTypes as $multiField)
+        @php
+            $multiLabel = $documentFields[$multiField] ?? $multiField;
+            $multiFiles = $documentFilesByType[$multiField] ?? collect();
+            $modalId = 'preImplMultiModal-' . $multiField;
+        @endphp
+        <div id="{{ $modalId }}" data-pre-impl-multi-modal style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); z-index: 1100; padding: 24px; overflow-y: auto;">
+            <div style="max-width: 1100px; margin: 0 auto; background: #ffffff; border-radius: 14px; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22); overflow: hidden;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);">
+                    <div>
+                        <h3 style="margin: 0; color: #ffffff; font-size: 18px; font-weight: 700;">{{ $multiLabel }}</h3>
+                        <div style="margin-top: 4px; color: rgba(255,255,255,0.82); font-size: 12px;">Multiple uploads supported. Latest files are shown first.</div>
+                    </div>
+                    <button type="button" onclick="closePreImplementationMultiUploadModal('{{ $multiField }}')" style="border: none; background: rgba(255,255,255,0.14); color: #ffffff; width: 34px; height: 34px; border-radius: 999px; cursor: pointer; font-size: 18px;">&times;</button>
+                </div>
+
+                <div style="padding: 20px 22px 22px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 12px; font-weight: 700;">
+                                {{ $multiFiles instanceof \Illuminate\Support\Collection ? $multiFiles->count() : 0 }}
+                            </span>
+                            <span style="font-size: 12px; color: #4b5563;">Uploads</span>
+                        </div>
+
+                        @if (!$isRegionalDilg)
+                            <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                @csrf
+                                <input type="file" name="document_file" accept=".pdf,application/pdf" required style="font-size: 12px;">
+                                <button type="submit" style="padding: 9px 14px; background-color: #002C76; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 700;">
+                                    Upload File
+                                </button>
+                            </form>
+                        @else
+                            <div style="font-size: 12px; color: #6b7280;">Regional Office cannot upload files.</div>
+                        @endif
+                    </div>
+
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
+                        <table style="width: 100%; border-collapse: collapse; min-width: 760px;">
+                            <thead>
+                                <tr style="background-color: #f8fafc;">
+                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Uploaded</th>
+                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">File</th>
+                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Status</th>
+                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Uploaded By</th>
+                                    <th style="padding: 12px 14px; text-align: right; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($multiFiles as $multiFile)
+                                    @php
+                                        $uploadedAt = $asLocalTime($multiFile->uploaded_at ?? $multiFile->created_at ?? null);
+                                        $uploadedBy = $resolveUserName($multiFile->uploaded_by ?? null);
+                                        $multiStatus = $multiFile->status ?? 'pending';
+                                        $statusMeta = ['label' => 'Pending', 'bg' => '#fef3c7', 'color' => '#92400e'];
+                                        if ($multiFile->approved_at_dilg_ro) {
+                                            $statusMeta = ['label' => 'Approved', 'bg' => '#d1fae5', 'color' => '#065f46'];
+                                        } elseif ($multiFile->status === 'returned') {
+                                            $statusMeta = ['label' => 'Returned', 'bg' => '#fee2e2', 'color' => '#991b1b'];
+                                        } elseif ($multiFile->approved_at_dilg_po) {
+                                            $statusMeta = ['label' => 'For DILG RO Validation', 'bg' => '#dbeafe', 'color' => '#1d4ed8'];
+                                        } elseif ($multiStatus === 'pending') {
+                                            $statusMeta = ['label' => 'For DILG PO Validation', 'bg' => '#e0f2fe', 'color' => '#075985'];
+                                        }
+                                    @endphp
+                                    <tr style="border-top: 1px solid #e5e7eb;">
+                                        <td style="padding: 12px 14px; font-size: 12px; color: #374151; white-space: nowrap;">{{ $uploadedAt ? $uploadedAt->format('M d, Y h:i A') : '-' }}</td>
+                                        <td style="padding: 12px 14px; font-size: 12px; color: #111827;">{{ basename($multiFile->file_path ?? ('File #' . $multiFile->id)) }}</td>
+                                        <td style="padding: 12px 14px;">
+                                            <span style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; background-color: {{ $statusMeta['bg'] }}; color: {{ $statusMeta['color'] }}; font-size: 11px; font-weight: 700;">
+                                                {{ $statusMeta['label'] }}
+                                            </span>
+                                        </td>
+                                        <td style="padding: 12px 14px; font-size: 12px; color: #374151;">{{ $uploadedBy }}</td>
+                                        <td style="padding: 12px 14px; text-align: right; white-space: nowrap;">
+                                            <a href="{{ route($routeConfig['document_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 11px; font-weight: 700;">
+                                                <i class="fas fa-eye"></i>
+                                                View
+                                            </a>
+                                            @if ($isDilg && !($isProvincialDilg && $multiFile->approved_at_dilg_po && !$multiFile->approved_at_dilg_ro) && !($isRegionalDilg && $multiFile->status === 'returned') && !($isRegionalDilg && $multiFile->status === 'approved') && !($isProvincialDilg && $multiFile->status === 'approved'))
+                                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'approve')" style="margin-left: 6px; padding: 7px 11px; background-color: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
+                                                    Approve
+                                                </button>
+                                                @if (!($isProvincialDilg && $multiFile->status === 'returned'))
+                                                    <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'return')" style="margin-left: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
+                                                        Return
+                                                    </button>
+                                                @endif
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="5" style="padding: 24px 18px; text-align: center; color: #6b7280; font-size: 12px;">No uploads yet.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endforeach
 
     <div id="preImplActivityLogModal" role="dialog" aria-modal="true" aria-labelledby="preImplActivityLogTitle" aria-hidden="true">
         <div style="display: flex; flex-direction: column; height: 100%;">
@@ -816,6 +1019,37 @@
     </script>
 
     <script>
+        function openPreImplementationMultiUploadModal(documentType) {
+            const modal = document.getElementById(`preImplMultiModal-${documentType}`);
+            if (!modal) {
+                return;
+            }
+
+            modal.style.display = 'block';
+            document.body.classList.add('modal-open-pre-impl-multi');
+        }
+
+        function closePreImplementationMultiUploadModal(documentType) {
+            const modal = document.getElementById(`preImplMultiModal-${documentType}`);
+            if (!modal) {
+                return;
+            }
+
+            modal.style.display = 'none';
+            document.body.classList.remove('modal-open-pre-impl-multi');
+        }
+
+        document.querySelectorAll('[data-pre-impl-multi-modal]').forEach((modal) => {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                    document.body.classList.remove('modal-open-pre-impl-multi');
+                }
+            });
+        });
+    </script>
+
+    <script>
         const preImplActivityLogModal = document.getElementById('preImplActivityLogModal');
         const preImplActivityLogBackdrop = document.getElementById('preImplActivityLogBackdrop');
         const preImplActivityLogFab = document.getElementById('preImplActivityLogFab');
@@ -883,9 +1117,7 @@
         </div>
     </div>
     <script>
-        const preImplValidateBaseUrl = @json(url('/pre-implementation-documents/projects/' . $project->project_code . '/validate'));
-
-        function openPreImplementationApprovalModal(documentType, action) {
+        function openPreImplementationApprovalModal(actionUrl, action) {
             const modal = document.getElementById('preImplApprovalModal');
             const form = document.getElementById('preImplApprovalForm');
             const title = document.getElementById('preImplApprovalTitle');
@@ -893,7 +1125,7 @@
             const remarks = document.getElementById('preImplApprovalRemarks');
             const submitBtn = document.getElementById('preImplApprovalSubmit');
 
-            form.action = preImplValidateBaseUrl + '/' + encodeURIComponent(documentType);
+            form.action = actionUrl;
             actionInput.value = action;
             remarks.value = '';
 
