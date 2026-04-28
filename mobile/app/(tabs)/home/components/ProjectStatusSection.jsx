@@ -1,8 +1,9 @@
 import { Feather } from "@expo/vector-icons";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { APP_COLORS } from "../../../../constants/theme";
 import { formatCount, formatPercentage, STATUS_META } from "../../../../constants/homeDashboardConfig";
+import SkeletonLoader from "../../../../components/common/SkeletonLoader";
 
 function StatusSubaybayanRow({ status, count, total, maxCount, screenWidth }) {
   const meta = STATUS_META[status] || {
@@ -80,11 +81,8 @@ export default function ProjectStatusSection({ isLoadingSummary, summaryError, s
       </Text>
 
       {isLoadingSummary ? (
-        <View className="items-center justify-center px-4 py-8">
-          <ActivityIndicator size="large" color={APP_COLORS.primaryBlue} />
-          <Text className="mt-3 text-[13px] text-[#475569]" style={{ fontFamily: "Montserrat" }}>
-            Loading status summary...
-          </Text>
+        <View className="overflow-hidden px-4 py-8">
+          <SkeletonLoader width="100%" height={60} borderRadius={12} count={4} gap={12} />
         </View>
       ) : summaryError ? (
         <View className="mt-3 rounded-[14px] bg-[#fff5f5] px-4 py-4">

@@ -1,9 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown } from "react-native-reanimated";
 
 import { APP_COLORS } from "../../../../constants/theme";
+import SkeletonLoader from "../../../../components/common/SkeletonLoader";
 
 const FUND_SOURCE_ICON_BY_LABEL = {
   SBDP: "shield",
@@ -224,11 +225,8 @@ export default function FundSourceSection({ isLoadingSummary, summaryError, fund
       </View>
 
       {isLoadingSummary ? (
-        <View className="items-center justify-center rounded-[20px] border border-[#dbe4f4] bg-[#f8fbff] px-4 py-8">
-          <ActivityIndicator size="large" color={APP_COLORS.primaryBlue} />
-          <Text className="mt-3 text-[13px] text-[#475569]" style={{ fontFamily: "Montserrat" }}>
-            Loading dashboard summary...
-          </Text>
+        <View className="overflow-hidden rounded-[20px] border border-[#dbe4f4] bg-[#f8fbff] px-4 py-8">
+          <SkeletonLoader width="100%" height={24} borderRadius={12} count={3} gap={12} />
         </View>
       ) : summaryError ? (
         <View className="rounded-[20px] border border-[#f4c7c7] bg-[#fff5f5] px-4 py-4">

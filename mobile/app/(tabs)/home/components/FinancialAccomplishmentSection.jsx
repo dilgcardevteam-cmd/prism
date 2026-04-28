@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { APP_COLORS } from "../../../../constants/theme";
+import SkeletonLoader from "../../../../components/common/SkeletonLoader";
 
 function FinancialMetricRow({ label, value, icon, backgroundColor, accentColor, valueColor, isLast }) {
   return (
@@ -58,11 +59,8 @@ export default function FinancialAccomplishmentSection({ isLoadingSummary, summa
       </Text>
 
       {isLoadingSummary ? (
-        <View className="items-center justify-center rounded-[20px] border border-[#dbe4f4] bg-[#f8fbff] px-4 py-8">
-          <ActivityIndicator size="large" color={APP_COLORS.primaryBlue} />
-          <Text className="mt-3 text-[13px] text-[#475569]" style={{ fontFamily: "Montserrat" }}>
-            Loading financial summary...
-          </Text>
+        <View className="overflow-hidden rounded-[20px] border border-[#dbe4f4] bg-[#f8fbff] px-4 py-8">
+          <SkeletonLoader width="100%" height={70} borderRadius={12} count={4} gap={12} />
         </View>
       ) : summaryError ? (
         <View className="rounded-[20px] border border-[#f4c7c7] bg-[#fff5f5] px-4 py-4">

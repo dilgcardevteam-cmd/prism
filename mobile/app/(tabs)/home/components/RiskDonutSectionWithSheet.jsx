@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import Animated, { Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown } from "react-native-reanimated";
@@ -7,6 +7,7 @@ import { Feather } from "@expo/vector-icons";
 
 import { APP_COLORS } from "../../../../constants/theme";
 import { formatCount, formatPercentage, PROJECT_RISK_STYLES } from "../../../../constants/homeDashboardConfig";
+import SkeletonLoader from "../../../../components/common/SkeletonLoader";
 
 function CompactLegendItem({ label, compact }) {
   const styleMeta = PROJECT_RISK_STYLES[label] || { bg: "#6b7280" };
@@ -198,11 +199,8 @@ export default function RiskDonutSectionWithSheet({
       </Text>
 
       {isLoadingSummary ? (
-        <View className="items-center justify-center px-4 py-8">
-          <ActivityIndicator size="large" color={APP_COLORS.primaryBlue} />
-          <Text className="mt-3 text-[13px] text-[#475569]" style={{ fontFamily: "Montserrat" }}>
-            {loadingText}
-          </Text>
+        <View className="overflow-hidden px-4 py-8">
+          <SkeletonLoader width="100%" height={80} borderRadius={12} count={3} gap={12} />
         </View>
       ) : summaryError ? (
         <View className="mt-3 rounded-[14px] bg-[#fff5f5] px-4 py-4">

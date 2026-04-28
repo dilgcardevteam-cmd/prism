@@ -23,7 +23,7 @@ class LocallyFundedProjectController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileExpectedCompletionThisMonth', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage']);
+        $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileExpectedCompletionThisMonth', 'mobileAggregatedDashboard', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['index']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['showSubaybayan', 'show']);
         $this->middleware('crud_permission:locally_funded_projects,add')->only(['create', 'store']);
@@ -402,6 +402,556 @@ class LocallyFundedProjectController extends Controller
                 'month_label' => $monthLabel,
             ],
         ]);
+    }
+
+    public function mobileAggregatedDashboard()
+    {
+        $cacheKey = 'mobile_dashboard_aggregate_v1';
+        $cacheMinutes = 60;
+
+        // Try to return cached data
+        if (Cache::has($cacheKey)) {
+            return response()->json(Cache::get($cacheKey));
+        }
+
+        // Build all dashboard data
+        $fundSourceOrder = ['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB'];
+        $statusDisplayOrder = [
+            'Completed',
+            'On-going',
+            'Bid Evaluation/Opening',
+            'NOA Issuance',
+            'DED Preparation',
+            'Not Yet Started',
+            'ITB/AD Posted',
+            'Terminated',
+            'Cancelled',
+        ];
+
+        $statusLabelByNormalized = [
+            'COMPLETED' => 'Completed',
+            'ONGOING' => 'On-going',
+            'BID EVALUATION/OPENING' => 'Bid Evaluation/Opening',
+            'NOA ISSUANCE' => 'NOA Issuance',
+            'DED PREPARATION' => 'DED Preparation',
+            'NOT YET STARTED' => 'Not Yet Started',
+            'ITB/AD POSTED' => 'ITB/AD Posted',
+            'TERMINATED' => 'Terminated',
+            'CANCELLED' => 'Cancelled',
+        ];
+
+        $statusAliases = [
+            'ON-GOING' => 'ONGOING',
+            'NOT STARTED' => 'NOT YET STARTED',
+        ];
+
+        $normalizeFundSource = static function ($value): string {
+            $normalized = strtoupper(trim((string) ($value ?? '')));
+            if ($normalized === '') {
+                return 'UNSPECIFIED';
+            }
+            if (str_starts_with($normalized, 'FALGU')) {
+                return 'FALGU';
+            }
+            if (str_starts_with($normalized, 'CMGP')) {
+                return 'CMGP';
+            }
+            if (str_starts_with($normalized, 'SBDP')) {
+                return 'SBDP';
+            }
+            if (str_starts_with($normalized, 'GEF')) {
+                return 'GEF';
+            }
+            if (str_starts_with($normalized, 'SAFPB')) {
+                return 'SAFPB';
+            }
+            return $normalized;
+        };
+
+        $normalizeStatus = static function ($value) use ($statusAliases, $statusLabelByNormalized): ?string {
+            $raw = trim((string) ($value ?? ''));
+            if ($raw === '') {
+                return null;
+            }
+            $upper = strtoupper($raw);
+            $normalized = $statusAliases[$upper] ?? $upper;
+            return $statusLabelByNormalized[$normalized] ?? null;
+        };
+
+        $toFloat = static function ($value): float {
+            if ($value === null) {
+                return 0.0;
+            }
+            $stringValue = trim((string) $value);
+            if ($stringValue === '') {
+                return 0.0;
+            }
+            $clean = preg_replace('/[^0-9\.-]/', '', $stringValue);
+            if ($clean === null || $clean === '' || $clean === '-' || $clean === '.') {
+                return 0.0;
+            }
+            return (float) $clean;
+        };
+
+        // ===== 1. DASHBOARD SUMMARY DATA =====
+        $hasLfpFundSourceColumn = Schema::hasColumn('locally_funded_projects', 'fund_source');
+        $hasLfpAllocationColumn = Schema::hasColumn('locally_funded_projects', 'lgsf_allocation');
+        $hasLfpObligationColumn = Schema::hasColumn('locally_funded_projects', 'obligation');
+        $hasLfpDisbursedAmountColumn = Schema::hasColumn('locally_funded_projects', 'disbursed_amount');
+        $hasLfpRevertedAmountColumn = Schema::hasColumn('locally_funded_projects', 'reverted_amount');
+        $hasLfpUpdatedAtColumn = Schema::hasColumn('locally_funded_projects', 'updated_at');
+        $hasPhysicalUpdatesTable = Schema::hasTable('locally_funded_physical_updates');
+
+        $query = DB::table('subay_project_profiles as spp')
+            ->leftJoin('locally_funded_projects as lfp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%']);
+
+        if ($hasPhysicalUpdatesTable) {
+            $query->leftJoin('locally_funded_physical_updates as lpu', function ($join) {
+                $join->on('lpu.project_id', '=', 'lfp.id')
+                    ->where('lpu.year', '=', now()->year)
+                    ->where('lpu.month', '=', now()->month);
+            });
+        }
+
+        $query->select([
+            $hasLfpFundSourceColumn ? 'lfp.fund_source as lfp_fund_source' : DB::raw('NULL as lfp_fund_source'),
+            'spp.program as spp_program',
+            'spp.status as spp_status',
+            $hasLfpAllocationColumn ? 'lfp.lgsf_allocation as lfp_lgsf_allocation' : DB::raw('NULL as lfp_lgsf_allocation'),
+            'spp.national_subsidy_original_allocation',
+            $hasLfpObligationColumn ? 'lfp.obligation as lfp_obligation' : DB::raw('NULL as lfp_obligation'),
+            'spp.obligation as spp_obligation',
+            $hasLfpDisbursedAmountColumn ? 'lfp.disbursed_amount as lfp_disbursed_amount' : DB::raw('NULL as lfp_disbursed_amount'),
+            'spp.disbursement as spp_disbursed_amount',
+            $hasLfpRevertedAmountColumn ? 'lfp.reverted_amount as lfp_reverted_amount' : DB::raw('NULL as lfp_reverted_amount'),
+            'spp.liquidations as spp_reverted_amount',
+            $hasLfpUpdatedAtColumn ? 'lfp.updated_at as lfp_updated_at' : DB::raw('NULL as lfp_updated_at'),
+            'spp.updated_at as spp_updated_at',
+        ]);
+
+        if ($hasPhysicalUpdatesTable) {
+            $query->addSelect('lpu.status_project_ro as status_project_ro');
+        } else {
+            $query->addSelect(DB::raw('NULL as status_project_ro'));
+        }
+
+        $rows = $query->get();
+
+        $fundSourceCountsMap = [];
+        $statusCountsMap = array_fill_keys($statusDisplayOrder, 0);
+        $allocation = 0.0;
+        $obligation = 0.0;
+        $disbursement = 0.0;
+        $reverted = 0.0;
+        $latestUpdatedAt = null;
+
+        foreach ($rows as $row) {
+            $fundSource = $normalizeFundSource($row->lfp_fund_source ?: $row->spp_program);
+            $fundSourceCountsMap[$fundSource] = ($fundSourceCountsMap[$fundSource] ?? 0) + 1;
+
+            $statusLabel = $normalizeStatus($row->status_project_ro ?: $row->spp_status);
+            if ($statusLabel !== null) {
+                $statusCountsMap[$statusLabel] = ($statusCountsMap[$statusLabel] ?? 0) + 1;
+            }
+
+            $allocation += $toFloat($row->lfp_lgsf_allocation ?? $row->national_subsidy_original_allocation);
+            $obligation += $toFloat($row->lfp_obligation ?? $row->spp_obligation);
+            $disbursement += $toFloat($row->lfp_disbursed_amount ?? $row->spp_disbursed_amount);
+            $reverted += $toFloat($row->lfp_reverted_amount ?? $row->spp_reverted_amount);
+
+            $candidateUpdatedAt = $row->lfp_updated_at ?: $row->spp_updated_at;
+            if ($candidateUpdatedAt) {
+                if ($latestUpdatedAt === null || strtotime((string) $candidateUpdatedAt) > strtotime((string) $latestUpdatedAt)) {
+                    $latestUpdatedAt = $candidateUpdatedAt;
+                }
+            }
+        }
+
+        $orderedFundSources = [];
+        foreach ($fundSourceOrder as $fundSource) {
+            $count = (int) ($fundSourceCountsMap[$fundSource] ?? 0);
+            if ($count > 0) {
+                $orderedFundSources[] = ['fund_source' => $fundSource, 'count' => $count];
+            }
+            unset($fundSourceCountsMap[$fundSource]);
+        }
+
+        ksort($fundSourceCountsMap);
+        foreach ($fundSourceCountsMap as $fundSource => $count) {
+            $intCount = (int) $count;
+            if ($intCount > 0) {
+                $orderedFundSources[] = ['fund_source' => (string) $fundSource, 'count' => $intCount];
+            }
+        }
+
+        $statusRows = collect($statusCountsMap)
+            ->map(function ($count, $status) {
+                return ['status' => (string) $status, 'count' => (int) $count];
+            })
+            ->filter(fn ($row) => $row['count'] > 0)
+            ->sort(function ($left, $right) use ($statusDisplayOrder) {
+                if ($left['count'] !== $right['count']) {
+                    return $right['count'] <=> $left['count'];
+                }
+                return array_search($left['status'], $statusDisplayOrder, true) <=> array_search($right['status'], $statusDisplayOrder, true);
+            })
+            ->values()
+            ->all();
+
+        $statusTotal = array_sum(array_column($statusRows, 'count'));
+        $statusMax = count($statusRows) > 0 ? max(array_column($statusRows, 'count')) : 0;
+        $balance = $allocation - ($disbursement + $reverted);
+        $utilizationRate = $allocation > 0 ? (($disbursement + $reverted) / $allocation) * 100 : 0.0;
+
+        // ===== 2. PROJECT AT RISK - SLIPPAGE SUMMARY =====
+        $slippageSummaryOrder = ['On Schedule', 'Ahead', 'No Risk', 'Low Risk', 'Moderate Risk', 'High Risk'];
+        $slippageCounts = [];
+
+        if (Schema::hasTable('project_at_risks')) {
+            $riskBaseQuery = DB::table('project_at_risks as par')
+                ->selectRaw('UPPER(TRIM(par.project_code)) as project_code')
+                ->selectRaw('TRIM(COALESCE(par.risk_level, "")) as risk_level_value')
+                ->selectRaw("COALESCE(par.date_of_extraction, '1900-01-01') as extraction_date")
+                ->addSelect('par.id')
+                ->whereNotNull('par.project_code')
+                ->whereRaw('TRIM(par.project_code) <> ""');
+
+            $latestExtractionByProject = DB::query()
+                ->fromSub($riskBaseQuery, 'risk_base')
+                ->selectRaw('risk_base.project_code')
+                ->selectRaw('MAX(risk_base.extraction_date) as latest_extraction')
+                ->groupBy('risk_base.project_code');
+
+            $latestRowsByExtraction = DB::query()
+                ->fromSub($riskBaseQuery, 'risk_base')
+                ->joinSub($latestExtractionByProject, 'risk_latest', function ($join) {
+                    $join->on('risk_base.project_code', '=', 'risk_latest.project_code')
+                        ->on('risk_base.extraction_date', '=', 'risk_latest.latest_extraction');
+                })
+                ->select('risk_base.project_code', 'risk_base.id', 'risk_base.risk_level_value');
+
+            $latestIdByProject = DB::query()
+                ->fromSub($latestRowsByExtraction, 'risk_rows')
+                ->selectRaw('risk_rows.project_code')
+                ->selectRaw('MAX(risk_rows.id) as latest_id')
+                ->groupBy('risk_rows.project_code');
+
+            $finalRiskRows = DB::query()
+                ->fromSub($riskBaseQuery, 'risk_base')
+                ->joinSub($latestIdByProject, 'risk_latest_id', function ($join) {
+                    $join->on('risk_base.project_code', '=', 'risk_latest_id.project_code')
+                        ->on('risk_base.id', '=', 'risk_latest_id.latest_id');
+                })
+                ->select('risk_base.risk_level_value')
+                ->get();
+
+            $slippageCounts = array_fill_keys($slippageSummaryOrder, 0);
+            foreach ($finalRiskRows as $row) {
+                $riskLabel = $this->normalizeRiskLevel($row->risk_level_value ?? null);
+                if ($riskLabel !== null && array_key_exists($riskLabel, $slippageCounts)) {
+                    $slippageCounts[$riskLabel] += 1;
+                }
+            }
+        } else {
+            $slippageCounts = array_fill_keys($slippageSummaryOrder, 0);
+        }
+
+        $slippageRows = collect($slippageSummaryOrder)->map(function ($label) use ($slippageCounts) {
+            return ['label' => $label, 'count' => (int) ($slippageCounts[$label] ?? 0)];
+        })->values()->all();
+
+        // ===== 3. PROJECT AT RISK - AGING SUMMARY =====
+        $agingSummaryOrder = ['High Risk', 'Low Risk', 'No Risk'];
+        $agingCounts = [];
+
+        if (Schema::hasTable('project_at_risks')) {
+            $riskBaseQuery = DB::table('project_at_risks as par')
+                ->selectRaw('UPPER(TRIM(par.project_code)) as project_code')
+                ->selectRaw('TRIM(COALESCE(par.aging, "")) as aging_value')
+                ->selectRaw("COALESCE(par.date_of_extraction, '1900-01-01') as extraction_date")
+                ->addSelect('par.id')
+                ->whereNotNull('par.project_code')
+                ->whereRaw('TRIM(par.project_code) <> ""');
+
+            $latestExtractionByProject = DB::query()
+                ->fromSub($riskBaseQuery, 'risk_base')
+                ->selectRaw('risk_base.project_code')
+                ->selectRaw('MAX(risk_base.extraction_date) as latest_extraction')
+                ->groupBy('risk_base.project_code');
+
+            $latestRowsByExtraction = DB::query()
+                ->fromSub($riskBaseQuery, 'risk_base')
+                ->joinSub($latestExtractionByProject, 'risk_latest', function ($join) {
+                    $join->on('risk_base.project_code', '=', 'risk_latest.project_code')
+                        ->on('risk_base.extraction_date', '=', 'risk_latest.latest_extraction');
+                })
+                ->select('risk_base.project_code', 'risk_base.id', 'risk_base.aging_value');
+
+            $latestIdByProject = DB::query()
+                ->fromSub($latestRowsByExtraction, 'risk_rows')
+                ->selectRaw('risk_rows.project_code')
+                ->selectRaw('MAX(risk_rows.id) as latest_id')
+                ->groupBy('risk_rows.project_code');
+
+            $finalAgingRows = DB::query()
+                ->fromSub($riskBaseQuery, 'risk_base')
+                ->joinSub($latestIdByProject, 'risk_latest_id', function ($join) {
+                    $join->on('risk_base.project_code', '=', 'risk_latest_id.project_code')
+                        ->on('risk_base.id', '=', 'risk_latest_id.latest_id');
+                })
+                ->select('risk_base.aging_value')
+                ->get();
+
+            $agingCounts = array_fill_keys($agingSummaryOrder, 0);
+            foreach ($finalAgingRows as $row) {
+                $rawAging = trim((string) ($row->aging_value ?? ''));
+                if ($rawAging === '') {
+                    continue;
+                }
+
+                if (is_numeric($rawAging)) {
+                    $agingValue = (float) $rawAging;
+                } else {
+                    $cleanedAging = preg_replace('/[^0-9\.\-]/', '', $rawAging);
+                    if ($cleanedAging === null || $cleanedAging === '' || !is_numeric($cleanedAging)) {
+                        continue;
+                    }
+                    $agingValue = (float) $cleanedAging;
+                }
+
+                if ($agingValue >= 60) {
+                    $riskLabel = 'High Risk';
+                } elseif ($agingValue > 30 && $agingValue < 60) {
+                    $riskLabel = 'Low Risk';
+                } else {
+                    $riskLabel = 'No Risk';
+                }
+
+                if (array_key_exists($riskLabel, $agingCounts)) {
+                    $agingCounts[$riskLabel] += 1;
+                }
+            }
+        } else {
+            $agingCounts = array_fill_keys($agingSummaryOrder, 0);
+        }
+
+        $agingRows = collect($agingSummaryOrder)->map(function ($label) use ($agingCounts) {
+            return ['label' => $label, 'count' => (int) ($agingCounts[$label] ?? 0)];
+        })->values()->all();
+
+        // ===== 4. PROJECT UPDATE STATUS SUMMARY =====
+        $updateStatusSummaryOrder = ['High Risk', 'Low Risk', 'No Risk'];
+        $updateStatusCounts = [];
+
+        if (Schema::hasTable('subay_project_profiles')) {
+            $projectUpdateRowsQuery = DB::table('subay_project_profiles as spp')
+                ->whereNotNull('spp.project_code')
+                ->whereRaw('TRIM(COALESCE(spp.project_code, "")) <> ""')
+                ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
+                ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
+                ->selectRaw('LOWER(TRIM(COALESCE(spp.status, ""))) as status_raw')
+                ->selectRaw($this->projectUpdateParsedDateExpression() . ' as latest_update_date');
+
+            $aggregatedCounts = DB::query()
+                ->fromSub($projectUpdateRowsQuery, 'project_updates')
+                ->where('project_updates.status_raw', '!=', 'completed')
+                ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) >= 60 THEN 1 ELSE 0 END) as high_risk_total')
+                ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) > 30 AND DATEDIFF(CURDATE(), project_updates.latest_update_date) < 60 THEN 1 ELSE 0 END) as low_risk_total')
+                ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) <= 30 THEN 1 ELSE 0 END) as no_risk_total')
+                ->first();
+
+            $updateStatusCounts['High Risk'] = (int) ($aggregatedCounts->high_risk_total ?? 0);
+            $updateStatusCounts['Low Risk'] = (int) ($aggregatedCounts->low_risk_total ?? 0);
+            $updateStatusCounts['No Risk'] = (int) ($aggregatedCounts->no_risk_total ?? 0);
+        } else {
+            $updateStatusCounts = array_fill_keys($updateStatusSummaryOrder, 0);
+        }
+
+        $updateStatusRows = collect($updateStatusSummaryOrder)->map(function ($label) use ($updateStatusCounts) {
+            return ['label' => $label, 'count' => (int) ($updateStatusCounts[$label] ?? 0)];
+        })->values()->all();
+
+        // ===== 5. EXPECTED COMPLETION THIS MONTH =====
+        $currentMonth = now()->month;
+        $currentYear = now()->year;
+        $monthLabel = now()->format('F Y');
+        $expectedCompletionData = [];
+
+        if (Schema::hasTable('subay_project_profiles')) {
+            $query = DB::table('subay_project_profiles as spp')
+                ->leftJoin('locally_funded_projects as lfp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
+                ->whereNotNull('spp.project_code')
+                ->whereRaw('TRIM(COALESCE(spp.project_code, "")) <> ""')
+                ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
+                ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
+                ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+                ->selectRaw('TRIM(COALESCE(lfp.project_name, spp.project_title, "")) as project_title')
+                ->selectRaw('TRIM(COALESCE(lfp.province, spp.province, "")) as province')
+                ->selectRaw('TRIM(COALESCE(lfp.city_municipality, spp.city_municipality, "")) as city_municipality')
+                ->selectRaw('lfp.target_date_completion as lfp_target_date_completion')
+                ->selectRaw('lfp.revised_target_date_completion as lfp_revised_target_date_completion')
+                ->selectRaw('spp.intended_completion_date as spp_intended_completion_date')
+                ->selectRaw('spp.intended_completion_date_2 as spp_intended_completion_date_2')
+                ->selectRaw('spp.date_of_expiration_of_contract as spp_date_of_expiration_of_contract');
+
+            $parseCompletionDate = function ($value): ?Carbon {
+                $raw = trim((string) ($value ?? ''));
+                if ($raw === '') {
+                    return null;
+                }
+
+                if (is_numeric($raw)) {
+                    try {
+                        return Carbon::createFromDate(1899, 12, 30)->addDays((int) floor((float) $raw))->startOfDay();
+                    } catch (\Exception $e) {
+                        return null;
+                    }
+                }
+
+                try {
+                    return Carbon::parse($raw)->startOfDay();
+                } catch (\Exception $e) {
+                    return null;
+                }
+            };
+
+            $expectedCompletionData = $query->get()
+                ->map(function ($row) use ($parseCompletionDate, $currentMonth, $currentYear) {
+                    $completionDate = $parseCompletionDate(
+                        $row->lfp_revised_target_date_completion
+                            ?: $row->lfp_target_date_completion
+                            ?: $row->spp_intended_completion_date
+                            ?: $row->spp_intended_completion_date_2
+                            ?: $row->spp_date_of_expiration_of_contract
+                            ?: null
+                    );
+
+                    if (!$completionDate || (int) $completionDate->month !== (int) $currentMonth || (int) $completionDate->year !== (int) $currentYear) {
+                        return null;
+                    }
+
+                    return [
+                        'project_code' => $row->project_code,
+                        'project_title' => $row->project_title !== '' ? $row->project_title : $row->project_code,
+                        'province' => $row->province !== '' ? $row->province : null,
+                        'city_municipality' => $row->city_municipality !== '' ? $row->city_municipality : null,
+                        'expected_completion_date' => $completionDate->format('M d, Y'),
+                    ];
+                })
+                ->filter()
+                ->sortBy([
+                    ['expected_completion_date', 'asc'],
+                    ['project_code', 'asc'],
+                    ['project_title', 'asc'],
+                ])
+                ->values()
+                ->all();
+        }
+
+        // ===== BUILD RESPONSE =====
+        $responseData = [
+            'summary' => [
+                'total_projects' => count($rows),
+                'latest_updated_at' => $latestUpdatedAt,
+                'fund_source_counts' => $orderedFundSources,
+                'status_subaybayan_rows' => $statusRows,
+                'status_subaybayan_total' => $statusTotal,
+                'status_subaybayan_max' => $statusMax,
+                'financial' => [
+                    'allocation' => (float) $allocation,
+                    'obligation' => (float) $obligation,
+                    'disbursement' => (float) $disbursement,
+                    'reverted' => (float) $reverted,
+                    'balance' => (float) $balance,
+                    'utilization_rate' => (float) $utilizationRate,
+                ],
+            ],
+            'slippage' => [
+                'data' => $slippageRows,
+                'meta' => ['total' => (int) array_sum(array_column($slippageRows, 'count'))],
+            ],
+            'aging' => [
+                'data' => $agingRows,
+                'meta' => ['total' => (int) array_sum(array_column($agingRows, 'count'))],
+            ],
+            'update_status' => [
+                'data' => $updateStatusRows,
+                'meta' => ['total' => (int) array_sum(array_column($updateStatusRows, 'count'))],
+            ],
+            'expected_completion' => [
+                'data' => $expectedCompletionData,
+                'meta' => [
+                    'total' => (int) count($expectedCompletionData),
+                    'month_label' => $monthLabel,
+                ],
+            ],
+        ];
+
+        // Cache for 60 minutes
+        Cache::put($cacheKey, $responseData, $cacheMinutes * 60);
+
+        return response()->json($responseData);
+    }
+
+    private function normalizeRiskLevel($riskLevel): ?string
+    {
+        $raw = strtoupper(trim((string) $riskLevel));
+        if ($raw === '') {
+            return null;
+        }
+
+        $compact = preg_replace('/[^A-Z]/', '', $raw) ?? '';
+        if ($compact === '') {
+            return null;
+        }
+
+        if (str_contains($compact, 'AHEAD')) {
+            return 'Ahead';
+        }
+        if (str_contains($compact, 'ONSCHEDULE')) {
+            return 'On Schedule';
+        }
+        if (str_contains($compact, 'NORISK')) {
+            return 'No Risk';
+        }
+        if (str_contains($compact, 'HIGHRISK')) {
+            return 'High Risk';
+        }
+        if (str_contains($compact, 'MODERATERISK')) {
+            return 'Moderate Risk';
+        }
+        if (str_contains($compact, 'LOWRISK')) {
+            return 'Low Risk';
+        }
+
+        return null;
+    }
+
+    private function projectUpdateParsedDateExpression(): string
+    {
+        return "
+            COALESCE(
+                IF(
+                    TRIM(COALESCE(spp.date, '')) REGEXP '^[0-9]+(\\\\.[0-9]+)?$',
+                    DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE(spp.date, '')) AS DECIMAL(12,4))) DAY),
+                    NULL
+                ),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%Y-%m-%d'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%Y-%m-%d %H:%i:%s'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %H:%i'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %H:%i:%s'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %h:%i:%s %p'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d/%m/%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d-%m-%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d-%b-%Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%b %e, %Y'),
+                STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%M %e, %Y')
+            )
+        ";
     }
 
     public function mobileIndex(Request $request)

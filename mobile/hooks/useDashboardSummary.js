@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 
 import { formatUpdatedAt } from "./useLocallyFundedProjects";
 import { useWebAppRequest } from "./useWebAppRequest";
+import { useDashboardCache } from "./useDashboardCache";
 
 const PROJECT_RISK_SUMMARY_ORDER = ["On Schedule", "Ahead", "No Risk", "Low Risk", "Moderate Risk", "High Risk"];
 const PROJECT_RISK_AGING_ORDER = ["High Risk", "Low Risk", "No Risk"];
@@ -53,6 +54,9 @@ function normalizeRiskRows(rows, order) {
 
 export function useDashboardSummary() {
   const { fetchJsonWithFallback } = useWebAppRequest();
+  const { getCachedData, setCachedData, clearCache, getStaleCachedData } = useDashboardCache();
+
+  // State for summary data
   const [totalProjects, setTotalProjects] = useState(0);
   const [fundSourceCounts, setFundSourceCounts] = useState([]);
   const [statusSubaybayanRows, setStatusSubaybayanRows] = useState([]);
@@ -69,26 +73,22 @@ export function useDashboardSummary() {
     PROJECT_UPDATE_STATUS_ORDER.map((label) => ({ label, count: 0 }))
   );
   const [projectsExpectedCompletionThisMonth, setProjectsExpectedCompletionThisMonth] = useState([]);
-  const [expectedCompletionMonthLabel, setExpectedCompletionMonthLabel] = useState(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date()));
+  const [expectedCompletionMonthLabel, setExpectedCompletionMonthLabel] = useState(
+    new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date())
+  );
   const [latestUpdatedAt, setLatestUpdatedAt] = useState(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState("");
 
-  const loadDashboardSummary = useCallback(async () => {
-    setIsLoadingSummary(true);
-    setSummaryError("");
+  // Track if we've loaded from cache to avoid redundant API calls
+  const hasTriedCacheRef = useRef(false);
+  const isRefreshingRef = useRef(false);
 
+  const processAggregateData = useCallback((aggregatePayload) => {
     try {
-      const [summaryPayload, projectAtRiskSummary, projectAtRiskAgingSummary, projectUpdateStatusSummary, expectedCompletionPayload] = await Promise.all([
-        fetchJsonWithFallback("/api/mobile/locally-funded/dashboard-summary"),
-        fetchJsonWithFallback("/api/mobile/project-at-risk/slippage-summary").catch(() => ({ data: [] })),
-        fetchJsonWithFallback("/api/mobile/project-at-risk/aging-summary").catch(() => ({ data: [] })),
-        fetchJsonWithFallback("/api/mobile/project-at-risk/project-update-status-summary").catch(() => ({ data: [] })),
-        fetchJsonWithFallback("/api/mobile/locally-funded/expected-completion").catch(() => ({ data: [], meta: {} })),
-      ]);
-
-      const summaryData = summaryPayload?.data && typeof summaryPayload.data === "object"
-        ? summaryPayload.data
+      // Extract summary data
+      const summaryData = aggregatePayload?.summary && typeof aggregatePayload.summary === "object"
+        ? aggregatePayload.summary
         : {};
 
       const normalizedFundSourceCounts = Array.isArray(summaryData.fund_source_counts)
@@ -136,11 +136,21 @@ export function useDashboardSummary() {
       });
       setLatestUpdatedAt(summaryData.latest_updated_at || null);
 
-      setProjectAtRiskSlippageRows(normalizeRiskRows(projectAtRiskSummary?.data, PROJECT_RISK_SUMMARY_ORDER));
-      setProjectAtRiskAgingRows(normalizeRiskRows(projectAtRiskAgingSummary?.data, PROJECT_RISK_AGING_ORDER));
-      setProjectUpdateStatusRows(normalizeRiskRows(projectUpdateStatusSummary?.data, PROJECT_UPDATE_STATUS_ORDER));
+      // Extract slippage data
+      const slippageData = aggregatePayload?.slippage?.data || [];
+      setProjectAtRiskSlippageRows(normalizeRiskRows(slippageData, PROJECT_RISK_SUMMARY_ORDER));
 
-      const expectedCompletionData = Array.isArray(expectedCompletionPayload?.data)
+      // Extract aging data
+      const agingData = aggregatePayload?.aging?.data || [];
+      setProjectAtRiskAgingRows(normalizeRiskRows(agingData, PROJECT_RISK_AGING_ORDER));
+
+      // Extract update status data
+      const updateStatusData = aggregatePayload?.update_status?.data || [];
+      setProjectUpdateStatusRows(normalizeRiskRows(updateStatusData, PROJECT_UPDATE_STATUS_ORDER));
+
+      // Extract expected completion data
+      const expectedCompletionPayload = aggregatePayload?.expected_completion || {};
+      const expectedCompletionData = Array.isArray(expectedCompletionPayload.data)
         ? expectedCompletionPayload.data
             .map((entry) => ({
               projectCode: String(entry?.project_code || "").trim(),
@@ -153,29 +163,113 @@ export function useDashboardSummary() {
         : [];
 
       setProjectsExpectedCompletionThisMonth(expectedCompletionData);
-      setExpectedCompletionMonthLabel(String(expectedCompletionPayload?.meta?.month_label || "").trim() || new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date()));
+      setExpectedCompletionMonthLabel(
+        String(expectedCompletionPayload.meta?.month_label || "").trim() ||
+          new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date())
+      );
+
+      return true;
     } catch (error) {
-      setTotalProjects(0);
-      setFundSourceCounts([]);
-      setStatusSubaybayanRows([]);
-      setStatusSubaybayanTotal(0);
-      setStatusSubaybayanMax(0);
-      setFinancialSummary(DEFAULT_FINANCIAL);
-      setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
-      setProjectAtRiskAgingRows(PROJECT_RISK_AGING_ORDER.map((label) => ({ label, count: 0 })));
-      setProjectUpdateStatusRows(PROJECT_UPDATE_STATUS_ORDER.map((label) => ({ label, count: 0 })));
-      setProjectsExpectedCompletionThisMonth([]);
-      setExpectedCompletionMonthLabel(new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date()));
-      setLatestUpdatedAt(null);
+      console.error("Error processing aggregate data:", error);
+      return false;
+    }
+  }, []);
+
+  const resetToDefaults = useCallback(() => {
+    setTotalProjects(0);
+    setFundSourceCounts([]);
+    setStatusSubaybayanRows([]);
+    setStatusSubaybayanTotal(0);
+    setStatusSubaybayanMax(0);
+    setFinancialSummary(DEFAULT_FINANCIAL);
+    setProjectAtRiskSlippageRows(PROJECT_RISK_SUMMARY_ORDER.map((label) => ({ label, count: 0 })));
+    setProjectAtRiskAgingRows(PROJECT_RISK_AGING_ORDER.map((label) => ({ label, count: 0 })));
+    setProjectUpdateStatusRows(PROJECT_UPDATE_STATUS_ORDER.map((label) => ({ label, count: 0 })));
+    setProjectsExpectedCompletionThisMonth([]);
+    setExpectedCompletionMonthLabel(
+      new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(new Date())
+    );
+    setLatestUpdatedAt(null);
+  }, []);
+
+  const loadDashboardSummary = useCallback(async () => {
+    // Prevent simultaneous refreshes
+    if (isRefreshingRef.current) {
+      return;
+    }
+
+    setIsLoadingSummary(true);
+    setSummaryError("");
+    isRefreshingRef.current = true;
+
+    try {
+      // Try to fetch from the aggregated endpoint
+      const aggregatedData = await fetchJsonWithFallback("/api/mobile/dashboard/aggregate");
+
+      if (aggregatedData) {
+        // Process and cache the data
+        const success = processAggregateData(aggregatedData);
+        if (success) {
+          await setCachedData(aggregatedData);
+        } else {
+          setSummaryError("Failed to process dashboard data.");
+        }
+      }
+    } catch (error) {
+      console.error("Error loading dashboard summary:", error);
       setSummaryError(error?.message || "Unable to load dashboard summary.");
+
+      // Attempt to fall back to stale cache for offline support
+      try {
+        const staleCacheData = await getStaleCachedData();
+        if (staleCacheData) {
+          processAggregateData(staleCacheData);
+          setSummaryError(""); // Clear error if we can display stale data
+        } else {
+          resetToDefaults();
+        }
+      } catch (cacheError) {
+        console.error("Error accessing stale cache:", cacheError);
+        resetToDefaults();
+      }
     } finally {
       setIsLoadingSummary(false);
+      isRefreshingRef.current = false;
     }
-  }, [fetchJsonWithFallback]);
+  }, [fetchJsonWithFallback, processAggregateData, setCachedData, getStaleCachedData, resetToDefaults]);
 
+  // Initial load: try cache first, then fetch
   useEffect(() => {
-    loadDashboardSummary();
-  }, [loadDashboardSummary]);
+    if (hasTriedCacheRef.current) {
+      return;
+    }
+
+    hasTriedCacheRef.current = true;
+
+    const initializeData = async () => {
+      setIsLoadingSummary(true);
+
+      try {
+        // Try to get cached data (cache expires after 10 minutes)
+        const cachedData = await getCachedData(10);
+        if (cachedData) {
+          // Use cached data
+          const success = processAggregateData(cachedData);
+          if (success) {
+            setIsLoadingSummary(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error("Error checking cache:", error);
+      }
+
+      // If no valid cache, fetch fresh data
+      await loadDashboardSummary();
+    };
+
+    initializeData();
+  }, [getCachedData, processAggregateData, loadDashboardSummary]);
 
   const financialMetrics = useMemo(() => {
     const allocation = toNumber(financialSummary.allocation);
@@ -212,6 +306,12 @@ export function useDashboardSummary() {
     ? `Project Status Summary as of ${formatUpdatedAt(latestUpdatedAt)}`
     : "Project Status Summary";
 
+  const refreshDashboard = useCallback(async () => {
+    // Clear cache and force refresh
+    await clearCache();
+    await loadDashboardSummary();
+  }, [clearCache, loadDashboardSummary]);
+
   return {
     isLoadingSummary,
     summaryError,
@@ -232,5 +332,6 @@ export function useDashboardSummary() {
     projectsExpectedCompletionThisMonth,
     expectedCompletionMonthLabel,
     loadDashboardSummary,
+    refreshDashboard,
   };
 }
