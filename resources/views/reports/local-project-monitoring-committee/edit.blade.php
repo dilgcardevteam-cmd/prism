@@ -293,14 +293,15 @@
                                 <i class="fas fa-file"></i>&nbsp;View current file
                             </a>
                             @if (Auth::user()->isSuperAdmin())
-                                <form method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
-                                        <i class="fas fa-trash-alt"></i>
-                                        <span>Delete</span>
-                                    </button>
-                                </form>
+                                <button
+                                    type="submit"
+                                    form="lpmc-delete-document-{{ $doc->id }}"
+                                    onclick="return confirm('Delete this uploaded document? This action cannot be undone.');"
+                                    style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;"
+                                >
+                                    <i class="fas fa-trash-alt"></i>
+                                    <span>Delete</span>
+                                </button>
                             @endif
                         </div>
                     @endif
@@ -359,6 +360,12 @@
                         </div>
                     @endif
                 </form>
+                @if (Auth::user()->isSuperAdmin() && $doc && $doc->file_path)
+                    <form id="lpmc-delete-document-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
+                        @csrf
+                        @method('DELETE')
+                    </form>
+                @endif
             @endforeach
         </div>
 
@@ -597,14 +604,15 @@
                                                 <i class="fas fa-file"></i>&nbsp;View current file
                                             </a>
                                             @if (Auth::user()->isSuperAdmin())
-                                                <form method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
-                                                        <i class="fas fa-trash-alt"></i>
-                                                        <span>Delete</span>
-                                                    </button>
-                                                </form>
+                                                <button
+                                                    type="submit"
+                                                    form="lpmc-delete-document-{{ $doc->id }}"
+                                                    onclick="return confirm('Delete this uploaded document? This action cannot be undone.');"
+                                                    style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;"
+                                                >
+                                                    <i class="fas fa-trash-alt"></i>
+                                                    <span>Delete</span>
+                                                </button>
                                             @endif
                                         </div>
                                     @endif
@@ -663,6 +671,12 @@
                                         </div>
                                     @endif
                                 </form>
+                                @if (Auth::user()->isSuperAdmin() && $doc && $doc->file_path)
+                                    <form id="lpmc-delete-document-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
+                                        @csrf
+                                        @method('DELETE')
+                                    </form>
+                                @endif
                             @endforeach
                         </div>
                     </div>
