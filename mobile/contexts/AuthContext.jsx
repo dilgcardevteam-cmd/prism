@@ -113,6 +113,14 @@ export function AuthProvider({ children }) {
           username: user.username || username,
           first_name: user.first_name ?? null,
           last_name: user.last_name ?? null,
+          email: user.email ?? null,
+          phone: user.phone ?? null,
+          agency: user.agency ?? null,
+          position: user.position ?? null,
+          region: user.region ?? null,
+          province: user.province ?? null,
+          office: user.office ?? null,
+          role: user.role ?? null,
           status: user.status ?? null,
         };
 

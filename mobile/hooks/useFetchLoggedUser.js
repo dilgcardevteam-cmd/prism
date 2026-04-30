@@ -31,11 +31,17 @@ export function useFetchLoggedUser() {
     return String(firstNameSource).trim().split(/[\s._-]+/)[0] || "User";
   }, [session]);
 
+  const lastName = useMemo(() => {
+    const lastNameSource = session?.last_name || session?.lname || "";
+    return String(lastNameSource).trim() || "";
+  }, [session]);
+
   const greeting = useMemo(() => getTimeBasedGreeting(hour), [hour]);
 
   return {
     userInfo: session,
     firstName,
+    lastName,
     greeting,
     isHydrating,
   };
