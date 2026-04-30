@@ -96,7 +96,7 @@
 
                 <div class="ticketing-field">
                     <label for="attachment">Attachment</label>
-                    <input id="attachment" type="file" name="attachment" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+                    <input id="attachment" type="file" name="attachment" class="dashboard-file-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
                 </div>
             </div>
 

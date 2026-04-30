@@ -31,6 +31,7 @@
             ? $selectedProvinceFilters->flatMap(fn ($province) => $provinceMunicipalities[$province] ?? [])
             : collect();
         $cityOptions = $cityOptions
+            ->concat(collect($activeFilters['city'] ?? []))
             ->map(fn($city) => trim((string) $city))
             ->filter()
             ->unique()

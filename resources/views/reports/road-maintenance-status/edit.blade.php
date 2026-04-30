@@ -365,7 +365,7 @@
                                 name="document"
                                 required
                                 @disabled($disableUploadInput)
-                                class="ops-upload-input"
+                                class="ops-upload-input dashboard-file-input"
                                 style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; margin-bottom: 8px; background-color: {{ $disableUploadInput ? '#f3f4f6' : '#ffffff' }}; cursor: {{ $disableUploadInput ? 'not-allowed' : 'auto' }};"
                                 onchange="showRoadMaintenanceSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
                             >

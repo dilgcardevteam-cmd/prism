@@ -192,6 +192,75 @@ class FundUtilizationReportController extends Controller
             ->all();
     }
 
+    private function applyFundUtilizationFiltersToQueries($furQuery, $lfpQuery, array $filters, array $expressions, array $exclude = []): void
+    {
+        $search = trim((string) ($filters['search'] ?? ''));
+        $programs = $filters['program'] ?? [];
+        $fundSources = $filters['fund_source'] ?? [];
+        $fundingYears = $filters['funding_year'] ?? [];
+        $provinces = $filters['province'] ?? [];
+        $cities = $filters['city'] ?? [];
+
+        if (!in_array('search', $exclude, true) && $search !== '') {
+            $keyword = '%' . strtolower($search) . '%';
+
+            $furQuery->where(function ($query) use ($keyword, $expressions) {
+                $query->whereRaw('LOWER(tbfur.project_code) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(tbfur.project_title) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(tbfur.implementing_unit) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(tbfur.province) LIKE ?', [$keyword])
+                    ->orWhereRaw("LOWER({$expressions['fur_city']}) LIKE ?", [$keyword])
+                    ->orWhereRaw("LOWER({$expressions['fur_program']}) LIKE ?", [$keyword])
+                    ->orWhereRaw("LOWER({$expressions['fur_fund_source']}) LIKE ?", [$keyword]);
+            });
+
+            $lfpQuery->where(function ($query) use ($keyword, $expressions) {
+                $query->whereRaw('LOWER(locally_funded_projects.subaybayan_project_code) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(locally_funded_projects.project_name) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(locally_funded_projects.implementing_unit) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(locally_funded_projects.province) LIKE ?', [$keyword])
+                    ->orWhereRaw("LOWER({$expressions['lfp_city']}) LIKE ?", [$keyword])
+                    ->orWhereRaw("LOWER({$expressions['lfp_program']}) LIKE ?", [$keyword])
+                    ->orWhereRaw("LOWER({$expressions['lfp_fund_source']}) LIKE ?", [$keyword]);
+            });
+        }
+
+        if (!in_array('program', $exclude, true) && !empty($programs)) {
+            $furQuery->whereIn(DB::raw("LOWER({$expressions['fur_program']})"), $programs);
+            $lfpQuery->whereIn(DB::raw("LOWER({$expressions['lfp_program']})"), $programs);
+        }
+
+        if (!in_array('fund_source', $exclude, true) && !empty($fundSources)) {
+            $furQuery->whereIn(DB::raw("LOWER({$expressions['fur_fund_source']})"), $fundSources);
+            $lfpQuery->whereIn(DB::raw("LOWER({$expressions['lfp_fund_source']})"), $fundSources);
+        }
+
+        if (!in_array('funding_year', $exclude, true) && !empty($fundingYears)) {
+            $furQuery->whereIn(DB::raw('TRIM(COALESCE(tbfur.funding_year, ""))'), $fundingYears);
+            $lfpQuery->whereIn(DB::raw('TRIM(COALESCE(locally_funded_projects.funding_year, ""))'), $fundingYears);
+        }
+
+        if (!in_array('province', $exclude, true) && !empty($provinces)) {
+            $furQuery->whereIn(DB::raw("LOWER({$expressions['fur_province']})"), $provinces);
+            $lfpQuery->whereIn(DB::raw("LOWER({$expressions['lfp_province']})"), $provinces);
+        }
+
+        if (!in_array('city', $exclude, true) && !empty($cities)) {
+            $furQuery->whereIn(DB::raw("LOWER({$expressions['fur_city']})"), $cities);
+            $lfpQuery->whereIn(DB::raw("LOWER({$expressions['lfp_city']})"), $cities);
+        }
+    }
+
+    private function buildFundUtilizationOptionQueries($furQuery, $lfpQuery, array $filters, array $expressions, array $exclude = []): array
+    {
+        $furOptionQuery = clone $furQuery;
+        $lfpOptionQuery = clone $lfpQuery;
+
+        $this->applyFundUtilizationFiltersToQueries($furOptionQuery, $lfpOptionQuery, $filters, $expressions, $exclude);
+
+        return [$furOptionQuery, $lfpOptionQuery];
+    }
+
     private function syncMissingSubayReports(): void
     {
         if (!Schema::hasTable('tbfur') || !Schema::hasTable('subay_project_profiles')) {
@@ -804,6 +873,23 @@ class FundUtilizationReportController extends Controller
             $lfpQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
         }
 
+        $normalizedFilters = [
+            'search' => $search,
+            'program' => $programs,
+            'fund_source' => $fundSources,
+            'funding_year' => $fundingYears,
+            'province' => $provinces,
+            'city' => $cities,
+        ];
+
+        $activeFilters = [
+            'program' => $this->normalizeFilterValues($request->query('program', [])),
+            'fund_source' => $this->normalizeFilterValues($request->query('fund_source', [])),
+            'funding_year' => $this->normalizeFilterValues($request->query('funding_year', [])),
+            'province' => $this->normalizeFilterValues($request->query('province', [])),
+            'city' => $this->normalizeFilterValues($request->query('city', [])),
+        ];
+
         $filterOptions = $this->buildFundUtilizationFilterOptions(
             clone $furQuery,
             clone $lfpQuery,
@@ -816,105 +902,78 @@ class FundUtilizationReportController extends Controller
                 'lfp_province' => $lfpProvinceExpression,
                 'fur_city' => $furCityExpression,
                 'lfp_city' => $lfpCityExpression,
-            ]
+            ],
+            $normalizedFilters,
+            $activeFilters
         );
 
-        // Apply filters
-        if ($search !== '') {
-            $keyword = '%' . strtolower($search) . '%';
-
-            $furQuery->where(function ($query) use ($keyword, $furProgramExpression, $furCityExpression, $furFundSourceExpression) {
-                $query->whereRaw('LOWER(tbfur.project_code) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(tbfur.project_title) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(tbfur.implementing_unit) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(tbfur.province) LIKE ?', [$keyword])
-                    ->orWhereRaw("LOWER({$furCityExpression}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$furProgramExpression}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$furFundSourceExpression}) LIKE ?", [$keyword]);
-            });
-            $lfpQuery->where(function ($query) use ($keyword, $lfpProgramExpression, $lfpCityExpression, $lfpFundSourceExpression) {
-                $query->whereRaw('LOWER(locally_funded_projects.subaybayan_project_code) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(locally_funded_projects.project_name) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(locally_funded_projects.implementing_unit) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(locally_funded_projects.province) LIKE ?', [$keyword])
-                    ->orWhereRaw("LOWER({$lfpCityExpression}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$lfpProgramExpression}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$lfpFundSourceExpression}) LIKE ?", [$keyword]);
-            });
-        }
-
-        if (!empty($programs)) {
-            $furQuery->whereIn(DB::raw("LOWER({$furProgramExpression})"), $programs);
-            $lfpQuery->whereIn(DB::raw("LOWER({$lfpProgramExpression})"), $programs);
-        }
-
-        if (!empty($fundSources)) {
-            $furQuery->whereIn(DB::raw("LOWER({$furFundSourceExpression})"), $fundSources);
-            $lfpQuery->whereIn(DB::raw("LOWER({$lfpFundSourceExpression})"), $fundSources);
-        }
-
-        if (!empty($fundingYears)) {
-            $furQuery->whereIn(DB::raw('TRIM(COALESCE(tbfur.funding_year, ""))'), $fundingYears);
-            $lfpQuery->whereIn(DB::raw('TRIM(COALESCE(locally_funded_projects.funding_year, ""))'), $fundingYears);
-        }
-
-        if (!empty($provinces)) {
-            $furQuery->whereIn(DB::raw("LOWER({$furProvinceExpression})"), $provinces);
-            $lfpQuery->whereIn(DB::raw("LOWER({$lfpProvinceExpression})"), $provinces);
-        }
-
-        if (!empty($cities)) {
-            $furQuery->whereIn(DB::raw("LOWER({$furCityExpression})"), $cities);
-            $lfpQuery->whereIn(DB::raw("LOWER({$lfpCityExpression})"), $cities);
-        }
+        $this->applyFundUtilizationFiltersToQueries(
+            $furQuery,
+            $lfpQuery,
+            $normalizedFilters,
+            [
+                'fur_program' => $furProgramExpression,
+                'lfp_program' => $lfpProgramExpression,
+                'fur_fund_source' => $furFundSourceExpression,
+                'lfp_fund_source' => $lfpFundSourceExpression,
+                'fur_province' => $furProvinceExpression,
+                'lfp_province' => $lfpProvinceExpression,
+                'fur_city' => $furCityExpression,
+                'lfp_city' => $lfpCityExpression,
+            ]
+        );
 
         // Union the queries
         $reportsQuery = $furQuery->union($lfpQuery);
 
         $filters = [
             'search' => $search,
-            'program' => $this->normalizeFilterValues($request->query('program', [])),
-            'fund_source' => $this->normalizeFilterValues($request->query('fund_source', [])),
-            'funding_year' => $this->normalizeFilterValues($request->query('funding_year', [])),
-            'province' => $this->normalizeFilterValues($request->query('province', [])),
-            'city' => $this->normalizeFilterValues($request->query('city', [])),
+            'program' => $activeFilters['program'],
+            'fund_source' => $activeFilters['fund_source'],
+            'funding_year' => $activeFilters['funding_year'],
+            'province' => $activeFilters['province'],
+            'city' => $activeFilters['city'],
         ];
 
         return [$reportsQuery, $filters, $filterOptions];
     }
 
-    private function buildFundUtilizationFilterOptions($furQuery, $lfpQuery, array $expressions): array
+    private function buildFundUtilizationFilterOptions($furQuery, $lfpQuery, array $expressions, array $filters = [], array $activeFilters = []): array
     {
-        $programs = (clone $furQuery)
+        [$programFurQuery, $programLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['program']);
+        $programs = $programFurQuery
             ->selectRaw($expressions['fur_program'] . ' as program')
             ->whereRaw($expressions['fur_program'] . " <> ''")
             ->distinct()
             ->pluck('program')
             ->concat(
-                (clone $lfpQuery)
+                $programLfpQuery
                     ->selectRaw($expressions['lfp_program'] . ' as program')
                     ->whereRaw($expressions['lfp_program'] . " <> ''")
                     ->distinct()
                     ->pluck('program')
             )
+            ->concat(collect($activeFilters['program'] ?? []))
             ->map(fn ($value) => trim((string) $value))
             ->filter()
             ->unique()
             ->sort()
             ->values();
 
-        $fundSources = (clone $furQuery)
+        [$fundSourceFurQuery, $fundSourceLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['fund_source']);
+        $fundSources = $fundSourceFurQuery
             ->selectRaw($expressions['fur_fund_source'] . ' as fund_source')
             ->whereRaw($expressions['fur_fund_source'] . " <> ''")
             ->distinct()
             ->pluck('fund_source')
             ->concat(
-                (clone $lfpQuery)
+                $fundSourceLfpQuery
                     ->selectRaw($expressions['lfp_fund_source'] . ' as fund_source')
                     ->whereRaw($expressions['lfp_fund_source'] . " <> ''")
                     ->distinct()
                     ->pluck('fund_source')
             )
+            ->concat(collect($activeFilters['fund_source'] ?? []))
             ->map(fn ($value) => trim((string) $value))
             ->filter()
             ->reject(fn ($value) => $this->isSglgifFundSource($value))
@@ -922,32 +981,35 @@ class FundUtilizationReportController extends Controller
             ->sort()
             ->values();
 
-        $fundingYears = (clone $furQuery)
+        [$fundingYearFurQuery, $fundingYearLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['funding_year']);
+        $fundingYears = $fundingYearFurQuery
             ->select('tbfur.funding_year')
             ->whereNotNull('tbfur.funding_year')
             ->distinct()
             ->pluck('funding_year')
             ->concat(
-                (clone $lfpQuery)
+                $fundingYearLfpQuery
                     ->select('locally_funded_projects.funding_year')
                     ->whereNotNull('locally_funded_projects.funding_year')
                     ->distinct()
                     ->pluck('funding_year')
             )
+            ->concat(collect($activeFilters['funding_year'] ?? []))
             ->map(fn ($value) => trim((string) $value))
             ->filter()
             ->unique()
             ->sortByDesc(fn ($value) => (int) $value)
             ->values();
 
-        $locations = (clone $furQuery)
+        [$locationFurQuery, $locationLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['province', 'city']);
+        $locations = $locationFurQuery
             ->selectRaw($expressions['fur_province'] . ' as province')
             ->selectRaw($expressions['fur_city'] . ' as city_municipality')
             ->whereRaw($expressions['fur_province'] . " <> ''")
             ->distinct()
             ->get()
             ->concat(
-                (clone $lfpQuery)
+                $locationLfpQuery
                     ->selectRaw($expressions['lfp_province'] . ' as province')
                     ->selectRaw($expressions['lfp_city'] . ' as city_municipality')
                     ->whereRaw($expressions['lfp_province'] . " <> ''")
@@ -966,6 +1028,7 @@ class FundUtilizationReportController extends Controller
 
         $provinces = $locations
             ->pluck('province')
+            ->concat(collect($activeFilters['province'] ?? []))
             ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
             ->filter()
             ->unique()

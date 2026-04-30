@@ -2909,8 +2909,8 @@
                             <input type="hidden" name="section" value="monitoring">
                             <label for="pcr_mov_file" style="display: block; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload PCR MOV</label>
                             <input type="file" id="pcr_mov_file" name="pcr_mov_file" accept="application/pdf,image/*"
-                                   data-post-implementation-edit="true" disabled
-                                   style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box; background-color: #f3f4f6;">
+                                data-post-implementation-edit="true" disabled class="dashboard-file-input"
+                                style="width: 100%; box-sizing: border-box;">
                             @if($project->pcr_mov_file_path)
                                 <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: #6b7280; flex-wrap: wrap;">
                                     <a href="{{ route('locally-funded-project.view-pcr-mov', $project) }}" target="_blank" style="padding: 4px 8px; background-color: #0369a1; color: white; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: 600;">

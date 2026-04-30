@@ -511,7 +511,7 @@
                         @if (!$isRegionalDilg)
                             <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                                 @csrf
-                                <input type="file" name="document_file" accept=".pdf,application/pdf" required style="font-size: 12px;">
+                                <input type="file" name="document_file" accept=".pdf,application/pdf" required class="dashboard-file-input" style="font-size: 12px;">
                                 <button type="submit" style="padding: 9px 14px; background-color: #002C76; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 700;">
                                     Upload File
                                 </button>

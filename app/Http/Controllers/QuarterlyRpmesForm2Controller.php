@@ -27,10 +27,10 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
             'page_heading' => 'RPMES FORM 2 : Physical and Financial Accomplishment Report',
             'page_subtitle' => 'Physical and Financial Accomplishment Report',
             'project_view_heading' => 'Project View',
-            'project_view_description' => 'SubayBayan project details, quarterly uploads, and DILG validation workflow for RPMES Form 2.',
+            'project_view_description' => 'SBDP project details, quarterly uploads, and DILG validation workflow for RPMES Form 2.',
             'list_heading' => 'RPMES FORM 2 : Physical and Financial Accomplishment Report',
-            'list_title_badge' => 'SubayBayan Project List',
-            'list_description' => 'All accessible SubayBayan projects are listed below, ordered by latest funding year first.',
+            'list_title_badge' => 'SBDP Project List',
+            'list_description' => 'All accessible SBDP projects are listed below, ordered by latest funding year first.',
             'report_short_label' => 'RPMES FORM 2',
             'report_short_name' => 'RPMES Form 2',
             'report_full_title' => 'Physical and Financial Accomplishment Report',
@@ -43,6 +43,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
             'model_class' => QuarterlyRpmesForm2Upload::class,
             'storage_directory' => 'rpmes-form-2',
             'timestamp_log_key' => 'rpmes-form-2',
+            'allowed_fund_sources' => ['SBDP'],
             'index_route' => 'reports.quarterly.rpmes.form-2',
             'show_route' => 'reports.quarterly.rpmes.form-2.show',
             'upload_route' => 'reports.quarterly.rpmes.form-2.upload',
@@ -439,53 +440,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
 
     protected function buildAccessibleSubayQuery($user)
     {
-        $province = trim((string) ($user->province ?? ''));
-        $office = trim((string) ($user->office ?? ''));
-        $region = trim((string) ($user->region ?? ''));
-        $provinceLower = $user->normalizedProvince();
-        $officeLower = $user->normalizedOffice();
-        $officeComparableLower = $user->normalizedOfficeComparable();
-        $regionLower = $user->normalizedRegion();
-        $cityComparableExpression = "TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(SUBSTRING_INDEX(COALESCE(spp.city_municipality, ''), ',', 1)), '(capital)', ''), 'municipality of ', ''), 'city of ', ''), ' municipality', ''), ' city', ''), '  ', ' '))";
-
-        $query = DB::table('subay_project_profiles as spp');
-
-        if ($user->isLguScopedUser()) {
-            if ($office !== '') {
-                $officeNeedle = $officeComparableLower !== '' ? $officeComparableLower : $officeLower;
-                if ($province !== '') {
-                    $query
-                        ->whereRaw('LOWER(spp.province) = ?', [$provinceLower])
-                        ->where(function ($subQuery) use ($officeLower, $officeNeedle, $cityComparableExpression) {
-                            $subQuery->whereRaw('LOWER(spp.city_municipality) = ?', [$officeLower]);
-
-                            if ($officeNeedle !== '') {
-                                $subQuery->orWhereRaw("{$cityComparableExpression} = ?", [$officeNeedle]);
-                            }
-                        });
-                } else {
-                    $query->where(function ($subQuery) use ($officeLower, $officeNeedle, $cityComparableExpression) {
-                        $subQuery->whereRaw('LOWER(spp.city_municipality) = ?', [$officeLower]);
-
-                        if ($officeNeedle !== '') {
-                            $subQuery->orWhereRaw("{$cityComparableExpression} = ?", [$officeNeedle]);
-                        }
-                    });
-                }
-            } elseif ($province !== '') {
-                $query->whereRaw('LOWER(spp.province) = ?', [$provinceLower]);
-            }
-        } elseif ($user->isDilgUser()) {
-            if ($provinceLower === 'regional office') {
-                // Regional Office can access all SubayBayan projects.
-            } elseif ($province !== '') {
-                $query->whereRaw('LOWER(spp.province) = ?', [$provinceLower]);
-            } elseif ($region !== '') {
-                $query->whereRaw('LOWER(spp.region) = ?', [$regionLower]);
-            }
-        }
-
-        return $query;
+        return parent::buildAccessibleSubayQuery($user);
     }
 
     protected function resolveProjectForUser(string $projectCode, $user): ?object
