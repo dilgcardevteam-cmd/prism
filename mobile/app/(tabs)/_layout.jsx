@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { Tabs, usePathname, useRouter } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import {
   Animated,
@@ -24,8 +24,6 @@ import { APP_COLORS } from "../../constants/theme";
 
 const PROJECT_MONITORING_KEY = "project-monitoring";
 const PROJECT_MONITORING_SUBMENU_HEIGHT = 208;
-const VISIBLE_TAB_ROUTE_NAMES = TAB_ROUTES.map((tab) => tab.route);
-
 const DRAWER_MENU_ITEMS = [
   {
     key: "home",
@@ -122,7 +120,6 @@ const DRAWER_MENU_ITEMS = [
 
 export default function TabLayout() {
   const router = useRouter();
-  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { firstName, lastName } = useFetchLoggedUser();
   const { signOut } = useAuth();
@@ -134,9 +131,6 @@ export default function TabLayout() {
   });
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const projectMonitoringAnimation = useRef(new Animated.Value(0)).current;
-  const tabIndicatorIndex = useRef(new Animated.Value(0)).current;
-  const previousTabIndex = useRef(0);
-  const inactiveTabColor = APP_COLORS.primaryMuted;
   const drawerWidth = 320;
   const headerStyle = {
     backgroundColor: APP_COLORS.tabBackgroundLight,
@@ -232,124 +226,9 @@ export default function TabLayout() {
     }
   };
 
-  const shouldHideBottomNavbar = pathname.includes("/project-monitoring/");
-
-  const renderTabBar = ({ state, descriptors, navigation }) => {
+  const renderTabBar = () => {
     // Always hide the bottom tab bar (we're moving messages/settings into drawer)
     return null;
-
-    const visibleRoutes = state.routes.filter((route) =>
-      VISIBLE_TAB_ROUTE_NAMES.includes(route.name)
-    );
-    const activeRoute = state.routes[state.index];
-    const activeVisibleIndex = visibleRoutes.findIndex(
-      (route) => route.key === activeRoute?.key
-    );
-    const indicatorWidth =
-      visibleRoutes.length > 0 ? tabTrackWidth / visibleRoutes.length : 0;
-
-    if (previousTabIndex.current !== activeVisibleIndex) {
-      Animated.timing(tabIndicatorIndex, {
-        toValue: activeVisibleIndex < 0 ? 0 : activeVisibleIndex,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-      previousTabIndex.current = activeVisibleIndex;
-    }
-
-    return (
-      <View
-        className="border-t bg-white"
-        style={[
-          { borderTopColor: APP_COLORS.tabBorderLight },
-          { paddingBottom: Math.max(insets.bottom, 10) },
-        ]}
-      >
-        <View
-          className="relative h-1 border-b"
-          style={{
-            backgroundColor: APP_COLORS.accentSurface,
-            borderBottomColor: APP_COLORS.tabBorderLight,
-          }}
-          onLayout={(event) => {
-            setTabTrackWidth(event.nativeEvent.layout.width);
-          }}
-        >
-          <Animated.View
-            style={[
-              {
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                backgroundColor: APP_COLORS.primary,
-                width: indicatorWidth,
-                transform: [
-                  {
-                    translateX: Animated.multiply(
-                      tabIndicatorIndex,
-                      indicatorWidth
-                    ),
-                  },
-                ],
-              },
-            ]}
-          />
-        </View>
-
-        <View className="flex-row items-center justify-around pt-2.5 pb-3">
-          {visibleRoutes.map((route, visibleIndex) => {
-            const { options } = descriptors[route.key];
-            const isFocused = activeRoute?.key === route.key;
-            const label = options.title ?? route.name;
-            const iconName = TAB_ROUTES[visibleIndex]?.icon;
-            const tintColor = isFocused ? activeTabColor : inactiveTabColor;
-
-            const handlePress = () => {
-              const event = navigation.emit({
-                type: "tabPress",
-                target: route.key,
-                canPreventDefault: true,
-              });
-
-              if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name);
-              }
-            };
-
-            return (
-              <Pressable
-                key={route.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={options.tabBarAccessibilityLabel}
-                testID={options.tabBarButtonTestID}
-                onPress={handlePress}
-                className="min-h-[64px] items-center justify-center px-1.5"
-                style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
-              >
-                <View className="w-full items-center justify-center gap-1.5">
-                  <View className="h-6 w-6 items-center justify-center">
-                    <Feather name={iconName} size={22} color={tintColor} />
-                  </View>
-                  <Text
-                    numberOfLines={1}
-                    className="text-center text-[9px] leading-[11px]"
-                    style={[
-                      { includeFontPadding: false },
-                      { color: tintColor },
-                      isFocused && { fontWeight: "500" },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-    );
   };
 
   return (

@@ -32,6 +32,18 @@
         </div>
     @endif
 
+    @if (session('error'))
+        <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:14px 16px;border-radius:10px;margin-bottom:18px;">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    @if (!empty($setupWarning))
+        <div style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:14px 16px;border-radius:10px;margin-bottom:18px;">
+            {{ $setupWarning }}
+        </div>
+    @endif
+
     @if ($errors->any())
         <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:14px 16px;border-radius:10px;margin-bottom:18px;">
             {{ $errors->first() }}
@@ -1367,4 +1379,3 @@
         });
     </script>
 @endsection
-

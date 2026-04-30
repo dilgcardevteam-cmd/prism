@@ -136,7 +136,7 @@ function RootNavigator() {
         ...existingInputStyleArray,
       ];
     }
-  } catch (e) {
+  } catch (_error) {
     // swallow in case global default assignment isn't supported on a platform
   }
 

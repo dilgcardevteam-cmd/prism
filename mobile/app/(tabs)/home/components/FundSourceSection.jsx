@@ -1,9 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Modal, Pressable, Text, View } from "react-native";
 import Animated, { Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown } from "react-native-reanimated";
 
-import { APP_COLORS } from "../../../../constants/theme";
 import SkeletonLoader from "../../../../components/common/SkeletonLoader";
 
 const FUND_SOURCE_ICON_BY_LABEL = {

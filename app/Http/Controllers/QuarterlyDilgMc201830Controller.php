@@ -29,6 +29,7 @@ class QuarterlyDilgMc201830Controller extends Controller
     {
         $reportingYear = $this->resolveReportingYear($request);
         $officeRows = $this->scopeOfficeRowsForUser($this->buildOfficeRows($this->getOffices()));
+        $setupWarning = null;
         $perPage = (int) $request->query('per_page', 15);
         $filters = [
             'province' => trim((string) $request->query('province', '')),
@@ -74,7 +75,10 @@ class QuarterlyDilgMc201830Controller extends Controller
             ->all();
 
         $documentsByOffice = [];
-        if (!empty($officeNames)) {
+        $missingTables = $this->missingRequiredTables();
+        if (!empty($missingTables)) {
+            $setupWarning = $this->buildMissingTablesMessage($missingTables);
+        } elseif (!empty($officeNames)) {
             $documents = QuarterlyDilgMc201830Upload::query()
                 ->whereIn('office', $officeNames)
                 ->where('year', $reportingYear)
@@ -118,7 +122,8 @@ class QuarterlyDilgMc201830Controller extends Controller
             'filters',
             'officeRows',
             'perPage',
-            'reportingYear'
+            'reportingYear',
+            'setupWarning'
         ));
     }
 
@@ -131,6 +136,10 @@ class QuarterlyDilgMc201830Controller extends Controller
 
     public function edit(Request $request, string $office, string $quarter)
     {
+        if ($redirect = $this->redirectForMissingTables($request, $office, true)) {
+            return $redirect;
+        }
+
         $this->abortUnlessOfficeAccessible($office);
 
         $user = auth()->user();
@@ -176,6 +185,10 @@ class QuarterlyDilgMc201830Controller extends Controller
 
     public function saveEncoding(Request $request, string $office, string $quarter)
     {
+        if ($redirect = $this->redirectForMissingTables($request, $office, true)) {
+            return $redirect;
+        }
+
         $this->abortUnlessOfficeAccessible($office);
 
         $user = auth()->user();
@@ -230,6 +243,10 @@ class QuarterlyDilgMc201830Controller extends Controller
 
     public function exportEncoding(Request $request, string $office, string $quarter)
     {
+        if ($redirect = $this->redirectForMissingTables($request, $office, true)) {
+            return $redirect;
+        }
+
         $this->abortUnlessOfficeAccessible($office);
 
         $user = auth()->user();
@@ -292,6 +309,10 @@ class QuarterlyDilgMc201830Controller extends Controller
 
     public function upload(Request $request, string $office)
     {
+        if ($redirect = $this->redirectForMissingTables($request, $office)) {
+            return $redirect;
+        }
+
         $this->abortUnlessOfficeAccessible($office);
 
         $user = auth()->user();
@@ -386,6 +407,10 @@ class QuarterlyDilgMc201830Controller extends Controller
 
     public function viewDocument(Request $request, string $office, int $docId)
     {
+        if ($redirect = $this->redirectForMissingTables($request, $office)) {
+            return $redirect;
+        }
+
         $this->abortUnlessOfficeAccessible($office);
 
         $document = QuarterlyDilgMc201830Upload::query()
@@ -409,6 +434,10 @@ class QuarterlyDilgMc201830Controller extends Controller
 
     public function approveDocument(Request $request, string $office, int $docId)
     {
+        if ($redirect = $this->redirectForMissingTables($request, $office)) {
+            return $redirect;
+        }
+
         $this->abortUnlessOfficeAccessible($office);
 
         $user = auth()->user();
@@ -484,6 +513,10 @@ class QuarterlyDilgMc201830Controller extends Controller
 
     public function deleteDocument(Request $request, string $office, int $docId)
     {
+        if ($redirect = $this->redirectForMissingTables($request, $office)) {
+            return $redirect;
+        }
+
         $this->abortUnlessOfficeAccessible($office);
 
         $document = QuarterlyDilgMc201830Upload::query()
@@ -591,13 +624,20 @@ class QuarterlyDilgMc201830Controller extends Controller
     {
         $reportingYear = $this->resolveReportingYear($request);
         $province = $this->findProvinceByOffice($office);
-        $documents = QuarterlyDilgMc201830Upload::query()
-            ->where('office', $office)
-            ->where('year', $reportingYear)
-            ->orderBy('quarter')
-            ->orderByDesc('uploaded_at')
-            ->orderByDesc('id')
-            ->get();
+        $setupWarning = null;
+        $missingTables = $this->missingRequiredTables();
+        $documents = collect();
+        if (!empty($missingTables)) {
+            $setupWarning = $this->buildMissingTablesMessage($missingTables);
+        } else {
+            $documents = QuarterlyDilgMc201830Upload::query()
+                ->where('office', $office)
+                ->where('year', $reportingYear)
+                ->orderBy('quarter')
+                ->orderByDesc('uploaded_at')
+                ->orderByDesc('id')
+                ->get();
+        }
 
         $documentsByQuarter = $documents
             ->groupBy('quarter')
@@ -634,8 +674,42 @@ class QuarterlyDilgMc201830Controller extends Controller
             'province',
             'reportingYear',
             'activityLogs',
-            'usersById'
+            'usersById',
+            'setupWarning'
         ));
+    }
+
+    private function missingRequiredTables(bool $includeEncoding = false): array
+    {
+        $requiredTables = ['quarterly_dilg_mc_2018_30_uploads'];
+
+        if ($includeEncoding) {
+            $requiredTables[] = 'quarterly_dilg_mc_2018_30_encodings';
+        }
+
+        return array_values(array_filter($requiredTables, fn (string $table) => !Schema::hasTable($table)));
+    }
+
+    private function buildMissingTablesMessage(array $missingTables): string
+    {
+        return 'DILG MC No. 2018-30 setup is incomplete on this deployment. Missing database tables: '
+            . implode(', ', $missingTables)
+            . '. Run the latest Laravel migrations on the server.';
+    }
+
+    private function redirectForMissingTables(Request $request, string $office, bool $includeEncoding = false)
+    {
+        $missingTables = $this->missingRequiredTables($includeEncoding);
+        if (empty($missingTables)) {
+            return null;
+        }
+
+        return redirect()
+            ->route('reports.quarterly.dilg-mc-2018-30.show', [
+                'office' => $office,
+                'year' => $this->resolveReportingYear($request),
+            ])
+            ->with('error', $this->buildMissingTablesMessage($missingTables));
     }
 
     private function buildActivityLogs(string $office, int $reportingYear): array
