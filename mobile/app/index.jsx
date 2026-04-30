@@ -4,7 +4,10 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View} from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 
+import LottieView from "lottie-react-native";
+
 import FloatingInput from "../components/common/FloatingInput";
+import LoadingOverlay from "../components/common/LoadingOverlay";
 
 import { useAuth } from "../contexts/AuthContext";
 import { APP_ROUTES } from "../constants/routes";
@@ -107,6 +110,16 @@ export default function LoginScreen() {
           </Text>
         </View>
       </KeyboardAvoidingView>
+
+      {/* LOADER */}
+      <LoadingOverlay visible={isSubmitting} message="Signing you in...">
+        <LottieView
+          source={require("../assets/animations/loading-rocketman.json")}
+          autoPlay
+          loop
+          style={{ width: 120, height: 120 }}
+        />
+      </LoadingOverlay>
     </SafeAreaView>
   );
 }
