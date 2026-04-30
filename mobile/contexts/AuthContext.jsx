@@ -8,6 +8,20 @@ const AUTH_STORAGE_VERSION = 2;
 
 const AuthContext = createContext(null);
 
+function fetchWithTimeout(resource, options = {}, timeoutMs = 5000) {
+  if (typeof AbortController === "undefined") {
+    return Promise.race([
+      fetch(resource, options),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out")), timeoutMs)),
+    ]);
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(resource, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [isHydrating, setIsHydrating] = useState(true);
@@ -69,14 +83,18 @@ export function AuthProvider({ children }) {
 
     for (const baseUrl of API_CANDIDATE_BASE_URLS) {
       try {
-        const response = await fetch(buildApiUrl("/api/mobile/login", baseUrl), {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
+        const response = await fetchWithTimeout(
+          buildApiUrl("/api/mobile/login", baseUrl),
+          {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ username, password }),
           },
-          body: JSON.stringify({ username, password }),
-        });
+          5000
+        );
 
         const payloadJson = await response.json().catch(() => null);
 
