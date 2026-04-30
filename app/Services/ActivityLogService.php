@@ -37,6 +37,8 @@ class ActivityLogService
         'utilities.role-configuration.roles.reset',
         'utilities.activity-logs.export',
         'utilities.system-maintenance.toggle',
+        'reports.quarterly.dilg-mc-2018-19.approve',
+        'reports.quarterly.dilg-mc-2018-19.delete-document',
     ];
 
     private ?bool $activityLogTableExists = null;

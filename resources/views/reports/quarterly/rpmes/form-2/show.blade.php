@@ -168,7 +168,7 @@
                     <form action="{{ route('reports.quarterly.rpmes.form-2.upload', ['projectCode' => $project->project_code]) }}" method="POST" enctype="multipart/form-data" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarterCode }}">
-                        <input type="file" name="report_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onchange="showSaveButton(this, 'rpmes-save-btn-{{ $quarterCode }}', 'rpmes-filename-{{ $quarterCode }}')" class="ops-upload-input{{ $canUpload ? '' : ' is-disabled' }}" {{ $canUpload ? '' : 'disabled' }}>
+                        <input type="file" name="report_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onchange="showSaveButton(this, 'rpmes-save-btn-{{ $quarterCode }}', 'rpmes-filename-{{ $quarterCode }}')" class="ops-upload-input dashboard-file-input{{ $canUpload ? '' : ' is-disabled' }}" {{ $canUpload ? '' : 'disabled' }}>
                         <button type="submit" id="rpmes-save-btn-{{ $quarterCode }}" class="ops-upload-submit" style="padding:10px 20px;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:12px;white-space:nowrap;opacity:0;pointer-events:none;width:auto;" {{ $canUpload ? '' : 'disabled' }}><i class="fas fa-upload"></i> Submit</button>
                     </form>
 

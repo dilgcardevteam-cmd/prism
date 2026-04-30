@@ -5,7 +5,6 @@ import Svg, { Circle } from "react-native-svg";
 import Animated, { Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 
-import { APP_COLORS } from "../../../../constants/theme";
 import { formatCount, formatPercentage, PROJECT_RISK_STYLES } from "../../../../constants/homeDashboardConfig";
 import SkeletonLoader from "../../../../components/common/SkeletonLoader";
 

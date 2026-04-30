@@ -1,7 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { Text, View } from "react-native";
 
-import { APP_COLORS } from "../../../../constants/theme";
 import SkeletonLoader from "../../../../components/common/SkeletonLoader";
 
 function FinancialMetricRow({ label, value, icon, backgroundColor, accentColor, valueColor, isLast }) {

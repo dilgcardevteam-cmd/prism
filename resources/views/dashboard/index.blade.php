@@ -349,96 +349,192 @@
                 });
             }
         };
+
+    </script>
+
+    @php
+        $dashboardSearchFilter = trim((string) ($filters['search'] ?? ''));
+        $selectedProvinceFilters = array_values($filters['province'] ?? []);
+        $selectedCityFilters = array_values($filters['city_municipality'] ?? []);
+        $selectedBarangayFilters = array_values($filters['barangay'] ?? []);
+        $selectedProgramFilters = array_values($filters['programs'] ?? []);
+        $selectedFundSourceFilters = array_values($filters['fund_source'] ?? []);
+        $selectedFundingYearFilters = array_values($filters['funding_year'] ?? []);
+        $selectedProjectTypeFilters = array_values($filters['project_type'] ?? []);
+        $selectedProjectStatusFilters = array_values($filters['project_status'] ?? []);
+        $dashboardProvinceCityMap = collect($filterOptions['province_city_map'] ?? []);
+        $dashboardCityBarangayMap = collect($filterOptions['city_barangay_map'] ?? []);
+        $dashboardCityOptions = collect($selectedProvinceFilters)
+            ->flatMap(fn ($province) => $dashboardProvinceCityMap->get($province, []))
+            ->concat($selectedCityFilters)
+            ->map(fn ($city) => trim((string) $city))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+        $dashboardBarangayOptions = collect($selectedCityFilters)
+            ->flatMap(fn ($city) => $dashboardCityBarangayMap->get($city, []))
+            ->concat($selectedBarangayFilters)
+            ->map(fn ($barangay) => trim((string) $barangay))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+        $dashboardFilterValuePresent = function ($value): bool {
+            if (is_array($value)) {
+                return !empty($value);
+            }
+
+            return $value !== null && $value !== '';
+        };
+        $dashboardSingleFilterValue = function (array $values): ?string {
+            return count($values) === 1 ? (string) $values[0] : null;
+        };
+        $dashboardFundUtilizationFilterQuery = array_filter([
+            'search' => $dashboardSearchFilter !== '' ? $dashboardSearchFilter : null,
+            'program' => $selectedProgramFilters,
+            'fund_source' => $selectedFundSourceFilters,
+            'funding_year' => $selectedFundingYearFilters,
+            'province' => $selectedProvinceFilters,
+            'city' => $selectedCityFilters,
+        ], $dashboardFilterValuePresent);
+        $dashboardFundUtilizationFilterUrl = route('fund-utilization.index', $dashboardFundUtilizationFilterQuery);
+        $dashboardLocallyFundedFilterQuery = array_filter([
+            'search' => $dashboardSearchFilter !== '' ? $dashboardSearchFilter : null,
+            'funding_year' => $dashboardSingleFilterValue($selectedFundingYearFilters),
+            'fund_source' => $dashboardSingleFilterValue($selectedFundSourceFilters),
+            'province' => $dashboardSingleFilterValue($selectedProvinceFilters),
+            'city' => $dashboardSingleFilterValue($selectedCityFilters),
+            'barangay' => $dashboardSingleFilterValue($selectedBarangayFilters),
+            'status' => $dashboardSingleFilterValue($selectedProjectStatusFilters),
+        ], $dashboardFilterValuePresent);
+        $dashboardLocallyFundedFilterUrl = route('projects.locally-funded', $dashboardLocallyFundedFilterQuery);
+    @endphp
+
+    <script>
+        if (typeof window.handleDashboardStackedFilterToggle !== 'function') {
+            window.handleDashboardStackedFilterToggle = function (toggleId, event) {
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault();
+                }
+
+                if (typeof window.initializeStackedFilters === 'function') {
+                    window.initializeStackedFilters();
+                }
+
+                if (typeof window.initializeDashboardLocationDependencies === 'function') {
+                    window.initializeDashboardLocationDependencies();
+                }
+
+                const toggleElement = document.getElementById(toggleId);
+                if (toggleElement && typeof toggleElement.__toggleDropdown === 'function') {
+                    toggleElement.__toggleDropdown();
+                }
+
+                return false;
+            };
+        }
+
+        if (typeof window.handleDashboardStackedFilterToggleKeydown !== 'function') {
+            window.handleDashboardStackedFilterToggleKeydown = function (toggleId, event) {
+                if (!event || (event.key !== 'Enter' && event.key !== ' ')) {
+                    return true;
+                }
+
+                return window.handleDashboardStackedFilterToggle(toggleId, event);
+            };
+        }
     </script>
 
     <div class="dashboard-main-layout">
-        <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter collapsed" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
-            <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="false" aria-controls="project-filter-body">
-                <span style="font-size: 20px;">&#128269;</span>
+        <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
+            <input type="hidden" name="tab" value="{{ $activeProjectTab }}">
+            <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="true" aria-controls="project-filter-body">
+                <span style="font-size: 20px;">🔍</span>
                 <span>PROJECT FILTER</span>
                 <span class="project-filter-chevron">
                     <i class="fas fa-chevron-up"></i>
                 </span>
             </button>
 
-            <div id="project-filter-body" class="project-filter-body">
+            <div id="project-filter-body" class="project-filter-body" style="max-height: 223px;">
                 <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px 22px; align-items: end;">
-                <div>
-                    <label for="province" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Province</label>
-                    <select id="province" name="province" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                        <option value="">All</option>
-                        @foreach (($filterOptions['provinces'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['province'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div>
+                        <label for="province" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Province</label>
+                        <select id="province" name="province" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">All</option>
+                            @foreach (($filterOptions['provinces'] ?? collect()) as $option)
+                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProvinceFilters) === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div>
-                    <label for="city_municipality" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">City/Municipality</label>
-                    <select id="city_municipality" name="city_municipality" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                        <option value="">All</option>
-                        @foreach (($filterOptions['cities'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['city_municipality'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div>
+                        <label for="city_municipality" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">City/Municipality</label>
+                        <select id="city_municipality" name="city_municipality" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">All</option>
+                            @foreach ($dashboardCityOptions as $option)
+                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedCityFilters) === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div>
-                    <label for="barangay" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Barangay</label>
-                    <select id="barangay" name="barangay" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                        <option value="">All</option>
-                        @foreach (($filterOptions['barangays'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['barangay'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div>
+                        <label for="barangay" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Barangay</label>
+                        <select id="barangay" name="barangay" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">All</option>
+                            @foreach ($dashboardBarangayOptions as $option)
+                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedBarangayFilters) === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div>
-                    <label for="program" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Program</label>
-                    <select id="program" name="program" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                        <option value="">All</option>
-                        @foreach (($filterOptions['programs'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['programs'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div>
+                        <label for="program" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Program</label>
+                        <select id="program" name="program" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">All</option>
+                            @foreach (($filterOptions['programs'] ?? collect()) as $option)
+                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProgramFilters) === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div>
-                    <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year</label>
-                    <select id="funding_year" name="funding_year" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                        <option value="">All</option>
-                        @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['funding_year'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div>
+                        <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year</label>
+                        <select id="funding_year" name="funding_year" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">All</option>
+                            @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
+                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedFundingYearFilters) === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div>
-                    <label for="project_type" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Type</label>
-                    <select id="project_type" name="project_type" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                        <option value="">All</option>
-                        @foreach (($filterOptions['project_types'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['project_type'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div>
+                        <label for="project_type" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Type</label>
+                        <select id="project_type" name="project_type" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">All</option>
+                            @foreach (($filterOptions['project_types'] ?? collect()) as $option)
+                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProjectTypeFilters) === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div>
-                    <label for="project_status" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Status</label>
-                    <select id="project_status" name="project_status" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                        <option value="">All</option>
-                        @foreach (($filterOptions['project_statuses'] ?? collect()) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($filters['project_status'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
+                    <div>
+                        <label for="project_status" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Status</label>
+                        <select id="project_status" name="project_status" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">All</option>
+                            @foreach (($filterOptions['project_statuses'] ?? collect()) as $option)
+                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProjectStatusFilters) === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end;">
-                    <a href="{{ route('dashboard') }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
-                        Reset Filter
-                    </a>
+                    <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end;">
+                        <a href="{{ route('dashboard', ['tab' => $activeProjectTab]) }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
+                            Reset Filter
+                        </a>
+                    </div>
                 </div>
-            </div>
             </div>
         </form>
 
@@ -450,7 +546,7 @@
                     </span>
                     TOTAL PROJECTS
                 </h2>
-                <div class="dashboard-tile clickable-dashboard-card" data-card-url="{{ route('projects.locally-funded') }}" style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; background-color: #f9fafb; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                <div class="dashboard-tile clickable-dashboard-card" data-card-url="{{ $dashboardLocallyFundedFilterUrl }}" style="padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; background-color: #f9fafb; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center;">
                     <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; color: #6b7280; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
                         <span style="width: 20px; height: 20px; border-radius: 999px; background-color: #e5e7eb; color: #4b5563; display: inline-flex; align-items: center; justify-content: center; font-size: 10px;">
                             <i class="fas fa-hashtag"></i>
@@ -497,7 +593,7 @@
                             if (array_key_exists($normalizedFundSource, $knownFundSourceProjectCodeKeywords)) {
                                 $fundSourceFilterQuery['project_code'] = $knownFundSourceProjectCodeKeywords[$normalizedFundSource];
                             }
-                            $fundSourceFilterUrl = route('projects.locally-funded', $fundSourceFilterQuery);
+                            $fundSourceFilterUrl = route('projects.locally-funded', array_merge($dashboardLocallyFundedFilterQuery, $fundSourceFilterQuery));
                         @endphp
                         <div
                             class="dashboard-tile fund-source-link-tile clickable-dashboard-card"
@@ -576,7 +672,7 @@
                 @endphp
                 <div
                     class="dashboard-tile financial-metric-tile financial-allocation-tile clickable-dashboard-card"
-                    data-card-url="{{ route('fund-utilization.index') }}"
+                    data-card-url="{{ $dashboardFundUtilizationFilterUrl }}"
                     data-modal-target="{{ $allocationProjectsModalId }}"
                     data-modal-only="true"
                     role="button"
@@ -639,7 +735,7 @@
 
                 <div
                     class="dashboard-tile financial-metric-tile financial-percentage-tile clickable-dashboard-card"
-                    data-card-url="{{ route('fund-utilization.index') }}"
+                    data-card-url="{{ $dashboardFundUtilizationFilterUrl }}"
                     data-modal-target="{{ $percentageProjectsModalId }}"
                     data-modal-only="true"
                     role="button"
@@ -703,7 +799,7 @@
 
                 <div
                     class="dashboard-tile financial-metric-tile financial-obligation-tile clickable-dashboard-card"
-                    data-card-url="{{ route('fund-utilization.index') }}"
+                    data-card-url="{{ $dashboardFundUtilizationFilterUrl }}"
                     data-modal-target="{{ $obligationProjectsModalId }}"
                     data-modal-only="true"
                     role="button"
@@ -766,7 +862,7 @@
 
                 <div
                     class="dashboard-tile financial-metric-tile financial-disbursement-tile clickable-dashboard-card"
-                    data-card-url="{{ route('fund-utilization.index') }}"
+                    data-card-url="{{ $dashboardFundUtilizationFilterUrl }}"
                     data-modal-target="{{ $disbursementProjectsModalId }}"
                     data-modal-only="true"
                     role="button"
@@ -829,7 +925,7 @@
 
                 <div
                     class="dashboard-tile financial-metric-tile financial-balance-tile clickable-dashboard-card"
-                    data-card-url="{{ route('fund-utilization.index') }}"
+                    data-card-url="{{ $dashboardFundUtilizationFilterUrl }}"
                     data-modal-target="{{ $balanceProjectsModalId }}"
                     data-modal-only="true"
                     role="button"
@@ -939,7 +1035,7 @@
                                 'clickable-dashboard-card' => $searchTerm !== '',
                             ])
                             @if ($searchTerm !== '')
-                                data-card-url="{{ route('projects.locally-funded', ['search' => $searchTerm]) }}"
+                                data-card-url="{{ route('projects.locally-funded', array_merge($dashboardLocallyFundedFilterQuery, ['search' => $searchTerm])) }}"
                             @endif
                         >
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
@@ -978,9 +1074,9 @@
                         $iconConfig = $statusIconMap[$status] ?? ['color' => '#2563eb', 'bg' => '#dbeafe', 'tileBg' => '#f8fbff', 'tileBorder' => '#bfdbfe', 'labelColor' => '#1e3a8a'];
                         $statusModalKey = trim((string) preg_replace('/[^a-z0-9]+/i', '-', (string) $status), '-');
                         $statusModalId = 'status-subaybayan-' . ($statusModalKey !== '' ? $statusModalKey : 'unspecified') . '-modal';
-                        $statusFilterUrl = route('projects.locally-funded', [
+                        $statusFilterUrl = route('projects.locally-funded', array_merge($dashboardLocallyFundedFilterQuery, [
                             'status' => $status,
-                        ]);
+                        ]));
                         $barWidth = $topStatusSubaybayanCount > 0 ? round((((int) $count) / $topStatusSubaybayanCount) * 100, 2) : 0;
                         $statusPercentage = $statusSubaybayanTotalCount > 0 ? round((((int) $count) / $statusSubaybayanTotalCount) * 100, 2) : 0;
                     @endphp
@@ -1165,7 +1261,7 @@
                     <div class="project-update-status-pie-layout">
                         <div
                             class="project-update-status-pie-wrap clickable-dashboard-card"
-                            data-card-url="{{ route('projects.locally-funded') }}"
+                            data-card-url="{{ $dashboardLocallyFundedFilterUrl }}"
                             data-modal-target="{{ $projectUpdateAllStatusModalId }}"
                             aria-label="Open project update status project list"
                         >
@@ -1251,12 +1347,19 @@
                             $riskCount = (int) ($projectUpdateStatusCounts[$riskLabel] ?? 0);
                             $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['bg' => '#6b7280', 'badgeBg' => '#f3f4f6', 'badgeColor' => '#374151'];
                             $riskModalId = 'project-update-' . strtolower(str_replace(' ', '-', $riskLabel)) . '-modal';
-                            $projectUpdateStatusFilterUrl = route('projects.locally-funded', ['project_update_status' => $riskLabel]);
+                            $projectUpdateStatusFilterUrl = route('projects.locally-funded', array_merge($dashboardLocallyFundedFilterQuery, ['project_update_status' => $riskLabel]));
                         @endphp
                         <div
                             class="dashboard-tile project-update-status-tile clickable-dashboard-card"
                             data-card-url="{{ $projectUpdateStatusFilterUrl }}"
                             data-modal-target="{{ $riskModalId }}"
+                            data-modal-only="true"
+                            role="button"
+                            tabindex="0"
+                            aria-controls="{{ $riskModalId }}"
+                            aria-haspopup="dialog"
+                            onclick="return window.openDashboardModalById('{{ $riskModalId }}', event)"
+                            onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $riskModalId }}', event); }"
                         >
                             <div class="project-update-status-label">
                                 <span
@@ -3956,6 +4059,19 @@
         }
 
         .dashboard-filter-reset-link {
+            height: 34px;
+            min-width: 150px;
+            border-radius: 7px;
+            background: linear-gradient(180deg, #003a99 0%, #002c76 100%);
+            color: #ffffff;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 0 14px;
             box-shadow: 0 4px 10px rgba(0, 44, 118, 0.18);
             transition: box-shadow 0.18s ease, transform 0.18s ease;
         }
@@ -3976,7 +4092,7 @@
             min-width: 150px;
             border-radius: 7px;
             border: 0;
-            background: linear-gradient(180deg, #1d4ed8 0%, #1e3a8a 100%);
+            background: #047857;
             color: #ffffff;
             display: inline-flex;
             align-items: center;
@@ -3986,20 +4102,20 @@
             font-weight: 600;
             padding: 0 14px;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(29, 78, 216, 0.22);
+            box-shadow: 0 4px 10px rgba(4, 120, 87, 0.18);
             transition: box-shadow 0.18s ease, transform 0.18s ease;
         }
 
         .dashboard-filter-apply-btn:hover {
-            background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-            box-shadow: 0 6px 14px rgba(29, 78, 216, 0.28);
+            background: #059669;
+            box-shadow: 0 6px 14px rgba(4, 120, 87, 0.24);
             transform: translateY(-1px);
         }
 
         .dashboard-filter-apply-btn:focus-visible {
             outline: 2px solid rgba(96, 165, 250, 0.9);
             outline-offset: 2px;
-            box-shadow: 0 6px 14px rgba(29, 78, 216, 0.28);
+            box-shadow: 0 6px 14px rgba(4, 120, 87, 0.24);
         }
 
         .dashboard-filter-export-btn {
@@ -4007,7 +4123,7 @@
             min-width: 150px;
             border-radius: 7px;
             border: 0;
-            background: linear-gradient(180deg, #0a8a52 0%, #007542 100%);
+            background: #166534;
             color: #ffffff;
             display: inline-flex;
             align-items: center;
@@ -4017,13 +4133,13 @@
             font-weight: 600;
             padding: 0 14px;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(0, 117, 66, 0.18);
+            box-shadow: 0 4px 10px rgba(22, 101, 52, 0.18);
             transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
         }
 
         .dashboard-filter-export-btn:hover {
-            background: linear-gradient(180deg, #0b9a5b 0%, #00693b 100%);
-            box-shadow: 0 6px 14px rgba(0, 117, 66, 0.24);
+            background: #15803d;
+            box-shadow: 0 6px 14px rgba(22, 101, 52, 0.24);
             transform: translateY(-1px);
         }
 
@@ -5735,27 +5851,6 @@
                     }
                 };
 
-                dropdownToggle.addEventListener('click', (event) => {
-                    if (event.target.closest('.dashboard-filter-badge-remove')) {
-                        return;
-                    }
-
-                    toggleDropdown();
-                });
-
-                dropdownToggle.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        toggleDropdown();
-                        return;
-                    }
-
-                    if (event.key === 'Escape') {
-                        event.preventDefault();
-                        closeDropdown();
-                    }
-                });
-
                 dropdownMenu.addEventListener('click', (event) => {
                     const optionButton = event.target.closest('.dashboard-stacked-filter-option');
                     if (!optionButton) {
@@ -5813,6 +5908,8 @@
                 renderBadges();
                 renderDropdownOptions();
                 stackedFilter.__closeDropdown = closeDropdown;
+                stackedFilter.__toggleDropdown = toggleDropdown;
+                dropdownToggle.__toggleDropdown = toggleDropdown;
                 stackedFilter.__refreshFilterUi = () => {
                     renderBadges();
                     renderDropdownOptions();
@@ -5829,6 +5926,10 @@
             const barangayStackedFilter = document.querySelector('[data-stacked-filter][data-source-select-id="barangay"]');
 
             if (!provinceSelect || !citySelect || !barangaySelect || !cityStackedFilter || !barangayStackedFilter) {
+                return;
+            }
+
+            if (provinceSelect.dataset.dashboardLocationDependenciesInitialized === '1') {
                 return;
             }
 
@@ -5953,7 +6054,53 @@
             provinceSelect.addEventListener('change', rebuildCityOptions);
             citySelect.addEventListener('change', rebuildBarangayOptions);
             rebuildCityOptions();
+            provinceSelect.dataset.dashboardLocationDependenciesInitialized = '1';
         }
+
+        window.initializeStackedFilters = initializeStackedFilters;
+        window.initializeDashboardLocationDependencies = initializeDashboardLocationDependencies;
+
+        window.ensureDashboardStackedFiltersInitialized = function () {
+            initializeStackedFilters();
+            initializeDashboardLocationDependencies();
+        };
+
+        window.handleDashboardStackedFilterToggle = function (toggleId, event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            if (event && typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
+            }
+            if (event && typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
+
+            if (event?.target?.closest && event.target.closest('.dashboard-filter-badge-remove')) {
+                return false;
+            }
+
+            window.ensureDashboardStackedFiltersInitialized();
+
+            const toggleElement = document.getElementById(toggleId);
+            if (toggleElement && typeof toggleElement.__toggleDropdown === 'function') {
+                toggleElement.__toggleDropdown();
+            }
+
+            return false;
+        };
+
+        window.handleDashboardStackedFilterToggleKeydown = function (toggleId, event) {
+            if (!event) {
+                return true;
+            }
+
+            if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Escape') {
+                return true;
+            }
+
+            return window.handleDashboardStackedFilterToggle(toggleId, event);
+        };
 
         function collectDashboardExportFilters() {
             const dashboardForm = document.querySelector('.project-filter-form');
@@ -6680,7 +6827,12 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        function bootDashboardPage() {
+            if (window.__dashboardPageBooted === true) {
+                return;
+            }
+
+            window.__dashboardPageBooted = true;
             const forms = document.querySelectorAll('.project-filter-form');
             const legendBlocks = document.querySelectorAll('.dashboard-legend-block');
             initializeStackedFilters();
@@ -6731,6 +6883,12 @@
 
                 syncRiskCardHeightsWithStatusCard();
             });
-        });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootDashboardPage);
+        } else {
+            bootDashboardPage();
+        }
     </script>
 @endsection

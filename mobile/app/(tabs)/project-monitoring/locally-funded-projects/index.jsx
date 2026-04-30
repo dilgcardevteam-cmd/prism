@@ -340,12 +340,6 @@ export default function LocallyFundedProjectsScreen() {
     return projects.filter((project) => {
       const normalizedFundingYear = String(project.fundingYear ?? "").trim();
       const normalizedFundSource = normalizeValue(project.fundSource);
-      const normalizedProvince = normalizeValue(project.province);
-      const normalizedCity = normalizeValue(project.city);
-      const normalizedProcurementType = normalizeValue(project.procurementType);
-      const normalizedStatusActual = normalizeValue(project.statusActual);
-      const normalizedStatusSubaybayan = normalizeValue(project.statusSubaybayan);
-
       const comparableProvince = normalizeComparable(project.province);
       const comparableCity = normalizeComparable(project.city);
       const comparableProcurement = normalizeComparable(project.procurementType);

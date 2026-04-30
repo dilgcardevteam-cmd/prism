@@ -160,7 +160,7 @@
                     </div>
                     <div>
                         <label for="document" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 600;">Upload NADAI Document</label>
-                        <input id="document" type="file" name="document" accept="application/pdf,.pdf" required style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 13px; color: #111827; background: #fff;">
+                        <input id="document" type="file" name="document" accept="application/pdf,.pdf" required class="dashboard-file-input" style="width: 100%;">
                         <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">Allowed format: PDF only, maximum 15MB.</div>
                     </div>
                 </div>

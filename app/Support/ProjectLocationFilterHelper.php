@@ -15,6 +15,154 @@ class ProjectLocationFilterHelper
         return $label === null ? '' : $label;
     }
 
+    public static function normalizeComparableLocationLabel($value): string
+    {
+        $label = mb_strtolower(self::normalizeLabel($value));
+        if ($label === '') {
+            return '';
+        }
+
+        $label = str_replace(
+            ['(capital)', 'municipality of ', 'city of ', ' municipality', ' city'],
+            '',
+            $label
+        );
+
+        $label = preg_replace('/\s+/u', ' ', trim($label));
+
+        return $label === null ? '' : $label;
+    }
+
+    public static function buildConfiguredLocationHierarchy(): array
+    {
+        static $hierarchy;
+
+        if (is_array($hierarchy)) {
+            return $hierarchy;
+        }
+
+        $hierarchy = [];
+        $path = resource_path('js/locationData.js');
+        if (!is_file($path)) {
+            return $hierarchy;
+        }
+
+        $content = @file_get_contents($path);
+        if (!is_string($content) || trim($content) === '') {
+            return $hierarchy;
+        }
+
+        if (!preg_match('/export\s+const\s+locationData\s*=\s*(\{.*\})\s*;?\s*$/su', $content, $matches)) {
+            return $hierarchy;
+        }
+
+        $decoded = json_decode($matches[1], true);
+        if (!is_array($decoded)) {
+            return $hierarchy;
+        }
+
+        foreach ($decoded as $province => $cities) {
+            $provinceLabel = self::normalizeLabel($province);
+            if ($provinceLabel === '' || !is_array($cities)) {
+                continue;
+            }
+
+            $hierarchy[$provinceLabel] ??= [];
+
+            foreach ($cities as $city => $barangays) {
+                $cityLabel = self::normalizeLabel($city);
+                if ($cityLabel === '') {
+                    continue;
+                }
+
+                $hierarchy[$provinceLabel][$cityLabel] = collect(is_array($barangays) ? $barangays : [])
+                    ->map([self::class, 'normalizeLabel'])
+                    ->filter()
+                    ->unique(function ($label) {
+                        return mb_strtolower((string) $label);
+                    })
+                    ->values()
+                    ->all();
+            }
+        }
+
+        return $hierarchy;
+    }
+
+    public static function buildConfiguredProvinceLabels(): array
+    {
+        return array_keys(self::buildConfiguredLocationHierarchy());
+    }
+
+    public static function buildConfiguredProvinceCityMapFromHierarchy(array $provinceOptionLabels = []): array
+    {
+        $hierarchy = self::buildConfiguredLocationHierarchy();
+        if (empty($hierarchy)) {
+            return [];
+        }
+
+        $provinceLabels = collect($provinceOptionLabels)
+            ->map([self::class, 'normalizeLabel'])
+            ->filter()
+            ->values()
+            ->all();
+
+        if (empty($provinceLabels)) {
+            $provinceLabels = array_keys($hierarchy);
+        }
+
+        $configuredProvinceIndex = [];
+        foreach ($hierarchy as $provinceLabel => $cityMap) {
+            $configuredProvinceIndex[mb_strtolower($provinceLabel)] = array_keys($cityMap);
+        }
+
+        $provinceCityMap = [];
+        foreach ($provinceLabels as $provinceLabel) {
+            $provinceCityMap[$provinceLabel] = $configuredProvinceIndex[mb_strtolower($provinceLabel)] ?? [];
+        }
+
+        return $provinceCityMap;
+    }
+
+    public static function buildConfiguredCityBarangayMapFromHierarchy(array $provinceLabels = []): array
+    {
+        $hierarchy = self::buildConfiguredLocationHierarchy();
+        if (empty($hierarchy)) {
+            return [];
+        }
+
+        $allowedProvinceKeys = collect($provinceLabels)
+            ->map([self::class, 'normalizeLabel'])
+            ->filter()
+            ->map(function ($label) {
+                return mb_strtolower((string) $label);
+            })
+            ->values()
+            ->all();
+
+        $useAllProvinces = empty($allowedProvinceKeys);
+        $cityBarangayMap = [];
+
+        foreach ($hierarchy as $provinceLabel => $cityMap) {
+            if (!$useAllProvinces && !in_array(mb_strtolower($provinceLabel), $allowedProvinceKeys, true)) {
+                continue;
+            }
+
+            foreach ($cityMap as $cityLabel => $barangays) {
+                $cityBarangayMap[$cityLabel] = collect(is_array($barangays) ? $barangays : [])
+                    ->map([self::class, 'normalizeLabel'])
+                    ->filter()
+                    ->unique(function ($label) {
+                        return mb_strtolower((string) $label);
+                    })
+                    ->values()
+                    ->all();
+            }
+        }
+
+        return $cityBarangayMap;
+    }
+
     public static function buildProvinceCityMap($baseQuery, array $provinceOptionLabels, string $provinceColumn, string $cityColumn): array
     {
         $configuredMap = self::buildConfiguredProvinceCityMap($provinceOptionLabels);

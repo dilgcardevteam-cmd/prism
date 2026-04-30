@@ -525,6 +525,23 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             }
         }
 
+        $allowedFundSources = $this->allowedFundSources();
+        if (!empty($allowedFundSources)) {
+            $normalizedFundSources = collect($allowedFundSources)
+                ->map(static fn ($value) => strtoupper(trim((string) $value)))
+                ->filter(static fn (string $value) => $value !== '')
+                ->values()
+                ->all();
+
+            if (!empty($normalizedFundSources)) {
+                $placeholders = implode(', ', array_fill(0, count($normalizedFundSources), '?'));
+                $query->whereRaw(
+                    'UPPER(TRIM(' . $this->fundSourceExpression('spp') . ")) IN ({$placeholders})",
+                    $normalizedFundSources
+                );
+            }
+        }
+
         return $query;
     }
 
@@ -846,6 +863,11 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
     protected function reportShortName(): string
     {
         return (string) $this->formConfig()['report_short_name'];
+    }
+
+    protected function allowedFundSources(): array
+    {
+        return (array) ($this->formConfig()['allowed_fund_sources'] ?? []);
     }
 
     protected function showRouteName(): string

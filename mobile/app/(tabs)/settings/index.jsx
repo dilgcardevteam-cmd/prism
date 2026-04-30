@@ -16,7 +16,6 @@ export default function SettingsScreen() {
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
 
   const containerStyle = { backgroundColor: APP_COLORS.background };
-  const titleStyle = { color: APP_COLORS.primary };
 
   const settingsButtonStyle = {
     borderWidth: 1,

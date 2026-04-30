@@ -1537,7 +1537,13 @@
             font-size: 12px;
         }
 
-        .ops-detail-page input[type="file"],
+        .ops-detail-page input[type="file"] {
+            border: 1px dashed #93c5fd !important;
+            border-radius: 10px !important;
+            background: #eff6ff !important;
+            color: #1e3a8a !important;
+        }
+
         .ops-detail-page textarea,
         .ops-detail-page select {
             border: 1px solid #c7d5e8 !important;
@@ -1555,13 +1561,14 @@
 
         .dashboard-file-input {
             width: 100%;
-            padding: 6px;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            font-size: 12px;
-            color: #111827;
-            background: #f9fafb;
+            padding: 8px 12px !important;
+            border: 1px dashed #93c5fd !important;
+            border-radius: 10px !important;
+            font-size: 12px !important;
+            color: #1e3a8a !important;
+            background: #eff6ff !important;
             cursor: pointer;
+            box-sizing: border-box;
         }
 
         .dashboard-file-input:focus {
@@ -1573,13 +1580,13 @@
         .dashboard-file-input::file-selector-button,
         .dashboard-file-input::-webkit-file-upload-button {
             margin-right: 12px;
-            padding: 9px 14px;
+            padding: 6px 12px;
             border: 1px solid #1d4ed8;
-            border-radius: 7px;
-            font-size: 12px;
+            border-radius: 999px;
+            font-size: 11px;
             font-weight: 700;
             color: #ffffff;
-            background: linear-gradient(135deg, #0f3b8a 0%, #2563eb 100%);
+            background: #1d4ed8;
             cursor: pointer;
             transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
             box-shadow: 0 6px 14px rgba(37, 99, 235, 0.18);
@@ -1587,8 +1594,15 @@
 
         .dashboard-file-input::file-selector-button:hover,
         .dashboard-file-input::-webkit-file-upload-button:hover {
-            background: linear-gradient(135deg, #0b2f6c 0%, #1d4ed8 100%);
+            background: #1e40af;
             box-shadow: 0 8px 16px rgba(37, 99, 235, 0.24);
+        }
+
+        .dashboard-file-input:disabled {
+            background: #e5e7eb !important;
+            border-color: #cbd5f5 !important;
+            color: #6b7280 !important;
+            cursor: not-allowed;
         }
 
         .ops-detail-page button,
@@ -2138,8 +2152,8 @@
                     $reportsAnnualActive = request()->routeIs('rbis-annual-certification.*')
                         || $reportsAnnualAmwpActive
                         || $reportsAnnualRpmesActive;
-                    $reportsQuarterlyMemorandumCircularActive = request()->routeIs('reports.quarterly.dilg-mc-2018-19')
-                        || request()->routeIs('reports.quarterly.dilg-mc-2018-30');
+                    $reportsQuarterlyMemorandumCircularActive = request()->routeIs('reports.quarterly.dilg-mc-2018-19*')
+                        || request()->routeIs('reports.quarterly.dilg-mc-2018-30*');
                     $reportsQuarterlyRpmesActive = request()->routeIs('reports.quarterly.rpmes.form-2*')
                         || request()->routeIs('reports.quarterly.rpmes.form-5*')
                         || request()->routeIs('reports.quarterly.rpmes.form-6*');
@@ -2245,13 +2259,13 @@
                                     </li>
                                 @endif
                                 <li>
-                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-19') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-19')) active @endif" title="Monitoring of Roads and Other Similar Public Works in Compliance with DILG MC No. 2018-19">
+                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-19') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-19*')) active @endif" title="Monitoring of Roads and Other Similar Public Works in Compliance with DILG MC No. 2018-19">
                                         <i class="fas fa-file-lines"></i>
                                         <span>DILG MC No. 2018-19</span>
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-30') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-30')) active @endif" title="Report on Monitoring of Local Government Projects on Contractor's Compliance to Inform the Public before Commencement of Road Projects">
+                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-30') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-30*')) active @endif" title="Report on Monitoring of Local Government Projects on Contractor's Compliance to Inform the Public before Commencement of Road Projects">
                                         <i class="fas fa-file-lines"></i>
                                         <span>DILG MC No. 2018-30</span>
                                     </a>

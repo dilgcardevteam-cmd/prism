@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -31,6 +32,9 @@ class DashboardFilterController extends Controller
         }
 
         $options = collect();
+        $configuredLocationHierarchy = ProjectLocationFilterHelper::buildConfiguredLocationHierarchy();
+        $scopeProvince = trim((string) ($user->province ?? ''));
+        $scopeOfficeComparable = $user->normalizedOfficeComparable();
 
         if (Schema::hasTable('subay_project_profiles')) {
             $baseQuery = DB::table('subay_project_profiles as spp')
@@ -59,6 +63,40 @@ class DashboardFilterController extends Controller
 
             switch ($filterType) {
                 case 'cities':
+                    if (!empty($configuredLocationHierarchy)) {
+                        $configuredProvinceLabels = !empty($currentFilters['province'])
+                            ? collect($currentFilters['province'])->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])->filter()->values()->all()
+                            : ProjectLocationFilterHelper::buildConfiguredProvinceLabels();
+
+                        if (($isLguScopedUser || ($isDilgUser && !$isRegionalOfficeUser)) && $scopeProvince !== '') {
+                            $normalizedScopeProvince = ProjectLocationFilterHelper::normalizeComparableLocationLabel($scopeProvince);
+                            $configuredProvinceLabels = array_values(array_filter(
+                                $configuredProvinceLabels,
+                                static function ($provinceLabel) use ($normalizedScopeProvince) {
+                                    return ProjectLocationFilterHelper::normalizeComparableLocationLabel($provinceLabel) === $normalizedScopeProvince;
+                                }
+                            ));
+                        }
+
+                        $options = collect(ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy($configuredProvinceLabels))
+                            ->flatten(1)
+                            ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+                            ->filter()
+                            ->unique(function ($label) {
+                                return mb_strtolower((string) $label);
+                            })
+                            ->values();
+
+                        if ($isLguScopedUser && $scopeOfficeComparable !== '') {
+                            $options = $options
+                                ->filter(static function ($cityLabel) use ($scopeOfficeComparable) {
+                                    return ProjectLocationFilterHelper::normalizeComparableLocationLabel($cityLabel) === $scopeOfficeComparable;
+                                })
+                                ->values();
+                        }
+                        break;
+                    }
+
                     $options = $baseQuery->select('spp.city_municipality')
                         ->whereNotNull('spp.city_municipality')
                         ->whereRaw('TRIM(spp.city_municipality) <> ""')
@@ -68,6 +106,51 @@ class DashboardFilterController extends Controller
                     break;
 
                 case 'barangays':
+                    if (!empty($configuredLocationHierarchy)) {
+                        $configuredProvinceLabels = !empty($currentFilters['province'])
+                            ? collect($currentFilters['province'])->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])->filter()->values()->all()
+                            : ProjectLocationFilterHelper::buildConfiguredProvinceLabels();
+
+                        if (($isLguScopedUser || ($isDilgUser && !$isRegionalOfficeUser)) && $scopeProvince !== '') {
+                            $normalizedScopeProvince = ProjectLocationFilterHelper::normalizeComparableLocationLabel($scopeProvince);
+                            $configuredProvinceLabels = array_values(array_filter(
+                                $configuredProvinceLabels,
+                                static function ($provinceLabel) use ($normalizedScopeProvince) {
+                                    return ProjectLocationFilterHelper::normalizeComparableLocationLabel($provinceLabel) === $normalizedScopeProvince;
+                                }
+                            ));
+                        }
+
+                        $cityBarangayMap = ProjectLocationFilterHelper::buildConfiguredCityBarangayMapFromHierarchy($configuredProvinceLabels);
+                        if ($isLguScopedUser && $scopeOfficeComparable !== '') {
+                            $cityBarangayMap = array_filter(
+                                $cityBarangayMap,
+                                static function ($cityLabel) use ($scopeOfficeComparable) {
+                                    return ProjectLocationFilterHelper::normalizeComparableLocationLabel($cityLabel) === $scopeOfficeComparable;
+                                },
+                                ARRAY_FILTER_USE_KEY
+                            );
+                        }
+
+                        $selectedCities = collect($currentFilters['city_municipality'] ?? [])
+                            ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+                            ->filter()
+                            ->values()
+                            ->all();
+
+                        $options = collect($selectedCities)
+                            ->flatMap(static function ($cityLabel) use ($cityBarangayMap) {
+                                return $cityBarangayMap[$cityLabel] ?? [];
+                            })
+                            ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+                            ->filter()
+                            ->unique(function ($label) {
+                                return mb_strtolower((string) $label);
+                            })
+                            ->values();
+                        break;
+                    }
+
                     $barangays = $baseQuery->select('spp.barangay')
                         ->whereNotNull('spp.barangay')
                         ->whereRaw('TRIM(spp.barangay) <> ""')
@@ -133,4 +216,3 @@ class DashboardFilterController extends Controller
         ]);
     }
 }
-

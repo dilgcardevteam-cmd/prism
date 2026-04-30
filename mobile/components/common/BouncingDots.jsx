@@ -38,7 +38,7 @@ export default function BouncingDots({
       -1,
       true
     );
-  }, []);
+  }, [dot1Y, dot2Y, dot3Y]);
 
   const dot1Style = useAnimatedStyle(() => ({
     transform: [{ translateY: dot1Y.value }],
