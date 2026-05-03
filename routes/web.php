@@ -256,6 +256,94 @@ Route::post('/api/mobile/login', function (Request $request) {
             'username' => $user->username,
             'first_name' => $user->fname ?? null,
             'last_name' => $user->lname ?? null,
+            'email' => $user->emailaddress ?? null,
+            'phone' => $user->mobileno ?? null,
+            'agency' => $user->agency ?? null,
+            'position' => $user->position ?? null,
+            'region' => $user->region ?? null,
+            'province' => $user->province ?? null,
+            'office' => $user->office ?? null,
+            'role' => $user->role ?? null,
+            'status' => $user->status,
+        ],
+    ]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+
+Route::get('/api/mobile/user/profile', function (Request $request) {
+    if (!Auth::check()) {
+        return response()->json([
+            'message' => 'Unauthenticated.',
+        ], 401);
+    }
+
+    $user = Auth::user();
+
+    return response()->json([
+        'user' => [
+            'id' => $user->idno,
+            'username' => $user->username,
+            'first_name' => $user->fname ?? null,
+            'last_name' => $user->lname ?? null,
+            'email' => $user->emailaddress ?? null,
+            'phone' => $user->mobileno ?? null,
+            'agency' => $user->agency ?? null,
+            'position' => $user->position ?? null,
+            'region' => $user->region ?? null,
+            'province' => $user->province ?? null,
+            'office' => $user->office ?? null,
+            'role' => $user->role ?? null,
+            'status' => $user->status,
+        ],
+    ]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+
+Route::post('/api/mobile/user/profile/update', function (Request $request) {
+    $validated = $request->validate([
+        'user_id' => ['required', 'integer'],
+        'first_name' => ['required', 'string', 'max:255'],
+        'last_name' => ['required', 'string', 'max:255'],
+        'position' => ['required', 'string', 'max:255'],
+        'phone' => ['required', 'string'],
+    ]);
+
+    $sanitizedPhone = preg_replace('/\D+/', '', (string) $validated['phone']);
+
+    if (!preg_match('/^09\d{9}$/', $sanitizedPhone)) {
+        return response()->json([
+            'message' => 'Mobile number must be 11 digits and start with 09.',
+        ], 422);
+    }
+
+    $user = User::where('idno', $validated['user_id'])->first();
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'User not found.',
+        ], 404);
+    }
+
+    $user->update([
+        'fname' => trim((string) $validated['first_name']),
+        'lname' => trim((string) $validated['last_name']),
+        'position' => trim((string) $validated['position']),
+        'mobileno' => $sanitizedPhone,
+    ]);
+
+    return response()->json([
+        'message' => 'Profile updated successfully.',
+        'user' => [
+            'id' => $user->idno,
+            'username' => $user->username,
+            'first_name' => $user->fname ?? null,
+            'last_name' => $user->lname ?? null,
+            'email' => $user->emailaddress ?? null,
+            'phone' => $user->mobileno ?? null,
+            'agency' => $user->agency ?? null,
+            'position' => $user->position ?? null,
+            'region' => $user->region ?? null,
+            'province' => $user->province ?? null,
+            'office' => $user->office ?? null,
+            'role' => $user->role ?? null,
             'status' => $user->status,
         ],
     ]);

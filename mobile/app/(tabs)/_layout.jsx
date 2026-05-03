@@ -359,9 +359,18 @@ export default function TabLayout() {
                   style={{ borderBottomColor: "rgba(255, 255, 255, 0.12)" }}
                 />
 
-                <View
+                <Pressable
                   className="mt-1 mb-4 rounded-xl px-3 py-3"
-                  style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed
+                      ? "rgba(255, 255, 255, 0.12)"
+                      : "rgba(255,255,255,0.08)",
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                  onPress={() => {
+                    router.push("profile");
+                    closeDrawer();
+                  }}
                 >
                   <View className="flex-row items-center">
                     <View className="h-10 w-10 rounded-full items-center justify-center bg-white/10">
@@ -379,7 +388,7 @@ export default function TabLayout() {
                       </Text>
                     </View>
                   </View>
-                </View>
+                </Pressable>
 
                 {DRAWER_MENU_ITEMS.map((item, idx) => {
                 const hasChildren = Array.isArray(item.children) && item.children.length > 0;
