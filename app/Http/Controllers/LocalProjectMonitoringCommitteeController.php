@@ -980,7 +980,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $officeName = $id;
         $request->validate([
-            'document' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'document' => ['required', 'file', 'mimes:pdf', 'max:25600'],
             'doc_type' => ['required', 'string', 'max:50'],
             'year' => ['nullable', 'integer'],
             'quarter' => ['nullable', 'in:Q1,Q2,Q3,Q4'],
