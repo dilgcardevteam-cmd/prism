@@ -16,6 +16,7 @@ class SystemManagementController extends Controller
     private const IMPORT_HISTORY_TABLE = 'subaybayan_import_histories';
     private const RLIP_LIME_IMPORT_HISTORY_TABLE = 'rlip_lime_import_histories';
     private const LEGACY_SUBAYBAYAN_TEMPLATE_PATH = 'templates/legacy-subaybayan-template.xls';
+    private const RSSA_TEMPLATE_PATH = 'templates/rssa-template.xls';
     private const SUBAYBAYAN_TEMPLATE_HEADERS = [
         'program',
         'project_code',
@@ -213,6 +214,86 @@ class SystemManagementController extends Controller
         'Attachment',
         'Overall',
     ];
+    private const RSSA_TEMPLATE_HEADERS = [
+        'PROGRAM',
+        'PROJECT CODE',
+        'PROJECT TITLE',
+        'REGION',
+        'PROVINCE',
+        'CITY/MUNICIPALITY',
+        'FUNDING YEAR',
+        'TYPE OF PROJECT',
+        'STATUS',
+        'NATIONAL SUBSIDY (Original Allocation)',
+        'LGU COUNTERPART (Original Allocation)',
+        'NATIONAL SUBSIDY (Cancelled Allocation)',
+        'LGU COUNTERPART (Cancelled Allocation)',
+        'NATIONAL SUBSIDY (Reverted Amount)',
+        'LGU COUNTERPART (Reverted Amount)',
+        'NATIONAL SUBSIDY (Revised Allocation)',
+        'LGU COUNTERPART (Revised Allocation)',
+        'TOTAL PROJECT COST',
+        'IMPLEMENTING UNIT',
+        'MOI',
+        'Date of Project Completion',
+        '1+ Year',
+        'Date Assessed',
+        'Project Booked as Asset',
+        'Project Insured',
+        'Project is Functional',
+        'IF FUNCTIONAL (YES)',
+        'ENCODED IMPROVEMENTS',
+        'IF NON FUNCTIONAL (State the reasons)',
+        'NO OF MONTHS NON-FUNCTIONAL',
+        'CATEGORY OF NON-FUNCTIONALITY',
+        'IS PROJECT IS OPERATIONAL',
+        'IF OPERATIONAL (YES)',
+        'WHO MAINSTAIN THE FACILITY',
+        'IS REGULARLY MAINTAINED?',
+        'ANNUAL MAINTENANCE BUDGET',
+        'IF NO, STATE THE REASON',
+        'NO. OF MONTHS NON-OPERATIONAL',
+    ];
+    private const RSSA_TEMPLATE_HEADER_MAP = [
+        'program' => 'program',
+        'project_code' => 'project_code',
+        'project_title' => 'project_title',
+        'region' => 'region',
+        'province' => 'province',
+        'city_municipality' => 'city_municipality',
+        'funding_year' => 'funding_year',
+        'type_of_project' => 'type_of_project',
+        'status' => 'status',
+        'national_subsidy_original_allocation' => 'national_subsidy_original_allocation',
+        'lgu_counterpart_original_allocation' => 'lgu_counterpart_original_allocation',
+        'national_subsidy_cancelled_allocation' => 'national_subsidy_cancelled_allocation',
+        'lgu_counterpart_cancelled_allocation' => 'lgu_counterpart_cancelled_allocation',
+        'national_subsidy_reverted_amount' => 'national_subsidy_reverted_amount',
+        'lgu_counterpart_reverted_amount' => 'lgu_counterpart_reverted_amount',
+        'national_subsidy_revised_allocation' => 'national_subsidy_revised_allocation',
+        'lgu_counterpart_revised_allocation' => 'lgu_counterpart_revised_allocation',
+        'total_project_cost' => 'total_project_cost',
+        'implementing_unit' => 'implementing_unit',
+        'moi' => 'moi',
+        'date_of_project_completion' => 'date_of_project_completion',
+        '1_year' => 'one_year',
+        'date_assessed' => 'date_assessed',
+        'project_booked_as_asset' => 'project_booked_as_asset',
+        'project_insured' => 'project_insured',
+        'project_is_functional' => 'project_is_functional',
+        'if_functional_yes' => 'if_functional_yes',
+        'encoded_improvements' => 'encoded_improvements',
+        'if_non_functional_state_the_reasons' => 'if_non_functional_state_the_reasons',
+        'no_of_months_non_functional' => 'no_of_months_non_functional',
+        'category_of_non_functionality' => 'category_of_non_functionality',
+        'is_project_is_operational' => 'is_project_operational',
+        'if_operational_yes' => 'if_operational_yes',
+        'who_mainstain_the_facility' => 'who_maintains_the_facility',
+        'is_regularly_maintained' => 'is_regularly_maintained',
+        'annual_maintenance_budget' => 'annual_maintenance_budget',
+        'if_no_state_the_reason' => 'if_no_state_the_reason',
+        'no_of_months_non_operational' => 'no_of_months_non_operational',
+    ];
     private const SGLGIF_TEMPLATE_HEADER_MAP = [
         'lgu_reference_code' => 'project_code',
         'beneficiaries' => 'beneficiaries',
@@ -333,8 +414,9 @@ class SystemManagementController extends Controller
     public function importSubaybayan(Request $request)
     {
         $uploadPage = $this->resolveSubaybayanUploadPage($request->route()?->getName());
+        $dataTable = $this->resolveUploadDataTable($uploadPage);
 
-        if (!Schema::hasTable('subay_project_profiles')) {
+        if (!Schema::hasTable($dataTable)) {
             return back()->with('error', $uploadPage['entityLabel'] . ' data table is not available yet.');
         }
 
@@ -382,8 +464,9 @@ class SystemManagementController extends Controller
     public function loadSubaybayanImport(Request $request, $importId)
     {
         $uploadPage = $this->resolveSubaybayanUploadPage($request->route()?->getName());
+        $dataTable = $this->resolveUploadDataTable($uploadPage);
 
-        if (!Schema::hasTable('subay_project_profiles')) {
+        if (!Schema::hasTable($dataTable)) {
             return back()->with('error', $uploadPage['entityLabel'] . ' data table is not available yet.');
         }
 
@@ -495,7 +578,9 @@ class SystemManagementController extends Controller
 
     private function renderSubaybayanUploadManager(array $uploadPage)
     {
-        if (!Schema::hasTable('subay_project_profiles')) {
+        $dataTable = $this->resolveUploadDataTable($uploadPage);
+
+        if (!Schema::hasTable($dataTable)) {
             return view('system-management.upload-subaybayan', [
                 'tableMissing' => true,
                 'filters' => [],
@@ -506,101 +591,8 @@ class SystemManagementController extends Controller
             ]);
         }
 
-        $filters = [
-            'province' => request('province'),
-            'city_municipality' => request('city_municipality'),
-            'barangay' => request('barangay'),
-            'program' => request('program'),
-            'status' => request('status'),
-            'funding_year' => request('funding_year'),
-            'procurement_type' => request('procurement_type'),
-            'project_code' => request('project_code'),
-            'project_title' => request('project_title'),
-            'procurement' => request('procurement'),
-            'type_of_project' => request('type_of_project'),
-            'implementing_unit' => request('implementing_unit'),
-            'profile_approval_status' => request('profile_approval_status'),
-        ];
-
-        $filterOptions = [
-            'provinces' => DB::table('subay_project_profiles')
-                ->select('province')
-                ->whereNotNull('province')
-                ->where('province', '!=', '')
-                ->distinct()
-                ->orderBy('province')
-                ->pluck('province'),
-            'cities' => DB::table('subay_project_profiles')
-                ->select('city_municipality')
-                ->whereNotNull('city_municipality')
-                ->where('city_municipality', '!=', '')
-                ->distinct()
-                ->orderBy('city_municipality')
-                ->pluck('city_municipality'),
-            'barangays' => DB::table('subay_project_profiles')
-                ->select('barangay')
-                ->whereNotNull('barangay')
-                ->where('barangay', '!=', '')
-                ->distinct()
-                ->orderBy('barangay')
-                ->pluck('barangay'),
-            'programs' => DB::table('subay_project_profiles')
-                ->select('program')
-                ->whereNotNull('program')
-                ->where('program', '!=', '')
-                ->distinct()
-                ->orderBy('program')
-                ->pluck('program'),
-            'statuses' => DB::table('subay_project_profiles')
-                ->select('status')
-                ->whereNotNull('status')
-                ->where('status', '!=', '')
-                ->distinct()
-                ->orderBy('status')
-                ->pluck('status'),
-            'funding_years' => DB::table('subay_project_profiles')
-                ->select('funding_year')
-                ->whereNotNull('funding_year')
-                ->where('funding_year', '!=', '')
-                ->distinct()
-                ->orderBy('funding_year')
-                ->pluck('funding_year'),
-            'procurement_types' => DB::table('subay_project_profiles')
-                ->select('procurement_type')
-                ->whereNotNull('procurement_type')
-                ->where('procurement_type', '!=', '')
-                ->distinct()
-                ->orderBy('procurement_type')
-                ->pluck('procurement_type'),
-            'procurements' => DB::table('subay_project_profiles')
-                ->select('procurement')
-                ->whereNotNull('procurement')
-                ->where('procurement', '!=', '')
-                ->distinct()
-                ->orderBy('procurement')
-                ->pluck('procurement'),
-            'project_types' => DB::table('subay_project_profiles')
-                ->select('type_of_project')
-                ->whereNotNull('type_of_project')
-                ->where('type_of_project', '!=', '')
-                ->distinct()
-                ->orderBy('type_of_project')
-                ->pluck('type_of_project'),
-            'implementing_units' => DB::table('subay_project_profiles')
-                ->select('implementing_unit')
-                ->whereNotNull('implementing_unit')
-                ->where('implementing_unit', '!=', '')
-                ->distinct()
-                ->orderBy('implementing_unit')
-                ->pluck('implementing_unit'),
-            'profile_statuses' => DB::table('subay_project_profiles')
-                ->select('profile_approval_status')
-                ->whereNotNull('profile_approval_status')
-                ->where('profile_approval_status', '!=', '')
-                ->distinct()
-                ->orderBy('profile_approval_status')
-                ->pluck('profile_approval_status'),
-        ];
+        $filters = [];
+        $filterOptions = [];
 
         $importHistoryTableMissing = !Schema::hasTable(self::IMPORT_HISTORY_TABLE);
         $importHistoryRows = $importHistoryTableMissing
@@ -635,14 +627,15 @@ class SystemManagementController extends Controller
                 'modalTitle' => 'Import RSSA Data (CSV/XLS)',
                 'routeBase' => 'system-management.upload-rssa',
                 'templateFileName' => 'rssa-template.xls',
-                'templateSourcePath' => resource_path(self::LEGACY_SUBAYBAYAN_TEMPLATE_PATH),
+                'templateSourcePath' => resource_path(self::RSSA_TEMPLATE_PATH),
                 'templateContentType' => 'application/vnd.ms-excel',
                 'storageSlug' => 'rssa',
                 'storageFolder' => 'rssa-imports',
-                'templateHeaders' => self::SUBAYBAYAN_TEMPLATE_HEADERS,
-                'customHeaderMap' => [],
+                'templateHeaders' => self::RSSA_TEMPLATE_HEADERS,
+                'customHeaderMap' => self::RSSA_TEMPLATE_HEADER_MAP,
                 'rowDefaults' => [],
-                'snapshotScope' => 'subaybayan',
+                'snapshotScope' => 'rssa',
+                'dataTable' => 'rssa_project_profiles',
             ];
         }
 
@@ -957,12 +950,13 @@ class SystemManagementController extends Controller
 
     private function importSnapshot(string $path, array $uploadPage): int
     {
+        $dataTable = $this->resolveUploadDataTable($uploadPage);
         $rows = $this->readImportedRows($path);
         if (empty($rows)) {
             throw new \RuntimeException('The selected file appears to be empty.');
         }
 
-        $columns = Schema::getColumnListing('subay_project_profiles');
+        $columns = Schema::getColumnListing($dataTable);
         $structure = $this->resolveImportStructure(
             $rows,
             $columns,
@@ -978,10 +972,10 @@ class SystemManagementController extends Controller
         }
 
         if (!empty($newColumns)) {
-            $this->ensureImportColumnsExist('subay_project_profiles', $newColumns);
+            $this->ensureImportColumnsExist($dataTable, $newColumns);
         }
 
-        return DB::transaction(function () use ($rows, $headerMap, $dataStartRow, $uploadPage) {
+        return DB::transaction(function () use ($rows, $headerMap, $dataStartRow, $uploadPage, $dataTable) {
             $now = now();
             $batchRows = [];
             $inserted = 0;
@@ -1016,14 +1010,14 @@ class SystemManagementController extends Controller
                 $batchRows[] = $row;
 
                 if (count($batchRows) >= 500) {
-                    DB::table('subay_project_profiles')->insert($batchRows);
+                    DB::table($dataTable)->insert($batchRows);
                     $inserted += count($batchRows);
                     $batchRows = [];
                 }
             }
 
             if (!empty($batchRows)) {
-                DB::table('subay_project_profiles')->insert($batchRows);
+                DB::table($dataTable)->insert($batchRows);
                 $inserted += count($batchRows);
             }
 
@@ -1112,6 +1106,16 @@ class SystemManagementController extends Controller
             ];
         }
 
+        if ($this->matchesRssaTemplate($rows)) {
+            $headerResolution = $this->buildHeaderMap($rows[1] ?? [], $columns, $routeCustomMap, $allowDynamicColumns);
+
+            return [
+                'headerMap' => $headerResolution['headerMap'],
+                'dataStartRow' => 2,
+                'newColumns' => $headerResolution['newColumns'],
+            ];
+        }
+
         $bestHeaderMap = [];
         $bestHeaderRows = 1;
         $bestNewColumns = [];
@@ -1187,6 +1191,31 @@ class SystemManagementController extends Controller
             && $row8col105 === 'YEAR OF ASSESSMENT'
             && $row9col50 === 'OBJECTIVE'
             && $row9col106 === 'OBSERVED RESULT';
+    }
+
+    private function matchesRssaTemplate(array $rows): bool
+    {
+        if (count($rows) < 2) {
+            return false;
+        }
+
+        $row0col0 = strtoupper(trim((string) ($rows[0][0] ?? '')));
+        $row0col9 = strtoupper(trim((string) ($rows[0][9] ?? '')));
+        $row0col32 = strtoupper(trim((string) ($rows[0][32] ?? '')));
+        $row0col36 = strtoupper(trim((string) ($rows[0][36] ?? '')));
+        $row1col0 = strtoupper(trim((string) ($rows[1][0] ?? '')));
+        $row1col20 = strtoupper(trim((string) ($rows[1][20] ?? '')));
+        $row1col31 = strtoupper(trim((string) ($rows[1][31] ?? '')));
+        $row1col37 = strtoupper(trim((string) ($rows[1][37] ?? '')));
+
+        return $row0col0 === 'PROJECT PROFILE'
+            && $row0col9 === 'IMPLEMENTATION INFORMATION'
+            && $row0col32 === 'IF OPERATIONAL'
+            && $row0col36 === 'IF NON OPERATIONAL, BLANK IF OPERATIONAL'
+            && $row1col0 === 'PROGRAM'
+            && $row1col20 === 'DATE OF PROJECT COMPLETION'
+            && $row1col31 === 'IS PROJECT IS OPERATIONAL'
+            && $row1col37 === 'NO. OF MONTHS NON-OPERATIONAL';
     }
 
     private function buildMultiRowHeaders(array $headerRows): array
@@ -1390,9 +1419,20 @@ class SystemManagementController extends Controller
             ->first();
     }
 
+    private function resolveUploadDataTable(array $uploadPage): string
+    {
+        return (string) ($uploadPage['dataTable'] ?? 'subay_project_profiles');
+    }
+
     private function clearImportScopeRows(array $uploadPage): void
     {
+        $dataTable = $this->resolveUploadDataTable($uploadPage);
         $scope = (string) ($uploadPage['snapshotScope'] ?? 'subaybayan');
+
+        if ($dataTable !== 'subay_project_profiles') {
+            DB::table($dataTable)->delete();
+            return;
+        }
 
         if ($scope === 'sglgif') {
             DB::table('subay_project_profiles')

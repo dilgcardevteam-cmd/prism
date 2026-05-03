@@ -312,6 +312,10 @@ Route::middleware(['auth'])->group(function () {
 
     $renderProjectDashboard = function (string $activeProjectTab = 'locally-funded') {
         try {
+            if ($activeProjectTab === 'rssa') {
+                return app(\App\Http\Controllers\RssaDashboardController::class)->index(request());
+            }
+
             $subayUploadDateLabel = 'No SubayBAYAN upload yet';
             if (Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'created_at')) {
                 $latestSubayUploadAt = DB::table('subay_project_profiles')->max('created_at');
@@ -2452,11 +2456,8 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('regional_dilg')
         ->name('projects.at-risk.import');
 
-    Route::get('/projects/rssa', function () {
-        return view('projects.rssa-coming-soon', [
-            'activeTab' => 'rssa',
-        ]);
-    })->name('projects.rssa');
+    Route::get('/projects/rssa', [App\Http\Controllers\RssaProjectController::class, 'index'])
+        ->name('projects.rssa');
 
     Route::get('/projects/sglgif', [SglgifProjectController::class, 'dashboard'])
         ->name('projects.sglgif');

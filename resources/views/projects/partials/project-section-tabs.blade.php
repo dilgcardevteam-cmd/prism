@@ -17,7 +17,7 @@
             'key' => 'rssa',
             'label' => 'Rapid Subproject Sustainability Assessment',
             'icon' => 'fa-list-check',
-            'url' => route('projects.rssa', [], false),
+            'url' => route('dashboard', ['tab' => 'rssa'], false),
         ],
         [
             'key' => 'sglgif',
