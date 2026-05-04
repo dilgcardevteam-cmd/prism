@@ -1274,21 +1274,25 @@ class LocallyFundedProjectController extends Controller
             ->values();
 
         if (Schema::hasTable('locally_funded_gallery_images') && $projectIds->isNotEmpty()) {
+            $hasCategoryColumn = Schema::hasColumn('locally_funded_gallery_images', 'category');
+
+            $selectColumns = [
+                'lgi.id',
+                'lgi.project_id',
+                $hasCategoryColumn ? 'lgi.category' : DB::raw("'' as category"),
+                'lgi.uploaded_by',
+                'lgi.latitude',
+                'lgi.longitude',
+                'lgi.accuracy',
+                'lgi.created_at',
+                DB::raw("NULLIF(TRIM(CONCAT(COALESCE(uploader.fname, ''), ' ', COALESCE(uploader.lname, ''))), '') as uploaded_by_name"),
+            ];
+
             $galleryRows = DB::table('locally_funded_gallery_images as lgi')
                 ->leftJoin('tbusers as uploader', 'uploader.idno', '=', 'lgi.uploaded_by')
                 ->whereIn('lgi.project_id', $projectIds)
                 ->orderByDesc('lgi.created_at')
-                ->get([
-                    'lgi.id',
-                    'lgi.project_id',
-                    'lgi.category',
-                    'lgi.uploaded_by',
-                    'lgi.latitude',
-                    'lgi.longitude',
-                    'lgi.accuracy',
-                    'lgi.created_at',
-                    DB::raw("NULLIF(TRIM(CONCAT(COALESCE(uploader.fname, ''), ' ', COALESCE(uploader.lname, ''))), '') as uploaded_by_name"),
-                ]);
+                ->get($selectColumns);
 
             $galleryByProject = $galleryRows
                 ->groupBy('project_id')

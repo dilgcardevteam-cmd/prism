@@ -153,7 +153,7 @@ function buildUniqueOptions(projects, selector) {
 
 export default function LocallyFundedProjectsScreen() {
   const router = useRouter();
-  const { projects, filterOptions: backendFilterOptions, isLoading, isRefreshing, errorMessage, loadProjects } =
+  const { activeBaseUrl, projects, filterOptions: backendFilterOptions, isLoading, isRefreshing, errorMessage, loadProjects } =
     useLocallyFundedProjects();
   const [searchQuery, setSearchQuery] = useState("");
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
@@ -736,13 +736,20 @@ export default function LocallyFundedProjectsScreen() {
                 <Text className="text-[15px] font-semibold text-[#1e3a8a]">
                   {debouncedSearchQuery.trim() || hasActiveFilters
                     ? "No matching projects"
+                    : errorMessage
+                    ? "Unable to load projects"
                     : "No projects available"}
                 </Text>
                 <Text className="mt-1 text-[12px] leading-[18px] text-[#64748b]">
                   {debouncedSearchQuery.trim() || hasActiveFilters
                     ? "Try another keyword or adjust your selected filters."
-                    : errorMessage || "No rows were returned by the endpoint."}
+                    : errorMessage
+                    ? errorMessage
+                    : "No rows were returned by the endpoint."}
                 </Text>
+                {errorMessage ? (
+                  <Text className="mt-2 text-[11px] text-[#475569]">Current base URL: {activeBaseUrl}</Text>
+                ) : null}
                 {!debouncedSearchQuery.trim() && !hasActiveFilters ? (
                   <Pressable
                     className="mt-4 self-start rounded-xl bg-[#dbeafe] px-4 py-2"
