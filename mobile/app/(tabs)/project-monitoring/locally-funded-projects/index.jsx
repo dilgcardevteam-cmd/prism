@@ -153,6 +153,8 @@ function buildUniqueOptions(projects, selector) {
 
 export default function LocallyFundedProjectsScreen() {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 350);
   const {
     activeBaseUrl,
     projects,
@@ -164,9 +166,7 @@ export default function LocallyFundedProjectsScreen() {
     errorMessage,
     loadProjects,
     loadMoreProjects,
-  } =
-    useLocallyFundedProjects();
-  const [searchQuery, setSearchQuery] = useState("");
+  } = useLocallyFundedProjects({ searchQuery: debouncedSearchQuery });
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [shouldRenderFilters, setShouldRenderFilters] = useState(false);
   const [pinnedProjectIds, setPinnedProjectIds] = useState([]);
@@ -181,7 +181,6 @@ export default function LocallyFundedProjectsScreen() {
     status: FILTER_ALL_VALUE,
   });
   const [activeDropdownFilterKey, setActiveDropdownFilterKey] = useState(null);
-  const debouncedSearchQuery = useDebounce(searchQuery, 350);
   const filtersAnimation = useRef(new Animated.Value(0)).current;
 
   // Load the saved pinned project ids when the screen mounts.
@@ -339,10 +338,8 @@ export default function LocallyFundedProjectsScreen() {
     [backendFilterOptions, projects, selectedFilters.province]
   );
 
-  // Apply the active search and filter rules to the project list.
+  // Apply the active filter rules to the project list.
   const filteredProjects = useMemo(() => {
-    const keyword = debouncedSearchQuery.trim().toLowerCase();
-
     const normalizeValue = (value) => String(value ?? "").trim().toLowerCase();
     const normalizeComparable = (value) =>
       normalizeValue(value)
@@ -426,13 +423,9 @@ export default function LocallyFundedProjectsScreen() {
         }
       }
 
-      if (!keyword) {
-        return true;
-      }
-
-      return String(project.title || "").toLowerCase().includes(keyword);
+      return true;
     });
-  }, [debouncedSearchQuery, projects, selectedFilters]);
+  }, [projects, selectedFilters]);
 
   // Sort pinned projects ahead of the remaining filtered projects.
   const displayedProjects = useMemo(() => {

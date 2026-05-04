@@ -137,7 +137,7 @@ export function normalizePinnedProjectIds(value) {
   );
 }
 
-export function useLocallyFundedProjects() {
+export function useLocallyFundedProjects({ searchQuery = "" } = {}) {
   const { activeBaseUrl, fetchJsonWithFallback } = useWebAppRequest();
   const [projects, setProjects] = useState([]);
   const [filterOptions, setFilterOptions] = useState({
@@ -187,7 +187,16 @@ export function useLocallyFundedProjects() {
       try {
         setErrorMessage("");
 
-        const payload = await fetchJsonWithFallback("/api/mobile/locally-funded?per_page=50&include_filters=1");
+        const queryParams = new URLSearchParams();
+        queryParams.set("per_page", "50");
+        queryParams.set("include_filters", "1");
+
+        const trimmedSearchQuery = String(searchQuery ?? "").trim();
+        if (trimmedSearchQuery !== "") {
+          queryParams.set("search", trimmedSearchQuery);
+        }
+
+        const payload = await fetchJsonWithFallback(`/api/mobile/locally-funded?${queryParams.toString()}`);
         const rows = Array.isArray(payload?.data) ? payload.data : [];
         const filters = payload?.meta?.filters || {};
         const normalizedRows = rows.map(normalizeProjectRow);
@@ -242,7 +251,7 @@ export function useLocallyFundedProjects() {
         setIsRefreshing(false);
       }
     },
-    [fetchJsonWithFallback]
+    [fetchJsonWithFallback, searchQuery]
   );
 
   const loadMoreProjects = useCallback(async () => {
@@ -253,9 +262,17 @@ export function useLocallyFundedProjects() {
     setIsLoadingMore(true);
 
     try {
-      const payload = await fetchJsonWithFallback(
-        `/api/mobile/locally-funded?per_page=50&cursor=${encodeURIComponent(nextCursor)}&include_filters=0`
-      );
+      const queryParams = new URLSearchParams();
+      queryParams.set("per_page", "50");
+      queryParams.set("cursor", nextCursor);
+      queryParams.set("include_filters", "0");
+
+      const trimmedSearchQuery = String(searchQuery ?? "").trim();
+      if (trimmedSearchQuery !== "") {
+        queryParams.set("search", trimmedSearchQuery);
+      }
+
+      const payload = await fetchJsonWithFallback(`/api/mobile/locally-funded?${queryParams.toString()}`);
       const rows = Array.isArray(payload?.data) ? payload.data : [];
       const normalizedRows = rows.map(normalizeProjectRow);
       const nextCursorValue =
@@ -271,7 +288,7 @@ export function useLocallyFundedProjects() {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [appendUniqueProjects, fetchJsonWithFallback, hasMore, isLoading, isLoadingMore, isRefreshing, nextCursor]);
+  }, [appendUniqueProjects, fetchJsonWithFallback, hasMore, isLoading, isLoadingMore, isRefreshing, nextCursor, searchQuery]);
 
   useEffect(() => {
     loadProjects(false);

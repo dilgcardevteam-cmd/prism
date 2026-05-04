@@ -972,6 +972,38 @@ class LocallyFundedProjectController extends Controller
             ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
             ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%']);
 
+        $this->applyLocallyFundedSourceScope(
+            $query,
+            'COALESCE(lfp.fund_source, spp.program)',
+            'COALESCE(lfp.subaybayan_project_code, spp.project_code)'
+        );
+
+        $projectProvinceExpression = 'COALESCE(lfp.province, spp.province)';
+        $projectCityExpression = 'COALESCE(lfp.city_municipality, spp.city_municipality)';
+        $projectRegionExpression = 'COALESCE(lfp.region, spp.region)';
+
+        $this->applyUserScopeToLocationQuery(
+            $query,
+            $projectProvinceExpression,
+            $projectCityExpression,
+            $projectRegionExpression
+        );
+
+        $searchTerm = trim((string) $request->query('search', ''));
+        if ($searchTerm !== '') {
+            $keyword = '%' . strtolower($searchTerm) . '%';
+            $query->where(function ($subQuery) use ($keyword) {
+                $subQuery
+                    ->whereRaw('LOWER(spp.project_code) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(spp.project_title) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(TRIM(COALESCE(lfp.province, spp.province, ""))) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(TRIM(COALESCE(lfp.city_municipality, spp.city_municipality, ""))) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(TRIM(COALESCE(lfp.barangay, spp.barangay, ""))) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(COALESCE(lfp.fund_source, spp.program)) LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(COALESCE(lfp.mode_of_procurement, spp.procurement_type, spp.procurement)) LIKE ?', [$keyword]);
+            });
+        }
+
         if (Schema::hasTable('locally_funded_physical_updates')) {
             $query->leftJoin('locally_funded_physical_updates as lpu', function ($join) use ($currentYear, $currentMonth) {
                 $join->on('lpu.project_id', '=', 'lfp.id')
