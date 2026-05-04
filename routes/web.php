@@ -297,6 +297,51 @@ Route::get('/api/mobile/user/profile', function (Request $request) {
     ]);
 })->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
 
+Route::get('/api/mobile/notifications', function (Request $request) {
+    $authUser = Auth::user();
+    $userId = $authUser?->idno ?? (int) $request->query('user_id');
+
+    if (!$userId) {
+        return response()->json([
+            'message' => 'Unauthenticated.',
+        ], 401);
+    }
+
+    if ($authUser && (int) $authUser->idno !== (int) $userId) {
+        return response()->json([
+            'message' => 'Unauthorized.',
+        ], 403);
+    }
+
+    $notifications = DB::table('tbnotifications')
+        ->where('user_id', $userId)
+        ->orderByDesc('created_at')
+        ->orderByDesc('id')
+        ->limit(50)
+        ->get()
+        ->map(function ($notification) {
+            return [
+                'id' => $notification->id,
+                'message' => $notification->message,
+                'url' => $notification->url,
+                'document_type' => $notification->document_type,
+                'quarter' => $notification->quarter,
+                'sender_name' => $notification->sender_name ?? null,
+                'sender_user_id' => $notification->sender_user_id ?? null,
+                'read_at' => $notification->read_at,
+                'is_read' => !is_null($notification->read_at),
+                'created_at' => $notification->created_at,
+                'updated_at' => $notification->updated_at,
+            ];
+        });
+
+    return response()->json([
+        'notifications' => $notifications,
+        'unread_count' => $notifications->where('is_read', false)->count(),
+        'total_count' => $notifications->count(),
+    ]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+
 Route::post('/api/mobile/user/profile/update', function (Request $request) {
     $validated = $request->validate([
         'user_id' => ['required', 'integer'],
