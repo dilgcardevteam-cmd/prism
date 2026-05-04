@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   Image,
+  PanResponder,
   Pressable,
   ScrollView,
   Text,
@@ -226,13 +227,35 @@ export default function TabLayout() {
     }
   };
 
+  // Global edge-swipe gesture to open drawer: start near left edge and swipe right.
+  const edgePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => {
+        try {
+          const x = evt?.nativeEvent?.pageX ?? 9999;
+          return x <= 28 && !isDrawerVisible;
+        } catch (_e) {
+          return false;
+        }
+      },
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 20;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > 60) {
+          openDrawer();
+        }
+      },
+    })
+  ).current;
+
   const renderTabBar = () => {
     // Always hide the bottom tab bar (we're moving messages/settings into drawer)
     return null;
   };
 
   return (
-    <View className="flex-1">
+    <View className="flex-1" {...edgePanResponder.panHandlers}>
       <Tabs
         screenOptions={{
           headerShown: true,
