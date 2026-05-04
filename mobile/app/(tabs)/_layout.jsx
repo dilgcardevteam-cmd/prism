@@ -380,10 +380,11 @@ export default function TabLayout() {
                       <Text
                         numberOfLines={1}
                         className="text-[16px] font-semibold text-white"
+                        style={{ fontFamily: "Montserrat-SemiBold" }}
                       >
                         {(firstName ?? "User") + (lastName ? " " + lastName : "")}
                       </Text>
-                      <Text className="mt-0.5 text-[12px] text-white/70">
+                      <Text className="mt-0.5 text-[12px] text-white/70" style={{ fontFamily: "Montserrat-Regular" }}>
                         Mobile User
                       </Text>
                     </View>
@@ -452,6 +453,7 @@ export default function TabLayout() {
                               ? "#FCA5A5"
                               : "rgba(255, 255, 255, 0.9)",
                             fontWeight: item.destructive ? "600" : "400",
+                            fontFamily: item.destructive ? "Montserrat-SemiBold" : "Montserrat-Regular",
                           }}
                         >
                           {item.label}
@@ -506,7 +508,7 @@ export default function TabLayout() {
                                   size={14}
                                   color="#EAF1FF"
                                 />
-                                <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white">
+                                <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white" style={{ fontFamily: "Montserrat-Regular" }}>
                                   {childItem.label}
                                 </Text>
                               </Pressable>
@@ -537,7 +539,7 @@ export default function TabLayout() {
                                 size={14}
                                 color="#EAF1FF"
                               />
-                              <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white">
+                              <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white" style={{ fontFamily: "Montserrat-Regular" }}>
                                 {childItem.label}
                               </Text>
                             </Pressable>
