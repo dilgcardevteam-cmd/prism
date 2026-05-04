@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\RoadMaintenanceStatusDocument;
 use App\Services\InterventionNotificationService;
 use App\Support\LguReportorialDeadlineResolver;
+use App\Support\ProjectLocationFilterHelper;
 use App\Support\InputSanitizer;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class RoadMaintenanceStatusReportController extends Controller
         $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
-    private function getOffices(): array
+    private function legacyOffices(): array
     {
         return [
             'Abra' => [
@@ -59,6 +60,76 @@ class RoadMaintenanceStatusReportController extends Controller
                 'Sabangan', 'Sadanga', 'Sagada', 'Tadian',
             ],
         ];
+    }
+
+    private function getOffices(): array
+    {
+        $legacyOffices = $this->legacyOffices();
+        $provinceLabels = array_keys($legacyOffices);
+
+        $configuredMunicipalities = ProjectLocationFilterHelper::buildConfiguredProvinceCityMap($provinceLabels);
+        if (empty(array_filter($configuredMunicipalities))) {
+            $configuredMunicipalities = ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy($provinceLabels);
+        }
+
+        if (empty(array_filter($configuredMunicipalities))) {
+            return $legacyOffices;
+        }
+
+        $officesByProvince = [];
+
+        foreach ($legacyOffices as $province => $legacyOfficeList) {
+            $provinceOffices = [];
+            $legacyMunicipalityIndex = [];
+
+            foreach ($legacyOfficeList as $office) {
+                if (str_starts_with($office, 'PLGU ')) {
+                    $provinceOffices[] = $office;
+                    continue;
+                }
+
+                $normalizedOffice = ProjectLocationFilterHelper::normalizeComparableLocationLabel($office);
+                if ($normalizedOffice !== '' && !isset($legacyMunicipalityIndex[$normalizedOffice])) {
+                    $legacyMunicipalityIndex[$normalizedOffice] = $office;
+                }
+            }
+
+            $seenMunicipalities = [];
+
+            // Prefer managed location configuration while keeping legacy labels for existing records.
+            foreach (($configuredMunicipalities[$province] ?? []) as $configuredOffice) {
+                $normalizedLabel = ProjectLocationFilterHelper::normalizeLabel(
+                    $this->resolveConfiguredOfficeAlias($province, (string) $configuredOffice)
+                );
+                $normalizedComparable = ProjectLocationFilterHelper::normalizeComparableLocationLabel($normalizedLabel);
+
+                if ($normalizedComparable === '' || isset($seenMunicipalities[$normalizedComparable])) {
+                    continue;
+                }
+
+                $provinceOffices[] = $legacyMunicipalityIndex[$normalizedComparable] ?? $normalizedLabel;
+                $seenMunicipalities[$normalizedComparable] = true;
+            }
+
+            foreach ($legacyMunicipalityIndex as $normalizedComparable => $legacyOffice) {
+                if (!isset($seenMunicipalities[$normalizedComparable])) {
+                    $provinceOffices[] = $legacyOffice;
+                }
+            }
+
+            $officesByProvince[$province] = $provinceOffices;
+        }
+
+        return $officesByProvince;
+    }
+
+    private function resolveConfiguredOfficeAlias(string $province, string $office): string
+    {
+        return [
+            'Abra' => [
+                'Villavieja' => 'Villaviciosa',
+            ],
+        ][$province][$office] ?? $office;
     }
 
     private function quarterlyDocType(): string
