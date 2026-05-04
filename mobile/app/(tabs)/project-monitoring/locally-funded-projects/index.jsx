@@ -548,67 +548,53 @@ export default function LocallyFundedProjectsScreen() {
           });
         }}
       >
-      <View className={`rounded-3xl border px-3 py-3 ${isPinned ? "border-[#c0841a] bg-[#fff8e8]" : "border-[#bfc3c9] bg-[#ebebeb]"}`}>
-        <View className="flex-row items-start justify-between gap-2">
-          <View className="min-w-0 flex-1 pr-2">
-            <View className="flex-row flex-wrap items-center gap-2">
+        <View className={`rounded-3xl border px-3 py-3 ${isPinned ? "border-[#c0841a] bg-[#fff8e8]" : "border-[#e6eef8] bg-white"}`}>
+          <View className="flex-row items-start justify-between gap-2">
+            <View className="min-w-0 flex-1 pr-2">
+              <HighlightedText
+                text={item.title}
+                query={highlightedQuery}
+                className="min-w-0 flex-1 text-[16px] text-[#0b3a66]"
+                highlightClassName=""
+                style={{ fontFamily: "Montserrat-Regular" }}
+                highlightStyle={{ fontFamily: "Montserrat-SemiBold" }}
+                numberOfLines={2}
+              />
+
               <HighlightedText
                 text={item.code}
                 query={highlightedQuery}
-                className="min-w-0 flex-1 text-[15px] text-[#404040]"
-                highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
+                className="mt-2 text-[13px] text-[#0b3a66]"
+                highlightClassName=""
                 style={{ fontFamily: "Montserrat-SemiBold" }}
                 highlightStyle={{ fontFamily: "Montserrat-SemiBold" }}
                 numberOfLines={1}
               />
-            </View>
-            <HighlightedText
-              text={item.title}
-              query={highlightedQuery}
-              className="mt-1 text-[12px] text-[#4b4b4b]"
-              highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
-              style={{ fontFamily: "Montserrat" }}
-              highlightStyle={{ fontFamily: "Montserrat" }}
-            />
-            <View className="mt-2 border-b border-[#bfc3c9]" />
-            <Text className="mt-2 text-[12px] text-[#4b4b4b]" numberOfLines={2}>
-              <HighlightedText
-                text={item.city}
-                query={highlightedQuery}
-                className="text-[12px] text-[#4b4b4b]"
-                highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
-                style={{ fontFamily: "Montserrat" }}
-                highlightStyle={{ fontFamily: "Montserrat" }}
-              />
-              {", "}
-              <HighlightedText
-                text={item.province}
-                query={highlightedQuery}
-                className="text-[12px] text-[#4b4b4b]"
-                highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
-                style={{ fontFamily: "Montserrat" }}
-                highlightStyle={{ fontFamily: "Montserrat" }}
-              />
-            </Text>
-          </View>
 
-          <View className="ml-1 flex-row items-center gap-2 shrink-0">
-            <Pressable
-              onPress={(event) => {
-                event?.stopPropagation?.();
-                showPinToast(isPinned ? "Project successfully unpinned" : "Project successfully pinned");
-                togglePinnedProject(item.id);
-              }}
-              className={`h-9 w-9 items-center justify-center rounded-full border ${isPinned ? "border-[#b45309] bg-[#fef3c7]" : "border-[#cbd5e1] bg-white"}`}
-              accessibilityRole="button"
-              accessibilityLabel={isPinned ? `Unpin ${String(item.title ?? "project")}` : `Pin ${String(item.title ?? "project")}`}
-            >
-              <Feather name={isPinned ? "bookmark" : "bookmark"} size={14} color={isPinned ? "#b45309" : "#64748b"} />
-            </Pressable>
-            <Feather name="chevron-right" size={16} color="#64748b" style={{ marginTop: 4 }} />
+              <View className="mt-2 border-b" style={{ borderBottomColor: "#e6eef8" }} />
+
+              <Text className="mt-2 text-[12px] text-[#0b3a66]" numberOfLines={1} style={{ fontFamily: "Montserrat-SemiBold" }}>
+                {String(item.city ?? "").toUpperCase()}{", "}{String(item.province ?? "").toUpperCase()}
+              </Text>
+            </View>
+
+            <View className="ml-1 flex-row items-center gap-2 shrink-0">
+              <Pressable
+                onPress={(event) => {
+                  event?.stopPropagation?.();
+                  showPinToast(isPinned ? "Project successfully unpinned" : "Project successfully pinned");
+                  togglePinnedProject(item.id);
+                }}
+                className={`h-9 w-9 items-center justify-center rounded-full border ${isPinned ? "border-[#b45309] bg-[#fef3c7]" : "border-[#cbd5e1] bg-white"}`}
+                accessibilityRole="button"
+                accessibilityLabel={isPinned ? `Unpin ${String(item.title ?? "project")}` : `Pin ${String(item.title ?? "project")}`}
+              >
+                <Feather name={isPinned ? "bookmark" : "bookmark"} size={14} color={isPinned ? "#b45309" : "#64748b"} />
+              </Pressable>
+              <Feather name="chevron-right" size={16} color="#64748b" style={{ marginTop: 4 }} />
+            </View>
           </View>
         </View>
-      </View>
       </Pressable>
     );
   };
