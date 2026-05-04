@@ -153,7 +153,18 @@ function buildUniqueOptions(projects, selector) {
 
 export default function LocallyFundedProjectsScreen() {
   const router = useRouter();
-  const { activeBaseUrl, projects, filterOptions: backendFilterOptions, isLoading, isRefreshing, errorMessage, loadProjects } =
+  const {
+    activeBaseUrl,
+    projects,
+    filterOptions: backendFilterOptions,
+    isLoading,
+    isRefreshing,
+    isLoadingMore,
+    hasMore,
+    errorMessage,
+    loadProjects,
+    loadMoreProjects,
+  } =
     useLocallyFundedProjects();
   const [searchQuery, setSearchQuery] = useState("");
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
@@ -419,19 +430,7 @@ export default function LocallyFundedProjectsScreen() {
         return true;
       }
 
-      const fields = [
-        project.code,
-        project.title,
-        project.city,
-        project.province,
-        project.fundSource,
-        project.statusActual,
-        project.statusSubaybayan,
-      ];
-
-      return fields.some((field) =>
-        String(field || "").toLowerCase().includes(keyword)
-      );
+      return String(project.title || "").toLowerCase().includes(keyword);
     });
   }, [debouncedSearchQuery, projects, selectedFilters]);
 
@@ -708,6 +707,12 @@ export default function LocallyFundedProjectsScreen() {
             data={displayedProjects}
             keyExtractor={(item, index) => `${item.id}-${index}`}
             renderItem={renderProjectCard}
+            onEndReached={() => {
+              if (!debouncedSearchQuery.trim() && !hasActiveFilters) {
+                loadMoreProjects();
+              }
+            }}
+            onEndReachedThreshold={0.55}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
@@ -716,6 +721,19 @@ export default function LocallyFundedProjectsScreen() {
                 }}
                 tintColor="#1d4ed8"
               />
+            }
+            ListFooterComponent={
+              isLoadingMore ? (
+                <View className="py-3 items-center justify-center">
+                  <ActivityIndicator size="small" color="#1d4ed8" />
+                </View>
+              ) : !hasMore && displayedProjects.length > 0 && !debouncedSearchQuery.trim() && !hasActiveFilters ? (
+                <View className="py-3 items-center justify-center">
+                  <Text className="text-[11px] text-[#64748b]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                    End of list
+                  </Text>
+                </View>
+              ) : null
             }
             ListEmptyComponent={
               <View className="mt-10 rounded-2xl border border-[#dbe3f0] bg-white px-4 py-5">

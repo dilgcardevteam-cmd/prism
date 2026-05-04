@@ -150,7 +150,31 @@ export function useLocallyFundedProjects() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const appendUniqueProjects = useCallback((existingProjects, incomingProjects) => {
+    const seenIds = new Set(
+      existingProjects
+        .map((project) => String(project?.id ?? "").trim())
+        .filter(Boolean)
+    );
+
+    const uniqueIncoming = incomingProjects.filter((project) => {
+      const normalizedId = String(project?.id ?? "").trim();
+
+      if (!normalizedId || seenIds.has(normalizedId)) {
+        return false;
+      }
+
+      seenIds.add(normalizedId);
+      return true;
+    });
+
+    return [...existingProjects, ...uniqueIncoming];
+  }, []);
 
   const loadProjects = useCallback(
     async (isPullToRefresh = false) => {
@@ -163,11 +187,14 @@ export function useLocallyFundedProjects() {
       try {
         setErrorMessage("");
 
-        const payload = await fetchJsonWithFallback(
-          "/api/mobile/locally-funded?per_page=50"
-        );
+        const payload = await fetchJsonWithFallback("/api/mobile/locally-funded?per_page=50&include_filters=1");
         const rows = Array.isArray(payload?.data) ? payload.data : [];
         const filters = payload?.meta?.filters || {};
+        const normalizedRows = rows.map(normalizeProjectRow);
+        const nextCursorValue =
+          typeof payload?.meta?.next_cursor === "string" && payload.meta.next_cursor.trim() !== ""
+            ? payload.meta.next_cursor
+            : null;
 
         setFilterOptions({
           fundingYears: Array.isArray(filters.funding_years)
@@ -191,9 +218,13 @@ export function useLocallyFundedProjects() {
             : [],
         });
 
-        setProjects(rows.map(normalizeProjectRow));
+        setProjects(normalizedRows);
+        setNextCursor(nextCursorValue);
+        setHasMore(Boolean(payload?.meta?.has_more) || nextCursorValue !== null);
       } catch (error) {
         setProjects([]);
+        setNextCursor(null);
+        setHasMore(false);
         setFilterOptions({
           fundingYears: [],
           fundSources: [],
@@ -214,6 +245,34 @@ export function useLocallyFundedProjects() {
     [fetchJsonWithFallback]
   );
 
+  const loadMoreProjects = useCallback(async () => {
+    if (isLoading || isRefreshing || isLoadingMore || !hasMore || !nextCursor) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+
+    try {
+      const payload = await fetchJsonWithFallback(
+        `/api/mobile/locally-funded?per_page=50&cursor=${encodeURIComponent(nextCursor)}&include_filters=0`
+      );
+      const rows = Array.isArray(payload?.data) ? payload.data : [];
+      const normalizedRows = rows.map(normalizeProjectRow);
+      const nextCursorValue =
+        typeof payload?.meta?.next_cursor === "string" && payload.meta.next_cursor.trim() !== ""
+          ? payload.meta.next_cursor
+          : null;
+
+      setProjects((currentProjects) => appendUniqueProjects(currentProjects, normalizedRows));
+      setNextCursor(nextCursorValue);
+      setHasMore(Boolean(payload?.meta?.has_more) || nextCursorValue !== null);
+    } catch (_error) {
+      // Keep current items and allow retry on the next scroll.
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [appendUniqueProjects, fetchJsonWithFallback, hasMore, isLoading, isLoadingMore, isRefreshing, nextCursor]);
+
   useEffect(() => {
     loadProjects(false);
   }, [loadProjects]);
@@ -224,7 +283,10 @@ export function useLocallyFundedProjects() {
     filterOptions,
     isLoading,
     isRefreshing,
+    isLoadingMore,
+    hasMore,
     errorMessage,
     loadProjects,
+    loadMoreProjects,
   };
 }
