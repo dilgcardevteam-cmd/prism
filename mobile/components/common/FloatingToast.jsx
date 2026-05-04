@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, PanResponder, Pressable, Text, View } from "react-native";
 
 const TOAST_VARIANTS = {
   success: {
@@ -48,13 +48,58 @@ export default function FloatingToast({
     return () => clearTimeout(timer);
   }, [duration, onClose, safeMessage, visible]);
 
+  const translateY = useRef(new Animated.Value(0)).current;
+  const isDismissing = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 4,
+      onPanResponderMove: (_, gestureState) => {
+        // Only allow downward movement
+        const dy = Math.max(0, gestureState.dy);
+        translateY.setValue(dy);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const dy = Math.max(0, gestureState.dy);
+        const THRESHOLD = 60;
+        if (dy > THRESHOLD && !isDismissing.current) {
+          isDismissing.current = true;
+          Animated.timing(translateY, {
+            toValue: 200,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => {
+            isDismissing.current = false;
+            if (typeof onClose === "function") onClose();
+            translateY.setValue(0);
+          });
+          return;
+        }
+
+        // Snap back
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  // Slide in animation when visible
+  useEffect(() => {
+    translateY.setValue(40);
+    Animated.timing(translateY, { toValue: 0, duration: 220, useNativeDriver: true }).start();
+  }, [translateY, visible]);
+
   if (!visible || !safeMessage) {
     return null;
   }
 
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      <View pointerEvents="box-none" className="absolute left-4 right-4 bottom-4 z-[300]">
+    <View pointerEvents="box-none" className="absolute left-4 right-4 bottom-16 z-[300]">
+      <Animated.View
+        {...panResponder.panHandlers}
+        pointerEvents="auto"
+        style={{ transform: [{ translateY }] }}
+      >
         <View className={`rounded-2xl border px-4 py-4 shadow-lg ${variant.container}`}>
           <View className="flex-row items-center gap-3">
             <View
@@ -75,7 +120,7 @@ export default function FloatingToast({
             </Pressable>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Animated.View>
+    </View>
   );
 }
