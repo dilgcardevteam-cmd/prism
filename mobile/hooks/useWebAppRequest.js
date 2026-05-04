@@ -7,7 +7,7 @@ import {
 } from "../constants/api";
 
 const STORAGE_KEY = "preferredBaseUrl";
-const REQUEST_TIMEOUT = 3000;
+const REQUEST_TIMEOUT = 8000;
 const MAX_RETRIES = 2;
 const STAGGER_DELAY = 150;
 
