@@ -24,6 +24,7 @@ import {
 } from "../../../../hooks/useLocallyFundedProjects";
 import { APP_ROUTES } from "../../../../constants/routes";
 import FloatingToast from "../../../../components/common/FloatingToast";
+import LoadingOverlay from "../../../../components/common/LoadingOverlay";
 
 const FILTER_ALL_VALUE = "All";
 
@@ -627,12 +628,11 @@ export default function LocallyFundedProjectsScreen() {
         </Text>
       </View> */}
 
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <ActivityIndicator size="large" color="#1d4ed8" />
-          <Text className="mt-3 text-[13px] text-[#475569]">Loading locally funded projects...</Text>
-        </View>
-      ) : (
+      <LoadingOverlay
+        visible={isLoading}
+        message="Loading locally funded projects..."
+      />
+      {!isLoading && (
         <View className="flex-1">
           <View className="w-full flex-row items-center gap-2 px-3 pb-1 pt-3">
             <View className="flex-1 flex-row items-center rounded-2xl border border-[#bfccdf] bg-white px-3 py-2.5">
