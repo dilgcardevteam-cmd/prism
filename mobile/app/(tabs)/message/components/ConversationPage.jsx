@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,7 +18,7 @@ import { APP_COLORS } from "../../../../constants/theme";
 import { useMessagesApi } from "../../../../hooks/useMessagesApi";
 import { createScrollHandler, createScrollInterpolations } from "../../../../utils/animations";
 
-/* ---------------- UTILITIES ---------------- */
+/* ---------------- UTIL ---------------- */
 
 const getInitials = (name) => {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
@@ -32,14 +31,13 @@ const formatTime = (value) => {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
 
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const day = d.getDate();
-  const year = d.getFullYear();
-  const h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, "0");
-  const period = h >= 12 ? "PM" : "AM";
-
-  return `${month} ${day}, ${year} ${h % 12 || 12}:${m} ${period}`;
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 };
 
 /* ---------------- MAIN ---------------- */
@@ -51,7 +49,8 @@ export default function ConversationPage() {
 
   const { fetchMessages, sendMessage } = useMessagesApi();
 
-  /* ---------------- PARSED PARAMS ---------------- */
+  const scrollRef = useRef(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const parsedThreadId = Number(threadId || 0);
 
@@ -59,98 +58,92 @@ export default function ConversationPage() {
     return String(recipientIds || "")
       .split(",")
       .map((v) => Number(v.trim()))
-      .filter((v) => v > 0);
+      .filter(Boolean);
   }, [recipientIds]);
-
-  /* ---------------- STATE ---------------- */
 
   const [thread, setThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const [reply, setReply] = useState("");
-  const [loading, setLoading] = useState(parsedThreadId > 0);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  /* ---------------- ANIMATION ---------------- */
-
-  const scrollY = useRef(new Animated.Value(0)).current;
-  
   const { headerOpacity, headerTranslate, heroOpacity, heroTranslate } =
     createScrollInterpolations(scrollY);
 
-  /* ---------------- DATA ---------------- */
+  /* ---------------- AUTO SCROLL ---------------- */
 
-  const loadConversation = useCallback(async ({ silent = false } = {}) => {
+  const scrollToBottom = useCallback((animated = true) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+
+  /* ---------------- LOAD ---------------- */
+
+  const loadConversation = useCallback(async () => {
     if (!parsedThreadId) return;
 
-    try {
-      if (!silent) setLoading(true);
-      setError(null);
+    const res = await fetchMessages({ threadId: parsedThreadId });
 
-      const res = await fetchMessages({ threadId: parsedThreadId });
+    setThread(res?.selected_thread || null);
+    setMessages(res?.conversation || []);
 
-      setThread(res?.selected_thread || null);
-      setMessages(res?.conversation || []);
-    } catch (e) {
-      setError(e?.message || "Failed to load");
-    } finally {
-      if (!silent) setLoading(false);
-    }
+    setLoading(false);
+
+    //  ALWAYS scroll to bottom after load
+    scrollToBottom(false);
   }, [parsedThreadId]);
 
   useEffect(() => {
     loadConversation();
   }, [loadConversation]);
 
+  /*  real-time polling */
   useEffect(() => {
     if (!parsedThreadId) return;
 
-    const i = setInterval(() => loadConversation({ silent: true }), 10000);
+    const i = setInterval(async () => {
+      const res = await fetchMessages({ threadId: parsedThreadId });
+      setMessages(res?.conversation || []);
+    }, 10000);
+
     return () => clearInterval(i);
   }, [parsedThreadId]);
 
-  /* ---------------- ACTIONS ---------------- */
+  /*  whenever messages change → stay at bottom */
+  useEffect(() => {
+    if (messages.length) {
+      scrollToBottom(true);
+    }
+  }, [messages]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadConversation({ silent: true });
-    setRefreshing(false);
-  };
+  /* ---------------- SEND ---------------- */
 
   const handleSend = async () => {
     const text = reply.trim();
     if (!text) return;
 
-    try {
-      setSending(true);
-      setReply("");
+    setSending(true);
+    setReply("");
 
-      const res = await sendMessage({
-        threadId: parsedThreadId,
-        recipientIds: parsedRecipientIds,
-        message: text,
-      });
+    await sendMessage({
+      threadId: parsedThreadId,
+      recipientIds: parsedRecipientIds,
+      message: text,
+    });
 
-      const nextId = Number(res?.thread_id || 0);
+    await loadConversation();
+    scrollToBottom(true);
 
-      if (nextId && !parsedThreadId) {
-        router.replace({
-          pathname: "/(tabs)/message/[threadId]",
-          params: { threadId: String(nextId) },
-        });
-        return;
-      }
-
-      await loadConversation({ silent: true });
-    } catch (e) {
-      setError(e?.message || "Send failed");
-    } finally {
-      setSending(false);
-    }
+    setSending(false);
   };
 
-  /* ---------------- DERIVED ---------------- */
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadConversation();
+    setRefreshing(false);
+  };
 
   const label =
     thread?.custom_name ||
@@ -161,9 +154,10 @@ export default function ConversationPage() {
     thread?.subtitle ||
     String(recipientSubtitle || "Start a conversation");
 
-  const initials = getInitials(label);
+    const initials = getInitials(label);
+    const listBottomPadding = 112;
 
-  /* ---------------- RENDER ---------------- */
+  /* ---------------- MESSAGE ---------------- */
 
   const renderMessage = (msg) => {
     const mine = msg?.is_mine;
@@ -171,14 +165,20 @@ export default function ConversationPage() {
     return (
       <View
         key={msg.id}
-        className={`mb-3 flex-row ${mine ? "justify-end" : "justify-start"}`}
+          className={`mb-3 flex-row items-end ${mine ? "justify-end" : "justify-start"}`}
       >
+          {!mine ? (
+            <View className="mr-2 h-9 w-9 items-center justify-center rounded-full bg-[#dbe7f5]">
+              <Text className="text-[12px] font-semibold" style={{ color: APP_COLORS.primaryBlue }}>
+                {initials}
+              </Text>
+            </View>
+          ) : null}
+
         <View
-          className="max-w-[80%] px-4 py-3 rounded-2xl"
+            className="max-w-[80%] rounded-2xl px-4 py-3"
           style={{
-            backgroundColor: mine
-              ? APP_COLORS.primaryBlue
-              : "#e8edf4",
+            backgroundColor: mine ? APP_COLORS.primaryBlue : "#e8edf4",
           }}
         >
           <Text style={{ color: mine ? "#fff" : APP_COLORS.primaryBlue }}>
@@ -188,32 +188,29 @@ export default function ConversationPage() {
           <Text
             className="text-[11px] mt-2"
             style={{
-              color: mine
-                ? "rgba(255,255,255,0.7)"
-                : APP_COLORS.tabInactive,
+              color: mine ? "rgba(255,255,255,0.7)" : APP_COLORS.tabInactive,
             }}
           >
-            {formatTime(msg.created_at)}
+            {formatTime(msg.time)}
           </Text>
         </View>
       </View>
     );
   };
 
+  /* ---------------- UI ---------------- */
+
   return (
     <SafeAreaView className="flex-1 bg-[#f7f9fd]" edges={["bottom"]}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         {/* HEADER */}
         <View className="flex-row items-center px-4 py-2">
           <Pressable onPress={() => router.back()}>
-            <Feather
-              name="chevron-left"
-              size={26}
-              color={APP_COLORS.primaryBlue}
-            />
+            <Feather name="chevron-left" size={26} color={APP_COLORS.primaryBlue} />
           </Pressable>
 
           <Animated.Text
@@ -233,15 +230,14 @@ export default function ConversationPage() {
 
         {/* CONTENT */}
         <Animated.ScrollView
+          ref={scrollRef}
           onScroll={createScrollHandler(scrollY)}
           scrollEventThrottle={16}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
-          className="flex-1 px-4"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 8 }}
         >
           {/* HERO */}
           <View className="items-center py-8">
@@ -249,10 +245,7 @@ export default function ConversationPage() {
               className="h-24 w-24 rounded-full items-center justify-center"
               style={{ backgroundColor: APP_COLORS.primaryBlueLight }}
             >
-              <Text
-                className="text-3xl font-bold"
-                style={{ color: APP_COLORS.primaryBlue }}
-              >
+              <Text className="text-3xl font-bold" style={{ color: APP_COLORS.primaryBlue }}>
                 {initials}
               </Text>
             </View>
@@ -268,17 +261,12 @@ export default function ConversationPage() {
               {label}
             </Animated.Text>
 
-            <Text className="text-sm text-gray-400 mt-1">
-              {subtitle}
-            </Text>
+            <Text className="text-sm text-gray-400 mt-1">{subtitle}</Text>
           </View>
 
           {/* MESSAGES */}
           {loading ? (
-            <ActivityIndicator
-              size="large"
-              color={APP_COLORS.primaryBlue}
-            />
+            <ActivityIndicator size="large" color={APP_COLORS.primaryBlue} />
           ) : (
             messages.map(renderMessage)
           )}
