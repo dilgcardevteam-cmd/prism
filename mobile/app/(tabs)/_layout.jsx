@@ -343,7 +343,7 @@ export default function TabLayout() {
 
         <Tabs.Screen
           name="message/[threadId]"
-          options={{ title: "Conversation", href: null }}
+          options={{ title: "", href: null }}
         />
 
         <Tabs.Screen

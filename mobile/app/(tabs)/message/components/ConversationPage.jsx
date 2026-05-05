@@ -295,8 +295,8 @@ export default function ConversationPage() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        <View className="flex-1 px-4 pt-3">
-          <View className="mb-3 flex-row items-center justify-between gap-3">
+        <View className="flex-1">
+          <View className="my-1 flex-row items-center justify-between gap-3">
             <Pressable
               onPress={() => router.replace("/(tabs)/message")}
               className="h-10 w-10 items-center justify-center rounded-full"
@@ -314,9 +314,9 @@ export default function ConversationPage() {
 
           <View style={{ height: 1, backgroundColor: "#d9e3f1" }} />
 
-          <View className="flex-1 py-3">
+          <View className="flex-1">
             <View
-              className="flex-1 overflow-hidden rounded-[30px] border border-[#d7e0ef] bg-white"
+              className="flex-1 overflow-hidden border border-white bg-white"
               style={{
                 shadowColor: "#0f172a",
                 shadowOpacity: 0.05,
