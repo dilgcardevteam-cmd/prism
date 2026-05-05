@@ -335,6 +335,11 @@ export default function TabLayout() {
         />
 
         <Tabs.Screen
+          name="message/[threadId]"
+          options={{ title: "Conversation", href: null }}
+        />
+
+        <Tabs.Screen
           name="notifications/index"
           options={{ title: "Notifications" }}
         />

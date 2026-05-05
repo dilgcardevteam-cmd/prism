@@ -297,6 +297,14 @@ Route::get('/api/mobile/user/profile', function (Request $request) {
     ]);
 })->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
 
+Route::get('/api/mobile/messages', [App\Http\Controllers\MessageController::class, 'mobileIndex'])
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->name('api.mobile.messages.index');
+
+Route::post('/api/mobile/messages', [App\Http\Controllers\MessageController::class, 'store'])
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->name('api.mobile.messages.store');
+
 Route::get('/api/mobile/notifications', function (Request $request) {
     $authUser = Auth::user();
     $userId = $authUser?->idno ?? (int) $request->query('user_id');
@@ -306,14 +314,6 @@ Route::get('/api/mobile/notifications', function (Request $request) {
             'message' => 'Unauthenticated.',
         ], 401);
     }
-
-    Route::get('/api/mobile/messages', [App\Http\Controllers\MessageController::class, 'mobileIndex'])
-        ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
-        ->name('api.mobile.messages.index');
-
-    Route::post('/api/mobile/messages', [App\Http\Controllers\MessageController::class, 'store'])
-        ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
-        ->name('api.mobile.messages.store');
 
     if ($authUser && (int) $authUser->idno !== (int) $userId) {
         return response()->json([

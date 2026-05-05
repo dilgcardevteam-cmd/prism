@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -12,7 +12,6 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -21,11 +20,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import NoResultsState from "../../../components/common/NoResultsState";
 import { APP_COLORS } from "../../../constants/theme";
-import { buildApiUrl } from "../../../constants/api";
-import { useAuth } from "../../../contexts/AuthContext";
+import { useMessagesApi } from "../../../hooks/useMessagesApi";
 import { useWebAppRequest } from "../../../hooks/useWebAppRequest";
 
 export const meta = {
@@ -37,21 +36,6 @@ const THREAD_FILTERS = [
   { key: "unread", label: "Unread" },
   { key: "groups", label: "Groups" },
 ];
-
-const THREAD_STATUS = {
-  unread: {
-    label: "Unread",
-    icon: "circle",
-    color: APP_COLORS.primaryBlue,
-    backgroundColor: APP_COLORS.primaryBlueLight,
-  },
-  read: {
-    label: "Read",
-    icon: "check-circle",
-    color: APP_COLORS.statusNeutral,
-    backgroundColor: APP_COLORS.statusNeutralLight,
-  },
-};
 
 const AVATAR_PALETTE = [
   APP_COLORS.primaryBlue,
@@ -112,36 +96,19 @@ function formatRelativeTime(value) {
   return `${diffInDays}d ago`;
 }
 
-function formatConversationTime(value) {
-  if (!value) {
-    return "";
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return String(value);
-  }
-
-  return new Intl.DateTimeFormat("en-PH", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(parsed);
-}
-
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
 }
 
 export default function MessageScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams();
-  const { activeBaseUrl, fetchJsonWithFallback } = useWebAppRequest();
+  const { fetchMessages, sendMessage } = useMessagesApi();
+  const { activeBaseUrl, candidateBaseUrls, isStorageLoaded } = useWebAppRequest();
+
   const scrollY = useSharedValue(0);
+
   const [threads, setThreads] = useState([]);
-  const [selectedThreadId, setSelectedThreadId] = useState(0);
-  const [selectedThread, setSelectedThread] = useState(null);
-  const [conversation, setConversation] = useState([]);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -149,60 +116,42 @@ export default function MessageScreen() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeQuery, setComposeQuery] = useState("");
   const [composeRecipients, setComposeRecipients] = useState([]);
   const [composeMessage, setComposeMessage] = useState("");
   const [composeImage, setComposeImage] = useState(null);
-  const [replyMessage, setReplyMessage] = useState("");
-  const [replyImage, setReplyImage] = useState(null);
   const [isSending, setIsSending] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
-  const loadMessages = useCallback(
-    async ({ threadId = selectedThreadId, silent = false } = {}) => {
-      try {
-        if (!silent) {
-          setIsLoading(true);
-        }
-
-        setErrorMessage(null);
-
-        const query = threadId > 0 ? `?thread=${encodeURIComponent(threadId)}` : "";
-        const response = await fetchJsonWithFallback(`/api/mobile/messages${query}`, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-        });
-
-        const nextThreads = Array.isArray(response?.threads) ? response.threads : [];
-        setThreads(nextThreads);
-        setSelectedThreadId(Number(response?.selected_thread_id || 0));
-        setSelectedThread(response?.selected_thread || null);
-        setConversation(Array.isArray(response?.conversation) ? response.conversation : []);
-        setAvailableUsers(Array.isArray(response?.available_users) ? response.available_users : []);
-        setUnreadCount(Number(response?.unread_count || 0));
-      } catch (error) {
-        setErrorMessage(error?.message || "Unable to load messages.");
-        setThreads([]);
-        setSelectedThreadId(0);
-        setSelectedThread(null);
-        setConversation([]);
-        setAvailableUsers([]);
-        setUnreadCount(0);
-      } finally {
-        if (!silent) {
-          setIsLoading(false);
-        }
+  const loadInbox = useCallback(async ({ silent = false } = {}) => {
+    try {
+      if (!silent) {
+        setIsLoading(true);
       }
-    },
-    [fetchJsonWithFallback, selectedThreadId]
-  );
+
+      setErrorMessage(null);
+      const response = await fetchMessages();
+
+      setThreads(Array.isArray(response?.threads) ? response.threads : []);
+      setAvailableUsers(Array.isArray(response?.available_users) ? response.available_users : []);
+      setUnreadCount(Number(response?.unread_count || 0));
+    } catch (error) {
+      setErrorMessage(error?.message || "Unable to load messages.");
+      setThreads([]);
+      setAvailableUsers([]);
+      setUnreadCount(0);
+    } finally {
+      if (!silent) {
+        setIsLoading(false);
+      }
+    }
+  }, [fetchMessages]);
 
   useEffect(() => {
-    loadMessages();
-  }, [loadMessages]);
+    loadInbox();
+  }, [loadInbox]);
 
   useEffect(() => {
     if (String(params?.compose || "") === "1") {
@@ -216,20 +165,20 @@ export default function MessageScreen() {
     }
 
     const intervalId = setInterval(() => {
-      loadMessages({ threadId: selectedThreadId, silent: true });
+      loadInbox({ silent: true });
     }, 10000);
 
     return () => clearInterval(intervalId);
-  }, [isComposeOpen, loadMessages, selectedThreadId]);
+  }, [isComposeOpen, loadInbox]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await loadMessages({ threadId: selectedThreadId, silent: true });
+      await loadInbox({ silent: true });
     } finally {
       setIsRefreshing(false);
     }
-  }, [loadMessages, selectedThreadId]);
+  }, [loadInbox]);
 
   const filteredThreads = useMemo(() => {
     const query = normalizeText(searchQuery);
@@ -268,8 +217,20 @@ export default function MessageScreen() {
   }, [availableUsers, composeQuery, composeRecipients]);
 
   const unreadPillCount = unreadCount > 99 ? "99+" : String(unreadCount || 0);
-  const selectedThreadLabel = selectedThread?.custom_name || selectedThread?.name || "Messages";
-  const selectedThreadSubtitle = selectedThread?.subtitle || "Select a conversation to view the latest messages.";
+  const composeSearchLower = normalizeText(composeQuery);
+  const emptyThreadState = !isLoading && !errorMessage && !filteredThreads.length;
+
+  const handleThreadPress = useCallback((threadId) => {
+    const nextThreadId = Number(threadId || 0);
+    if (nextThreadId <= 0) {
+      return;
+    }
+
+    router.push({
+      pathname: "/(tabs)/message/[threadId]",
+      params: { threadId: String(nextThreadId) },
+    });
+  }, [router]);
 
   const pickImage = useCallback(async () => {
     try {
@@ -300,70 +261,6 @@ export default function MessageScreen() {
       return null;
     }
   }, []);
-
-  const sendMessageRequest = useCallback(
-    async ({ threadId = 0, recipientIds = [], message = "", image = null }) => {
-      if (isSending) {
-        return null;
-      }
-
-      setIsSending(true);
-      setErrorMessage(null);
-
-      try {
-        const formData = new FormData();
-
-        if (threadId > 0) {
-          formData.append("thread_id", String(threadId));
-        }
-
-        recipientIds.forEach((recipientId) => {
-          formData.append("recipient_ids[]", String(recipientId));
-        });
-
-        formData.append("message", message);
-
-        if (image?.uri) {
-          formData.append("image", {
-            uri: image.uri,
-            name: image.name || `message-${Date.now()}.jpg`,
-            type: image.type || "image/jpeg",
-          });
-        }
-
-        const response = await fetch(buildApiUrl("/api/mobile/messages", activeBaseUrl), {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-          },
-          body: formData,
-        });
-
-        const payload = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          throw new Error(payload?.message || "Unable to send the message.");
-        }
-
-        return payload;
-      } finally {
-        setIsSending(false);
-      }
-    },
-    [activeBaseUrl, isSending]
-  );
-
-  const handleThreadPress = useCallback((threadId) => {
-    const nextThreadId = Number(threadId || 0);
-    if (nextThreadId <= 0) {
-      return;
-    }
-
-    setIsComposeOpen(false);
-    setSelectedThreadId(nextThreadId);
-    loadMessages({ threadId: nextThreadId });
-  }, [loadMessages]);
 
   const handleToggleCompose = useCallback(() => {
     setIsComposeOpen((current) => !current);
@@ -410,55 +307,37 @@ export default function MessageScreen() {
       return;
     }
 
-    const payload = await sendMessageRequest({
-      recipientIds: composeRecipients.map((item) => item.id),
-      message: text,
-      image: composeImage,
-    });
+    try {
+      setIsSending(true);
+      setErrorMessage(null);
 
-    if (!payload) {
-      return;
+      const payload = await sendMessage({
+        recipientIds: composeRecipients.map((item) => item.id),
+        message: text,
+        image: composeImage,
+      });
+
+      const nextThreadId = Number(payload?.thread_id || 0);
+
+      setComposeMessage("");
+      setComposeRecipients([]);
+      setComposeImage(null);
+      setIsComposeOpen(false);
+
+      if (nextThreadId > 0) {
+        router.push({
+          pathname: "/(tabs)/message/[threadId]",
+          params: { threadId: String(nextThreadId) },
+        });
+      } else {
+        await loadInbox({ silent: true });
+      }
+    } catch (error) {
+      setErrorMessage(error?.message || "Unable to send the message.");
+    } finally {
+      setIsSending(false);
     }
-
-    setComposeMessage("");
-    setComposeRecipients([]);
-    setComposeImage(null);
-    setIsComposeOpen(false);
-
-    const nextThreadId = Number(payload?.thread_id || 0);
-    await loadMessages({ threadId: nextThreadId > 0 ? nextThreadId : selectedThreadId });
-  }, [composeImage, composeMessage, composeRecipients, loadMessages, sendMessageRequest, selectedThreadId]);
-
-  const handleSendReplyMessage = useCallback(async () => {
-    const text = String(replyMessage || "").trim();
-
-    if (!selectedThreadId) {
-      setErrorMessage("Choose a conversation first.");
-      return;
-    }
-
-    if (!text && !replyImage) {
-      setErrorMessage("Type a message or attach an image.");
-      return;
-    }
-
-    const payload = await sendMessageRequest({
-      threadId: selectedThreadId,
-      message: text,
-      image: replyImage,
-    });
-
-    if (!payload) {
-      return;
-    }
-
-    setReplyMessage("");
-    setReplyImage(null);
-    await loadMessages({ threadId: selectedThreadId });
-  }, [loadMessages, replyImage, replyMessage, selectedThreadId, sendMessageRequest]);
-
-  const selectedThreadMembers = Array.isArray(selectedThread?.members) ? selectedThread.members : [];
-  const selectedThreadAvatarSeed = selectedThread?.custom_name || selectedThread?.name || String(selectedThreadId || 0);
+  }, [composeImage, composeMessage, composeRecipients, loadInbox, router, sendMessage]);
 
   const renderAvatar = useCallback((name, seed, size = 44, compact = false) => {
     const initials = getInitials(name);
@@ -517,32 +396,9 @@ export default function MessageScreen() {
     );
   }, [renderAvatar]);
 
-  const renderSelectedThreadAvatar = useCallback(() => {
-    if (selectedThread?.is_group) {
-      const members = selectedThreadMembers.length ? selectedThreadMembers : [{ name: selectedThreadLabel }];
-      const primaryName = members[0]?.name || selectedThreadLabel;
-      const secondaryName = members[1]?.name || primaryName;
-
-      return (
-        <View className="relative h-14 w-14">
-          <View className="absolute right-0 top-0">
-            {renderAvatar(secondaryName, `${secondaryName}|detail-secondary`, 28, true)}
-          </View>
-          <View className="absolute bottom-0 left-0">
-            {renderAvatar(primaryName, `${primaryName}|detail-primary`, 36, true)}
-          </View>
-        </View>
-      );
-    }
-
-    return renderAvatar(selectedThreadLabel, selectedThreadAvatarSeed, 48);
-  }, [renderAvatar, selectedThread?.is_group, selectedThreadAvatarSeed, selectedThreadLabel, selectedThreadMembers]);
-
   const renderThreadCard = useCallback((thread) => {
-    const isActive = Number(thread?.thread_id || 0) === Number(selectedThreadId || 0);
     const unread = Number(thread?.unread || 0);
     const previewPrefix = thread?.preview_is_mine ? "You:" : thread?.preview_sender || "";
-    const threadStatus = unread > 0 ? THREAD_STATUS.unread : THREAD_STATUS.read;
     const timeLabel = formatRelativeTime(thread?.time);
 
     return (
@@ -552,7 +408,6 @@ export default function MessageScreen() {
         className="mb-1 overflow-hidden border-b border-[#e5edf6] bg-white"
         style={({ pressed }) => ({
           opacity: pressed ? 0.94 : 1,
-          backgroundColor: isActive ? "#eff6ff" : "#ffffff",
         })}
       >
         <View className="px-2 py-3">
@@ -583,16 +438,21 @@ export default function MessageScreen() {
                   <Text className="text-[11px] font-medium" style={{ color: APP_COLORS.tabInactive }}>
                     {timeLabel}
                   </Text>
-                  <View className="flex-row items-center gap-1.5">
-                    <Feather
-                      name={threadStatus.icon}
-                      size={12}
-                      color={threadStatus.color}
-                    />
-                    <Text className="text-[10px] font-bold uppercase tracking-wide" style={{ color: threadStatus.color }}>
-                      {threadStatus.label}
-                    </Text>
-                  </View>
+                  {unread > 0 ? (
+                    <View className="flex-row items-center gap-1.5">
+                      <Feather name="circle" size={12} color={APP_COLORS.primaryBlue} />
+                      <Text className="text-[10px] font-bold uppercase tracking-wide" style={{ color: APP_COLORS.primaryBlue }}>
+                        Unread
+                      </Text>
+                    </View>
+                  ) : (
+                    <View className="flex-row items-center gap-1.5">
+                      <Feather name="check-circle" size={12} color={APP_COLORS.statusNeutral} />
+                      <Text className="text-[10px] font-bold uppercase tracking-wide" style={{ color: APP_COLORS.statusNeutral }}>
+                        Read
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             </View>
@@ -607,7 +467,7 @@ export default function MessageScreen() {
         </View>
       </Pressable>
     );
-  }, [handleThreadPress, renderThreadAvatar, selectedThreadId]);
+  }, [handleThreadPress, renderThreadAvatar]);
 
   const renderImagePreview = useCallback((image, onRemove) => {
     if (!image?.uri) {
@@ -624,91 +484,10 @@ export default function MessageScreen() {
             <Feather name="x" size={16} color={APP_COLORS.primaryBlue} />
           </Pressable>
         </View>
-        <Image
-          source={{ uri: image.uri }}
-          style={{ width: "100%", height: 180 }}
-          resizeMode="cover"
-        />
       </View>
     );
   }, []);
 
-  const renderMessageImages = useCallback((images = []) => {
-    if (!Array.isArray(images) || !images.length) {
-      return null;
-    }
-
-    const imageCount = images.length;
-    const columns = imageCount > 1 ? 2 : 1;
-
-    return (
-      <View className={`mt-2 ${columns > 1 ? "flex-row flex-wrap gap-2" : ""}`}>
-        {images.map((image) => (
-          <View
-            key={image?.url}
-            className={`overflow-hidden rounded-[18px] ${columns > 1 ? "w-[48%]" : "w-full"}`}
-            style={{ backgroundColor: "#e2e8f0" }}
-          >
-            <Image
-              source={{ uri: image?.url }}
-              style={{ width: "100%", height: columns > 1 ? 120 : 220 }}
-              resizeMode="cover"
-            />
-          </View>
-        ))}
-      </View>
-    );
-  }, []);
-
-  const renderMessageBubble = useCallback((entry) => {
-    const mine = Boolean(entry?.is_mine);
-    const messageText = String(entry?.message || "").trim();
-    const images = Array.isArray(entry?.images) ? entry.images : [];
-
-    return (
-      <View
-        key={entry?.id}
-        className={`mb-3 flex-row items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}
-      >
-        {!mine ? (
-          <View className="mb-1">{renderAvatar(selectedThreadLabel, selectedThreadAvatarSeed, 30, true)}</View>
-        ) : null}
-
-        <View
-          className="max-w-[84%] rounded-[22px] px-4 py-3"
-          style={{
-            backgroundColor: mine ? APP_COLORS.primaryBlue : APP_COLORS.backgroundCard,
-            borderWidth: mine ? 0 : 1,
-            borderColor: mine ? "transparent" : `${APP_COLORS.accentBorder}20`,
-            shadowColor: mine ? "transparent" : "#0f172a",
-            shadowOpacity: mine ? 0 : 0.04,
-            shadowRadius: 10,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: mine ? 0 : 1,
-          }}
-        >
-          {images.length ? renderMessageImages(images) : null}
-          {messageText ? (
-            <Text
-              className="text-[15px] leading-6"
-              style={{ color: mine ? "#ffffff" : APP_COLORS.primaryBlue }}
-            >
-              {messageText}
-            </Text>
-          ) : null}
-          <Text
-            className={`mt-2 text-[11px] ${mine ? "text-white/75" : ""}`}
-            style={{ color: mine ? "rgba(255,255,255,0.78)" : APP_COLORS.tabInactive }}
-          >
-            {entry?.time || formatConversationTime(entry?.created_at || entry?.created_at_raw || "")}
-          </Text>
-        </View>
-      </View>
-    );
-  }, [renderAvatar, renderMessageImages, selectedThreadAvatarSeed, selectedThreadLabel]);
-
-  const emptyThreadState = !isLoading && !errorMessage && !filteredThreads.length;
-  const composeSearchLower = normalizeText(composeQuery);
   const handleScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
@@ -833,7 +612,7 @@ export default function MessageScreen() {
                             {user?.name || "Unknown User"}
                           </Text>
                           <Text className="mt-0.5 text-xs" style={{ color: APP_COLORS.textSubtle }} numberOfLines={1}>
-                            {[user?.position, user?.office].filter(Boolean).join(" · ") || "PDMU User"}
+                            {[user?.position, user?.office].filter(Boolean).join(" � ") || "PDMU User"}
                           </Text>
                         </View>
                         <Feather name="plus-circle" size={18} color={APP_COLORS.primaryBlue} />
@@ -974,6 +753,51 @@ export default function MessageScreen() {
               <Text className="mt-2 max-w-sm text-center text-sm leading-6" style={{ color: APP_COLORS.textSubtle }}>
                 {errorMessage}
               </Text>
+              
+              <Pressable
+                onPress={() => setShowDebug(!showDebug)}
+                className="mt-4 rounded-full px-4 py-2"
+                style={{ backgroundColor: `${APP_COLORS.primaryBlue}33` }}
+              >
+                <Text className="text-xs font-semibold" style={{ color: APP_COLORS.primaryBlue }}>
+                  {showDebug ? "Hide" : "Show"} Debug Info
+                </Text>
+              </Pressable>
+
+              {showDebug ? (
+                <View className="mt-4 w-full max-w-sm overflow-hidden rounded-2xl border border-[#dbe5f1] bg-[#f8fbff] p-3">
+                  <Text className="text-xs font-bold" style={{ color: APP_COLORS.primaryBlue }}>
+                    Active Base URL:
+                  </Text>
+                  <Text className="mt-1 text-[10px] font-mono" style={{ color: APP_COLORS.textSubtle }}>
+                    {activeBaseUrl || "(loading...)"}
+                  </Text>
+
+                  <Text className="mt-3 text-xs font-bold" style={{ color: APP_COLORS.primaryBlue }}>
+                    Candidate URLs:
+                  </Text>
+                  {candidateBaseUrls?.map((url, index) => (
+                    <Text key={index} className="mt-0.5 text-[10px] font-mono" style={{ color: APP_COLORS.textSubtle }}>
+                      {index + 1}. {url}
+                    </Text>
+                  ))}
+
+                  <Pressable
+                    onPress={async () => {
+                      await AsyncStorage.removeItem("preferredBaseUrl");
+                      setErrorMessage("Cached URL cleared. Please try again.");
+                      await handleRefresh();
+                    }}
+                    className="mt-3 rounded-full px-3 py-2"
+                    style={{ backgroundColor: APP_COLORS.primaryYellow }}
+                  >
+                    <Text className="text-xs font-bold" style={{ color: APP_COLORS.primaryBlue }}>
+                      Clear Cached URL
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
               <Pressable
                 onPress={handleRefresh}
                 className="mt-5 rounded-full px-5 py-3"
@@ -994,105 +818,6 @@ export default function MessageScreen() {
               {filteredThreads.map((thread) => renderThreadCard(thread))}
             </View>
           )}
-
-          <View className="mt-2 overflow-hidden rounded-[28px] border border-[#dbe5f1] bg-white">
-            <View className="border-b border-[#e5edf6] px-4 py-4">
-              <View className="flex-row items-start gap-3">
-                {renderSelectedThreadAvatar()}
-                <View className="flex-1">
-                  <Text className="text-lg font-extrabold" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={1}>
-                    {selectedThreadLabel}
-                  </Text>
-                  <Text className="mt-1 text-sm leading-5" style={{ color: APP_COLORS.textSubtle }}>
-                    {selectedThreadSubtitle}
-                  </Text>
-                </View>
-              </View>
-
-              {selectedThread?.is_group && selectedThreadMembers.length ? (
-                <View className="mt-4 flex-row flex-wrap gap-2">
-                  {selectedThreadMembers.slice(0, 5).map((member) => (
-                    <View
-                      key={member.idno}
-                      className="flex-row items-center gap-2 rounded-full px-3 py-2"
-                      style={{ backgroundColor: APP_COLORS.accentSurface }}
-                    >
-                      <View className="h-6 w-6 items-center justify-center rounded-full" style={{ backgroundColor: APP_COLORS.primaryBlue }}>
-                        <Text className="text-[9px] font-extrabold text-white">{getInitials(member.name)}</Text>
-                      </View>
-                      <Text className="max-w-[120px] text-xs font-semibold" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={1}>
-                        {member.name}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-
-            <View className="px-4 py-4">
-              {conversation.length ? conversation.map((entry) => renderMessageBubble(entry)) : (
-                <View className="items-center justify-center py-10">
-                  <View className="mb-4 h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: APP_COLORS.primaryBlueLight }}>
-                    <Feather name="message-circle" size={28} color={APP_COLORS.primaryBlue} />
-                  </View>
-                  <Text className="text-center text-base font-bold" style={{ color: APP_COLORS.primaryBlue }}>
-                    No messages yet
-                  </Text>
-                  <Text className="mt-2 max-w-xs text-center text-sm leading-6" style={{ color: APP_COLORS.textSubtle }}>
-                    Start the conversation with a short note or attach an image.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View className="border-t border-[#e5edf6] px-4 py-4">
-              <Text className="text-xs font-semibold uppercase tracking-wide" style={{ color: APP_COLORS.tabInactive }}>
-                Reply
-              </Text>
-
-              <TextInput
-                value={replyMessage}
-                onChangeText={setReplyMessage}
-                placeholder={selectedThreadId ? "Write a reply..." : "Select a conversation first"}
-                placeholderTextColor={APP_COLORS.tabInactive}
-                multiline
-                editable={Boolean(selectedThreadId)}
-                className="mt-2 min-h-[92px] rounded-[18px] border border-[#dbe5f1] bg-[#f8fbff] px-4 py-3 text-sm"
-                style={{ color: APP_COLORS.primaryBlue, textAlignVertical: "top" }}
-              />
-
-              {renderImagePreview(replyImage, () => setReplyImage(null))}
-
-              <View className="mt-4 flex-row items-center justify-between gap-3">
-                <Pressable
-                  onPress={async () => {
-                    const image = await pickImage();
-                    if (image) {
-                      setReplyImage(image);
-                    }
-                  }}
-                  disabled={!selectedThreadId}
-                  className="flex-row items-center gap-2 rounded-full px-4 py-3"
-                  style={{ backgroundColor: APP_COLORS.primaryBlueLight, opacity: selectedThreadId ? 1 : 0.5 }}
-                >
-                  <Feather name="image" size={16} color={APP_COLORS.primaryBlue} />
-                  <Text className="text-sm font-semibold" style={{ color: APP_COLORS.primaryBlue }}>
-                    Add image
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={handleSendReplyMessage}
-                  disabled={!selectedThreadId || isSending}
-                  className="flex-row items-center gap-2 rounded-full px-5 py-3"
-                  style={{ backgroundColor: APP_COLORS.primaryBlue, opacity: !selectedThreadId || isSending ? 0.72 : 1 }}
-                >
-                  {isSending ? <ActivityIndicator size="small" color="#ffffff" /> : <Feather name="send" size={16} color="#ffffff" />}
-                  <Text className="text-sm font-bold text-white">Send</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
         </Animated.View>
       </Animated.ScrollView>
     </SafeAreaView>

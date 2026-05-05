@@ -329,9 +329,31 @@ class MessageController extends Controller
                 ->with('error', 'Messaging is not configured yet. Run migrations first.');
         }
 
-        $authId = (int) Auth::id();
-        $supportsMessageImages = $this->hasMessageImageColumns();
+        $authUser = Auth::user();
+        $authId = (int) ($authUser?->idno ?? 0);
         $wantsJson = $request->expectsJson() || $request->ajax();
+
+        if ($authId <= 0 && $wantsJson) {
+            $authId = (int) $request->integer('user_id');
+        }
+
+        if ($authUser && $authId > 0 && (int) $authUser->idno !== $authId) {
+            return response()->json([
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
+
+        if ($authId <= 0) {
+            if ($wantsJson) {
+                return response()->json([
+                    'message' => 'Unauthenticated.',
+                ], 401);
+            }
+
+            return redirect()->route('login');
+        }
+
+        $supportsMessageImages = $this->hasMessageImageColumns();
 
         $validated = $request->validate([
             'thread_id' => ['nullable', 'integer'],
@@ -837,7 +859,21 @@ class MessageController extends Controller
             ]);
         }
 
-        $authId = (int) Auth::id();
+        $authUser = Auth::user();
+        $authId = (int) ($authUser?->idno ?? $request->integer('user_id'));
+
+        if ($authUser && $authId > 0 && (int) $authUser->idno !== $authId) {
+            return response()->json([
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
+
+        if ($authId <= 0) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
         $threadId = (int) $request->integer('thread');
 
         $latestByThread = DB::table('user_messages')
