@@ -24,6 +24,7 @@ import {
 } from "../../../../hooks/useLocallyFundedProjects";
 import { APP_ROUTES } from "../../../../constants/routes";
 import FloatingToast from "../../../../components/common/FloatingToast";
+import NoResultsState from "../../../../components/common/NoResultsState";
 
 const FILTER_ALL_VALUE = "All";
 
@@ -732,25 +733,19 @@ export default function LocallyFundedProjectsScreen() {
                 ) : null
               }
               ListEmptyComponent={
-                <View className="mt-10 rounded-2xl border border-[#dbe3f0] bg-white px-4 py-5">
-                  <Text className="text-[15px] font-semibold text-[#1e3a8a]">
-                    {debouncedSearchQuery.trim() || hasActiveFilters
-                      ? "No matching projects"
-                      : errorMessage
-                      ? "Unable to load projects"
-                      : "No projects available"}
-                  </Text>
-                  <Text className="mt-1 text-[12px] leading-[18px] text-[#64748b]">
-                    {debouncedSearchQuery.trim() || hasActiveFilters
-                      ? "Try another keyword or adjust your selected filters."
-                      : errorMessage
-                      ? errorMessage
-                      : "No rows were returned by the endpoint."}
-                  </Text>
-                  {errorMessage ? (
-                    <Text className="mt-2 text-[11px] text-[#475569]">Current base URL: {activeBaseUrl}</Text>
-                  ) : null}
-                  {!debouncedSearchQuery.trim() && !hasActiveFilters ? (
+                debouncedSearchQuery.trim() || hasActiveFilters ? (
+                  <NoResultsState title="No matching projects" />
+                ) : (
+                  <View className="mt-10 rounded-2xl border border-[#dbe3f0] bg-white px-4 py-5">
+                    <Text className="text-[15px] font-semibold text-[#1e3a8a]">
+                      {errorMessage ? "Unable to load projects" : "No projects available"}
+                    </Text>
+                    <Text className="mt-1 text-[12px] leading-[18px] text-[#64748b]">
+                      {errorMessage ? errorMessage : "No rows were returned by the endpoint."}
+                    </Text>
+                    {errorMessage ? (
+                      <Text className="mt-2 text-[11px] text-[#475569]">Current base URL: {activeBaseUrl}</Text>
+                    ) : null}
                     <Pressable
                       className="mt-4 self-start rounded-xl bg-[#dbeafe] px-4 py-2"
                       onPress={() => {
@@ -759,8 +754,8 @@ export default function LocallyFundedProjectsScreen() {
                     >
                       <Text className="text-[12px] font-semibold text-[#1e3a8a]">Retry Fetch</Text>
                     </Pressable>
-                  ) : null}
-                </View>
+                  </View>
+                )
               }
             />
           )}
