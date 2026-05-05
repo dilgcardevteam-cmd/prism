@@ -543,18 +543,25 @@ export default function MessageScreen() {
               onClose={() => setIsComposeOpen(false)}
               composeQuery={composeQuery}
               setComposeQuery={setComposeQuery}
-              composeRecipients={composeRecipients}
-              handleRemoveComposeRecipient={handleRemoveComposeRecipient}
               composeRecipientOptions={composeRecipientOptions}
-              handleAddComposeRecipient={handleAddComposeRecipient}
-              composeMessage={composeMessage}
-              setComposeMessage={setComposeMessage}
-              composeImage={composeImage}
-              setComposeImage={setComposeImage}
-              pickImage={pickImage}
-              renderImagePreview={renderImagePreview}
-              handleSendComposeMessage={handleSendComposeMessage}
-              isSending={isSending}
+              onPickRecipient={(user) => {
+                const recipientId = Number(user?.id || 0);
+                if (recipientId <= 0) {
+                  return;
+                }
+
+                setIsComposeOpen(false);
+                setComposeQuery("");
+
+                router.push({
+                  pathname: "/(tabs)/message/new",
+                  params: {
+                    recipientIds: String(recipientId),
+                    recipientName: String(user?.name || "Conversation"),
+                    recipientSubtitle: String([user?.position, user?.office].filter(Boolean).join(" • ") || "Messaging thread"),
+                  },
+                });
+              }}
             />
           ) : null}
 

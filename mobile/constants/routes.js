@@ -46,5 +46,9 @@ export const PROJECT_MONITORING_ROUTES = [
   {
     route: "profile/index",
     title: "Profile",
+  },
+  {
+    route: "message/new",
+    title: "",
   }
 ];

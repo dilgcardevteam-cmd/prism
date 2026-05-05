@@ -159,6 +159,11 @@ export default function TabLayout() {
     elevation: 18,
   };
   const isMessagesTab = pathname === "/(tabs)/message" || pathname === "/message";
+  const isConversationTab =
+    pathname === "/(tabs)/message/[threadId]" ||
+    pathname === "/message/[threadId]" ||
+    pathname?.startsWith("/(tabs)/message/") ||
+    pathname?.startsWith("/message/");
 
   const openDrawer = () => {
     if (isDrawerVisible) {
@@ -278,30 +283,32 @@ export default function TabLayout() {
             </Pressable>
           ),
           headerRight: () => (
-            <View className="mr-[10px] flex-row items-center gap-2">
-              {isMessagesTab ? (
+            isConversationTab ? null : (
+              <View className="mr-[10px] flex-row items-center gap-2">
+                {isMessagesTab ? (
+                  <Pressable
+                    onPress={() => router.setParams({ compose: "1" })}
+                    className="p-1"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Create new message"
+                  >
+                    <Feather name="edit-3" size={22} color={APP_COLORS.primary} />
+                  </Pressable>
+                ) : null}
                 <Pressable
-                  onPress={() => router.setParams({ compose: "1" })}
+                  onPress={() => router.push(APP_ROUTES.notifications)}
                   className="p-1"
                   style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel="Create new message"
+                  accessibilityLabel="Open notifications"
                 >
-                  <Feather name="edit-3" size={22} color={APP_COLORS.primary} />
+                  <Feather name="bell" size={22} color={APP_COLORS.primary} />
                 </Pressable>
-              ) : null}
-              <Pressable
-                onPress={() => router.push(APP_ROUTES.notifications)}
-                className="p-1"
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Open notifications"
-              >
-                <Feather name="bell" size={22} color={APP_COLORS.primary} />
-              </Pressable>
-            </View>
+              </View>
+            )
           ),
         }}
         tabBar={renderTabBar}
