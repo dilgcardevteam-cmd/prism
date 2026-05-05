@@ -23,8 +23,17 @@ import {
 } from "../../constants/routes";
 import { APP_COLORS } from "../../constants/theme";
 
+import {
+  ANIMATION_TIMINGS,
+  PROJECT_MONITORING_SUBMENU_HEIGHT,
+  animateDrawerOpen,
+  animateDrawerClose,
+  createDrawerInterpolations,
+  animateMenuToggle,
+  createSubmenuInterpolations,
+} from "../../utils/animations";
+
 const PROJECT_MONITORING_KEY = "project-monitoring";
-const PROJECT_MONITORING_SUBMENU_HEIGHT = 208;
 const DRAWER_MENU_ITEMS = [
   {
     key: "home",
@@ -171,21 +180,11 @@ export default function TabLayout() {
     }
 
     setIsDrawerVisible(true);
-    Animated.timing(drawerProgress, {
-      toValue: 1,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+    animateDrawerOpen(drawerProgress);
   };
 
   const closeDrawer = () => {
-    Animated.timing(drawerProgress, {
-      toValue: 0,
-      duration: 220,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
+    animateDrawerClose(drawerProgress, ({ finished }) => {
       if (finished) {
         setIsDrawerVisible(false);
       }
@@ -196,12 +195,7 @@ export default function TabLayout() {
     const willExpand = !expandedMenus[sectionKey];
 
     if (sectionKey === PROJECT_MONITORING_KEY) {
-      Animated.timing(projectMonitoringAnimation, {
-        toValue: willExpand ? 1 : 0,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
+      animateMenuToggle(projectMonitoringAnimation, willExpand);
     }
 
     setExpandedMenus((currentState) => ({
@@ -376,10 +370,7 @@ export default function TabLayout() {
               {
                 transform: [
                   {
-                    translateX: drawerProgress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [-drawerWidth, 0],
-                    }),
+                    translateX: createDrawerInterpolations(drawerProgress, drawerWidth).translateX,
                   },
                 ],
               },
@@ -446,18 +437,10 @@ export default function TabLayout() {
                 const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                 const isExpanded = expandedMenus[item.key];
                 const isProjectMonitoringSection = item.key === PROJECT_MONITORING_KEY;
-                const submenuHeight = projectMonitoringAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, PROJECT_MONITORING_SUBMENU_HEIGHT],
-                });
-                const submenuTranslateY = projectMonitoringAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-8, 0],
-                });
-                const chevronRotate = projectMonitoringAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ["0deg", "180deg"],
-                });
+                const submenuAnimations = createSubmenuInterpolations(
+                  projectMonitoringAnimation,
+                  PROJECT_MONITORING_SUBMENU_HEIGHT
+                );
 
                   return (
                     <View key={item.key ?? item.label ?? idx}>
@@ -511,7 +494,7 @@ export default function TabLayout() {
                         </Text>
                         {hasChildren ? (
                           isProjectMonitoringSection ? (
-                            <Animated.View style={{ transform: [{ rotate: chevronRotate }] }}>
+                            <Animated.View style={{ transform: [{ rotate: submenuAnimations.chevronRotate }] }}>
                               <Feather
                                 name="chevron-down"
                                 size={16}
@@ -533,9 +516,9 @@ export default function TabLayout() {
                           className="overflow-hidden"
                           pointerEvents={isExpanded ? "auto" : "none"}
                           style={{
-                            height: submenuHeight,
-                            opacity: projectMonitoringAnimation,
-                            transform: [{ translateY: submenuTranslateY }],
+                            height: submenuAnimations.height,
+                            opacity: submenuAnimations.opacity,
+                            transform: [{ translateY: submenuAnimations.translateY }],
                           }}
                         >
                           <View className="mb-2 ml-3 rounded-xl border border-white/20 bg-white/10 px-2 py-2">

@@ -1,14 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -17,400 +17,299 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { APP_COLORS } from "../../../../constants/theme";
 import { useMessagesApi } from "../../../../hooks/useMessagesApi";
+import { createScrollHandler, createScrollInterpolations } from "../../../../utils/animations";
 
-function getInitials(name) {
-  const parts = String(name || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+/* ---------------- UTILITIES ---------------- */
 
-  if (!parts.length) {
-    return "U";
-  }
+const getInitials = (name) => {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "U";
+  return `${parts[0][0]}${parts[1]?.[0] || parts[0][1] || ""}`.toUpperCase();
+};
 
-  const first = parts[0]?.[0] || "U";
-  const second = parts[1]?.[0] || parts[0]?.[1] || "";
-  return `${first}${second}`.toUpperCase();
-}
+const formatTime = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
 
-function formatConversationTime(value) {
-  if (!value) {
-    return "";
-  }
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const day = d.getDate();
+  const year = d.getFullYear();
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const period = h >= 12 ? "PM" : "AM";
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return String(value);
-  }
+  return `${month} ${day}, ${year} ${h % 12 || 12}:${m} ${period}`;
+};
 
-  const month = parsed.toLocaleString("en-US", { month: "short" });
-  const day = parsed.getDate();
-  const year = parsed.getFullYear();
-  const hours24 = parsed.getHours();
-  const hours = hours24 % 12 || 12;
-  const minutes = String(parsed.getMinutes()).padStart(2, "0");
-  const period = hours24 >= 12 ? "PM" : "AM";
-
-  return `${month} ${day}, ${year} ${hours}:${minutes} ${period}`;
-}
+/* ---------------- MAIN ---------------- */
 
 export default function ConversationPage() {
   const router = useRouter();
-  const { threadId, recipientIds, recipientName, recipientSubtitle } = useLocalSearchParams();
+  const { threadId, recipientIds, recipientName, recipientSubtitle } =
+    useLocalSearchParams();
+
   const { fetchMessages, sendMessage } = useMessagesApi();
 
+  /* ---------------- PARSED PARAMS ---------------- */
+
   const parsedThreadId = Number(threadId || 0);
+
   const parsedRecipientIds = useMemo(() => {
     return String(recipientIds || "")
       .split(",")
-      .map((value) => Number(value.trim()))
-      .filter((value) => value > 0);
+      .map((v) => Number(v.trim()))
+      .filter((v) => v > 0);
   }, [recipientIds]);
 
-  const [selectedThread, setSelectedThread] = useState(null);
-  const [conversation, setConversation] = useState([]);
-  const [isLoading, setIsLoading] = useState(parsedThreadId > 0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [replyMessage, setReplyMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  /* ---------------- STATE ---------------- */
+
+  const [thread, setThread] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [reply, setReply] = useState("");
+  const [loading, setLoading] = useState(parsedThreadId > 0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+
+  /* ---------------- ANIMATION ---------------- */
+
+  const scrollY = useRef(new Animated.Value(0)).current;
+  
+  const { headerOpacity, headerTranslate, heroOpacity, heroTranslate } =
+    createScrollInterpolations(scrollY);
+
+  /* ---------------- DATA ---------------- */
 
   const loadConversation = useCallback(async ({ silent = false } = {}) => {
-    if (parsedThreadId <= 0) {
-      setSelectedThread(null);
-      setConversation([]);
-      setIsLoading(false);
-      return;
-    }
+    if (!parsedThreadId) return;
 
     try {
-      if (!silent) {
-        setIsLoading(true);
-      }
+      if (!silent) setLoading(true);
+      setError(null);
 
-      setErrorMessage(null);
-      const response = await fetchMessages({ threadId: parsedThreadId });
-      setSelectedThread(response?.selected_thread || null);
-      setConversation(Array.isArray(response?.conversation) ? response.conversation : []);
-    } catch (error) {
-      setErrorMessage(error?.message || "Unable to load conversation.");
-      setConversation([]);
+      const res = await fetchMessages({ threadId: parsedThreadId });
+
+      setThread(res?.selected_thread || null);
+      setMessages(res?.conversation || []);
+    } catch (e) {
+      setError(e?.message || "Failed to load");
     } finally {
-      if (!silent) {
-        setIsLoading(false);
-      }
+      if (!silent) setLoading(false);
     }
-  }, [fetchMessages, parsedThreadId]);
+  }, [parsedThreadId]);
 
   useEffect(() => {
-    if (parsedThreadId > 0) {
-      loadConversation();
-      return undefined;
-    }
-
-    setIsLoading(false);
-    return undefined;
-  }, [loadConversation, parsedThreadId]);
+    loadConversation();
+  }, [loadConversation]);
 
   useEffect(() => {
-    if (parsedThreadId <= 0) {
-      return undefined;
-    }
+    if (!parsedThreadId) return;
 
-    const intervalId = setInterval(() => {
-      loadConversation({ silent: true });
-    }, 10000);
+    const i = setInterval(() => loadConversation({ silent: true }), 10000);
+    return () => clearInterval(i);
+  }, [parsedThreadId]);
 
-    return () => clearInterval(intervalId);
-  }, [loadConversation, parsedThreadId]);
+  /* ---------------- ACTIONS ---------------- */
 
-  const handleRefresh = useCallback(async () => {
-    if (parsedThreadId <= 0) {
-      return;
-    }
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadConversation({ silent: true });
+    setRefreshing(false);
+  };
 
-    setIsRefreshing(true);
-    try {
-      await loadConversation({ silent: true });
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [loadConversation, parsedThreadId]);
-
-  const selectedThreadLabel = selectedThread?.custom_name || selectedThread?.name || String(recipientName || "Recipient");
-  const selectedThreadSubtitle = selectedThread?.subtitle || String(recipientSubtitle || "Start a conversation");
-  const selectedThreadInitials = getInitials(selectedThreadLabel);
-
-  const renderAvatar = useCallback((name, size = 112) => {
-    return (
-      <View
-        className="items-center justify-center overflow-hidden rounded-full"
-        style={{ width: size, height: size, backgroundColor: APP_COLORS.primaryBlueLight }}
-      >
-        <Text
-          className="font-bold"
-          style={{
-            color: APP_COLORS.primaryBlue,
-            fontSize: Math.max(18, size * 0.4),
-          }}
-        >
-          {getInitials(name)}
-        </Text>
-      </View>
-    );
-  }, []);
-
-  const renderMessageImages = useCallback((images = []) => {
-    if (!Array.isArray(images) || !images.length) {
-      return null;
-    }
-
-    const columns = images.length > 1 ? 2 : 1;
-
-    return (
-      <View className={`mt-2 ${columns > 1 ? "flex-row flex-wrap gap-2" : ""}`}>
-        {images.map((image) => (
-          <View
-            key={image?.url}
-            className={`overflow-hidden rounded-[18px] ${columns > 1 ? "w-[48%]" : "w-full"}`}
-            style={{ backgroundColor: "#e2e8f0" }}
-          >
-            <Image
-              source={{ uri: image?.url }}
-              style={{ width: "100%", height: columns > 1 ? 120 : 220 }}
-              resizeMode="cover"
-            />
-          </View>
-        ))}
-      </View>
-    );
-  }, []);
-
-  const renderMessageBubble = useCallback((entry) => {
-    const mine = Boolean(entry?.is_mine);
-    const messageText = String(entry?.message || "").trim();
-    const images = Array.isArray(entry?.images) ? entry.images : [];
-
-    return (
-      <View
-        key={entry?.id}
-        className={`mb-3 flex-row items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}
-      >
-        {!mine ? (
-          <View className="mb-1">
-            <View
-              className="items-center justify-center overflow-hidden rounded-full"
-              style={{ width: 30, height: 30, backgroundColor: APP_COLORS.primaryBlueLight }}
-            >
-              <Text className="text-[10px] font-bold" style={{ color: APP_COLORS.primaryBlue }}>
-                {selectedThreadInitials}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        <View
-          className="max-w-[84%] rounded-[22px] px-4 py-3"
-          style={{
-            backgroundColor: mine ? APP_COLORS.primaryBlue : "#e8edf4",
-            borderWidth: mine ? 0 : 1,
-            borderColor: mine ? "transparent" : "#d7e0ef",
-            shadowColor: mine ? "transparent" : "#0f172a",
-            shadowOpacity: mine ? 0 : 0.05,
-            shadowRadius: mine ? 0 : 10,
-            shadowOffset: mine ? { width: 0, height: 0 } : { width: 0, height: 4 },
-            elevation: mine ? 0 : 1,
-          }}
-        >
-          {images.length ? renderMessageImages(images) : null}
-          {messageText ? (
-            <Text className="text-[15px] leading-6" style={{ color: mine ? "#ffffff" : APP_COLORS.statusNeutral }}>
-              {messageText}
-            </Text>
-          ) : null}
-          <Text
-            className={`mt-2 text-[11px] ${mine ? "text-white/75" : ""}`}
-            style={{ color: mine ? "rgba(255,255,255,0.8)" : APP_COLORS.tabInactive }}
-          >
-            {entry?.time || formatConversationTime(entry?.created_at || entry?.created_at_raw || "")}
-          </Text>
-        </View>
-      </View>
-    );
-  }, [renderMessageImages, selectedThreadInitials]);
-
-  const handleSendReplyMessage = useCallback(async () => {
-    const text = String(replyMessage || "").trim();
-
-    if (!text) {
-      setErrorMessage("Type a message before sending.");
-      return;
-    }
-
-    if (parsedThreadId <= 0 && !parsedRecipientIds.length) {
-      setErrorMessage("No recipient selected.");
-      return;
-    }
+  const handleSend = async () => {
+    const text = reply.trim();
+    if (!text) return;
 
     try {
-      setIsSending(true);
-      setErrorMessage(null);
+      setSending(true);
+      setReply("");
 
-      const payload = await sendMessage({
+      const res = await sendMessage({
         threadId: parsedThreadId,
         recipientIds: parsedRecipientIds,
         message: text,
       });
 
-      const nextThreadId = Number(payload?.thread_id || 0);
-      setReplyMessage("");
+      const nextId = Number(res?.thread_id || 0);
 
-      if (nextThreadId > 0 && parsedThreadId <= 0) {
+      if (nextId && !parsedThreadId) {
         router.replace({
           pathname: "/(tabs)/message/[threadId]",
-          params: { threadId: String(nextThreadId) },
+          params: { threadId: String(nextId) },
         });
         return;
       }
 
-      if (parsedThreadId > 0) {
-        await loadConversation({ silent: true });
-      } else if (nextThreadId > 0) {
-        router.replace({
-          pathname: "/(tabs)/message/[threadId]",
-          params: { threadId: String(nextThreadId) },
-        });
-      }
-    } catch (error) {
-      setErrorMessage(error?.message || "Unable to send message.");
+      await loadConversation({ silent: true });
+    } catch (e) {
+      setError(e?.message || "Send failed");
     } finally {
-      setIsSending(false);
+      setSending(false);
     }
-  }, [loadConversation, parsedRecipientIds, parsedThreadId, replyMessage, router, sendMessage]);
+  };
+
+  /* ---------------- DERIVED ---------------- */
+
+  const label =
+    thread?.custom_name ||
+    thread?.name ||
+    String(recipientName || "Recipient");
+
+  const subtitle =
+    thread?.subtitle ||
+    String(recipientSubtitle || "Start a conversation");
+
+  const initials = getInitials(label);
+
+  /* ---------------- RENDER ---------------- */
+
+  const renderMessage = (msg) => {
+    const mine = msg?.is_mine;
+
+    return (
+      <View
+        key={msg.id}
+        className={`mb-3 flex-row ${mine ? "justify-end" : "justify-start"}`}
+      >
+        <View
+          className="max-w-[80%] px-4 py-3 rounded-2xl"
+          style={{
+            backgroundColor: mine
+              ? APP_COLORS.primaryBlue
+              : "#e8edf4",
+          }}
+        >
+          <Text style={{ color: mine ? "#fff" : APP_COLORS.primaryBlue }}>
+            {msg.message}
+          </Text>
+
+          <Text
+            className="text-[11px] mt-2"
+            style={{
+              color: mine
+                ? "rgba(255,255,255,0.7)"
+                : APP_COLORS.tabInactive,
+            }}
+          >
+            {formatTime(msg.created_at)}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: "#f7f9fd" }} edges={["bottom"]}>
+    <SafeAreaView className="flex-1 bg-[#f7f9fd]" edges={["bottom"]}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        <View className="flex-1">
-          <View className="my-1 flex-row items-center justify-between gap-3">
-            <Pressable
-              onPress={() => router.replace("/(tabs)/message")}
-              className="h-10 w-10 items-center justify-center rounded-full"
-              style={{ backgroundColor: "transparent" }}
-            >
-              <Feather name="chevron-left" size={28} color={APP_COLORS.primaryBlue} />
-            </Pressable>
+        {/* HEADER */}
+        <View className="flex-row items-center px-4 py-2">
+          <Pressable onPress={() => router.back()}>
+            <Feather
+              name="chevron-left"
+              size={26}
+              color={APP_COLORS.primaryBlue}
+            />
+          </Pressable>
 
-            <Text className="flex-1 px-2 text-center text-[18px] font-semibold" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={1}>
-              {selectedThreadLabel}
-            </Text>
+          <Animated.Text
+            numberOfLines={1}
+            className="flex-1 text-center text-[18px] font-semibold"
+            style={{
+              color: APP_COLORS.primaryBlue,
+              opacity: headerOpacity,
+              transform: [{ translateY: headerTranslate }],
+            }}
+          >
+            {label}
+          </Animated.Text>
 
-            <View className="h-10 w-10" />
-          </View>
+          <View className="w-6" />
+        </View>
 
-          <View style={{ height: 1, backgroundColor: "#d9e3f1" }} />
-
-          <View className="flex-1">
+        {/* CONTENT */}
+        <Animated.ScrollView
+          onScroll={createScrollHandler(scrollY)}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+            />
+          }
+          className="flex-1 px-4"
+        >
+          {/* HERO */}
+          <View className="items-center py-8">
             <View
-              className="flex-1 overflow-hidden border border-white bg-white"
+              className="h-24 w-24 rounded-full items-center justify-center"
+              style={{ backgroundColor: APP_COLORS.primaryBlueLight }}
+            >
+              <Text
+                className="text-3xl font-bold"
+                style={{ color: APP_COLORS.primaryBlue }}
+              >
+                {initials}
+              </Text>
+            </View>
+
+            <Animated.Text
+              className="mt-4 text-2xl font-extrabold"
               style={{
-                shadowColor: "#0f172a",
-                shadowOpacity: 0.05,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 8 },
-                elevation: 2,
+                color: APP_COLORS.primaryBlue,
+                opacity: heroOpacity,
+                transform: [{ translateY: heroTranslate }],
               }}
             >
-              <ScrollView
-                className="flex-1 px-4 pt-4"
-                contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
-                refreshControl={parsedThreadId > 0 ? <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={APP_COLORS.primaryBlue} /> : undefined}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                automaticallyAdjustKeyboardInsets
-              >
-                <View className="mb-6 items-center px-4 py-5">
-                  {renderAvatar(selectedThreadLabel, 112)}
-                  <Text className="mt-4 text-center text-[28px] font-extrabold" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={1}>
-                    {selectedThreadLabel}
-                  </Text>
-                  <Text className="mt-1 text-center text-[15px] leading-5" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={2}>
-                    {selectedThreadSubtitle}
-                  </Text>
-                </View>
-                {isLoading ? (
-                  <View className="flex-1 items-center justify-center py-14">
-                    <ActivityIndicator size="large" color={APP_COLORS.primaryBlue} />
-                    <Text className="mt-4 text-sm font-medium" style={{ color: APP_COLORS.textSubtle }}>
-                      Loading conversation...
-                    </Text>
-                  </View>
-                ) : errorMessage ? (
-                  <View className="flex-1 items-center justify-center py-10">
-                    <Text className="text-center text-sm" style={{ color: APP_COLORS.primaryRed }}>
-                      {errorMessage}
-                    </Text>
-                  </View>
-                ) : conversation.length ? (
-                  <View className="pb-2 pt-1">
-                    {conversation.map((entry) => renderMessageBubble(entry))}
-                  </View>
-                ) : (
-                  <View className="flex-1 items-center justify-center px-4 py-10">
-                    <View className="mb-4 h-20 w-20 items-center justify-center rounded-full" style={{ backgroundColor: APP_COLORS.primaryBlueLight }}>
-                      <Feather name="message-circle" size={32} color={APP_COLORS.primaryBlue} />
-                    </View>
-                    <Text className="text-center text-[18px] font-bold" style={{ color: APP_COLORS.primaryBlue }}>
-                      No messages yet
-                    </Text>
-                    <Text className="mt-2 max-w-sm text-center text-sm leading-6" style={{ color: APP_COLORS.textSubtle }}>
-                      Start the conversation by sending the first message below.
-                    </Text>
-                  </View>
-                )}
-              </ScrollView>
+              {label}
+            </Animated.Text>
 
-              <View className="border-t border-[#e5edf6] px-4 py-4">
-                <View className="flex-row items-center gap-3 rounded-[20px] border border-[#d7e0ef] bg-[#f8fbff] px-4 py-3">
-                  <TextInput
-                    value={replyMessage}
-                    onChangeText={setReplyMessage}
-                    placeholder="Write a message."
-                    placeholderTextColor={APP_COLORS.tabInactive}
-                    className="flex-1 text-[15px]"
-                    style={{ color: APP_COLORS.primaryBlue }}
-                    returnKeyType="send"
-                    onSubmitEditing={handleSendReplyMessage}
-                  />
+            <Text className="text-sm text-gray-400 mt-1">
+              {subtitle}
+            </Text>
+          </View>
 
-                  <Pressable
-                    onPress={handleSendReplyMessage}
-                    disabled={isSending || !String(replyMessage || "").trim()}
-                    className="h-11 w-11 items-center justify-center rounded-full"
-                    style={{
-                      backgroundColor: isSending || !String(replyMessage || "").trim() ? APP_COLORS.primaryBlueLight : APP_COLORS.primaryBlue,
-                      opacity: isSending ? 0.8 : 1,
-                    }}
-                  >
-                    {isSending ? (
-                      <ActivityIndicator size="small" color={APP_COLORS.primaryBlue} />
-                    ) : (
-                      <Feather name="send" size={16} color="#ffffff" />
-                    )}
-                  </Pressable>
-                </View>
+          {/* MESSAGES */}
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color={APP_COLORS.primaryBlue}
+            />
+          ) : (
+            messages.map(renderMessage)
+          )}
+        </Animated.ScrollView>
 
-                {errorMessage ? (
-                  <Text className="mt-2 text-xs" style={{ color: APP_COLORS.primaryRed }}>
-                    {errorMessage}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
+        {/* INPUT */}
+        <View className="px-3 py-2 bg-white border-t border-[#e5edf6]">
+          <View className="flex-row items-center bg-[#f1f5fb] rounded-full px-4 py-2">
+            <TextInput
+              value={reply}
+              onChangeText={setReply}
+              placeholder="Write a message"
+              className="flex-1"
+            />
+
+            <Pressable
+              onPress={handleSend}
+              disabled={!reply.trim() || sending}
+              className="ml-2 h-10 w-10 rounded-full items-center justify-center"
+              style={{
+                backgroundColor: reply.trim()
+                  ? APP_COLORS.primaryBlue
+                  : APP_COLORS.primaryBlueLight,
+              }}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name="send" size={16} color="#fff" />
+              )}
+            </Pressable>
           </View>
         </View>
       </KeyboardAvoidingView>
