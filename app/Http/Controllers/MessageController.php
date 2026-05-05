@@ -822,6 +822,200 @@ class MessageController extends Controller
         ]);
     }
 
+    public function mobileIndex(Request $request): JsonResponse
+    {
+        if (!$this->hasMessagingSchema()) {
+            return response()->json([
+                'ok' => true,
+                'threads' => [],
+                'selected_thread' => null,
+                'conversation' => [],
+                'available_users' => [],
+                'latest_thread_id' => 0,
+                'latest_global_id' => 0,
+                'unread_count' => 0,
+            ]);
+        }
+
+        $authId = (int) Auth::id();
+        $threadId = (int) $request->integer('thread');
+
+        $latestByThread = DB::table('user_messages')
+            ->selectRaw('thread_id, MAX(created_at) as latest_created_at, MAX(id) as latest_message_id')
+            ->where('recipient_id', $authId)
+            ->whereNotNull('thread_id')
+            ->groupBy('thread_id');
+
+        $threadRowsQuery = DB::table('message_thread_members as member')
+            ->join('message_threads as thread', 'thread.id', '=', 'member.thread_id')
+            ->joinSub($latestByThread, 'latest', function ($join) {
+                $join->on('latest.thread_id', '=', 'thread.id');
+            })
+            ->where('member.user_id', $authId)
+            ->select([
+                'thread.id as thread_id',
+                'thread.name as thread_name',
+                'thread.is_group',
+                'latest.latest_created_at',
+                'latest.latest_message_id',
+            ]);
+
+        if ($this->hasManualUnreadColumn()) {
+            $threadRowsQuery->addSelect('member.manual_unread_at');
+        }
+
+        $threadRows = $threadRowsQuery
+            ->orderByDesc('latest_created_at')
+            ->orderByDesc('latest_message_id')
+            ->get();
+
+        $latestIds = $threadRows->pluck('latest_message_id')->filter()->map(fn ($id) => (int) $id)->values();
+        $threadIds = $threadRows->pluck('thread_id')->filter()->map(fn ($id) => (int) $id)->values();
+
+        $latestMessages = $latestIds->isEmpty()
+            ? collect()
+            : DB::table('user_messages')->whereIn('id', $latestIds)->get()->keyBy('id');
+
+        $threadMembersRaw = $threadIds->isEmpty()
+            ? collect()
+            : DB::table('message_thread_members as member')
+                ->join('tbusers as user', 'user.idno', '=', 'member.user_id')
+                ->whereIn('member.thread_id', $threadIds)
+                ->select([
+                    'member.thread_id',
+                    'user.idno',
+                    'user.fname',
+                    'user.lname',
+                    'user.position',
+                    'user.office',
+                    'user.province',
+                    'user.region',
+                ])
+                ->get();
+
+        $membersByThread = $threadMembersRaw->groupBy('thread_id');
+
+        $unreadByThread = DB::table('user_messages')
+            ->select('thread_id', DB::raw('COUNT(*) as unread_count'))
+            ->where('recipient_id', $authId)
+            ->where('sender_id', '!=', $authId)
+            ->whereNull('read_at')
+            ->whereNotNull('thread_id')
+            ->groupBy('thread_id')
+            ->pluck('unread_count', 'thread_id');
+
+        $threadsCollection = $threadRows->map(function ($row) use ($authId, $latestMessages, $membersByThread, $unreadByThread) {
+            $latest = $latestMessages->get((int) $row->latest_message_id);
+            $threadId = (int) ($row->thread_id ?? 0);
+            if (!$latest || $threadId <= 0) {
+                return null;
+            }
+
+            $members = collect($membersByThread->get($threadId, collect()));
+            $counterparts = $members->filter(fn ($member) => (int) ($member->idno ?? 0) !== $authId)->values();
+
+            $isGroup = (bool) ($row->is_group ?? false) || $counterparts->count() > 1;
+            $name = trim((string) ($row->thread_name ?? ''));
+            $subtitle = '';
+
+            if ($isGroup) {
+                $avatarMembers = $counterparts->map(function ($member) {
+                    $memberName = trim((string) (($member->fname ?? '') . ' ' . ($member->lname ?? '')));
+
+                    return $memberName !== '' ? $memberName : 'Unknown User';
+                })->sortBy(fn ($memberName) => mb_strtolower((string) $memberName))->values();
+
+                if ($name === '') {
+                    $names = $avatarMembers;
+                    $name = $names->take(2)->implode(', ');
+                    $remaining = max(0, $names->count() - 2);
+                    if ($remaining > 0) {
+                        $name .= ' +' . $remaining;
+                    }
+                }
+
+                if ($name === '') {
+                    $name = 'Group chat';
+                }
+
+                $subtitle = max(2, $members->count()) . ' participants';
+            } else {
+                $counterpart = $counterparts->first();
+                if (!$counterpart) {
+                    return null;
+                }
+
+                $name = trim((string) (($counterpart->fname ?? '') . ' ' . ($counterpart->lname ?? '')));
+                $name = $name !== '' ? $name : 'Unknown User';
+                $subtitle = trim((string) ($counterpart->position ?: $counterpart->office ?: 'PDMU User'));
+            }
+
+            $latestSenderId = (int) ($latest->sender_id ?? 0);
+            $latestSender = $members->first(fn ($member) => (int) ($member->idno ?? 0) === $latestSenderId);
+            $latestSenderName = '';
+            if ($latestSender) {
+                $latestSenderName = trim((string) (($latestSender->fname ?? '') . ' ' . ($latestSender->lname ?? '')));
+                $latestSenderName = $latestSenderName !== '' ? $latestSenderName : 'Unknown User';
+            }
+
+            $isMine = $latestSenderId === $authId;
+            $actualUnreadCount = (int) ($unreadByThread[$threadId] ?? 0);
+            $manualUnread = $this->hasManualUnreadColumn() && !empty($row->manual_unread_at);
+            $threadUnreadCount = $actualUnreadCount > 0 ? $actualUnreadCount : ($manualUnread ? 1 : 0);
+
+            return [
+                'thread_id' => $threadId,
+                'name' => $name,
+                'subtitle' => $subtitle,
+                'is_group' => $isGroup,
+                'avatar_members' => $isGroup ? ($avatarMembers ?? collect())->values()->all() : [],
+                'preview' => $this->messagePreviewText($latest->message ?? '', $latest->image_path ?? null, 72),
+                'preview_sender' => $latestSenderName,
+                'preview_is_mine' => $isMine,
+                'preview_show_unread_label' => !$isMine && $actualUnreadCount > 0,
+                'time' => $this->formatMessageTimestamp($latest->created_at ?? null),
+                'latest_at' => $latest->created_at,
+                'unread' => $threadUnreadCount,
+            ];
+        })->filter()->values();
+
+        if ($threadId <= 0 && $threadsCollection->isNotEmpty()) {
+            $threadId = (int) ($threadsCollection->first()['thread_id'] ?? 0);
+        }
+
+        $selectedThread = null;
+        $conversation = collect();
+        if ($threadId > 0) {
+            $context = $this->mobileThreadContext($threadId, $authId);
+            $selectedThread = $context['selected_thread'];
+            $conversation = $context['conversation'];
+        }
+
+        return response()->json([
+            'ok' => true,
+            'threads' => $threadsCollection->values(),
+            'selected_thread_id' => $threadId,
+            'selected_thread' => $selectedThread,
+            'conversation' => $conversation,
+            'available_users' => $this->availableUsers()->map(function ($user) {
+                $fullName = trim((string) (($user->fname ?? '') . ' ' . ($user->lname ?? '')));
+
+                return [
+                    'id' => (int) ($user->idno ?? 0),
+                    'name' => $fullName !== '' ? $fullName : 'Unknown User',
+                    'position' => trim((string) ($user->position ?? '')),
+                    'office' => trim((string) ($user->office ?? '')),
+                    'search' => mb_strtolower(trim((string) (($user->fname ?? '') . ' ' . ($user->lname ?? '') . ' ' . ($user->position ?? '') . ' ' . ($user->office ?? '')))),
+                ];
+            })->values(),
+            'latest_thread_id' => (int) ($conversation->max('id') ?? 0),
+            'latest_global_id' => (int) (DB::table('user_messages')
+                ->where('recipient_id', $authId)
+                ->max('id') ?? 0),
+            'unread_count' => $this->unreadThreadCountForUser($authId),
+        ]);
+    }
+
     private function availableUsers(): Collection
     {
         $authId = (int) Auth::id();
@@ -837,6 +1031,154 @@ class MessageController extends Controller
             ->select(['idno', 'fname', 'lname', 'position', 'office'])
             ->limit(300)
             ->get();
+    }
+
+    private function mobileThreadContext(int $threadId, int $authId): array
+    {
+        $threadExists = DB::table('message_thread_members')
+            ->where('thread_id', $threadId)
+            ->where('user_id', $authId)
+            ->exists();
+
+        if (!$threadExists) {
+            return [
+                'selected_thread' => null,
+                'selected_group_members' => collect(),
+                'conversation' => collect(),
+            ];
+        }
+
+        $thread = DB::table('message_threads')->where('id', $threadId)->first();
+        $members = DB::table('message_thread_members as member')
+            ->join('tbusers as user', 'user.idno', '=', 'member.user_id')
+            ->where('member.thread_id', $threadId)
+            ->select(['user.idno', 'user.fname', 'user.lname', 'user.position', 'user.office', 'user.province', 'user.region'])
+            ->get();
+
+        $counterparts = $members->filter(fn ($member) => (int) ($member->idno ?? 0) !== $authId)->values();
+        $isGroup = (bool) ($thread->is_group ?? false) || $counterparts->count() > 1;
+
+        $selectedUser = null;
+        $selectedGroupMembers = collect();
+
+        if ($isGroup) {
+            $threadName = trim((string) ($thread->name ?? ''));
+            if ($threadName === '') {
+                $threadName = $counterparts
+                    ->map(function ($member) {
+                        $memberName = trim((string) (($member->fname ?? '') . ' ' . ($member->lname ?? '')));
+                        return $memberName !== '' ? $memberName : 'Unknown User';
+                    })
+                    ->take(3)
+                    ->implode(', ');
+            }
+
+            $selectedGroupMembers = $members
+                ->map(function ($member) use ($authId) {
+                    $name = trim((string) (($member->fname ?? '') . ' ' . ($member->lname ?? '')));
+
+                    return (object) [
+                        'idno' => (int) ($member->idno ?? 0),
+                        'name' => $name !== '' ? $name : 'Unknown User',
+                        'position' => trim((string) ($member->position ?? '')),
+                        'office' => trim((string) ($member->office ?? '')),
+                        'province' => trim((string) ($member->province ?? '')),
+                        'region' => trim((string) ($member->region ?? '')),
+                        'is_me' => (int) ($member->idno ?? 0) === $authId,
+                    ];
+                })
+                ->sortBy(fn ($member) => mb_strtolower((string) $member->name))
+                ->values();
+
+            $selectedUser = (object) [
+                'idno' => $threadId,
+                'fname' => $threadName !== '' ? $threadName : 'Group chat',
+                'lname' => '',
+                'custom_name' => trim((string) ($thread->name ?? '')),
+                'position' => 'Group chat',
+                'office' => max(2, $members->count()) . ' participants',
+            ];
+        } else {
+            $counterpart = $counterparts->first();
+            if ($counterpart) {
+                $selectedUser = (object) [
+                    'idno' => $threadId,
+                    'fname' => $counterpart->fname,
+                    'lname' => $counterpart->lname,
+                    'position' => $counterpart->position,
+                    'office' => $counterpart->office,
+                    'province' => $counterpart->province,
+                    'region' => $counterpart->region,
+                ];
+            }
+        }
+
+        $conversation = DB::table('user_messages')
+            ->where('thread_id', $threadId)
+            ->where('recipient_id', $authId)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit(150)
+            ->get();
+
+        DB::table('user_messages')
+            ->where('thread_id', $threadId)
+            ->where('recipient_id', $authId)
+            ->where('sender_id', '!=', $authId)
+            ->whereNull('read_at')
+            ->update([
+                'read_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        if ($this->hasManualUnreadColumn()) {
+            DB::table('message_thread_members')
+                ->where('thread_id', $threadId)
+                ->where('user_id', $authId)
+                ->whereNotNull('manual_unread_at')
+                ->update([
+                    'manual_unread_at' => null,
+                    'updated_at' => now(),
+                ]);
+        }
+
+        $subtitle = '';
+        if ($selectedUser) {
+            $position = trim((string) ($selectedUser->position ?? ''));
+            $office = trim((string) ($selectedUser->office ?? ''));
+            if ($position !== '' && $office !== '') {
+                $subtitle = $position . ' · ' . $office;
+            } elseif ($position !== '') {
+                $subtitle = $position;
+            } elseif ($office !== '') {
+                $subtitle = $office;
+            }
+        }
+
+        return [
+            'selected_thread' => $selectedUser ? [
+                'thread_id' => $threadId,
+                'name' => trim((string) (($selectedUser->fname ?? '') . ' ' . ($selectedUser->lname ?? ''))) !== ''
+                    ? trim((string) (($selectedUser->fname ?? '') . ' ' . ($selectedUser->lname ?? '')))
+                    : 'Unknown User',
+                'subtitle' => $subtitle,
+                'is_group' => $isGroup,
+                'custom_name' => trim((string) ($selectedUser->custom_name ?? '')),
+                'members' => $selectedGroupMembers->map(function ($member) {
+                    return [
+                        'idno' => (int) ($member->idno ?? 0),
+                        'name' => (string) ($member->name ?? ''),
+                        'position' => trim((string) ($member->position ?? '')),
+                        'office' => trim((string) ($member->office ?? '')),
+                        'province' => trim((string) ($member->province ?? '')),
+                        'region' => trim((string) ($member->region ?? '')),
+                        'is_me' => (bool) ($member->is_me ?? false),
+                    ];
+                })->values()->all(),
+            ] : null,
+            'selected_group_members' => $selectedGroupMembers,
+            'conversation' => $this->groupConversationEntries($conversation, $authId)->values(),
+        ];
     }
 
     private function paginateCollection(Collection $items, int $perPage, Request $request): LengthAwarePaginator

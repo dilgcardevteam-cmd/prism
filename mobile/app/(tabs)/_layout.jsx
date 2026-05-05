@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
+import { Tabs, usePathname, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import {
   Animated,
@@ -121,6 +121,7 @@ const DRAWER_MENU_ITEMS = [
 
 export default function TabLayout() {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { firstName, lastName } = useFetchLoggedUser();
   const { signOut } = useAuth();
@@ -157,6 +158,7 @@ export default function TabLayout() {
     shadowOffset: { width: 6, height: 0 },
     elevation: 18,
   };
+  const isMessagesTab = pathname === "/(tabs)/message" || pathname === "/message";
 
   const openDrawer = () => {
     if (isDrawerVisible) {
@@ -276,16 +278,30 @@ export default function TabLayout() {
             </Pressable>
           ),
           headerRight: () => (
-            <Pressable
-              onPress={() => router.push(APP_ROUTES.notifications)}
-              className="mr-[14px] p-1"
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Open notifications"
-            >
-              <Feather name="bell" size={22} color={APP_COLORS.primary} />
-            </Pressable>
+            <View className="mr-[10px] flex-row items-center gap-2">
+              {isMessagesTab ? (
+                <Pressable
+                  onPress={() => router.setParams({ compose: "1" })}
+                  className="p-1"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create new message"
+                >
+                  <Feather name="edit-3" size={22} color={APP_COLORS.primary} />
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => router.push(APP_ROUTES.notifications)}
+                className="p-1"
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Open notifications"
+              >
+                <Feather name="bell" size={22} color={APP_COLORS.primary} />
+              </Pressable>
+            </View>
           ),
         }}
         tabBar={renderTabBar}
@@ -315,7 +331,7 @@ export default function TabLayout() {
         {/* Explicitly register screens that used to be tabs so we can set friendly titles */}
         <Tabs.Screen
           name="message/index"
-          options={{ title: "Messages" }}
+          options={{ title: "" }}
         />
 
         <Tabs.Screen
