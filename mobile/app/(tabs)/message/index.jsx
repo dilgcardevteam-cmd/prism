@@ -23,6 +23,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import NoResultsState from "../../../components/common/NoResultsState";
+import ComposeBottomSheet from "./components/ComposeBottomSheet";
 import { APP_COLORS } from "../../../constants/theme";
 import { useMessagesApi } from "../../../hooks/useMessagesApi";
 import { useWebAppRequest } from "../../../hooks/useWebAppRequest";
@@ -537,145 +538,24 @@ export default function MessageScreen() {
 
         <Animated.View className="-mt-6 flex-1 rounded-t-[30px] bg-white px-4 pb-6 pt-4" style={contentParallaxStyle}>
           {isComposeOpen ? (
-            <View className="mb-4 overflow-hidden rounded-[28px] border border-[#dbe5f1] bg-[#fbfdff]">
-              <View className="flex-row items-center justify-between border-b border-[#e3ebf4] px-4 py-4">
-                <View>
-                  <Text className="text-base font-bold" style={{ color: APP_COLORS.primaryBlue }}>
-                    Start a conversation
-                  </Text>
-                  <Text className="mt-1 text-xs" style={{ color: APP_COLORS.textSubtle }}>
-                    Select one or more recipients and send a message.
-                  </Text>
-                </View>
-                <Pressable onPress={() => setIsComposeOpen(false)} className="h-9 w-9 items-center justify-center rounded-full bg-white">
-                  <Feather name="x" size={18} color={APP_COLORS.primaryBlue} />
-                </Pressable>
-              </View>
-
-              <View className="px-4 py-4">
-                <View className="rounded-[22px] border border-[#dbe5f1] bg-white px-4 py-3">
-                  <Text className="text-xs font-semibold uppercase tracking-wide" style={{ color: APP_COLORS.tabInactive }}>
-                    Recipients
-                  </Text>
-                  <View className="mt-2 flex-row flex-wrap gap-2">
-                    {composeRecipients.length ? composeRecipients.map((recipient) => (
-                      <View
-                        key={recipient.id}
-                        className="flex-row items-center gap-2 rounded-full px-3 py-2"
-                        style={{ backgroundColor: APP_COLORS.primaryBlueLight }}
-                      >
-                        <View className="h-6 w-6 items-center justify-center rounded-full" style={{ backgroundColor: APP_COLORS.primaryBlue }}>
-                          <Text className="text-[9px] font-extrabold text-white">{recipient.initials}</Text>
-                        </View>
-                        <Text className="max-w-[140px] text-xs font-semibold" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={1}>
-                          {recipient.name}
-                        </Text>
-                        <Pressable onPress={() => handleRemoveComposeRecipient(recipient.id)}>
-                          <Feather name="x" size={14} color={APP_COLORS.primaryBlue} />
-                        </Pressable>
-                      </View>
-                    )) : (
-                      <Text className="text-sm" style={{ color: APP_COLORS.textSubtle }}>
-                        Add recipients to begin.
-                      </Text>
-                    )}
-                  </View>
-
-                  <View className="mt-3 flex-row items-center gap-2 rounded-full border border-[#dbe5f1] bg-[#f8fbff] px-3 py-2">
-                    <Feather name="search" size={16} color={APP_COLORS.tabInactive} />
-                    <TextInput
-                      value={composeQuery}
-                      onChangeText={setComposeQuery}
-                      placeholder="Search recipients"
-                      placeholderTextColor={APP_COLORS.tabInactive}
-                      className="flex-1 text-sm"
-                      style={{ color: APP_COLORS.primaryBlue }}
-                    />
-                  </View>
-                </View>
-
-                <View className="mt-3 max-h-60 overflow-hidden rounded-[22px] border border-[#dbe5f1] bg-white">
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                    {composeRecipientOptions.length ? composeRecipientOptions.map((user) => (
-                      <Pressable
-                        key={user.id}
-                        onPress={() => handleAddComposeRecipient(user)}
-                        className="flex-row items-center gap-3 border-b border-[#eef3f8] px-4 py-3"
-                      >
-                        <View className="h-10 w-10 items-center justify-center rounded-2xl" style={{ backgroundColor: `${APP_COLORS.primaryBlue}12` }}>
-                          <Text className="text-xs font-extrabold" style={{ color: APP_COLORS.primaryBlue }}>
-                            {getInitials(user?.name || "U")}
-                          </Text>
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-sm font-semibold" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={1}>
-                            {user?.name || "Unknown User"}
-                          </Text>
-                          <Text className="mt-0.5 text-xs" style={{ color: APP_COLORS.textSubtle }} numberOfLines={1}>
-                            {[user?.position, user?.office].filter(Boolean).join(" � ") || "PDMU User"}
-                          </Text>
-                        </View>
-                        <Feather name="plus-circle" size={18} color={APP_COLORS.primaryBlue} />
-                      </Pressable>
-                    )) : (
-                      <NoResultsState
-                        title={composeSearchLower ? "No recipients matched" : "No recipients available"}
-                        description={composeSearchLower ? "Try another name or remove a filter." : "There are no selectable users right now."}
-                        containerClassName="rounded-none border-0 bg-transparent px-4 py-6"
-                        titleClassName="text-[15px] font-semibold text-[#1e3a8a]"
-                        descriptionClassName="mt-1 text-[12px] leading-[18px] text-[#64748b]"
-                        animationStyle={{ width: 180, height: 180 }}
-                      />
-                    )}
-                  </ScrollView>
-                </View>
-
-                <View className="mt-4 rounded-[22px] border border-[#dbe5f1] bg-white px-4 py-3">
-                  <Text className="text-xs font-semibold uppercase tracking-wide" style={{ color: APP_COLORS.tabInactive }}>
-                    Message
-                  </Text>
-                  <TextInput
-                    value={composeMessage}
-                    onChangeText={setComposeMessage}
-                    placeholder="Write something thoughtful..."
-                    placeholderTextColor={APP_COLORS.tabInactive}
-                    multiline
-                    className="mt-2 min-h-[96px] rounded-[18px] border border-[#dbe5f1] bg-[#f8fbff] px-4 py-3 text-sm"
-                    style={{ color: APP_COLORS.primaryBlue, textAlignVertical: "top" }}
-                  />
-
-                  {renderImagePreview(composeImage, () => setComposeImage(null))}
-
-                  <View className="mt-4 flex-row items-center justify-between gap-3">
-                    <Pressable
-                      onPress={async () => {
-                        const image = await pickImage();
-                        if (image) {
-                          setComposeImage(image);
-                        }
-                      }}
-                      className="flex-row items-center gap-2 rounded-full px-4 py-3"
-                      style={{ backgroundColor: APP_COLORS.primaryBlueLight }}
-                    >
-                      <Feather name="image" size={16} color={APP_COLORS.primaryBlue} />
-                      <Text className="text-sm font-semibold" style={{ color: APP_COLORS.primaryBlue }}>
-                        Add image
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={handleSendComposeMessage}
-                      disabled={isSending}
-                      className="flex-row items-center gap-2 rounded-full px-5 py-3"
-                      style={{ backgroundColor: APP_COLORS.primaryBlue, opacity: isSending ? 0.75 : 1 }}
-                    >
-                      {isSending ? <ActivityIndicator size="small" color="#ffffff" /> : <Feather name="send" size={16} color="#ffffff" />}
-                      <Text className="text-sm font-bold text-white">Send</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-            </View>
+            <ComposeBottomSheet
+              visible={isComposeOpen}
+              onClose={() => setIsComposeOpen(false)}
+              composeQuery={composeQuery}
+              setComposeQuery={setComposeQuery}
+              composeRecipients={composeRecipients}
+              handleRemoveComposeRecipient={handleRemoveComposeRecipient}
+              composeRecipientOptions={composeRecipientOptions}
+              handleAddComposeRecipient={handleAddComposeRecipient}
+              composeMessage={composeMessage}
+              setComposeMessage={setComposeMessage}
+              composeImage={composeImage}
+              setComposeImage={setComposeImage}
+              pickImage={pickImage}
+              renderImagePreview={renderImagePreview}
+              handleSendComposeMessage={handleSendComposeMessage}
+              isSending={isSending}
+            />
           ) : null}
 
           <View className="mb-3">
