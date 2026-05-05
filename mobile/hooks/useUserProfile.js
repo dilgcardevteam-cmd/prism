@@ -5,13 +5,15 @@ import { useWebAppRequest } from "./useWebAppRequest";
 export function useUserProfile() {
   const { session, isHydrating } = useAuth();
   const { fetchJsonWithFallback } = useWebAppRequest();
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState(session?.id ? session : null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = useCallback(async ({ silent = false } = {}) => {
     try {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       setErrorMessage(null);
 
       const data = await fetchJsonWithFallback("/api/mobile/user/profile", {
@@ -25,22 +27,39 @@ export function useUserProfile() {
       if (data?.user) {
         setProfile(data.user);
       } else {
-        setErrorMessage("Failed to load profile data");
+        throw new Error("Failed to load profile data");
       }
     } catch (error) {
-      setErrorMessage(
-        error?.message || "Unable to load profile. Please try again."
-      );
+      if (session?.id) {
+        setProfile((currentProfile) => currentProfile || session);
+        setErrorMessage(null);
+      } else {
+        setErrorMessage(
+          error?.message || "Unable to load profile. Please try again."
+        );
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
-  }, [fetchJsonWithFallback]);
+  }, [fetchJsonWithFallback, session]);
 
   useEffect(() => {
-    if (!isHydrating && session?.id) {
-      loadProfile();
+    if (isHydrating) {
+      return;
     }
-  }, [isHydrating, session?.id, loadProfile]);
+
+    if (session?.id) {
+      setProfile(session);
+      setErrorMessage(null);
+      setIsLoading(false);
+      loadProfile({ silent: true });
+      return;
+    }
+
+    setIsLoading(false);
+  }, [isHydrating, session, loadProfile]);
 
   return {
     profile: profile || session, // Fallback to session data

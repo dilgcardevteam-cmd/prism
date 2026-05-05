@@ -1,10 +1,11 @@
 import { Feather } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
+import { Tabs, usePathname, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import {
   Animated,
   Easing,
   Image,
+  PanResponder,
   Pressable,
   ScrollView,
   Text,
@@ -120,6 +121,7 @@ const DRAWER_MENU_ITEMS = [
 
 export default function TabLayout() {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { firstName, lastName } = useFetchLoggedUser();
   const { signOut } = useAuth();
@@ -156,6 +158,7 @@ export default function TabLayout() {
     shadowOffset: { width: 6, height: 0 },
     elevation: 18,
   };
+  const isMessagesTab = pathname === "/(tabs)/message" || pathname === "/message";
 
   const openDrawer = () => {
     if (isDrawerVisible) {
@@ -226,13 +229,35 @@ export default function TabLayout() {
     }
   };
 
+  // Global edge-swipe gesture to open drawer: start near left edge and swipe right.
+  const edgePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => {
+        try {
+          const x = evt?.nativeEvent?.pageX ?? 9999;
+          return x <= 28 && !isDrawerVisible;
+        } catch (_e) {
+          return false;
+        }
+      },
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 20;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx > 60) {
+          openDrawer();
+        }
+      },
+    })
+  ).current;
+
   const renderTabBar = () => {
     // Always hide the bottom tab bar (we're moving messages/settings into drawer)
     return null;
   };
 
   return (
-    <View className="flex-1">
+    <View className="flex-1" {...edgePanResponder.panHandlers}>
       <Tabs
         screenOptions={{
           headerShown: true,
@@ -253,16 +278,30 @@ export default function TabLayout() {
             </Pressable>
           ),
           headerRight: () => (
-            <Pressable
-              onPress={() => router.push(APP_ROUTES.notifications)}
-              className="mr-[14px] p-1"
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Open notifications"
-            >
-              <Feather name="bell" size={22} color={APP_COLORS.primary} />
-            </Pressable>
+            <View className="mr-[10px] flex-row items-center gap-2">
+              {isMessagesTab ? (
+                <Pressable
+                  onPress={() => router.setParams({ compose: "1" })}
+                  className="p-1"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create new message"
+                >
+                  <Feather name="edit-3" size={22} color={APP_COLORS.primary} />
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => router.push(APP_ROUTES.notifications)}
+                className="p-1"
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Open notifications"
+              >
+                <Feather name="bell" size={22} color={APP_COLORS.primary} />
+              </Pressable>
+            </View>
           ),
         }}
         tabBar={renderTabBar}
@@ -292,7 +331,12 @@ export default function TabLayout() {
         {/* Explicitly register screens that used to be tabs so we can set friendly titles */}
         <Tabs.Screen
           name="message/index"
-          options={{ title: "Messages" }}
+          options={{ title: "" }}
+        />
+
+        <Tabs.Screen
+          name="message/[threadId]"
+          options={{ title: "Conversation", href: null }}
         />
 
         <Tabs.Screen
@@ -380,10 +424,11 @@ export default function TabLayout() {
                       <Text
                         numberOfLines={1}
                         className="text-[16px] font-semibold text-white"
+                        style={{ fontFamily: "Montserrat-SemiBold" }}
                       >
                         {(firstName ?? "User") + (lastName ? " " + lastName : "")}
                       </Text>
-                      <Text className="mt-0.5 text-[12px] text-white/70">
+                      <Text className="mt-0.5 text-[12px] text-white/70" style={{ fontFamily: "Montserrat-Regular" }}>
                         Mobile User
                       </Text>
                     </View>
@@ -452,6 +497,7 @@ export default function TabLayout() {
                               ? "#FCA5A5"
                               : "rgba(255, 255, 255, 0.9)",
                             fontWeight: item.destructive ? "600" : "400",
+                            fontFamily: item.destructive ? "Montserrat-SemiBold" : "Montserrat-Regular",
                           }}
                         >
                           {item.label}
@@ -506,7 +552,7 @@ export default function TabLayout() {
                                   size={14}
                                   color="#EAF1FF"
                                 />
-                                <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white">
+                                <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white" style={{ fontFamily: "Montserrat-Regular" }}>
                                   {childItem.label}
                                 </Text>
                               </Pressable>
@@ -537,7 +583,7 @@ export default function TabLayout() {
                                 size={14}
                                 color="#EAF1FF"
                               />
-                              <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white">
+                              <Text className="ml-3 flex-1 text-[13px] leading-[18px] text-white" style={{ fontFamily: "Montserrat-Regular" }}>
                                 {childItem.label}
                               </Text>
                             </Pressable>

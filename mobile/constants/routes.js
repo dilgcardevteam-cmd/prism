@@ -43,4 +43,8 @@ export const PROJECT_MONITORING_ROUTES = [
     route: "project-monitoring/sglgif-portal",
     title: "SGLGIF Portal",
   },
+  {
+    route: "profile/index",
+    title: "Profile",
+  }
 ];

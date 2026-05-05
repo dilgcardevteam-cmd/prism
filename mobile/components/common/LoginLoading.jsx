@@ -6,8 +6,8 @@ export default function LoadingOverlay({
   message,
   children,
   overlayClassName = "bg-black/40",
-  cardClassName = "rounded-lg items-center justify-center",
-  messageClassName = "mt-2 text-sm font-semibold text-white",
+  cardClassName = "bg-white rounded-full items-center justify-center",
+  messageClassName = "mt-2 text-sm font-semibold text-gray-600",
 }) {
   if (!visible) return null;
 
@@ -15,10 +15,11 @@ export default function LoadingOverlay({
     <Modal transparent visible={visible} animationType="fade">
       <View className={`absolute inset-0 z-50 items-center justify-center ${overlayClassName}`}>
         
-        <View className={`h-72 w-72 ${cardClassName}`}>
+        {/* BIGGER CIRCLE */}
+        <View className={`h-56 w-56 ${cardClassName}`}>
           {children || (
             <LottieView
-              source={require("../../assets/animations/loading-dataman.json")}
+              source={require("../../assets/animations/loading-rocketman.json")}
               autoPlay
               loop
               style={{ width: 200, height: 200 }}
@@ -26,10 +27,7 @@ export default function LoadingOverlay({
           )}
 
           {message ? (
-            <Text
-              className={messageClassName}
-              style={{fontFamily: "Montserrat-SemiBold"}}
-            >
+            <Text className={messageClassName}>
               {message}
             </Text>
           ) : null}

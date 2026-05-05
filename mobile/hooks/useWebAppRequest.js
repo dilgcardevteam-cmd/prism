@@ -7,11 +7,20 @@ import {
 } from "../constants/api";
 
 const STORAGE_KEY = "preferredBaseUrl";
-const REQUEST_TIMEOUT = 3000;
+const REQUEST_TIMEOUT = 8000;
 const MAX_RETRIES = 2;
 const STAGGER_DELAY = 150;
 
 let preferredBaseUrl = API_URL;
+
+function isLoopbackBaseUrl(url) {
+  try {
+    const hostname = new URL(String(url || "")).hostname;
+    return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "10.0.2.2";
+  } catch (_error) {
+    return false;
+  }
+}
 
 /**
  * Fetch with timeout
@@ -25,6 +34,7 @@ async function requestJson(path, baseUrl, init = {}, timeout = REQUEST_TIMEOUT) 
 
     const response = await fetch(url, {
       ...init,
+      credentials: init.credentials ?? "include",
       signal: controller.signal,
       headers: {
         Accept: "application/json",
@@ -118,8 +128,13 @@ export function useWebAppRequest() {
         const saved = await AsyncStorage.getItem(STORAGE_KEY);
 
         if (saved && mounted) {
-          preferredBaseUrl = saved;
-          setActiveBaseUrl(saved);
+          if (!isLoopbackBaseUrl(saved)) {
+            preferredBaseUrl = saved;
+            setActiveBaseUrl(saved);
+          } else {
+            await AsyncStorage.removeItem(STORAGE_KEY);
+            setActiveBaseUrl(API_URL);
+          }
         }
       } catch (e) {
         // optional: log error
@@ -134,10 +149,10 @@ export function useWebAppRequest() {
   }, []);
 
   /**
-   * Persist working base URL
+   * Persist working base URL (skip loopback URLs)
    */
   useEffect(() => {
-    if (!activeBaseUrl || !isStorageLoaded) return;
+    if (!activeBaseUrl || !isStorageLoaded || isLoopbackBaseUrl(activeBaseUrl)) return;
 
     AsyncStorage.setItem(STORAGE_KEY, activeBaseUrl).catch(() => {
       // optional: log error
@@ -149,9 +164,15 @@ export function useWebAppRequest() {
    */
   const fetchJsonWithFallback = useCallback(
     async (path, init = {}) => {
-      const candidates = Array.from(
+      const dedupedCandidates = Array.from(
         new Set([activeBaseUrl, ...candidateBaseUrls].filter(Boolean))
       );
+
+      const nonLoopbackCandidates = dedupedCandidates.filter((baseUrl) => !isLoopbackBaseUrl(baseUrl));
+      const loopbackCandidates = dedupedCandidates.filter((baseUrl) => isLoopbackBaseUrl(baseUrl));
+      const candidates = nonLoopbackCandidates.length
+        ? [...nonLoopbackCandidates, ...loopbackCandidates]
+        : dedupedCandidates;
 
       const { res, baseUrl } = await fetchWithRace(path, candidates, init);
 

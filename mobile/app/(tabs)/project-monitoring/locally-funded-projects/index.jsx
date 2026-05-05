@@ -1,10 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { useRouter } from "expo-router";
+import LottieView from "lottie-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -24,6 +24,7 @@ import {
 } from "../../../../hooks/useLocallyFundedProjects";
 import { APP_ROUTES } from "../../../../constants/routes";
 import FloatingToast from "../../../../components/common/FloatingToast";
+import NoResultsState from "../../../../components/common/NoResultsState";
 
 const FILTER_ALL_VALUE = "All";
 
@@ -152,9 +153,20 @@ function buildUniqueOptions(projects, selector) {
 
 export default function LocallyFundedProjectsScreen() {
   const router = useRouter();
-  const { projects, filterOptions: backendFilterOptions, isLoading, isRefreshing, errorMessage, loadProjects } =
-    useLocallyFundedProjects();
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 350);
+  const {
+    activeBaseUrl,
+    projects,
+    filterOptions: backendFilterOptions,
+    isLoading,
+    isRefreshing,
+    isLoadingMore,
+    hasMore,
+    errorMessage,
+    loadProjects,
+    loadMoreProjects,
+  } = useLocallyFundedProjects({ searchQuery: debouncedSearchQuery });
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [shouldRenderFilters, setShouldRenderFilters] = useState(false);
   const [pinnedProjectIds, setPinnedProjectIds] = useState([]);
@@ -169,8 +181,8 @@ export default function LocallyFundedProjectsScreen() {
     status: FILTER_ALL_VALUE,
   });
   const [activeDropdownFilterKey, setActiveDropdownFilterKey] = useState(null);
-  const debouncedSearchQuery = useDebounce(searchQuery, 350);
-  const filtersAnimation = useRef(new Animated.Value(0)).current;
+  const [isApplyingFilters, setIsApplyingFilters] = useState(false);
+  const filterSpinnerTimeoutRef = useRef(null);
 
   // Load the saved pinned project ids when the screen mounts.
   useEffect(() => {
@@ -229,28 +241,24 @@ export default function LocallyFundedProjectsScreen() {
     });
   }, []);
 
-  // Animate the filter bar in and out when the user expands or collapses it.
+  // Show a lightweight spinner whenever search/filter criteria change.
   useEffect(() => {
-    if (isFiltersExpanded) {
-      setShouldRenderFilters(true);
-      Animated.timing(filtersAnimation, {
-        toValue: 1,
-        duration: 220,
-        useNativeDriver: true,
-      }).start();
-      return;
+    setIsApplyingFilters(true);
+
+    if (filterSpinnerTimeoutRef.current) {
+      clearTimeout(filterSpinnerTimeoutRef.current);
     }
 
-    Animated.timing(filtersAnimation, {
-      toValue: 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) {
-        setShouldRenderFilters(false);
+    filterSpinnerTimeoutRef.current = setTimeout(() => {
+      setIsApplyingFilters(false);
+    }, 220);
+
+    return () => {
+      if (filterSpinnerTimeoutRef.current) {
+        clearTimeout(filterSpinnerTimeoutRef.current);
       }
-    });
-  }, [filtersAnimation, isFiltersExpanded]);
+    };
+  }, [debouncedSearchQuery, selectedFilters]);
 
   const filterOptions = useMemo(
     () => {
@@ -327,10 +335,8 @@ export default function LocallyFundedProjectsScreen() {
     [backendFilterOptions, projects, selectedFilters.province]
   );
 
-  // Apply the active search and filter rules to the project list.
+  // Apply the active filter rules to the project list.
   const filteredProjects = useMemo(() => {
-    const keyword = debouncedSearchQuery.trim().toLowerCase();
-
     const normalizeValue = (value) => String(value ?? "").trim().toLowerCase();
     const normalizeComparable = (value) =>
       normalizeValue(value)
@@ -414,25 +420,9 @@ export default function LocallyFundedProjectsScreen() {
         }
       }
 
-      if (!keyword) {
-        return true;
-      }
-
-      const fields = [
-        project.code,
-        project.title,
-        project.city,
-        project.province,
-        project.fundSource,
-        project.statusActual,
-        project.statusSubaybayan,
-      ];
-
-      return fields.some((field) =>
-        String(field || "").toLowerCase().includes(keyword)
-      );
+      return true;
     });
-  }, [debouncedSearchQuery, projects, selectedFilters]);
+  }, [projects, selectedFilters]);
 
   // Sort pinned projects ahead of the remaining filtered projects.
   const displayedProjects = useMemo(() => {
@@ -487,12 +477,13 @@ export default function LocallyFundedProjectsScreen() {
     return mapping[activeDropdownFilterKey] || [];
   }, [activeDropdownFilterKey, filterOptions]);
 
+  useEffect(() => {
+    setShouldRenderFilters(isFiltersExpanded);
+  }, [isFiltersExpanded]);
+
   // Store the trimmed query for highlight matching.
   const highlightedQuery = debouncedSearchQuery.trim();
-  const filtersSlideY = filtersAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-12, 0],
-  });
+  const isSearching = String(searchQuery ?? "").trim() !== String(debouncedSearchQuery ?? "").trim();
 
   // Build the project card and its navigation payload.
   const renderProjectCard = ({ item }) => {
@@ -547,67 +538,53 @@ export default function LocallyFundedProjectsScreen() {
           });
         }}
       >
-      <View className={`rounded-3xl border px-3 py-3 ${isPinned ? "border-[#c0841a] bg-[#fff8e8]" : "border-[#bfc3c9] bg-[#ebebeb]"}`}>
-        <View className="flex-row items-start justify-between gap-2">
-          <View className="min-w-0 flex-1 pr-2">
-            <View className="flex-row flex-wrap items-center gap-2">
+        <View className={`rounded-3xl border px-3 py-3 ${isPinned ? "border-[#c0841a] bg-[#fff8e8]" : "border-[#e6eef8] bg-white"}`}>
+          <View className="flex-row items-start justify-between gap-2">
+            <View className="min-w-0 flex-1 pr-2">
+              <HighlightedText
+                text={item.title}
+                query={highlightedQuery}
+                className="min-w-0 flex-1 text-[16px] text-[#0b3a66]"
+                highlightClassName=""
+                style={{ fontFamily: "Montserrat-Regular" }}
+                highlightStyle={{ fontFamily: "Montserrat-SemiBold" }}
+                numberOfLines={2}
+              />
+
               <HighlightedText
                 text={item.code}
                 query={highlightedQuery}
-                className="min-w-0 flex-1 text-[15px] text-[#404040]"
-                highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
+                className="mt-2 text-[13px] text-[#0b3a66]"
+                highlightClassName=""
                 style={{ fontFamily: "Montserrat-SemiBold" }}
                 highlightStyle={{ fontFamily: "Montserrat-SemiBold" }}
                 numberOfLines={1}
               />
-            </View>
-            <HighlightedText
-              text={item.title}
-              query={highlightedQuery}
-              className="mt-1 text-[12px] text-[#4b4b4b]"
-              highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
-              style={{ fontFamily: "Montserrat" }}
-              highlightStyle={{ fontFamily: "Montserrat" }}
-            />
-            <View className="mt-2 border-b border-[#bfc3c9]" />
-            <Text className="mt-2 text-[12px] text-[#4b4b4b]" numberOfLines={2}>
-              <HighlightedText
-                text={item.city}
-                query={highlightedQuery}
-                className="text-[12px] text-[#4b4b4b]"
-                highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
-                style={{ fontFamily: "Montserrat" }}
-                highlightStyle={{ fontFamily: "Montserrat" }}
-              />
-              {", "}
-              <HighlightedText
-                text={item.province}
-                query={highlightedQuery}
-                className="text-[12px] text-[#4b4b4b]"
-                highlightClassName="rounded-sm bg-[#fde68a] text-[#1f2937]"
-                style={{ fontFamily: "Montserrat" }}
-                highlightStyle={{ fontFamily: "Montserrat" }}
-              />
-            </Text>
-          </View>
 
-          <View className="ml-1 flex-row items-center gap-2 shrink-0">
-            <Pressable
-              onPress={(event) => {
-                event?.stopPropagation?.();
-                showPinToast(isPinned ? "Project successfully unpinned" : "Project successfully pinned");
-                togglePinnedProject(item.id);
-              }}
-              className={`h-9 w-9 items-center justify-center rounded-full border ${isPinned ? "border-[#b45309] bg-[#fef3c7]" : "border-[#cbd5e1] bg-white"}`}
-              accessibilityRole="button"
-              accessibilityLabel={isPinned ? `Unpin ${String(item.title ?? "project")}` : `Pin ${String(item.title ?? "project")}`}
-            >
-              <Feather name={isPinned ? "bookmark" : "bookmark"} size={14} color={isPinned ? "#b45309" : "#64748b"} />
-            </Pressable>
-            <Feather name="chevron-right" size={16} color="#64748b" style={{ marginTop: 4 }} />
+              <View className="mt-2 border-b" style={{ borderBottomColor: "#e6eef8" }} />
+
+              <Text className="mt-2 text-[12px] text-[#0b3a66]" numberOfLines={1} style={{ fontFamily: "Montserrat-SemiBold" }}>
+                {String(item.city ?? "").toUpperCase()}{", "}{String(item.province ?? "").toUpperCase()}
+              </Text>
+            </View>
+
+            <View className="ml-1 flex-row items-center gap-2 shrink-0">
+              <Pressable
+                onPress={(event) => {
+                  event?.stopPropagation?.();
+                  showPinToast(isPinned ? "Project successfully unpinned" : "Project successfully pinned");
+                  togglePinnedProject(item.id);
+                }}
+                className={`h-9 w-9 items-center justify-center rounded-full border ${isPinned ? "border-[#b45309] bg-[#fef3c7]" : "border-[#cbd5e1] bg-white"}`}
+                accessibilityRole="button"
+                accessibilityLabel={isPinned ? `Unpin ${String(item.title ?? "project")}` : `Pin ${String(item.title ?? "project")}`}
+              >
+                <Feather name={isPinned ? "bookmark" : "bookmark"} size={14} color={isPinned ? "#b45309" : "#64748b"} />
+              </Pressable>
+              <Feather name="chevron-right" size={16} color="#64748b" style={{ marginTop: 4 }} />
+            </View>
           </View>
         </View>
-      </View>
       </Pressable>
     );
   };
@@ -627,13 +604,7 @@ export default function LocallyFundedProjectsScreen() {
         </Text>
       </View> */}
 
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <ActivityIndicator size="large" color="#1d4ed8" />
-          <Text className="mt-3 text-[13px] text-[#475569]">Loading locally funded projects...</Text>
-        </View>
-      ) : (
-        <View className="flex-1">
+      <View className="flex-1">
           <View className="w-full flex-row items-center gap-2 px-3 pb-1 pt-3">
             <View className="flex-1 flex-row items-center rounded-2xl border border-[#bfccdf] bg-white px-3 py-2.5">
               <Feather name="search" size={18} color="#64748b" />
@@ -665,22 +636,20 @@ export default function LocallyFundedProjectsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Toggle filters"
             >
-              <Feather
-                name="sliders"
-                size={18}
-                color={isFiltersExpanded || hasActiveFilters ? "#1d4ed8" : "#64748b"}
-              />
+              {isApplyingFilters ? (
+                <ActivityIndicator size="small" color="#1d4ed8" />
+              ) : (
+                <Feather
+                  name="sliders"
+                  size={18}
+                  color={isFiltersExpanded || hasActiveFilters ? "#1d4ed8" : "#64748b"}
+                />
+              )}
             </Pressable>
           </View>
 
           {shouldRenderFilters ? (
-            <Animated.View
-              className="mt-2"
-              style={{
-                opacity: filtersAnimation,
-                transform: [{ translateY: filtersSlideY }],
-              }}
-            >
+            <View className="mt-2">
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -714,50 +683,83 @@ export default function LocallyFundedProjectsScreen() {
                   />
                 ))}
               </ScrollView>
-            </Animated.View>
+            </View>
           ) : null}
 
-          <FlatList
-            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12 }}
-            data={displayedProjects}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
-            renderItem={renderProjectCard}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={() => {
-                  loadProjects(true);
-                }}
-                tintColor="#1d4ed8"
+          {isLoading || isSearching ? (
+            <View className="flex-1 items-center justify-center px-4">
+              <LottieView
+                source={require("../../../../assets/animations/loading-dataman.json")}
+                autoPlay
+                loop
+                style={{ width: 140, height: 140 }}
               />
-            }
-            ListEmptyComponent={
-              <View className="mt-10 rounded-2xl border border-[#dbe3f0] bg-white px-4 py-5">
-                <Text className="text-[15px] font-semibold text-[#1e3a8a]">
-                  {debouncedSearchQuery.trim() || hasActiveFilters
-                    ? "No matching projects"
-                    : "No projects available"}
-                </Text>
-                <Text className="mt-1 text-[12px] leading-[18px] text-[#64748b]">
-                  {debouncedSearchQuery.trim() || hasActiveFilters
-                    ? "Try another keyword or adjust your selected filters."
-                    : errorMessage || "No rows were returned by the endpoint."}
-                </Text>
-                {!debouncedSearchQuery.trim() && !hasActiveFilters ? (
-                  <Pressable
-                    className="mt-4 self-start rounded-xl bg-[#dbeafe] px-4 py-2"
-                    onPress={() => {
-                      loadProjects(false);
-                    }}
-                  >
-                    <Text className="text-[12px] font-semibold text-[#1e3a8a]">Retry Fetch</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            }
-          />
+              <Text className="mt-2 text-[12px] text-[#64748b]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                {isSearching ? "Searching projects..." : "Loading projects..."}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12 }}
+              data={displayedProjects}
+              keyExtractor={(item, index) => `${item.id}-${index}`}
+              renderItem={renderProjectCard}
+              onEndReached={() => {
+                if (!debouncedSearchQuery.trim() && !hasActiveFilters) {
+                  loadMoreProjects();
+                }
+              }}
+              onEndReachedThreshold={0.55}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefreshing}
+                  onRefresh={() => {
+                    loadProjects(true);
+                  }}
+                  tintColor="#1d4ed8"
+                />
+              }
+              ListFooterComponent={
+                isLoadingMore ? (
+                  <View className="py-3 items-center justify-center">
+                    <ActivityIndicator size="small" color="#1d4ed8" />
+                  </View>
+                ) : !hasMore && displayedProjects.length > 0 && !debouncedSearchQuery.trim() && !hasActiveFilters ? (
+                  <View className="py-3 items-center justify-center">
+                    <Text className="text-[11px] text-[#64748b]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                      End of list
+                    </Text>
+                  </View>
+                ) : null
+              }
+              ListEmptyComponent={
+                debouncedSearchQuery.trim() || hasActiveFilters ? (
+                  <NoResultsState title="No matching projects" />
+                ) : (
+                  <View className="mt-10 rounded-2xl border border-[#dbe3f0] bg-white px-4 py-5">
+                    <Text className="text-[15px] font-semibold text-[#1e3a8a]">
+                      {errorMessage ? "Unable to load projects" : "No projects available"}
+                    </Text>
+                    <Text className="mt-1 text-[12px] leading-[18px] text-[#64748b]">
+                      {errorMessage ? errorMessage : "No rows were returned by the endpoint."}
+                    </Text>
+                    {errorMessage ? (
+                      <Text className="mt-2 text-[11px] text-[#475569]">Current base URL: {activeBaseUrl}</Text>
+                    ) : null}
+                    <Pressable
+                      className="mt-4 self-start rounded-xl bg-[#dbeafe] px-4 py-2"
+                      onPress={() => {
+                        loadProjects(false);
+                      }}
+                    >
+                      <Text className="text-[12px] font-semibold text-[#1e3a8a]">Retry Fetch</Text>
+                    </Pressable>
+                  </View>
+                )
+              }
+            />
+          )}
         </View>
-      )}
 
       <Modal
         transparent

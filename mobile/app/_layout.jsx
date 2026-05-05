@@ -59,6 +59,8 @@ function RootNavigator() {
 
   const [fontsLoaded] = useFonts({
     Montserrat: require("../assets/fonts/Montserrat-Regular.ttf"),
+    "Montserrat-Regular": require("../assets/fonts/Montserrat-Regular.ttf"),
+    "Montserrat-Thin": require("../assets/fonts/Montserrat-Thin.ttf"),
     "Montserrat-SemiBold": require("../assets/fonts/Montserrat-SemiBold.ttf"),
     "Montserrat-Bold": require("../assets/fonts/Montserrat-Bold.ttf"),
   });
