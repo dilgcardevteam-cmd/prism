@@ -204,7 +204,11 @@ export function useDashboardSummary() {
 
     try {
       // Try to fetch from the aggregated endpoint
-      const aggregatedData = await fetchJsonWithFallback("/api/mobile/dashboard/aggregate");
+      const aggregatedData = await fetchJsonWithFallback(
+        "/api/mobile/dashboard/aggregate",
+        {},
+        { timeout: 20000 }
+      );
 
       if (aggregatedData) {
         // Process and cache the data

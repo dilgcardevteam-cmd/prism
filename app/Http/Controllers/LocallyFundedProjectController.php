@@ -23,7 +23,7 @@ class LocallyFundedProjectController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileExpectedCompletionThisMonth', 'mobileAggregatedDashboard', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage']);
+        $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileExpectedCompletionThisMonth', 'mobileAggregatedDashboard', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage', 'mobileDeleteGalleryImage', 'mobileUpdateGalleryImage']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['index']);
         $this->middleware('crud_permission:locally_funded_projects,view')->only(['showSubaybayan', 'show']);
         $this->middleware('crud_permission:locally_funded_projects,add')->only(['create', 'store']);
@@ -1527,6 +1527,155 @@ class LocallyFundedProjectController extends Controller
                 'created_at' => $now->toISOString(),
             ],
         ], 201);
+    }
+
+    public function mobileDeleteGalleryImage(Request $request, LocallyFundedProject $project, $galleryImageId)
+    {
+        if (!Schema::hasTable('locally_funded_gallery_images')) {
+            return response()->json([
+                'message' => 'Gallery table is missing. Please run migrations first.',
+            ], 500);
+        }
+
+        $galleryImageId = (int) $galleryImageId;
+
+        $image = DB::table('locally_funded_gallery_images')
+            ->where('id', $galleryImageId)
+            ->where('project_id', $project->id)
+            ->first();
+
+        if (!$image) {
+            return response()->json([
+                'message' => 'Gallery image not found.',
+            ], 404);
+        }
+
+        // Delete the file from storage if it exists
+        if (!empty($image->image_path) && Storage::disk('public')->exists($image->image_path)) {
+            Storage::disk('public')->delete($image->image_path);
+        }
+
+        // Delete the database record
+        DB::table('locally_funded_gallery_images')
+            ->where('id', $galleryImageId)
+            ->delete();
+
+        // Log the activity
+        $this->logLocallyFundedActivity(
+            $project,
+            'delete',
+            'Gallery',
+            'Image',
+            'Image ID: ' . $galleryImageId . ' - Files: 1',
+            now(),
+            Auth::id()
+        );
+
+        $this->notifyLocallyFundedUpdateRecipients($project, 'deleted Gallery image', true);
+
+        return response()->json([
+            'message' => 'Gallery image deleted successfully.',
+        ], 200);
+    }
+
+    public function mobileUpdateGalleryImage(Request $request, LocallyFundedProject $project, $galleryImageId)
+    {
+        if (!Schema::hasTable('locally_funded_gallery_images')) {
+            return response()->json([
+                'message' => 'Gallery table is missing. Please run migrations first.',
+            ], 500);
+        }
+
+        $galleryImageId = (int) $galleryImageId;
+
+        $image = DB::table('locally_funded_gallery_images')
+            ->where('id', $galleryImageId)
+            ->where('project_id', $project->id)
+            ->first();
+
+        if (!$image) {
+            return response()->json([
+                'message' => 'Gallery image not found.',
+            ], 404);
+        }
+
+        $categories = array_values(array_filter($this->locallyFundedGalleryCategories(), function (string $category): bool {
+            return $category !== 'All';
+        }));
+
+        $validated = $request->validate([
+            'category' => ['nullable', 'string', Rule::in($categories)],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'accuracy' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $updateData = ['updated_at' => now()];
+
+        if (isset($validated['category']) && !empty($validated['category'])) {
+            $updateData['category'] = InputSanitizer::sanitizeNullablePlainText($validated['category']) ?? 'During';
+        }
+
+        if (isset($validated['latitude']) && isset($validated['longitude'])) {
+            $updateData['latitude'] = $validated['latitude'];
+            $updateData['longitude'] = $validated['longitude'];
+            if (isset($validated['accuracy'])) {
+                $updateData['accuracy'] = $validated['accuracy'];
+            }
+        }
+
+        DB::table('locally_funded_gallery_images')
+            ->where('id', $galleryImageId)
+            ->update($updateData);
+
+        // Log the activity
+        $this->logLocallyFundedActivity(
+            $project,
+            'update',
+            'Gallery',
+            'Image',
+            'Image ID: ' . $galleryImageId . ' - Updated: ' . implode(', ', array_keys($validated)),
+            now(),
+            Auth::id()
+        );
+
+        $this->notifyLocallyFundedUpdateRecipients($project, 'updated Gallery image metadata', true);
+
+        // Fetch and return the updated image
+        $updatedImage = DB::table('locally_funded_gallery_images as lgi')
+            ->leftJoin('tbusers as uploader', 'uploader.idno', '=', 'lgi.uploaded_by')
+            ->where('lgi.id', $galleryImageId)
+            ->first([
+                'lgi.id',
+                'lgi.project_id',
+                'lgi.category',
+                'lgi.uploaded_by',
+                'lgi.latitude',
+                'lgi.longitude',
+                'lgi.accuracy',
+                'lgi.created_at',
+                'lgi.updated_at',
+                DB::raw("NULLIF(TRIM(CONCAT(COALESCE(uploader.fname, ''), ' ', COALESCE(uploader.lname, ''))), '') as uploaded_by_name"),
+            ]);
+
+        return response()->json([
+            'message' => 'Gallery image updated successfully.',
+            'data' => [
+                'id' => (int) $updatedImage->id,
+                'category' => $updatedImage->category,
+                'image_url' => route('api.mobile.locally-funded.gallery-image', [
+                    'project' => (int) $updatedImage->project_id,
+                    'galleryImage' => (int) $updatedImage->id,
+                ]),
+                'uploaded_by' => $updatedImage->uploaded_by,
+                'uploaded_by_name' => $updatedImage->uploaded_by_name,
+                'latitude' => $updatedImage->latitude !== null ? (float) $updatedImage->latitude : null,
+                'longitude' => $updatedImage->longitude !== null ? (float) $updatedImage->longitude : null,
+                'accuracy' => $updatedImage->accuracy !== null ? (float) $updatedImage->accuracy : null,
+                'created_at' => $updatedImage->created_at,
+                'updated_at' => $updatedImage->updated_at,
+            ],
+        ], 200);
     }
 
     private function comparableLocationSql(string $columnExpression): string

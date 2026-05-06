@@ -232,6 +232,18 @@ Route::post('/api/mobile/locally-funded/{project}/gallery', [App\Http\Controller
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
     ->name('api.mobile.locally-funded.gallery-upload');
 
+Route::delete('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileDeleteGalleryImage'])
+    ->whereNumber('project')
+    ->whereNumber('galleryImage')
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->name('api.mobile.locally-funded.gallery-delete');
+
+Route::patch('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [App\Http\Controllers\LocallyFundedProjectController::class, 'mobileUpdateGalleryImage'])
+    ->whereNumber('project')
+    ->whereNumber('galleryImage')
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->name('api.mobile.locally-funded.gallery-update');
+
 Route::post('/api/mobile/login', function (Request $request) {
     $credentials = $request->validate([
         'username' => ['required', 'string'],

@@ -196,7 +196,11 @@ export function useLocallyFundedProjects({ searchQuery = "" } = {}) {
           queryParams.set("search", trimmedSearchQuery);
         }
 
-        const payload = await fetchJsonWithFallback(`/api/mobile/locally-funded?${queryParams.toString()}`);
+        const payload = await fetchJsonWithFallback(
+          `/api/mobile/locally-funded?${queryParams.toString()}`,
+          {},
+          { timeout: 15000 }
+        );
         const rows = Array.isArray(payload?.data) ? payload.data : [];
         const filters = payload?.meta?.filters || {};
         const normalizedRows = rows.map(normalizeProjectRow);
@@ -272,7 +276,11 @@ export function useLocallyFundedProjects({ searchQuery = "" } = {}) {
         queryParams.set("search", trimmedSearchQuery);
       }
 
-      const payload = await fetchJsonWithFallback(`/api/mobile/locally-funded?${queryParams.toString()}`);
+      const payload = await fetchJsonWithFallback(
+        `/api/mobile/locally-funded?${queryParams.toString()}`,
+        {},
+        { timeout: 15000 }
+      );
       const rows = Array.isArray(payload?.data) ? payload.data : [];
       const normalizedRows = rows.map(normalizeProjectRow);
       const nextCursorValue =
