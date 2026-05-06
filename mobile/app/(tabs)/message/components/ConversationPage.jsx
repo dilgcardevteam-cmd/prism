@@ -16,6 +16,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { APP_COLORS } from "../../../../constants/theme";
 import { useMessagesApi } from "../../../../hooks/useMessagesApi";
+import useEcho from "../../../../hooks/useEcho";
+import { useAuth } from "../../../../contexts/AuthContext";
+import { useWebAppRequest } from "../../../../hooks/useWebAppRequest";
 import { createScrollHandler, createScrollInterpolations } from "../../../../utils/animations";
 
 /* ---------------- UTIL ---------------- */
@@ -67,6 +70,12 @@ export default function ConversationPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [isRecipientTyping, setIsRecipientTyping] = useState(false);
+
+  const { session } = useAuth();
+  const { activeBaseUrl } = useWebAppRequest();
+  const echoRef = useEcho();
+  const typingTimerRef = useRef(null);
 
   const { headerOpacity, headerTranslate, heroOpacity, heroTranslate } =
     createScrollInterpolations(scrollY);
@@ -111,6 +120,48 @@ export default function ConversationPage() {
     return () => clearInterval(i);
   }, [parsedThreadId]);
 
+  /* ---------------- REALTIME (Echo) ---------------- */
+  useEffect(() => {
+    const echo = echoRef?.current;
+    if (!echo || !session?.id || !parsedThreadId) return;
+
+    try {
+      const channel = echo.private(`users.${session.id}.messages`);
+
+      channel.listen('.message.thread.updated', (event) => {
+        const incomingThreadId = Number(event?.thread_id || 0);
+
+        if (incomingThreadId === parsedThreadId) {
+          fetchMessages({ threadId: parsedThreadId }).then((res) => {
+            setMessages(res?.conversation || []);
+          }).catch(() => {});
+          return;
+        }
+
+        // For other threads we could trigger a lightweight refresh elsewhere
+      });
+
+      channel.listen('.message.typing', (event) => {
+        const incomingThreadId = Number(event?.thread_id || 0);
+        if (incomingThreadId !== parsedThreadId) return;
+
+        const typing = Boolean(event?.typing);
+        const userId = Number(event?.user_id || 0);
+        if (userId === session.id) return; // ignore our own typing echoes
+
+        setIsRecipientTyping(typing);
+      });
+
+      return () => {
+        try {
+          echo.leave(`users.${session.id}.messages`);
+        } catch (_e) {}
+      };
+    } catch (_err) {
+      // ignore echo errors
+    }
+  }, [echoRef, session?.id, parsedThreadId, fetchMessages]);
+
   /*  whenever messages change → stay at bottom */
   useEffect(() => {
     if (messages.length) {
@@ -126,6 +177,15 @@ export default function ConversationPage() {
 
     setSending(true);
     setReply("");
+    // notify stop typing
+    try {
+      await fetch(`${activeBaseUrl}/api/mobile/messages/typing`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: parsedThreadId, recipient_ids: parsedRecipientIds, typing: false }),
+      });
+    } catch (_e) {}
 
     await sendMessage({
       threadId: parsedThreadId,
@@ -137,6 +197,38 @@ export default function ConversationPage() {
     scrollToBottom(true);
 
     setSending(false);
+  };
+
+  /* Typing indicator emitter (debounced) */
+  const sendTyping = useCallback((typing) => {
+    if (!parsedThreadId) return;
+    try {
+      fetch(`${activeBaseUrl}/api/mobile/messages/typing`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: parsedThreadId, recipient_ids: parsedRecipientIds, typing }),
+      }).catch(() => {});
+    } catch (_e) {}
+  }, [parsedThreadId, parsedRecipientIds, activeBaseUrl]);
+
+  const onChangeReply = (value) => {
+    setReply(value);
+
+    // clear previous timer
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+
+    // notify typing started
+    sendTyping(true);
+
+    // schedule stop typing after 2.5s of inactivity
+    typingTimerRef.current = setTimeout(() => {
+      sendTyping(false);
+      typingTimerRef.current = null;
+    }, 2500);
   };
 
   const handleRefresh = async () => {
@@ -275,12 +367,20 @@ export default function ConversationPage() {
         {/* INPUT */}
         <View className="px-3 py-2 bg-white border-t border-[#e5edf6]">
           <View className="flex-row items-center bg-[#f1f5fb] rounded-full px-4 py-2">
-            <TextInput
-              value={reply}
-              onChangeText={setReply}
-              placeholder="Write a message"
-              className="flex-1"
-            />
+            <View className="flex-1">
+              {isRecipientTyping ? (
+                <Text className="text-sm mb-1" style={{ color: APP_COLORS.tabInactive }}>
+                  {String(recipientName || 'Recipient')} is typing...
+                </Text>
+              ) : null}
+
+              <TextInput
+                value={reply}
+                onChangeText={onChangeReply}
+                placeholder="Write a message"
+                className="flex-1"
+              />
+            </View>
 
             <Pressable
               onPress={handleSend}

@@ -305,6 +305,27 @@ Route::post('/api/mobile/messages', [App\Http\Controllers\MessageController::cla
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
     ->name('api.mobile.messages.store');
 
+Route::post('/api/mobile/messages/typing', function (Request $request) {
+    $authUser = Auth::user();
+
+    if (!$authUser) {
+        return response()->json(['message' => 'Unauthenticated.'], 401);
+    }
+
+    $threadId = (int) ($request->input('thread_id') ?? 0);
+    $recipientIds = $request->input('recipient_ids', []);
+    if (!is_array($recipientIds)) {
+        $recipientIds = [$recipientIds];
+    }
+
+    $typing = (bool) $request->input('typing');
+
+    // Only broadcast to provided recipients (server-side will filter invalid ids)
+    event(new App\Events\MessageTyping($recipientIds, $threadId, (int) $authUser->idno, $typing));
+
+    return response()->json(['ok' => true]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)->name('api.mobile.messages.typing');
+
 Route::get('/api/mobile/notifications', function (Request $request) {
     $authUser = Auth::user();
     $userId = $authUser?->idno ?? (int) $request->query('user_id');
