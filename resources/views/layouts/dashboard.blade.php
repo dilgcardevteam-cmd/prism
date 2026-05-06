@@ -4116,6 +4116,83 @@
             window.showPageLoader = showPageLoader;
             window.hidePageLoader = hidePageLoader;
 
+            function bindForcePaginationNavigation(root) {
+                const scope = root && root.querySelectorAll ? root : document;
+                const links = scope.querySelectorAll('a[href*="page="], a[rel="prev"], a[rel="next"]');
+
+                links.forEach(function (link) {
+                    if (link.dataset.forcePaginationBound === '1') {
+                        return;
+                    }
+
+                    link.dataset.forcePaginationBound = '1';
+                    link.addEventListener('click', function (event) {
+                        if (
+                            event.defaultPrevented
+                            || event.button !== 0
+                            || event.metaKey
+                            || event.ctrlKey
+                            || event.shiftKey
+                            || event.altKey
+                        ) {
+                            return;
+                        }
+
+                        const paginationLabel = (link.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                        const rel = (link.getAttribute('rel') || '').toLowerCase();
+                        const isPaginationControl = rel === 'prev'
+                            || rel === 'next'
+                            || paginationLabel.includes('next')
+                            || paginationLabel.includes('back')
+                            || paginationLabel.includes('previous');
+
+                        if (
+                            !isPaginationControl
+                            || link.target === '_blank'
+                            || link.hasAttribute('download')
+                            || !link.href
+                        ) {
+                            return;
+                        }
+
+                        let resolvedUrl;
+                        try {
+                            resolvedUrl = new URL(link.href, window.location.origin);
+                        } catch (error) {
+                            return;
+                        }
+
+                        if (resolvedUrl.origin !== window.location.origin || !resolvedUrl.searchParams.has('page')) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        event.stopPropagation();
+                        showPageLoaderForLink(link);
+                        window.location.assign(resolvedUrl.toString());
+                    }, true);
+                });
+            }
+
+            bindForcePaginationNavigation(document);
+
+            if (window.MutationObserver) {
+                const paginationObserver = new MutationObserver(function (mutations) {
+                    mutations.forEach(function (mutation) {
+                        mutation.addedNodes.forEach(function (node) {
+                            if (node && node.nodeType === 1) {
+                                bindForcePaginationNavigation(node);
+                            }
+                        });
+                    });
+                });
+
+                paginationObserver.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                });
+            }
+
             document.addEventListener('click', function (event) {
                 if (
                     event.defaultPrevented
