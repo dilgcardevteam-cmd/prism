@@ -2369,7 +2369,7 @@
                             <li>
                                 <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents') || request()->routeIs('initial-project-documents.*') || (request()->routeIs('pre-implementation-documents.*') && request()->query('scope') === 'all')) active @endif">
                                     <i class="fas fa-folder-tree"></i>
-                                    <span>Initial Project Documents</span>
+                                    <span>Project Documents</span>
                                 </a>
                             </li>
                             <li>
