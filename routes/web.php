@@ -305,6 +305,27 @@ Route::post('/api/mobile/messages', [App\Http\Controllers\MessageController::cla
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
     ->name('api.mobile.messages.store');
 
+Route::post('/api/mobile/messages/typing', function (Request $request) {
+    $authUser = Auth::user();
+
+    if (!$authUser) {
+        return response()->json(['message' => 'Unauthenticated.'], 401);
+    }
+
+    $threadId = (int) ($request->input('thread_id') ?? 0);
+    $recipientIds = $request->input('recipient_ids', []);
+    if (!is_array($recipientIds)) {
+        $recipientIds = [$recipientIds];
+    }
+
+    $typing = (bool) $request->input('typing');
+
+    // Only broadcast to provided recipients (server-side will filter invalid ids)
+    event(new App\Events\MessageTyping($recipientIds, $threadId, (int) $authUser->idno, $typing));
+
+    return response()->json(['ok' => true]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)->name('api.mobile.messages.typing');
+
 Route::get('/api/mobile/notifications', function (Request $request) {
     $authUser = Auth::user();
     $userId = $authUser?->idno ?? (int) $request->query('user_id');
@@ -399,6 +420,64 @@ Route::post('/api/mobile/user/profile/update', function (Request $request) {
             'role' => $user->role ?? null,
             'status' => $user->status,
         ],
+    ]);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+
+Route::post('/api/mobile/user/password/update', function (Request $request) {
+    if (!Auth::check()) {
+        return response()->json([
+            'message' => 'Unauthenticated.',
+        ], 401);
+    }
+
+    $validated = $request->validate([
+        'user_id' => ['required', 'integer'],
+        'current_password' => ['required', 'string'],
+        'new_password' => [
+            'required',
+            'string',
+            'min:8',
+            'regex:/[A-Z]/',
+            'regex:/[a-z]/',
+            'regex:/[0-9]/',
+            'regex:/[^A-Za-z0-9]/',
+            'different:current_password',
+            'confirmed',
+        ],
+    ], [
+        'new_password.min' => 'The new password must be at least 8 characters.',
+        'new_password.regex' => 'The new password does not meet all required complexity rules.',
+        'new_password.confirmed' => 'The password confirmation does not match.',
+        'new_password.different' => 'The new password must be different from the current password.',
+    ]);
+
+    $authUser = Auth::user();
+
+    if ((int) $authUser->idno !== (int) $validated['user_id']) {
+        return response()->json([
+            'message' => 'Unauthorized password update request.',
+        ], 403);
+    }
+
+    $user = User::where('idno', (int) $validated['user_id'])->first();
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'User not found.',
+        ], 404);
+    }
+
+    if (!Hash::check($validated['current_password'], $user->password)) {
+        return response()->json([
+            'message' => 'Current password is incorrect.',
+        ], 422);
+    }
+
+    $user->password = Hash::make($validated['new_password']);
+    $user->save();
+
+    return response()->json([
+        'message' => 'Password updated successfully.',
     ]);
 })->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
 

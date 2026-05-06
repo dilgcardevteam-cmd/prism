@@ -208,6 +208,7 @@
                     $inputId = 'pre-impl-doc-input-' . $field;
                     $buttonId = 'pre-impl-doc-btn-' . $field;
                     $filenameId = 'pre-impl-doc-file-' . $field;
+                    $pickerId = 'pre-impl-doc-picker-' . $field;
 
                     $uploadedTime = $asLocalTime($fileRecord->uploaded_at ?? $fileRecord->created_at ?? $fileRecord->updated_at ?? null);
                     $uploaderName = $resolveUserName($fileRecord->uploaded_by ?? null);
@@ -219,14 +220,16 @@
                     $uploaderUser = $fileRecord && $fileRecord->uploaded_by && isset($usersById[$fileRecord->uploaded_by])
                         ? $usersById[$fileRecord->uploaded_by]
                         : null;
-                    $isDilgMountainUploader = $uploaderUser
-                        && strtoupper(trim((string) ($uploaderUser->agency ?? ''))) === 'DILG'
-                        && strtolower(trim((string) ($uploaderUser->province ?? ''))) === 'mountain province';
+                    $isProvincialDilgUploader = $uploaderUser
+                        && method_exists($uploaderUser, 'isDilgUser')
+                        && method_exists($uploaderUser, 'isRegionalOfficeAssignment')
+                        && $uploaderUser->isDilgUser()
+                        && !$uploaderUser->isRegionalOfficeAssignment();
 
                     $isUploadedAndPoValidatedBySameUser = $fileRecord
                         && $uploadedTime
                         && $poValidatedAt
-                        && $isDilgMountainUploader
+                        && $isProvincialDilgUploader
                         && !empty($fileRecord->uploaded_by)
                         && !empty($fileRecord->approved_by_dilg_po)
                         && (string) $fileRecord->uploaded_by === (string) $fileRecord->approved_by_dilg_po
@@ -386,16 +389,17 @@
                             data-pre-impl-upload-input
                             data-button-id="{{ $buttonId }}"
                             data-filename-id="{{ $filenameId }}"
+                            data-picker-id="{{ $pickerId }}"
                             onchange="showPreImplementationSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
                         >
                         @unless ($hasFile)
-                            <label for="{{ $inputId }}" class="pre-impl-upload-dropzone{{ $disableUpload ? ' is-disabled' : '' }}" tabindex="{{ $disableUpload ? '-1' : '0' }}" role="button" aria-controls="{{ $inputId }}">
+                            <button id="{{ $pickerId }}" type="button" class="pre-impl-upload-dropzone{{ $disableUpload ? ' is-disabled' : '' }}" data-pre-impl-picker-button data-input-id="{{ $inputId }}" @disabled($disableUpload) aria-controls="{{ $inputId }}">
                                 <span class="pre-impl-upload-dropzone-icon">
                                     <i class="fas fa-cloud-upload-alt"></i>
                                 </span>
                                 <span class="pre-impl-upload-dropzone-title">Browse Files to upload</span>
                                 <span class="pre-impl-upload-dropzone-copy">PDF only</span>
-                            </label>
+                            </button>
                         @endunless
 
                         @if ($hasFile && $fileViewUrl)
@@ -410,16 +414,22 @@
                                 title="View {{ $fileName ?: 'current file' }}"
                             >
                                 <span class="pre-impl-upload-fileicon">
-                                    <i class="far fa-file-alt"></i>
+                                    <i class="fas fa-file-pdf"></i>
                                 </span>
-                                <span class="pre-impl-upload-filename" data-file-name>{{ $fileName ?: 'View current file' }}</span>
+                                <span class="pre-impl-upload-filemeta">
+                                    <span class="pre-impl-upload-fileeyebrow">Uploaded file</span>
+                                    <span class="pre-impl-upload-filename" data-file-name>{{ $fileName ?: 'View current file' }}</span>
+                                </span>
                             </a>
                         @else
-                            <div id="{{ $filenameId }}" class="pre-impl-upload-filebar" data-empty-text="No selected file">
+                            <div id="{{ $filenameId }}" class="pre-impl-upload-filebar" data-empty-text="No selected file" hidden>
                                 <span class="pre-impl-upload-fileicon">
-                                    <i class="far fa-file-alt"></i>
+                                    <i class="fas fa-file-pdf"></i>
                                 </span>
-                                <span class="pre-impl-upload-filename" data-file-name>No selected file</span>
+                                <span class="pre-impl-upload-filemeta">
+                                    <span class="pre-impl-upload-fileeyebrow">Selected file</span>
+                                    <span class="pre-impl-upload-filename" data-file-name>No selected file</span>
+                                </span>
                                 <button
                                     type="button"
                                     class="pre-impl-upload-clear"
@@ -766,6 +776,8 @@
         }
 
         .pre-impl-upload-dropzone {
+            appearance: none;
+            width: 100%;
             display: grid;
             justify-items: center;
             gap: 8px;
@@ -776,6 +788,7 @@
             background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
             text-align: center;
             cursor: pointer;
+            font: inherit;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
 
@@ -821,20 +834,22 @@
         }
 
         .pre-impl-upload-filebar {
-            display: flex;
-            align-items: center;
+            position: relative;
+            display: grid;
+            justify-items: center;
             gap: 10px;
-            min-height: 48px;
-            padding: 10px 12px;
+            min-height: 120px;
+            padding: 16px 14px 14px;
             border: 1px solid #dbe7ff;
-            border-radius: 12px;
-            background: #edf4ff;
-            transition: border-color 0.2s ease, background-color 0.2s ease;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
+            text-align: center;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
 
         .pre-impl-upload-filebar.is-selected {
             border-color: #93c5fd;
-            background: #dbeafe;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
         }
 
         .pre-impl-upload-filelink {
@@ -844,8 +859,9 @@
 
         .pre-impl-upload-filelink:hover {
             border-color: #60a5fa;
-            background: #dbeafe;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
             box-shadow: 0 10px 20px rgba(37, 99, 235, 0.10);
+            transform: translateY(-1px);
         }
 
         .pre-impl-upload-filelink:focus-visible {
@@ -855,45 +871,67 @@
         }
 
         .pre-impl-upload-fileicon {
-            width: 24px;
-            height: 24px;
-            color: #2563eb;
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+            color: #ffffff;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            font-size: 24px;
             flex-shrink: 0;
+            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+        }
+
+        .pre-impl-upload-filemeta {
+            display: grid;
+            gap: 4px;
+            width: 100%;
+        }
+
+        .pre-impl-upload-fileeyebrow {
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
         .pre-impl-upload-filename {
-            flex: 1 1 auto;
+            display: block;
             min-width: 0;
-            color: #334155;
+            color: #0f172a;
             font-size: 13px;
             line-height: 1.4;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-weight: 600;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .pre-impl-upload-clear {
+            position: absolute;
+            top: 10px;
+            right: 10px;
             width: 28px;
             height: 28px;
             border: none;
             border-radius: 999px;
-            background: transparent;
+            background: rgba(255, 255, 255, 0.85);
             color: #111827;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             flex-shrink: 0;
-            transition: background-color 0.2s ease, color 0.2s ease;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.10);
+            transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
         }
 
         .pre-impl-upload-clear:hover:not(:disabled) {
-            background: rgba(15, 23, 42, 0.08);
+            background: #ffffff;
             color: #b91c1c;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.14);
         }
 
         .pre-impl-upload-clear:disabled {
@@ -941,6 +979,8 @@
         function syncPreImplementationUploadUi(fileInput, buttonId, filenameId) {
             const saveBtn = document.getElementById(buttonId);
             const filenameBar = document.getElementById(filenameId);
+            const pickerId = fileInput ? fileInput.getAttribute('data-picker-id') || '' : '';
+            const pickerButton = pickerId ? document.getElementById(pickerId) : null;
             const filenameText = filenameBar ? filenameBar.querySelector('[data-file-name]') : null;
             const clearBtn = filenameBar ? filenameBar.querySelector('[data-file-clear]') : null;
             if (!saveBtn || !filenameBar || !filenameText) return;
@@ -949,6 +989,10 @@
             if (isLocked) {
                 saveBtn.style.opacity = '0';
                 saveBtn.style.pointerEvents = 'none';
+                filenameBar.hidden = false;
+                if (pickerButton) {
+                    pickerButton.hidden = true;
+                }
                 filenameBar.classList.add('is-selected');
                 if (clearBtn) {
                     clearBtn.hidden = true;
@@ -963,6 +1007,10 @@
                 const fileName = fileInput.files[0].name;
                 saveBtn.style.opacity = '1';
                 saveBtn.style.pointerEvents = 'auto';
+                filenameBar.hidden = false;
+                if (pickerButton) {
+                    pickerButton.hidden = true;
+                }
                 filenameText.textContent = fileName;
                 filenameBar.classList.add('is-selected');
                 if (clearBtn) {
@@ -973,6 +1021,10 @@
 
             saveBtn.style.opacity = '0';
             saveBtn.style.pointerEvents = 'none';
+            filenameBar.hidden = true;
+            if (pickerButton) {
+                pickerButton.hidden = false;
+            }
             filenameText.textContent = emptyText;
             filenameBar.classList.remove('is-selected');
             if (clearBtn) {
@@ -1002,18 +1054,20 @@
     </script>
 
     <script>
-        document.querySelectorAll('.pre-impl-upload-dropzone').forEach((dropzone) => {
-            dropzone.addEventListener('keydown', (event) => {
-                if ((event.key !== 'Enter' && event.key !== ' ') || dropzone.classList.contains('is-disabled')) {
+        function openPreImplementationFilePicker(inputId) {
+            const input = inputId ? document.getElementById(inputId) : null;
+            if (input instanceof HTMLInputElement && !input.disabled) {
+                input.click();
+            }
+        }
+
+        document.querySelectorAll('[data-pre-impl-picker-button]').forEach((dropzone) => {
+            dropzone.addEventListener('click', () => {
+                if (dropzone.classList.contains('is-disabled')) {
                     return;
                 }
 
-                event.preventDefault();
-                const inputId = dropzone.getAttribute('for');
-                const input = inputId ? document.getElementById(inputId) : null;
-                if (input instanceof HTMLInputElement && !input.disabled) {
-                    input.click();
-                }
+                openPreImplementationFilePicker(dropzone.getAttribute('data-input-id'));
             });
         });
     </script>

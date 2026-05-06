@@ -19,7 +19,6 @@ class PreImplementationDocument extends Model
         'funding_year',
         'mode_of_contract',
         'signed_lgu_letter_path',
-        'signed_lgu_contact_details_path',
         'nadai_path',
         'confirmation_receipt_fund_path',
         'proof_transfer_trust_fund_path',

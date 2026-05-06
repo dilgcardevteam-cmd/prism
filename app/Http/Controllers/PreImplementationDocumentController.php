@@ -305,7 +305,9 @@ class PreImplementationDocumentController extends Controller
 
         $folder = 'pre-implementation/projects/' . Str::slug((string) $project->project_code, '_');
         $now = now();
-        $userId = Auth::user()->idno ?? null;
+        $currentUser = Auth::user();
+        $userId = $currentUser->idno ?? null;
+        $isProvincialDilgUploader = $currentUser && $currentUser->isDilgUser() && !$currentUser->isRegionalOfficeAssignment();
         $uploadedDocumentTypes = [];
 
         foreach ($this->singleUploadDocumentTypes() as $field) {
@@ -333,11 +335,11 @@ class PreImplementationDocumentController extends Controller
             $fileRecord->file_path = $path;
             $fileRecord->uploaded_at = $now;
             $fileRecord->uploaded_by = $userId;
-            $fileRecord->status = 'pending';
-            $fileRecord->approved_at = null;
-            $fileRecord->approved_by = null;
-            $fileRecord->approved_at_dilg_po = null;
-            $fileRecord->approved_by_dilg_po = null;
+            $fileRecord->status = $isProvincialDilgUploader ? 'pending_ro' : 'pending';
+            $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
+            $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
+            $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
+            $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
             $fileRecord->approved_at_dilg_ro = null;
             $fileRecord->approved_by_dilg_ro = null;
             $fileRecord->approval_remarks = null;
@@ -393,7 +395,9 @@ class PreImplementationDocumentController extends Controller
 
         $folder = 'pre-implementation/projects/' . Str::slug((string) $project->project_code, '_') . '/' . Str::slug($documentType, '_');
         $now = now();
-        $userId = Auth::user()->idno ?? null;
+        $currentUser = Auth::user();
+        $userId = $currentUser->idno ?? null;
+        $isProvincialDilgUploader = $currentUser && $currentUser->isDilgUser() && !$currentUser->isRegionalOfficeAssignment();
         $path = $validated['document_file']->store($folder, 'public');
 
         $fileRecord = new PreImplementationDocumentFile();
@@ -402,11 +406,11 @@ class PreImplementationDocumentController extends Controller
         $fileRecord->file_path = $path;
         $fileRecord->uploaded_at = $now;
         $fileRecord->uploaded_by = $userId;
-        $fileRecord->status = 'pending';
-        $fileRecord->approved_at = null;
-        $fileRecord->approved_by = null;
-        $fileRecord->approved_at_dilg_po = null;
-        $fileRecord->approved_by_dilg_po = null;
+        $fileRecord->status = $isProvincialDilgUploader ? 'pending_ro' : 'pending';
+        $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
+        $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
+        $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
+        $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
         $fileRecord->approved_at_dilg_ro = null;
         $fileRecord->approved_by_dilg_ro = null;
         $fileRecord->approval_remarks = null;
@@ -1302,7 +1306,6 @@ class PreImplementationDocumentController extends Controller
             'confirmation_receipt_fund_path' => 'Confirmation on the Receipt of Fund',
             'proof_transfer_trust_fund_path' => 'Proof on the Transfer of Fund to LGU Trust Fund',
             'signed_lgu_letter_path' => 'Signed LGU Letter (if any)',
-            'signed_lgu_contact_details_path' => 'Signed LGU Contract Details (if any)',
             'approved_ldip_path' => 'Approved LDIP',
             'approved_aip_path' => 'Approved AIP',
             'approved_dtp_path' => 'Approved DTP',
@@ -1334,7 +1337,6 @@ class PreImplementationDocumentController extends Controller
                 'confirmation_receipt_fund_path',
                 'proof_transfer_trust_fund_path',
                 'signed_lgu_letter_path',
-                'signed_lgu_contact_details_path',
             ],
             'Permits and Certifications' => [
                 'approved_ldip_path',
