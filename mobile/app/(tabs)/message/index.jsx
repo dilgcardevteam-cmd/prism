@@ -264,9 +264,18 @@ export default function MessageScreen() {
   }, []);
 
   const handleToggleCompose = useCallback(() => {
-    setIsComposeOpen((current) => !current);
-    setErrorMessage(null);
-  }, []);
+    setIsComposeOpen((current) => {
+      const nextIsOpen = !current;
+
+      router.setParams({ compose: nextIsOpen ? "1" : "" });
+
+      if (nextIsOpen) {
+        setErrorMessage(null);
+      }
+
+      return nextIsOpen;
+    });
+  }, [router]);
 
   const handleAddComposeRecipient = useCallback((user) => {
     const recipientId = Number(user?.id || 0);
@@ -522,25 +531,21 @@ export default function MessageScreen() {
         scrollEventThrottle={16}
       >
         <Animated.View style={heroParallaxStyle}>
-          <LinearGradient
-            colors={[APP_COLORS.primaryBlue, "#0a3b8f", "#0b4cb3"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            className="px-5 pb-8 pt-6"
-          >
             <View className="flex-row items-start gap-4">
-              <View className="flex-1">
+              <View className="flex-1 mt-4 px-4">
                 <Text className="text-3xl font-extrabold text-white">Messages</Text>
               </View>
             </View>
-          </LinearGradient>
         </Animated.View>
 
-        <Animated.View className="-mt-6 flex-1 rounded-t-[30px] bg-white px-4 pb-6 pt-4" style={contentParallaxStyle}>
+        <Animated.View className="mt-6 flex-1 rounded-t-[30px] bg-white px-4 pb-6 pt-4" style={contentParallaxStyle}>
           {isComposeOpen ? (
             <ComposeBottomSheet
               visible={isComposeOpen}
-              onClose={() => setIsComposeOpen(false)}
+              onClose={() => {
+                setIsComposeOpen(false);
+                router.setParams({ compose: "" });
+              }}
               composeQuery={composeQuery}
               setComposeQuery={setComposeQuery}
               composeRecipientOptions={composeRecipientOptions}
@@ -551,6 +556,7 @@ export default function MessageScreen() {
                 }
 
                 setIsComposeOpen(false);
+                router.setParams({ compose: "" });
                 setComposeQuery("");
 
                 router.push({
@@ -566,13 +572,18 @@ export default function MessageScreen() {
           ) : null}
 
           <View className="mb-3">
-            <View className="mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-bold" style={{ color: APP_COLORS.primaryBlue }}>
-                Conversations
-              </Text>
-              <Text className="text-xs font-semibold" style={{ color: APP_COLORS.tabInactive }}>
-                {filteredThreads.length} shown
-              </Text>
+            <View className="mb-4">
+              <View className="flex-row items-center gap-2 rounded-full border border-[#dbe5f1] bg-white px-4 py-2">
+                <Feather name="search" size={16} color={APP_COLORS.tabInactive} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search conversations"
+                  placeholderTextColor={APP_COLORS.tabInactive}
+                  className="flex-1 text-sm"
+                  style={{ color: APP_COLORS.primaryBlue }}
+                />
+              </View>
             </View>
 
             <View className="flex-row gap-2">
@@ -605,20 +616,6 @@ export default function MessageScreen() {
                   </Pressable>
                 );
               })}
-            </View>
-          </View>
-
-          <View className="mb-4 rounded-[22px] border border-[#dbe5f1] bg-[#f8fbff] px-4 py-3">
-            <View className="flex-row items-center gap-2 rounded-full border border-[#dbe5f1] bg-white px-4 py-3">
-              <Feather name="search" size={16} color={APP_COLORS.tabInactive} />
-              <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search conversations"
-                placeholderTextColor={APP_COLORS.tabInactive}
-                className="flex-1 text-sm"
-                style={{ color: APP_COLORS.primaryBlue }}
-              />
             </View>
           </View>
 

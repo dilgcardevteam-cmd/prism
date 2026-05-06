@@ -326,7 +326,7 @@ export default function ConversationPage() {
       >
         {/* HEADER */}
         <View className="flex-row items-center px-4 py-2">
-          <Pressable onPress={() => router.back()}>
+          <Pressable onPress={() => router.push("/message")}>
             <Feather name="chevron-left" size={26} color={APP_COLORS.primaryBlue} />
           </Pressable>
 
