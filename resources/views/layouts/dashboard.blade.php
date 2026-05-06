@@ -2380,19 +2380,15 @@
                                 </a>
                                 <ul id="reportsProjectCompletionMenu" class="submenu" style="display: {{ $reportsProjectCompletionActive ? 'block' : 'none' }};">
                                     <li>
-                                        <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp')) active @endif">
+                                        <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp*')) active @endif">
                                             <i class="fas fa-file-alt"></i>
-                                            <span>FALGU, GEF, SBDP</span>
+                                            <span>LGSF</span>
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="{{ route('reports.one-time.project-completion-reports.safpb') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.safpb')) active @endif">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span>SAFPB</span>
-                                        </a>
                                     </li>
                                     <li>
-                                        <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif')) active @endif">
+                                        <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif*')) active @endif">
                                             <i class="fas fa-file-alt"></i>
                                             <span>SGLGIF</span>
                                         </a>
@@ -4119,6 +4115,60 @@
             window.AppUI.suppressPageLoaderForDownload = suppressPageLoaderForDownload;
             window.showPageLoader = showPageLoader;
             window.hidePageLoader = hidePageLoader;
+
+            document.addEventListener('click', function (event) {
+                if (
+                    event.defaultPrevented
+                    || event.button !== 0
+                    || event.metaKey
+                    || event.ctrlKey
+                    || event.shiftKey
+                    || event.altKey
+                ) {
+                    return;
+                }
+
+                const paginationLink = event.target.closest('a[href*="page="], a[rel="prev"], a[rel="next"]');
+                if (!paginationLink) {
+                    return;
+                }
+
+                if (
+                    paginationLink.target === '_blank'
+                    || paginationLink.hasAttribute('download')
+                    || !paginationLink.href
+                ) {
+                    return;
+                }
+
+                const paginationLabel = (paginationLink.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                const rel = (paginationLink.getAttribute('rel') || '').toLowerCase();
+                const isPaginationControl = rel === 'prev'
+                    || rel === 'next'
+                    || paginationLabel.includes('next')
+                    || paginationLabel.includes('back')
+                    || paginationLabel.includes('previous');
+
+                if (!isPaginationControl) {
+                    return;
+                }
+
+                let resolvedUrl;
+                try {
+                    resolvedUrl = new URL(paginationLink.href, window.location.origin);
+                } catch (error) {
+                    return;
+                }
+
+                if (resolvedUrl.origin !== window.location.origin || !resolvedUrl.searchParams.has('page')) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                showPageLoaderForLink(paginationLink);
+                window.location.assign(resolvedUrl.toString());
+            }, true);
 
             document.addEventListener('click', function (event) {
                 if (

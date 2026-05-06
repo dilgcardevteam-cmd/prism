@@ -1,13 +1,15 @@
 import { Feather } from "@expo/vector-icons";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator } from "react-native";
+import {
+  Modal,
+  KeyboardAvoidingView,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  Platform,
+} from "react-native";
 import { APP_COLORS } from "../../../../constants/theme";
-import { useMemo } from "react";
-
-const FONT_STYLES = {
-  regular: { fontFamily: "Montserrat-Regular" },
-  semiBold: { fontFamily: "Montserrat-SemiBold" },
-  bold: { fontFamily: "Montserrat-Bold" },
-};
 
 export default function ComposeBottomSheet({
   visible,
@@ -19,68 +21,158 @@ export default function ComposeBottomSheet({
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}>
-        <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <View style={{ maxHeight: "88%", backgroundColor: "white", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, paddingBottom: 24 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <View>
-                <Text style={[{ color: APP_COLORS.primaryBlue, fontSize: 16 }, FONT_STYLES.bold]}>Start a conversation</Text>
-                <Text style={[{ color: APP_COLORS.textSubtle, fontSize: 12, marginTop: 4 }, FONT_STYLES.regular]}>Tap a recipient to open the conversation page.</Text>
+      <KeyboardAvoidingView
+        className="flex-1 bg-black/50"
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        <View className="flex-1 justify-end">
+          {/* Bottom Sheet */}
+          <View className="max-h-[88%] bg-white rounded-t-3xl px-4 pt-4 pb-6">
+            
+            {/* Header */}
+            <View className="flex-row items-start justify-between mb-3">
+              <View className="flex-1 pr-3">
+                <Text
+                  className="text-base"
+                  style={{ color: APP_COLORS.primaryBlue, fontFamily: "Montserrat-Bold" }}
+                >
+                  Start a conversation
+                </Text>
+                <Text
+                  className="text-xs mt-1"
+                  style={{ color: APP_COLORS.textSubtle, fontFamily: "Montserrat-Regular" }}
+                >
+                  Tap a recipient to open the conversation page.
+                </Text>
               </View>
 
-              <Pressable onPress={onClose} style={{ height: 36, width: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "#fff" }}>
+              <Pressable
+                onPress={onClose}
+                className="h-9 w-9 items-center justify-center rounded-full bg-slate-100 active:opacity-70"
+              >
                 <Feather name="x" size={18} color={APP_COLORS.primaryBlue} />
               </Pressable>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 999, borderWidth: 1, borderColor: "#dbe5f1", backgroundColor: "#f8fbff", paddingHorizontal: 12, paddingVertical: 8 }}>
+            {/* Search */}
+            <View className="flex-row items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-2">
               <Feather name="search" size={16} color={APP_COLORS.tabInactive} />
               <TextInput
                 value={composeQuery}
                 onChangeText={setComposeQuery}
                 placeholder="Search recipients"
                 placeholderTextColor={APP_COLORS.tabInactive}
-                style={[{ flex: 1, fontSize: 14, color: APP_COLORS.primaryBlue }, FONT_STYLES.regular]}
+                className="flex-1 ml-2 text-sm"
+                style={{ color: APP_COLORS.primaryBlue, fontFamily: "Montserrat-Regular" }}
               />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 12 }}>
-              <View style={{ borderRadius: 22, borderWidth: 1, borderColor: '#dbe5f1', backgroundColor: '#fff', overflow: 'hidden' }}>
-                {composeRecipientOptions.length ? composeRecipientOptions.map((user) => (
-                  <Pressable
-                    key={user.id}
-                    onPress={() => onPickRecipient(user)}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 12,
-                      borderBottomWidth: 1,
-                      borderBottomColor: '#eef3f8',
-                      paddingHorizontal: 12,
-                      paddingVertical: 12,
-                      opacity: pressed ? 0.84 : 1,
-                    })}
-                  >
-                    <View style={{ height: 42, width: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: `${APP_COLORS.primaryBlue}12` }}>
-                      <Text style={{ color: APP_COLORS.primaryBlue, fontSize: 11, fontWeight: '800' }}>{(user.name || 'U').split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[{ fontSize: 14, color: APP_COLORS.primaryBlue }, FONT_STYLES.semiBold]} numberOfLines={1}>{user?.name || 'Unknown User'}</Text>
-                      <Text style={[{ marginTop: 2, fontSize: 12, color: APP_COLORS.textSubtle }, FONT_STYLES.regular]} numberOfLines={1}>{[user?.position, user?.office].filter(Boolean).join(' • ') || 'PDMU User'}</Text>
-                    </View>
-                    <Feather name="chevron-right" size={18} color={APP_COLORS.tabInactive} />
-                  </Pressable>
-                )) : (
-                  <View style={{ padding: 16 }}>
-                    <Text style={[{ fontSize: 15, color: '#1e3a8a' }, FONT_STYLES.semiBold]}>No recipients available</Text>
-                    <Text style={[{ marginTop: 6, fontSize: 12, color: '#64748b' }, FONT_STYLES.regular]}>There are no selectable users right now.</Text>
+            {/* List */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              className="mt-3"
+              keyboardShouldPersistTaps="handled"
+            >
+              <View className="rounded-2xl border border-slate-200 overflow-hidden bg-white">
+                {composeRecipientOptions.length ? (
+                  composeRecipientOptions.map((user, index) => (
+                    <Pressable
+                      key={user.id}
+                      onPress={() => onPickRecipient(user)}
+                      className="flex-row items-center px-3 py-3 active:opacity-80"
+                      style={{
+                        borderBottomWidth:
+                          index !== composeRecipientOptions.length - 1 ? 1 : 0,
+                        borderBottomColor: "#eef3f8",
+                      }}
+                    >
+                      {/* Avatar */}
+                      <View
+                        className="h-11 w-11 items-center justify-center rounded-xl mr-3"
+                        style={{ backgroundColor: `${APP_COLORS.primaryBlue}15` }}
+                      >
+                        <Text
+                          className="text-[11px]"
+                          style={{
+                            color: APP_COLORS.primaryBlue,
+                            fontFamily: "Montserrat-Bold",
+                          }}
+                        >
+                          {(user.name || "U")
+                            .split(" ")
+                            .map((p) => p[0])
+                            .slice(0, 2)
+                            .join("")
+                            .toUpperCase()}
+                        </Text>
+                      </View>
+
+                      {/* Info */}
+                      <View className="flex-1">
+                        <Text
+                          numberOfLines={1}
+                          className="text-sm"
+                          style={{
+                            color: APP_COLORS.primaryBlue,
+                            fontFamily: "Montserrat-SemiBold",
+                          }}
+                        >
+                          {user?.name || "Unknown User"}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          className="text-xs mt-0.5"
+                          style={{
+                            color: APP_COLORS.textSubtle,
+                            fontFamily: "Montserrat-Regular",
+                          }}
+                        >
+                          {[user?.position, user?.office]
+                            .filter(Boolean)
+                            .join(" • ") || "PDMU User"}
+                        </Text>
+                      </View>
+
+                      <Feather
+                        name="chevron-right"
+                        size={18}
+                        color={APP_COLORS.tabInactive}
+                      />
+                    </Pressable>
+                  ))
+                ) : (
+                  <View className="px-4 py-6 items-center">
+                    <Feather
+                      name="users"
+                      size={28}
+                      color={APP_COLORS.tabInactive}
+                    />
+                    <Text
+                      className="text-sm mt-3"
+                      style={{
+                        color: APP_COLORS.primaryBlue,
+                        fontFamily: "Montserrat-SemiBold",
+                      }}
+                    >
+                      No recipients available
+                    </Text>
+                    <Text
+                      className="text-xs mt-1 text-center"
+                      style={{
+                        color: APP_COLORS.textSubtle,
+                        fontFamily: "Montserrat-Regular",
+                      }}
+                    >
+                      There are no selectable users right now.
+                    </Text>
                   </View>
                 )}
               </View>
             </ScrollView>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

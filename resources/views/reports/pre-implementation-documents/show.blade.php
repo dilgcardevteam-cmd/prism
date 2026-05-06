@@ -175,6 +175,7 @@
                     $fileName = $path ? basename($path) : null;
 
                     $isMultiUpload = in_array($field, $multiUploadDocumentTypes, true);
+                    $isPhotoMultiUpload = $isMultiUpload && $field === 'geotagged_photos_path';
                     $uploadCount = $fileRecordsForField instanceof \Illuminate\Support\Collection ? $fileRecordsForField->count() : 0;
                     $hasFile = !empty($path);
                     $fileViewUrl = $hasFile ? route($routeConfig['document'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) : null;
@@ -325,36 +326,57 @@
                 @endphp
 
                 @if ($isMultiUpload)
-                    <button
-                        type="button"
-                        onclick="openPreImplementationMultiUploadModal('{{ $field }}')"
-                        style="width: 100%; text-align: left; border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb; cursor: pointer;"
-                    >
+                    <div style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
-                            <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0; cursor: pointer;">{{ $label }}</label>
+                            <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0;">{{ $label }}</label>
                             <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
                                 {{ $statusLabel }}
                             </span>
                         </div>
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
-                            <div style="font-size: 11px; color: #6b7280;">
-                                {{ $uploadCount }} {{ \Illuminate\Support\Str::plural('upload', $uploadCount) }}
-                            </div>
-                            <div style="display: inline-flex; align-items: center; gap: 6px; color: #002C76; font-size: 11px; font-weight: 700;">
-                                <i class="fas fa-layer-group"></i>
-                                <span>Manage Files</span>
-                            </div>
-                        </div>
-                        <div style="font-size: 11px; color: #6b7280; min-height: 40px;">
+
+                        <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; min-height: 40px;">
                             @if (empty($timelineEvents))
                                 <div style="color: #9ca3af;">No upload activity yet.</div>
-                            @else
-                                <div style="display: block; font-size: {{ $timelineEvents[0]['font_size'] ?? '11px' }}; font-weight: {{ $timelineEvents[0]['font_weight'] ?? 'normal' }}; color: {{ $timelineEvents[0]['color'] ?? '#6b7280' }};">
-                                    {{ $timelineEvents[0]['message'] ?? '' }}
+                            @endif
+                            @foreach ($timelineEvents as $timelineEvent)
+                                <div style="display: block; font-size: {{ $timelineEvent['font_size'] }}; font-weight: {{ $timelineEvent['font_weight'] }}; color: {{ $timelineEvent['color'] }}; {{ $loop->first ? '' : 'margin-top: 4px;' }}">
+                                    {{ $timelineEvent['message'] }}
                                 </div>
+                            @endforeach
+                        </div>
+
+                        <div class="pre-impl-upload-shell">
+                            @if ($uploadCount > 0)
+                                <button
+                                    type="button"
+                                    onclick="openPreImplementationMultiUploadModal('{{ $field }}')"
+                                    class="pre-impl-upload-filebar pre-impl-upload-filelink pre-impl-upload-filebutton is-selected"
+                                    title="{{ $isPhotoMultiUpload ? 'Open uploaded photos' : 'Open uploaded documents' }}"
+                                >
+                                    <span class="pre-impl-upload-fileicon">
+                                        <i class="fas {{ $isPhotoMultiUpload ? 'fa-images' : 'fa-folder-open' }}"></i>
+                                    </span>
+                                    <span class="pre-impl-upload-filemeta">
+                                        <span class="pre-impl-upload-fileeyebrow">{{ $isPhotoMultiUpload ? 'Uploaded photos' : 'Uploaded documents' }}</span>
+                                        <span class="pre-impl-upload-filename">{{ $uploadCount }} {{ \Illuminate\Support\Str::plural($isPhotoMultiUpload ? 'photo' : 'document', $uploadCount) }} available</span>
+                                    </span>
+                                </button>
+                            @else
+                                <button
+                                    type="button"
+                                    onclick="openPreImplementationMultiUploadModal('{{ $field }}')"
+                                    class="pre-impl-upload-dropzone"
+                                    aria-label="{{ $isPhotoMultiUpload ? 'Browse photos for ' . $label : 'Browse documents for ' . $label }}"
+                                >
+                                    <span class="pre-impl-upload-dropzone-icon">
+                                        <i class="fas {{ $isPhotoMultiUpload ? 'fa-images' : 'fa-cloud-upload-alt' }}"></i>
+                                    </span>
+                                    <span class="pre-impl-upload-dropzone-title">{{ $isPhotoMultiUpload ? 'Browse Photos' : 'Browse Documents' }}</span>
+                                    <span class="pre-impl-upload-dropzone-copy">{{ $isPhotoMultiUpload ? 'JPEG only' : 'PDF only' }}</span>
+                                </button>
                             @endif
                         </div>
-                    </button>
+                    </div>
                 @else
                 <form method="POST" action="{{ route($routeConfig['save'], array_merge(['projectCode' => $project->project_code], $scopeQuery)) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
                     @csrf
@@ -489,7 +511,7 @@
         @endforeach
 
         <div style="margin-top: 12px; font-size: 11px; color: #6b7280;">
-            Accepted format: PDF only. Maximum file size per document: 15 MB.
+            Accepted format: PDF for documents@if(array_key_exists('geotagged_photos_path', $documentFields)), JPEG for geo-tagged photos@endif. Maximum file size per upload: 15 MB.
         </div>
     </div>
 
@@ -498,48 +520,76 @@
             $multiLabel = $documentFields[$multiField] ?? $multiField;
             $multiFiles = $documentFilesByType[$multiField] ?? collect();
             $modalId = 'preImplMultiModal-' . $multiField;
+            $multiUploadCount = $multiFiles instanceof \Illuminate\Support\Collection ? $multiFiles->count() : 0;
+            $isPhotoMultiUpload = $multiField === 'geotagged_photos_path';
         @endphp
         <div id="{{ $modalId }}" data-pre-impl-multi-modal style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); z-index: 1100; padding: 24px; overflow-y: auto;">
-            <div style="max-width: 1100px; margin: 0 auto; background: #ffffff; border-radius: 14px; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22); overflow: hidden;">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);">
-                    <div>
-                        <h3 style="margin: 0; color: #ffffff; font-size: 18px; font-weight: 700;">{{ $multiLabel }}</h3>
-                        <div style="margin-top: 4px; color: rgba(255,255,255,0.82); font-size: 12px;">Multiple uploads supported. Latest files are shown first.</div>
+            <div style="max-width: 1120px; margin: 0 auto; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 120px); border-radius: 20px; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24); overflow: hidden; border: 1px solid rgba(191, 219, 254, 0.9);">
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 20px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);">
+                    <div style="display: flex; align-items: flex-start; gap: 14px;">
+                        <div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,0.14); color: #ffffff; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
+                            <i class="fas {{ $isPhotoMultiUpload ? 'fa-images' : 'fa-folder-open' }}"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 700; line-height: 1.2;">{{ $multiLabel }}</h3>
+                            <div style="margin-top: 6px; color: rgba(255,255,255,0.82); font-size: 12px; line-height: 1.5;">{{ $isPhotoMultiUpload ? 'Multiple photo uploads supported. Latest images appear first and remain available for validation inside this modal.' : 'Multiple uploads supported. Latest files appear first and remain available for validation inside this modal.' }}</div>
+                        </div>
                     </div>
-                    <button type="button" onclick="closePreImplementationMultiUploadModal('{{ $multiField }}')" style="border: none; background: rgba(255,255,255,0.14); color: #ffffff; width: 34px; height: 34px; border-radius: 999px; cursor: pointer; font-size: 18px;">&times;</button>
+                    <button type="button" onclick="closePreImplementationMultiUploadModal('{{ $multiField }}')" style="border: none; background: rgba(255,255,255,0.14); color: #ffffff; width: 36px; height: 36px; border-radius: 999px; cursor: pointer; font-size: 18px; flex-shrink: 0;">&times;</button>
                 </div>
 
-                <div style="padding: 20px 22px 22px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap;">
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 28px; padding: 0 10px; border-radius: 999px; background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 12px; font-weight: 700;">
-                                {{ $multiFiles instanceof \Illuminate\Support\Collection ? $multiFiles->count() : 0 }}
-                            </span>
-                            <span style="font-size: 12px; color: #4b5563;">Uploads</span>
+                <div style="padding: 22px 24px 24px;">
+                    <div style="display: grid; grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); gap: 16px; align-items: stretch; margin-bottom: 18px;">
+                        <div style="border: 1px solid #dbe7ff; border-radius: 16px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding: 18px 18px 16px;">
+                            <div style="display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 999px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+                                <i class="fas fa-layer-group"></i>
+                                <span>Upload Summary</span>
+                            </div>
+                            <div style="margin-top: 14px; color: #0f172a; font-size: 30px; font-weight: 800; line-height: 1;">{{ $multiUploadCount }}</div>
+                            <div style="margin-top: 6px; color: #475569; font-size: 13px; font-weight: 600;">{{ \Illuminate\Support\Str::plural($isPhotoMultiUpload ? 'photo' : 'document', $multiUploadCount) }} in this set</div>
+                            <div style="margin-top: 10px; color: #64748b; font-size: 12px; line-height: 1.5;">Use this panel to review every submitted {{ $isPhotoMultiUpload ? 'image' : 'file' }}, then validate or return each one individually.</div>
                         </div>
 
-                        @if (!$isRegionalDilg)
-                            <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                @csrf
-                                <input type="file" name="document_file" accept=".pdf,application/pdf" required class="dashboard-file-input" style="font-size: 12px;">
-                                <button type="submit" style="padding: 9px 14px; background-color: #002C76; color: #ffffff; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 700;">
-                                    Upload File
-                                </button>
-                            </form>
-                        @else
-                            <div style="font-size: 12px; color: #6b7280;">Regional Office cannot upload files.</div>
-                        @endif
+                        <div style="border: 1px solid #dbe7ff; border-radius: 16px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding: 18px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap;">
+                                <div>
+                                    <div style="color: #0f172a; font-size: 15px; font-weight: 700;">Add another {{ $isPhotoMultiUpload ? 'photo' : 'document' }}</div>
+                                    <div style="margin-top: 4px; color: #64748b; font-size: 12px;">{{ $isPhotoMultiUpload ? 'JPEG only' : 'PDF only' }}. Maximum file size per upload: 15 MB.</div>
+                                </div>
+                                @if ($multiUploadCount > 0)
+                                    <div style="display: inline-flex; align-items: center; gap: 6px; color: #1d4ed8; font-size: 12px; font-weight: 700;">
+                                        <i class="fas fa-clock-rotate-left"></i>
+                                        <span>Latest first</span>
+                                    </div>
+                                @endif
+                            </div>
+
+                            @if (!$isRegionalDilg)
+                                <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                    @csrf
+                                    <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;">
+                                    <button type="submit" style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18);">
+                                        Upload {{ $isPhotoMultiUpload ? 'Photo' : 'Document' }}
+                                    </button>
+                                </form>
+                            @else
+                                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 12px; background: #f8fafc; border: 1px solid #e5e7eb; color: #64748b; font-size: 12px;">
+                                    <i class="fas fa-lock"></i>
+                                    <span>Regional Office cannot upload files in this modal.</span>
+                                </div>
+                            @endif
+                        </div>
                     </div>
 
-                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
+                    <div style="border: 1px solid #dbe7ff; border-radius: 16px; overflow: hidden; background: #ffffff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);">
                         <table style="width: 100%; border-collapse: collapse; min-width: 760px;">
                             <thead>
-                                <tr style="background-color: #f8fafc;">
-                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Uploaded</th>
-                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">File</th>
-                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Status</th>
-                                    <th style="padding: 12px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Uploaded By</th>
-                                    <th style="padding: 12px 14px; text-align: right; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Actions</th>
+                                <tr style="background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);">
+                                    <th style="padding: 13px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Uploaded</th>
+                                    <th style="padding: 13px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">File</th>
+                                    <th style="padding: 13px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Status</th>
+                                    <th style="padding: 13px 14px; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Uploaded By</th>
+                                    <th style="padding: 13px 14px; text-align: right; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -559,9 +609,9 @@
                                             $statusMeta = ['label' => 'For DILG PO Validation', 'bg' => '#e0f2fe', 'color' => '#075985'];
                                         }
                                     @endphp
-                                    <tr style="border-top: 1px solid #e5e7eb;">
+                                    <tr style="border-top: 1px solid #e5e7eb; background-color: {{ $loop->odd ? '#ffffff' : '#f8fafc' }};">
                                         <td style="padding: 12px 14px; font-size: 12px; color: #374151; white-space: nowrap;">{{ $uploadedAt ? $uploadedAt->format('M d, Y h:i A') : '-' }}</td>
-                                        <td style="padding: 12px 14px; font-size: 12px; color: #111827;">{{ basename($multiFile->file_path ?? ('File #' . $multiFile->id)) }}</td>
+                                        <td style="padding: 12px 14px; font-size: 12px; color: #111827; font-weight: 600;">{{ basename($multiFile->file_path ?? ('File #' . $multiFile->id)) }}</td>
                                         <td style="padding: 12px 14px;">
                                             <span style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; background-color: {{ $statusMeta['bg'] }}; color: {{ $statusMeta['color'] }}; font-size: 11px; font-weight: 700;">
                                                 {{ $statusMeta['label'] }}
@@ -587,7 +637,15 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5" style="padding: 24px 18px; text-align: center; color: #6b7280; font-size: 12px;">No uploads yet.</td>
+                                        <td colspan="5" style="padding: 38px 24px; text-align: center;">
+                                            <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 10px; color: #64748b;">
+                                                <span style="width: 56px; height: 56px; border-radius: 18px; background: #eff6ff; color: #2563eb; display: inline-flex; align-items: center; justify-content: center; font-size: 22px;">
+                                                    <i class="fas {{ $isPhotoMultiUpload ? 'fa-images' : 'fa-folder-open' }}"></i>
+                                                </span>
+                                                <div style="font-size: 14px; font-weight: 700; color: #334155;">No uploads yet</div>
+                                                <div style="font-size: 12px; line-height: 1.5; max-width: 320px;">Upload the first {{ $isPhotoMultiUpload ? 'photo' : 'supporting document' }} above to start the validation history for this requirement.</div>
+                                            </div>
+                                        </td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -855,6 +913,14 @@
         .pre-impl-upload-filelink {
             text-decoration: none;
             cursor: pointer;
+        }
+
+        .pre-impl-upload-filebutton {
+            appearance: none;
+            width: 100%;
+            text-align: center;
+            font: inherit;
+            border: 1px solid #dbe7ff;
         }
 
         .pre-impl-upload-filelink:hover {

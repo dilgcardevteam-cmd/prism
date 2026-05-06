@@ -1364,7 +1364,7 @@
             populateBarangayOptions(citySelect.value, selectedBarangay);
 
             document.addEventListener('click', function (event) {
-                const link = event.target.closest('.lfp-sort-link, .lfp-mobile-card-action, [data-results-container] a');
+                const link = event.target.closest('.lfp-sort-link, .lfp-mobile-card-action');
                 if (!link) {
                     return;
                 }
@@ -1375,10 +1375,13 @@
                 }
 
                 const isLocallyFundedNavigation = href.indexOf('{{ route('projects.locally-funded') }}') === 0;
-                const isPaginationLink = link.closest('[data-results-container]') && href.indexOf('page=') !== -1;
                 const isSortLink = link.classList.contains('lfp-sort-link');
 
-                if (!isLocallyFundedNavigation || (!isSortLink && !isPaginationLink)) {
+                if (!isLocallyFundedNavigation && !isSortLink) {
+                    return;
+                }
+
+                if (!isSortLink && !link.classList.contains('lfp-mobile-card-action')) {
                     return;
                 }
 

@@ -31,7 +31,7 @@ export function useMessagesApi() {
     });
   }, [fetchJsonWithFallback, session?.id]);
 
-  const sendMessage = useCallback(async ({ threadId = 0, recipientIds = [], message = "", image = null }) => {
+  const sendMessage = useCallback(async ({ threadId = 0, recipientIds = [], message = "", image = null, images = [] }) => {
     const formData = new FormData();
 
     if (session?.id) {
@@ -53,6 +53,20 @@ export function useMessagesApi() {
         uri: image.uri,
         name: image.name || `message-${Date.now()}.jpg`,
         type: image.type || "image/jpeg",
+      });
+    }
+
+    if (Array.isArray(images) && images.length) {
+      images.forEach((attachment) => {
+        if (!attachment?.uri) {
+          return;
+        }
+
+        formData.append("images[]", {
+          uri: attachment.uri,
+          name: attachment.name || `message-${Date.now()}.jpg`,
+          type: attachment.type || "image/jpeg",
+        });
       });
     }
 
