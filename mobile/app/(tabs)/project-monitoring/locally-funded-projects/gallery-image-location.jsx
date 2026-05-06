@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Image, Linking, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Image, Linking, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   Extrapolation,
@@ -70,22 +70,111 @@ function formatCapturedAt(value) {
   });
 }
 
+function parseProjectParam(rawValue) {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function normalizeStageKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/%/g, "")
+    .replace(/[^a-z0-9-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function normalizeGalleryImages(images) {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+
+  return images
+    .map((image) => ({
+      id: image?.id,
+      category: String(image?.category || image?.gallery_category || "").trim() || "During",
+      imageUrl: String(image?.imageUrl || image?.image_url || "").trim(),
+      createdAt: image?.createdAt || image?.created_at || null,
+      capturedBy:
+        image?.capturedBy ||
+        image?.captured_by ||
+        image?.uploadedByName ||
+        image?.uploaded_by_name ||
+        image?.uploaded_by ||
+        null,
+      latitude:
+        image?.latitude === null || image?.latitude === undefined || image?.latitude === ""
+          ? null
+          : Number(image.latitude),
+      longitude:
+        image?.longitude === null || image?.longitude === undefined || image?.longitude === ""
+          ? null
+          : Number(image.longitude),
+      accuracy:
+        image?.accuracy === null || image?.accuracy === undefined || image?.accuracy === ""
+          ? null
+          : Number(image.accuracy),
+    }))
+    .filter((image) => image.id && image.imageUrl);
+}
+
 export default function GalleryImageLocationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { width: windowWidth } = useWindowDimensions();
+
+  const project = useMemo(() => parseProjectParam(params.project), [params.project]);
 
   const projectTitle = String(params.projectTitle || "Locally Funded Project");
   const projectCode = String(params.projectCode || "-");
   const stage = String(params.stage || "During");
-  const imageUrl = String(params.imageUrl || "");
-  const imageCreatedAt = String(params.imageCreatedAt || "");
-  const imageCapturedBy = String(params.imageCapturedBy || "").trim();
   const markerTitle = String(projectTitle || "Locally Funded Project").trim() || "Locally Funded Project";
-  const markerDescription = String(stage || "During").trim() || "During";
+  const projectImages = useMemo(() => normalizeGalleryImages(project?.galleryImages), [project?.galleryImages]);
+  const currentStageKey = useMemo(() => normalizeStageKey(stage), [stage]);
+  const initialImageId = String(params.imageId || "").trim();
+  const fallbackImage = useMemo(() => {
+    return (
+      normalizeGalleryImages([
+        {
+          id: initialImageId || params.imageUrl || "current-image",
+          category: stage,
+          imageUrl: params.imageUrl,
+          createdAt: params.imageCreatedAt,
+          capturedBy: params.imageCapturedBy,
+          latitude: params.latitude,
+          longitude: params.longitude,
+          accuracy: params.accuracy,
+        },
+      ])[0] || null
+    );
+  }, [initialImageId, params.accuracy, params.imageCapturedBy, params.imageCreatedAt, params.imageUrl, params.latitude, params.longitude, stage]);
+  const stageImages = useMemo(() => {
+    const matched = projectImages.filter((image) => normalizeStageKey(image.category) === currentStageKey);
 
-  const latitude = useMemo(() => parseCoordinate(params.latitude), [params.latitude]);
-  const longitude = useMemo(() => parseCoordinate(params.longitude), [params.longitude]);
-  const accuracy = useMemo(() => parseAccuracy(params.accuracy), [params.accuracy]);
+    if (matched.length > 0) {
+      return matched;
+    }
+
+    return fallbackImage ? [fallbackImage] : [];
+  }, [currentStageKey, fallbackImage, projectImages]);
+  const [activeImageIndex, setActiveImageIndex] = useState(() => {
+    if (stageImages.length === 0) {
+      return 0;
+    }
+
+    const initialIndex = stageImages.findIndex(
+      (image) => String(image.id) === initialImageId || String(image.imageUrl) === String(params.imageUrl || "")
+    );
+
+    return initialIndex >= 0 ? initialIndex : 0;
+  });
   const [locationState, setLocationState] = useState(LOCATION_STATE.READY_ONLINE);
   const [toast, setToast] = useState({ visible: false, type: "info", message: "" });
   const [viewMode, setViewMode] = useState(VIEW_MODE.OVERVIEW);
@@ -100,7 +189,18 @@ export default function GalleryImageLocationScreen() {
   const savedTranslateY = useSharedValue(0);
   const scrollY = useSharedValue(0);
 
+  const activeImage = stageImages[activeImageIndex] || stageImages[0] || fallbackImage;
+  const imageUrl = String(activeImage?.imageUrl || params.imageUrl || "");
+  const imageCreatedAt = String(activeImage?.createdAt || params.imageCreatedAt || "");
+  const imageCapturedBy = String(activeImage?.capturedBy || params.imageCapturedBy || "").trim();
+  const markerDescription = String(activeImage?.category || stage || "During").trim() || "During";
+  const latitude = useMemo(() => parseCoordinate(activeImage?.latitude), [activeImage?.latitude]);
+  const longitude = useMemo(() => parseCoordinate(activeImage?.longitude), [activeImage?.longitude]);
+  const accuracy = useMemo(() => parseAccuracy(activeImage?.accuracy), [activeImage?.accuracy]);
+
   const hasCoordinates = latitude !== null && longitude !== null;
+  const hasMultipleStageImages = stageImages.length > 1;
+  const carouselWidth = Math.max(windowWidth, 1);
 
   const initialRegion = useMemo(
     () =>
@@ -123,6 +223,19 @@ export default function GalleryImageLocationScreen() {
 
     setLocationState(LOCATION_STATE.READY_ONLINE);
   }, [hasCoordinates]);
+
+  useEffect(() => {
+    if (stageImages.length === 0) {
+      setActiveImageIndex(0);
+      return;
+    }
+
+    const nextIndex = stageImages.findIndex(
+      (image) => String(image.id) === initialImageId || String(image.imageUrl) === String(params.imageUrl || "")
+    );
+
+    setActiveImageIndex(nextIndex >= 0 ? nextIndex : 0);
+  }, [initialImageId, params.imageUrl, stageImages]);
 
   useEffect(() => {
     if (!toast.visible) {
@@ -194,8 +307,18 @@ export default function GalleryImageLocationScreen() {
     showToast("info", "Map state refreshed.");
   };
 
-  const openImageViewer = () => {
-    if (!imageUrl) {
+  const handleCarouselMomentumEnd = (event) => {
+    if (!hasMultipleStageImages) {
+      return;
+    }
+
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / carouselWidth);
+    const boundedIndex = Math.max(0, Math.min(nextIndex, stageImages.length - 1));
+    setActiveImageIndex(boundedIndex);
+  };
+
+  const openImageViewer = (image = activeImage) => {
+    if (!image?.imageUrl) {
       return;
     }
 
@@ -207,6 +330,252 @@ export default function GalleryImageLocationScreen() {
     savedTranslateY.value = 0;
     setIsViewerOpen(true);
   };
+
+  const renderStagePage = ({ item, index }) => {
+    const pageImageUrl = String(item?.imageUrl || "");
+    const pageCreatedAt = String(item?.createdAt || "");
+    const pageCapturedBy = String(item?.capturedBy || "").trim();
+    const pageMarkerDescription = String(item?.category || stage || "During").trim() || "During";
+    const pageLatitude = parseCoordinate(item?.latitude);
+    const pageLongitude = parseCoordinate(item?.longitude);
+    const pageAccuracy = parseAccuracy(item?.accuracy);
+    const pageHasCoordinates = pageLatitude !== null && pageLongitude !== null;
+    const pageInitialRegion = pageHasCoordinates
+      ? {
+          latitude: pageLatitude,
+          longitude: pageLongitude,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
+        }
+      : null;
+
+    return (
+      <View style={{ width: carouselWidth }} className="flex-1">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
+          <View className="relative">
+            <Pressable
+              onPress={() => openImageViewer(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${String(item?.category || stage || "image")}`}
+              className="overflow-hidden"
+            >
+              {pageImageUrl ? (
+                <Image source={{ uri: pageImageUrl }} className="h-[290px] w-full bg-[#dce6f8]" resizeMode="cover" />
+              ) : (
+                <View className="h-[290px] items-center justify-center bg-[#d8e2f2]">
+                  <Feather name="image" size={28} color="#6e86ac" />
+                  <Text className="mt-3 text-[13px] text-[#486391]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                    Image unavailable
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+
+            <View className="absolute left-4 right-4 top-4 flex-row items-center justify-between">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={handleBackToGallery}
+                className="h-11 w-11 items-center justify-center rounded-full bg-white/95"
+              >
+                <Feather name="chevron-left" size={21} color="#002C76" />
+              </Pressable>
+            </View>
+
+            <View className="absolute bottom-[15%] left-4 flex-row items-center gap-2">
+              <View className="rounded-full bg-black/55 px-3 py-1.5">
+                <Text className="text-[11px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                  {pageMarkerDescription}
+                </Text>
+              </View>
+
+              {hasMultipleStageImages ? (
+                <View className="rounded-full bg-black/40 px-3 py-1.5">
+                  <Text className="text-[11px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                    {index + 1} of {stageImages.length}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          <View className="-mt-7 rounded-[30px] border border-[#e2e8f0] bg-white px-5 py-5 shadow-xl shadow-black/10">
+            <Text className="text-[22px] leading-[30px] text-[#002C76]" numberOfLines={3} style={{ fontFamily: "Montserrat-SemiBold" }}>
+              {projectTitle}
+            </Text>
+
+            <View className="mt-3 flex-col items-start gap-2">
+              <View className="max-w-full flex-row items-center rounded-full bg-[#f3f4f6] px-2.5 py-1.5">
+                <View className="h-3 w-3 rounded-full bg-[#65a30d]" />
+                <Text className="ml-2 text-[12px] text-[#374151]" numberOfLines={1} style={{ fontFamily: "Montserrat-SemiBold" }}>
+                  {pageHasCoordinates ? "Coordinates captured" : "Location unavailable"}
+                </Text>
+              </View>
+
+              <Text
+                className="w-full text-[12px] text-[#374151] underline"
+                numberOfLines={1}
+                ellipsizeMode="middle"
+                style={{ fontFamily: "Montserrat-SemiBold" }}
+              >
+                {projectCode}
+              </Text>
+            </View>
+
+            <Text className="mt-4 text-[14px] leading-6 text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+              This gallery entry records the project stage and field location details for monitoring and verification.
+            </Text>
+
+            {hasMultipleStageImages ? (
+              <Text className="mt-2 text-[12px] text-[#6b7280]" style={{ fontFamily: "Montserrat" }}>
+                Swipe left or right to view the other {pageMarkerDescription} images in this project.
+              </Text>
+            ) : null}
+
+            <View className="mt-5 flex-row rounded-2xl bg-[#f3f4f6] p-1.5">
+              <Pressable
+                onPress={() => setViewMode(VIEW_MODE.OVERVIEW)}
+                className={`flex-1 items-center rounded-xl px-3 py-2.5 ${
+                  viewMode === VIEW_MODE.OVERVIEW ? "bg-white" : "bg-transparent"
+                }`}
+                accessibilityRole="button"
+                accessibilityLabel="Switch to overview"
+              >
+                <Text
+                  className={`text-[12px] ${viewMode === VIEW_MODE.OVERVIEW ? "text-[#002C76]" : "text-[#6b7280]"}`}
+                  style={{ fontFamily: "Montserrat-SemiBold" }}
+                >
+                  Overview
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setViewMode(VIEW_MODE.MAP)}
+                className={`ml-1.5 flex-1 items-center rounded-xl px-3 py-2.5 ${
+                  viewMode === VIEW_MODE.MAP ? "bg-white" : "bg-transparent"
+                }`}
+                accessibilityRole="button"
+                accessibilityLabel="Switch to map"
+              >
+                <Text
+                  className={`text-[12px] ${viewMode === VIEW_MODE.MAP ? "text-[#002C76]" : "text-[#6b7280]"}`}
+                  style={{ fontFamily: "Montserrat-SemiBold" }}
+                >
+                  Map
+                </Text>
+              </Pressable>
+            </View>
+
+            {viewMode === VIEW_MODE.OVERVIEW ? (
+              <View className="mt-5 rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-4">
+                <View className="flex-row items-start">
+                  <Text className="flex-1 pr-2 text-[18px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                    Image details
+                  </Text>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open in Google Maps"
+                  onPress={handleOpenExternalMap}
+                  className="mt-3 self-start rounded-full bg-[#002C76] px-3.5 py-2"
+                >
+                  <Text className="text-[11px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                    Open in Google Maps
+                  </Text>
+                </Pressable>
+
+                {pageHasCoordinates ? (
+                  <>
+                    <Text className="mt-4 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+                      Uploaded At: {formatCapturedAt(pageCreatedAt)}
+                    </Text>
+                    <Text className="mt-1.5 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+                      Uploaded By: {pageCapturedBy || "Not available"}
+                    </Text>
+                    <Text className="mt-4 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+                      Latitude: {formatCoordinate(pageLatitude)}
+                    </Text>
+                    <Text className="mt-1.5 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+                      Longitude: {formatCoordinate(pageLongitude)}
+                    </Text>
+                    <Text className="mt-1.5 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
+                      Accuracy: {pageAccuracy !== null ? `${pageAccuracy.toFixed(2)} m` : "Not available"}
+                    </Text>
+
+                    {(locationState === LOCATION_STATE.READY_NO_TILES || locationState === LOCATION_STATE.ERROR) ? (
+                      <Pressable
+                        onPress={handleRetryMap}
+                        className="mt-4 flex-row items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-4 py-3"
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry map"
+                      >
+                        <Feather name="refresh-cw" size={14} color="#002C76" />
+                        <Text className="ml-2 text-[13px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                          Retry map
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                ) : (
+                  <View className="mt-4 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-3 py-3">
+                    <Text className="text-[12px] text-[#b91c1c]" style={{ fontFamily: "Montserrat" }}>
+                      No location was captured for this image.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View className="mt-5 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-[#dfe7f5]" style={{ height: 300 }}>
+                {pageHasCoordinates ? (
+                  <Pressable
+                    onPress={handleOpenMapFullscreen}
+                    className="absolute right-3 top-3 z-20 flex-row items-center rounded-full bg-white/95 px-3 py-1.5"
+                    accessibilityRole="button"
+                    accessibilityLabel="Open full screen map"
+                  >
+                    <Feather name="maximize-2" size={13} color="#002C76" />
+                    <Text className="ml-1.5 text-[11px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+                      Full screen
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                {pageHasCoordinates ? (
+                  <MapView
+                    style={{ flex: 1 }}
+                    initialRegion={pageInitialRegion}
+                    showsCompass={false}
+                    showsScale={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                    onMapReady={() => setLocationState(LOCATION_STATE.READY_ONLINE)}
+                  >
+                    <Marker
+                      coordinate={{ latitude: pageLatitude, longitude: pageLongitude }}
+                      tappable
+                      pinColor="#002C76"
+                      title={markerTitle}
+                      description={pageMarkerDescription}
+                    />
+                  </MapView>
+                ) : (
+                  <View className="h-full items-center justify-center px-6">
+                    <Feather name="map" size={24} color="#738fbf" />
+                    <Text className="mt-2 text-center text-[12px] text-[#6077a4]" style={{ fontFamily: "Montserrat" }}>
+                      No coordinates available for map preview.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const keyExtractor = (item) => String(item.id);
 
   const pinchGesture = Gesture.Pinch()
     .onUpdate((event) => {
@@ -297,236 +666,23 @@ export default function GalleryImageLocationScreen() {
     <SafeAreaView className="flex-1 bg-[#eceff3]" edges={["left", "right"]}>
       <FloatingToast visible={toast.visible} type={toast.type} message={toast.message} onClose={() => setToast((current) => ({ ...current, visible: false }))} />
 
-      <Animated.ScrollView
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 28 }}
-      >
-        <Animated.View className="relative" style={heroParallaxStyle}>
-          <Pressable
-            onPress={openImageViewer}
-            accessibilityRole="button"
-            accessibilityLabel="Open full image"
-            className="overflow-hidden"
-          >
-            {imageUrl ? (
-              <Image source={{ uri: imageUrl }} className="h-[290px] w-full bg-[#dce6f8]" resizeMode="cover" />
-            ) : (
-              <View className="h-[290px] items-center justify-center bg-[#d8e2f2]">
-                <Feather name="image" size={28} color="#6e86ac" />
-                <Text className="mt-3 text-[13px] text-[#486391]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                  Image unavailable
-                </Text>
-              </View>
-            )}
-          </Pressable>
-
-          <View className="absolute left-4 right-4 top-4 flex-row items-center justify-between">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={handleBackToGallery}
-              className="h-11 w-11 items-center justify-center rounded-full bg-white/95"
-            >
-              <Feather name="chevron-left" size={21} color="#002C76" />
-            </Pressable>
-
-            {/* <View className="flex-row items-center gap-2">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back to project list"
-                onPress={() => router.push(APP_ROUTES.projectMonitoring.locallyFundedProjects)}
-                className="h-11 w-11 items-center justify-center rounded-full bg-white/95"
-              >
-                <Feather name="list" size={18} color="#0f172a" />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open image preview"
-                onPress={openImageViewer}
-                className="h-11 w-11 items-center justify-center rounded-full bg-white/95"
-              >
-                <Feather name="eye" size={18} color="#0f172a" />
-              </Pressable>
-            </View> */}
-          </View>
-
-          <View className="absolute bottom-[15%] left-4">
-            <View className="rounded-full bg-black/55 px-3 py-1.5">
-              <Text className="text-[11px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                {stage}
-              </Text>
-            </View>
-          </View>
-        </Animated.View>
-
-        <Animated.View className="-mt-7 rounded-[30px] border border-[#e2e8f0] bg-white px-5 py-5 shadow-xl shadow-black/10" style={infoParallaxStyle}>
-          <Text className="text-[22px] leading-[30px] text-[#002C76]" numberOfLines={3} style={{ fontFamily: "Montserrat-SemiBold" }}>
-            {projectTitle}
-          </Text>
-
-          <View className="mt-3 flex-col items-start gap-2">
-            <View className="max-w-full flex-row items-center rounded-full bg-[#f3f4f6] px-2.5 py-1.5">
-              <View className="h-3 w-3 rounded-full bg-[#65a30d]" />
-              <Text className="ml-2 text-[12px] text-[#374151]" numberOfLines={1} style={{ fontFamily: "Montserrat-SemiBold" }}>
-                {hasCoordinates ? "Coordinates captured" : "Location unavailable"}
-              </Text>
-            </View>
-
-            <Text
-              className="w-full text-[12px] text-[#374151] underline"
-              numberOfLines={1}
-              ellipsizeMode="middle"
-              style={{ fontFamily: "Montserrat-SemiBold" }}
-            >
-              {projectCode}
-            </Text>
-          </View>
-
-          <Text className="mt-4 text-[14px] leading-6 text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
-            This gallery entry records the project stage and field location details for monitoring and verification.
-          </Text>
-
-          <View className="mt-5 flex-row rounded-2xl bg-[#f3f4f6] p-1.5">
-            <Pressable
-              onPress={() => setViewMode(VIEW_MODE.OVERVIEW)}
-              className={`flex-1 items-center rounded-xl px-3 py-2.5 ${
-                viewMode === VIEW_MODE.OVERVIEW ? "bg-white" : "bg-transparent"
-              }`}
-              accessibilityRole="button"
-              accessibilityLabel="Switch to overview"
-            >
-              <Text
-                className={`text-[12px] ${viewMode === VIEW_MODE.OVERVIEW ? "text-[#002C76]" : "text-[#6b7280]"}`}
-                style={{ fontFamily: "Montserrat-SemiBold" }}
-              >
-                Overview
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setViewMode(VIEW_MODE.MAP)}
-              className={`ml-1.5 flex-1 items-center rounded-xl px-3 py-2.5 ${
-                viewMode === VIEW_MODE.MAP ? "bg-white" : "bg-transparent"
-              }`}
-              accessibilityRole="button"
-              accessibilityLabel="Switch to map"
-            >
-              <Text
-                className={`text-[12px] ${viewMode === VIEW_MODE.MAP ? "text-[#002C76]" : "text-[#6b7280]"}`}
-                style={{ fontFamily: "Montserrat-SemiBold" }}
-              >
-                Map
-              </Text>
-            </Pressable>
-          </View>
-
-          {viewMode === VIEW_MODE.OVERVIEW ? (
-            <View className="mt-5 rounded-2xl border border-[#e5e7eb] bg-[#f9fafb] px-4 py-4">
-              <View className="flex-row items-start">
-                <Text className="flex-1 pr-2 text-[18px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                  Image details
-                </Text>
-              </View>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open in Google Maps"
-                onPress={handleOpenExternalMap}
-                className="mt-3 self-start rounded-full bg-[#002C76] px-3.5 py-2"
-              >
-                <Text className="text-[11px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                  Open in Google Maps
-                </Text>
-              </Pressable>
-
-              {hasCoordinates ? (
-                <>
-                  <Text className="mt-4 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
-                    Uploaded At: {formatCapturedAt(imageCreatedAt)}
-                  </Text>
-                  <Text className="mt-1.5 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
-                    Uploaded By: {imageCapturedBy || "Not available"}
-                  </Text>
-                  <Text className="mt-4 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
-                    Latitude: {formatCoordinate(latitude)}
-                  </Text>
-                  <Text className="mt-1.5 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
-                    Longitude: {formatCoordinate(longitude)}
-                  </Text>
-                  <Text className="mt-1.5 text-[13px] text-[#4b5563]" style={{ fontFamily: "Montserrat" }}>
-                    Accuracy: {hasAccuracy ? `${accuracy.toFixed(2)} m` : "Not available"}
-                  </Text>
-
-                  {(locationState === LOCATION_STATE.READY_NO_TILES || locationState === LOCATION_STATE.ERROR) ? (
-                    <Pressable
-                      onPress={handleRetryMap}
-                      className="mt-4 flex-row items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-4 py-3"
-                      accessibilityRole="button"
-                      accessibilityLabel="Retry map"
-                    >
-                      <Feather name="refresh-cw" size={14} color="#002C76" />
-                      <Text className="ml-2 text-[13px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                        Retry map
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </>
-              ) : (
-                <View className="mt-4 rounded-xl border border-[#fecaca] bg-[#fef2f2] px-3 py-3">
-                  <Text className="text-[12px] text-[#b91c1c]" style={{ fontFamily: "Montserrat" }}>
-                    No location was captured for this image.
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <View className="mt-5 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-[#dfe7f5]" style={{ height: 300 }}>
-              {hasCoordinates ? (
-                <Pressable
-                  onPress={handleOpenMapFullscreen}
-                  className="absolute right-3 top-3 z-20 flex-row items-center rounded-full bg-white/95 px-3 py-1.5"
-                  accessibilityRole="button"
-                  accessibilityLabel="Open full screen map"
-                >
-                  <Feather name="maximize-2" size={13} color="#002C76" />
-                  <Text className="ml-1.5 text-[11px] text-[#002C76]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                    Full screen
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              {hasCoordinates ? (
-                <MapView
-                  style={{ flex: 1 }}
-                  initialRegion={initialRegion}
-                  showsCompass={false}
-                  showsScale={false}
-                  rotateEnabled={false}
-                  pitchEnabled={false}
-                  onMapReady={() => setLocationState(LOCATION_STATE.READY_ONLINE)}
-                >
-                  <Marker
-                    coordinate={{ latitude, longitude }}
-                    tappable
-                    pinColor="#002C76"
-                    title={markerTitle}
-                    description={markerDescription}
-                  />
-                </MapView>
-              ) : (
-                <View className="h-full items-center justify-center px-6">
-                  <Feather name="map" size={24} color="#738fbf" />
-                  <Text className="mt-2 text-center text-[12px] text-[#6077a4]" style={{ fontFamily: "Montserrat" }}>
-                    No coordinates available for map preview.
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-        </Animated.View>
-      </Animated.ScrollView>
+      <FlatList
+        data={stageImages}
+        keyExtractor={keyExtractor}
+        renderItem={renderStagePage}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleCarouselMomentumEnd}
+        initialScrollIndex={Math.min(activeImageIndex, Math.max(stageImages.length - 1, 0))}
+        getItemLayout={(_, index) => ({
+          length: carouselWidth,
+          offset: carouselWidth * index,
+          index,
+        })}
+        onScrollToIndexFailed={() => null}
+        nestedScrollEnabled
+      />
 
       <Modal
         visible={isViewerOpen}
@@ -538,7 +694,7 @@ export default function GalleryImageLocationScreen() {
           <View className="flex-1 bg-black/90">
             <View className="flex-row items-center justify-between px-4 pb-3 pt-12">
               <Text className="text-[13px] text-white" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                {stage}
+                {markerDescription}
               </Text>
               <Pressable
                 onPress={() => setIsViewerOpen(false)}

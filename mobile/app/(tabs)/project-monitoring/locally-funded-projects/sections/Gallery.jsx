@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Image, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { FlatList, Image, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import * as ImagePicker from "expo-image-picker";
@@ -243,6 +243,7 @@ export default function Gallery({ project }) {
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [imageToDelete, setImageToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isGalleryRefreshing, setIsGalleryRefreshing] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -261,6 +262,8 @@ export default function Gallery({ project }) {
   const galleryImages = useMemo(() => serverImages, [serverImages]);
   const isCompactScreen = width < 360;
   const imageTileWidth = isCompactScreen ? "100%" : "48.5%";
+  const projectLookupKey = String(project?.id ?? project?.code ?? "").trim();
+  const projectCodeLookupKey = String(project?.code ?? "").trim();
 
   const showToast = (type, message) => {
     setToast({ visible: true, type, message: String(message || "") });
@@ -269,6 +272,60 @@ export default function Gallery({ project }) {
   useEffect(() => {
     setServerImages(normalizedProjectGallery);
   }, [project?.id, normalizedProjectGallery]);
+
+  const refreshGalleryData = useCallback(
+    async ({ showSpinner = true } = {}) => {
+      if (!projectLookupKey && !projectCodeLookupKey) {
+        setServerImages(normalizedProjectGallery);
+        return normalizedProjectGallery;
+      }
+
+      if (showSpinner) {
+        setIsGalleryRefreshing(true);
+      }
+
+      try {
+        const queryParams = new URLSearchParams();
+        queryParams.set("per_page", "50");
+        queryParams.set("include_filters", "1");
+
+        const payload = await fetchJsonWithFallback(`/api/mobile/locally-funded?${queryParams.toString()}`, {}, { timeout: 15000 });
+        const rows = Array.isArray(payload?.data) ? payload.data : [];
+        const refreshedProjectRow = rows.find((row) => {
+          const normalizedId = String(row?.lfp_id ?? row?.id ?? "").trim();
+          const normalizedCode = String(row?.subaybayan_project_code ?? row?.code ?? "").trim();
+
+          return (
+            normalizedId === projectLookupKey ||
+            normalizedCode === projectLookupKey ||
+            normalizedCode === projectCodeLookupKey
+          );
+        });
+
+        const refreshedImages = normalizeGalleryImages(refreshedProjectRow?.gallery_images || []);
+        setServerImages(refreshedImages);
+        return refreshedImages;
+      } catch (error) {
+        if (project?.galleryImages) {
+          const fallbackImages = normalizeGalleryImages(project.galleryImages);
+          setServerImages(fallbackImages);
+          return fallbackImages;
+        }
+
+        showToast("error", error?.message || "Unable to refresh gallery right now.");
+        return [];
+      } finally {
+        if (showSpinner) {
+          setIsGalleryRefreshing(false);
+        }
+      }
+    },
+    [fetchJsonWithFallback, normalizedProjectGallery, project?.galleryImages, projectCodeLookupKey, projectLookupKey]
+  );
+
+  useEffect(() => {
+    refreshGalleryData({ showSpinner: false });
+  }, [project?.id, refreshGalleryData]);
 
   useEffect(() => {
     const requestLocationPermission = async () => {
@@ -394,19 +451,6 @@ export default function Gallery({ project }) {
     setIsViewerOpen(false);
   };
 
-  const appendServerImage = (image) => {
-    const normalized = normalizeGalleryImages([image]);
-    if (normalized.length === 0) {
-      return;
-    }
-
-    setServerImages((current) => {
-      const existingIds = new Set(current.map((item) => String(item.id)));
-      const next = normalized.filter((item) => !existingIds.has(String(item.id)));
-      return [...next, ...current];
-    });
-  };
-
   const resolveStageFromCurrentFilter = () => {
     return selectedFilter !== "All" ? selectedFilter : "During";
   };
@@ -476,17 +520,7 @@ export default function Gallery({ project }) {
       throw new Error("Upload succeeded but response was invalid.");
     }
 
-    appendServerImage({
-      id: uploaded.id,
-      category: uploaded.category || safeStage,
-      image_url: uploaded.image_url,
-      uploaded_by: uploaded.uploaded_by ?? null,
-      uploaded_by_name: uploaded.uploaded_by_name ?? null,
-      latitude: uploaded.latitude ?? null,
-      longitude: uploaded.longitude ?? null,
-      accuracy: uploaded.accuracy ?? null,
-      created_at: uploaded.created_at || null,
-    });
+    await refreshGalleryData({ showSpinner: false });
 
     return payload;
   };
@@ -667,10 +701,7 @@ export default function Gallery({ project }) {
     try {
       await deleteGalleryImageFromServer(imageToDelete.id);
 
-      // Remove image from local state
-      setServerImages((current) =>
-        current.filter((img) => String(img.id) !== String(imageToDelete.id))
-      );
+      await refreshGalleryData({ showSpinner: false });
 
       setDeleteConfirmationOpen(false);
       setImageToDelete(null);
@@ -740,6 +771,7 @@ export default function Gallery({ project }) {
   );
 
   const isAllFilter = selectedFilter === "All";
+  const handlePullToRefresh = useCallback(() => refreshGalleryData({ showSpinner: true }), [refreshGalleryData]);
 
   return (
     <View className="mt-3 overflow-hidden rounded-3xl border border-[#d7e2f5] bg-white">
@@ -766,53 +798,58 @@ export default function Gallery({ project }) {
         </View>
       </View>
 
-      <View className="px-4 pb-4 pt-4">
-      <FloatingToast
-        visible={toast.visible}
-        type={toast.type}
-        message={toast.message}
-        duration={2600}
-        onClose={() => setToast((current) => ({ ...current, visible: false }))}
-      />
-
-      {isAllFilter ? (
-        <View>
-          {listHeader}
-          <GalleryAllHeader count={filteredImages.length} />
-          {groupedGallerySections.length > 0 ? (
-            groupedGallerySections.map((section) => (
-              <GalleryStageSection
-                key={section.stage}
-                title={section.stage}
-                images={section.images}
-                onOpenViewer={openViewer}
-                onOpenLocation={openImageLocation}
-                onDelete={handleDeleteImage}
-                tileWidth={imageTileWidth}
-              />
-            ))
-          ) : (
-            listEmpty
-          )}
-        </View>
-      ) : (
-        <FlatList
-          data={filteredImages}
-          keyExtractor={keyExtractor}
-          renderItem={renderGalleryImage}
-          numColumns={isCompactScreen ? 1 : 2}
-          columnWrapperStyle={isCompactScreen ? undefined : { justifyContent: "space-between" }}
-          ListHeaderComponent={listHeader}
-          ListEmptyComponent={listEmpty}
-          scrollEnabled={false}
-          removeClippedSubviews
-          initialNumToRender={6}
-          maxToRenderPerBatch={6}
-          windowSize={5}
-          updateCellsBatchingPeriod={50}
+      <ScrollView
+        className="px-4 pb-4 pt-4"
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isGalleryRefreshing} onRefresh={handlePullToRefresh} tintColor={BRAND.primary} colors={[BRAND.primary]} />}
+      >
+        <FloatingToast
+          visible={toast.visible}
+          type={toast.type}
+          message={toast.message}
+          duration={2600}
+          onClose={() => setToast((current) => ({ ...current, visible: false }))}
         />
-      )}
-      </View>
+
+        {isAllFilter ? (
+          <View>
+            {listHeader}
+            <GalleryAllHeader count={filteredImages.length} />
+            {groupedGallerySections.length > 0 ? (
+              groupedGallerySections.map((section) => (
+                <GalleryStageSection
+                  key={section.stage}
+                  title={section.stage}
+                  images={section.images}
+                  onOpenViewer={openViewer}
+                  onOpenLocation={openImageLocation}
+                  onDelete={handleDeleteImage}
+                  tileWidth={imageTileWidth}
+                />
+              ))
+            ) : (
+              listEmpty
+            )}
+          </View>
+        ) : (
+          <FlatList
+            data={filteredImages}
+            keyExtractor={keyExtractor}
+            renderItem={renderGalleryImage}
+            numColumns={isCompactScreen ? 1 : 2}
+            columnWrapperStyle={isCompactScreen ? undefined : { justifyContent: "space-between" }}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            scrollEnabled={false}
+            removeClippedSubviews
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={5}
+            updateCellsBatchingPeriod={50}
+          />
+        )}
+      </ScrollView>
 
       <Modal
         visible={isViewerOpen}
