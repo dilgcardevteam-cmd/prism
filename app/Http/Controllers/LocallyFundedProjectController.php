@@ -1731,7 +1731,7 @@ class LocallyFundedProjectController extends Controller
 
         // Fund source and funding year options
         $fundSources = ['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB', 'SGLGIF'];
-        $fundingYears = [2025, 2024, 2023, 2022, 2021];
+        $fundingYears = $this->getLocallyFundedFundingYears();
 
         // Procurement types (mode of procurement)
         $procurementTypes = ['admin', 'contract'];
@@ -1751,9 +1751,103 @@ class LocallyFundedProjectController extends Controller
         return compact('provinces', 'provinceMunicipalities', 'fundSources', 'fundingYears', 'procurementTypes', 'statusOptions');
     }
 
+    private function getLocallyFundedFundingYears(): array
+    {
+        $years = collect();
+
+        if (Schema::hasTable('subay_project_profiles')) {
+            $subayQuery = DB::table('subay_project_profiles as spp')
+                ->selectRaw("TRIM(COALESCE(spp.funding_year, '')) as funding_year")
+                ->whereNotNull('spp.funding_year')
+                ->whereRaw("TRIM(COALESCE(spp.funding_year, '')) <> ''");
+
+            $this->applyLocallyFundedSourceScope(
+                $subayQuery,
+                'spp.program',
+                'spp.project_code'
+            );
+
+            $this->applyUserScopeToLocationQuery(
+                $subayQuery,
+                'spp.province',
+                'spp.city_municipality',
+                'spp.region'
+            );
+
+            $years = $years->merge($subayQuery->pluck('funding_year'));
+        }
+
+        if (Schema::hasTable('locally_funded_projects') && Schema::hasColumn('locally_funded_projects', 'funding_year')) {
+            $lfpQuery = DB::table('locally_funded_projects as lfp')
+                ->selectRaw("TRIM(COALESCE(lfp.funding_year, '')) as funding_year")
+                ->whereNotNull('lfp.funding_year')
+                ->whereRaw("TRIM(COALESCE(lfp.funding_year, '')) <> ''");
+
+            if (Schema::hasColumn('locally_funded_projects', 'fund_source')) {
+                $lfpQuery->where(function ($subQuery) {
+                    $subQuery->whereRaw('UPPER(TRIM(COALESCE(lfp.fund_source, ""))) IN (?, ?, ?, ?)', [
+                        'SBDP',
+                        'CMGP',
+                        'GEF',
+                        'SAFPB',
+                    ])->orWhereRaw('UPPER(TRIM(COALESCE(lfp.fund_source, ""))) LIKE ?', ['%FALGU%']);
+                });
+            }
+
+            if (Schema::hasColumn('locally_funded_projects', 'subaybayan_project_code')) {
+                $lfpQuery->whereRaw('UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, ""))) NOT LIKE ?', ['SGLGIF%']);
+            }
+
+            $this->applyUserScopeToLocationQuery(
+                $lfpQuery,
+                'lfp.province',
+                'lfp.city_municipality',
+                'lfp.region'
+            );
+
+            $years = $years->merge($lfpQuery->pluck('funding_year'));
+        }
+
+        return $years
+            ->map(fn ($year) => trim((string) $year))
+            ->filter()
+            ->unique()
+            ->sort(function (string $left, string $right) {
+                $leftIsNumeric = preg_match('/^\d+$/', $left) === 1;
+                $rightIsNumeric = preg_match('/^\d+$/', $right) === 1;
+
+                if ($leftIsNumeric && $rightIsNumeric) {
+                    return (int) $right <=> (int) $left;
+                }
+
+                if ($leftIsNumeric !== $rightIsNumeric) {
+                    return $leftIsNumeric ? -1 : 1;
+                }
+
+                return strcasecmp($left, $right);
+            })
+            ->values()
+            ->all();
+    }
+
     private function isSglgifProjectCode(?string $projectCode): bool
     {
         return str_starts_with(strtoupper(trim((string) $projectCode)), 'SGLGIF');
+    }
+
+    private function normalizeLocallyFundedFundSourceFilter($value): string
+    {
+        $normalized = strtoupper(trim((string) $value));
+
+        return match ($normalized) {
+            'GROWTH EQUITY FUND', 'GEF' => 'GEF',
+            'SUPPORT TO THE BARANGAY DEVELOPMENT PROGRAM', 'SBDP' => 'SBDP',
+            'FINANCIAL ASSISTANCE TO LOCAL GOVERNMENT UNIT PROGRAM', 'FALGU' => 'FALGU',
+            'CMGP' => 'CMGP',
+            'SAFPB' => 'SAFPB',
+            'SGLGIF' => 'SGLGIF',
+            default => trim((string) $value),
+        };
     }
 
     private function isExcludedSglgifLocallyFundedProject(?string $fundSource, ?string $projectCode = null): bool
@@ -2221,14 +2315,56 @@ $url = route('locally-funded-project.show', $project, false);
     {
         // Cache key: user + filters (5min TTL)
         $userId = Auth::id();
-        $filterHash = md5(serialize(request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'barangay', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir'])));
-        $cacheKey = "lfp_index:{$userId}:{$filterHash}";
+        $rawFilterState = request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'barangay', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir', 'page']);
+        if (array_key_exists('fund_source', $rawFilterState)) {
+            $rawFilterState['fund_source'] = $this->normalizeLocallyFundedFundSourceFilter($rawFilterState['fund_source']);
+        }
+        $filterHash = md5(serialize($rawFilterState));
+        $cacheKey = "lfp_index_v5:{$userId}:{$filterHash}";
 
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
             $cachedViewData = $cached['view_data'] ?? [];
             if (!is_array($cachedViewData)) {
                 $cachedViewData = [];
+            }
+
+            $cachedFilters = $cachedViewData['filters'] ?? [];
+            if (!is_array($cachedFilters)) {
+                $cachedFilters = [];
+            }
+            if (array_key_exists('fund_source', $cachedFilters)) {
+                $cachedFilters['fund_source'] = $this->normalizeLocallyFundedFundSourceFilter($cachedFilters['fund_source']);
+            }
+            $cachedViewData['filters'] = $cachedFilters;
+
+            if (($cachedViewData['projects'] ?? null) instanceof \Illuminate\Pagination\LengthAwarePaginator) {
+                $cachedPerPage = (int) ($cachedViewData['perPage'] ?? request('per_page', 10));
+                $cachedSortBy = trim((string) ($cachedViewData['sortBy'] ?? request('sort_by', 'funding_year')));
+                $cachedSortDir = strtolower(trim((string) ($cachedViewData['sortDir'] ?? request('sort_dir', 'asc'))));
+                if (!in_array($cachedSortDir, ['asc', 'desc'], true)) {
+                    $cachedSortDir = 'asc';
+                }
+
+                $cachedViewData['projects']
+                    ->setPath(request()->url())
+                    ->appends(array_filter([
+                        'search' => $cachedFilters['search'] ?? '',
+                        'project_code' => $cachedFilters['project_code'] ?? '',
+                        'funding_year' => $cachedFilters['funding_year'] ?? '',
+                        'fund_source' => $cachedFilters['fund_source'] ?? '',
+                        'province' => $cachedFilters['province'] ?? '',
+                        'city' => $cachedFilters['city'] ?? '',
+                        'barangay' => $cachedFilters['barangay'] ?? '',
+                        'procurement' => $cachedFilters['procurement'] ?? '',
+                        'status' => $cachedFilters['status'] ?? '',
+                        'project_update_status' => $cachedFilters['project_update_status'] ?? '',
+                        'per_page' => $cachedPerPage,
+                        'sort_by' => $cachedSortBy,
+                        'sort_dir' => $cachedSortDir,
+                    ], function ($value) {
+                        return $value !== '' && $value !== null;
+                    }));
             }
 
             $cachedOptions = $cachedViewData['options'] ?? [];
@@ -2404,7 +2540,7 @@ $url = route('locally-funded-project.show', $project, false);
             'search' => trim((string) request('search', '')),
             'project_code' => trim((string) request('project_code', '')),
             'funding_year' => trim((string) request('funding_year', '')),
-            'fund_source' => trim((string) request('fund_source', '')),
+            'fund_source' => $this->normalizeLocallyFundedFundSourceFilter(request('fund_source', '')),
             'province' => trim((string) request('province', '')),
             'city' => trim((string) request('city', '')),
             'barangay' => trim((string) request('barangay', '')),
@@ -2413,17 +2549,25 @@ $url = route('locally-funded-project.show', $project, false);
             'project_update_status' => trim((string) request('project_update_status', '')),
         ];
 
-        if (strcasecmp($filters['fund_source'], 'SGLGIF') === 0) {
-            $filters['fund_source'] = '';
-        }
-
-        $this->applyLocallyFundedSourceScope(
-            $query,
-            'COALESCE(lfp.fund_source, spp.program)',
-            'COALESCE(lfp.subaybayan_project_code, spp.project_code)'
-        );
-
         $scopedLocationOptionsQuery = clone $query;
+
+        $normalizedFundSourceExpression = "
+            CASE
+                WHEN UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, spp.project_code, ''))) LIKE 'SBDP%' THEN 'SBDP'
+                WHEN UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, spp.project_code, ''))) LIKE 'FA-%' THEN 'FALGU'
+                WHEN UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, spp.project_code, ''))) LIKE 'FALGU%' THEN 'FALGU'
+                WHEN UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, spp.project_code, ''))) LIKE 'CMGP%' THEN 'CMGP'
+                WHEN UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, spp.project_code, ''))) LIKE 'GEF%' THEN 'GEF'
+                WHEN UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, spp.project_code, ''))) LIKE 'SAFPB%' THEN 'SAFPB'
+                WHEN UPPER(TRIM(COALESCE(lfp.subaybayan_project_code, spp.project_code, ''))) LIKE 'SGLGIF%' THEN 'SGLGIF'
+                WHEN UPPER(TRIM(COALESCE(lfp.fund_source, spp.program, ''))) LIKE '%FALGU%' THEN 'FALGU'
+                WHEN UPPER(TRIM(COALESCE(lfp.fund_source, spp.program, ''))) IN ('GROWTH EQUITY FUND', 'GEF') THEN 'GEF'
+                WHEN UPPER(TRIM(COALESCE(lfp.fund_source, spp.program, ''))) IN ('SUPPORT TO THE BARANGAY DEVELOPMENT PROGRAM', 'SBDP') THEN 'SBDP'
+                ELSE UPPER(TRIM(COALESCE(lfp.fund_source, spp.program, '')))
+            END
+        ";
+        $normalizedProcurementExpression = "LOWER(TRIM(COALESCE(lfp.mode_of_procurement, spp.procurement_type, spp.procurement, '')))";
+        $normalizedStatusExpression = "TRIM(COALESCE(lpu.status_project_ro, spp.status, ''))";
 
         $scopedProvinceOptions = (clone $scopedLocationOptionsQuery)
             ->selectRaw('TRIM(COALESCE(' . $projectProvinceExpression . ", '')) as province")
@@ -2476,6 +2620,50 @@ $url = route('locally-funded-project.show', $project, false);
             })
             ->toArray();
 
+        $scopedFundingYearOptions = (clone $scopedLocationOptionsQuery)
+            ->selectRaw("TRIM(COALESCE(spp.funding_year, '')) as funding_year")
+            ->whereRaw("TRIM(COALESCE(spp.funding_year, '')) <> ''")
+            ->distinct()
+            ->orderByRaw("CAST(COALESCE(NULLIF(TRIM(spp.funding_year), ''), '0') AS UNSIGNED) DESC")
+            ->pluck('funding_year')
+            ->map(fn ($year) => trim((string) $year))
+            ->filter()
+            ->values()
+            ->all();
+
+        $scopedFundSourceOptions = (clone $scopedLocationOptionsQuery)
+            ->selectRaw("{$normalizedFundSourceExpression} as fund_source")
+            ->whereRaw("TRIM(COALESCE(lfp.fund_source, spp.program, '')) <> ''")
+            ->distinct()
+            ->orderBy('fund_source')
+            ->pluck('fund_source')
+            ->map(fn ($source) => trim((string) $source))
+            ->filter()
+            ->values()
+            ->all();
+
+        $scopedProcurementOptions = (clone $scopedLocationOptionsQuery)
+            ->selectRaw("{$normalizedProcurementExpression} as procurement_type")
+            ->whereRaw("{$normalizedProcurementExpression} <> ''")
+            ->distinct()
+            ->orderBy('procurement_type')
+            ->pluck('procurement_type')
+            ->map(fn ($type) => trim((string) $type))
+            ->filter()
+            ->values()
+            ->all();
+
+        $scopedStatusOptions = (clone $scopedLocationOptionsQuery)
+            ->selectRaw("{$normalizedStatusExpression} as status_value")
+            ->whereRaw("{$normalizedStatusExpression} <> ''")
+            ->distinct()
+            ->orderBy('status_value')
+            ->pluck('status_value')
+            ->map(fn ($status) => trim((string) $status))
+            ->filter()
+            ->values()
+            ->all();
+
         if ($filters['project_code'] !== '') {
             $projectCodeKeyword = '%' . strtolower($filters['project_code']) . '%';
             $query->whereRaw('LOWER(spp.project_code) LIKE ?', [$projectCodeKeyword]);
@@ -2500,18 +2688,10 @@ $url = route('locally-funded-project.show', $project, false);
         }
 
         if ($filters['fund_source'] !== '') {
-            $normalizedFundSource = strtolower($filters['fund_source']);
-            if ($normalizedFundSource === 'falgu') {
-                $query->whereRaw(
-                    'LOWER(TRIM(COALESCE(lfp.fund_source, spp.program, \'\'))) LIKE ?',
-                    ['%falgu%']
-                );
-            } else {
-                $query->whereRaw(
-                    'LOWER(TRIM(COALESCE(lfp.fund_source, spp.program, \'\'))) = ?',
-                    [$normalizedFundSource]
-                );
-            }
+            $query->whereRaw(
+                "UPPER(TRIM({$normalizedFundSourceExpression})) = ?",
+                [strtoupper(trim($filters['fund_source']))]
+            );
         }
 
         if ($filters['province'] !== '') {
@@ -2700,7 +2880,23 @@ $url = route('locally-funded-project.show', $project, false);
         $projects = $query
             ->orderBy('spp.project_code')
             ->paginate($perPage)
-            ->withQueryString();
+            ->appends(array_filter([
+                'search' => $filters['search'],
+                'project_code' => $filters['project_code'],
+                'funding_year' => $filters['funding_year'],
+                'fund_source' => $filters['fund_source'],
+                'province' => $filters['province'],
+                'city' => $filters['city'],
+                'barangay' => $filters['barangay'],
+                'procurement' => $filters['procurement'],
+                'status' => $filters['status'],
+                'project_update_status' => $filters['project_update_status'],
+                'per_page' => $perPage,
+                'sort_by' => $sortBy,
+                'sort_dir' => $sortDir,
+            ], function ($value) {
+                return $value !== '' && $value !== null;
+            }));
 
         $projects->getCollection()->transform(function ($row) {
             $parseNumber = function ($value) {
@@ -2820,12 +3016,18 @@ $url = route('locally-funded-project.show', $project, false);
         $options['cityBarangays'] = !empty($scopedCityBarangays)
             ? $scopedCityBarangays
             : ($options['cityBarangays'] ?? []);
-        $options['fundSources'] = collect($options['fundSources'] ?? [])
-            ->reject(function ($source) {
-                return strcasecmp((string) $source, 'SGLGIF') === 0;
-            })
-            ->values()
-            ->all();
+        $options['fundingYears'] = !empty($scopedFundingYearOptions)
+            ? $scopedFundingYearOptions
+            : ($options['fundingYears'] ?? []);
+        $options['fundSources'] = !empty($scopedFundSourceOptions)
+            ? $scopedFundSourceOptions
+            : ($options['fundSources'] ?? []);
+        $options['procurementTypes'] = !empty($scopedProcurementOptions)
+            ? $scopedProcurementOptions
+            : ($options['procurementTypes'] ?? []);
+        $options['statusOptions'] = !empty($scopedStatusOptions)
+            ? $scopedStatusOptions
+            : ($options['statusOptions'] ?? []);
 
         // Cache results
         $viewData = array_merge(
@@ -3771,7 +3973,7 @@ $url = route('locally-funded-project.show', $project, false);
 
         // Fund source and funding year options
         $fundSources = ['SBDP', 'FALGU', 'CMGP', 'SGLGIF', 'SAFPB'];
-        $fundingYears = [2025, 2024, 2023, 2022, 2021];
+        $fundingYears = $this->getLocallyFundedFundingYears();
 
         $financialAllocationTotal = (float) $project->lgsf_allocation;
         $financialDisbursedTotal = (float) ($financialTotals['disbursed_amount'] ?? 0);
@@ -3996,7 +4198,7 @@ $url = route('locally-funded-project.show', $project, false);
 
         // Fund source and funding year options
         $fundSources = ['SBDP', 'FALGU', 'CMGP', 'SGLGIF', 'SAFPB'];
-        $fundingYears = [2025, 2024, 2023, 2022, 2021];
+        $fundingYears = $this->getLocallyFundedFundingYears();
 
         $prefill = $project->toArray();
         $prefill['barangay_json'] = json_encode(array_values(array_filter(array_map('trim', explode(',', $project->barangay)))));

@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\PreImplementationDocument;
-use App\Models\PreImplementationDocumentFile;
+use App\Models\LgsfProjectCompletionReport;
+use App\Models\LgsfProjectCompletionReportFile;
 use App\Services\InterventionNotificationService;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -16,19 +16,18 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
-class PreImplementationDocumentController extends Controller
+class LgsfProjectCompletionReportController extends Controller
 {
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show']);
-        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['save']);
-        $this->middleware('crud_permission:pre_implementation_documents,update')->only(['validateDocument']);
+        $this->middleware('crud_permission:project_completion_reports,view')->only(['index', 'show']);
+        $this->middleware('crud_permission:project_completion_reports,add')->only(['save', 'uploadMultiDocument']);
+        $this->middleware('crud_permission:project_completion_reports,update')->only(['validateDocument', 'validateDocumentFile']);
     }
 
     public function index(Request $request)
     {
-        $allProjectsScope = $this->hasAllProjectsScope($request);
         $pageConfig = $this->pageConfig($request);
         $routeConfig = $this->routeConfig($request);
         $scopeQuery = $this->scopeQuery($request);
@@ -76,7 +75,7 @@ class PreImplementationDocumentController extends Controller
             return view('reports.pre-implementation-documents.index', compact('projects', 'filters', 'filterOptions', 'perPage', 'pageConfig', 'routeConfig', 'scopeQuery'));
         }
 
-        $baseQuery = $this->buildAccessibleSubayQuery(Auth::user(), $allProjectsScope);
+        $baseQuery = $this->buildAccessibleSubayQuery(Auth::user());
         $projectTypeExpression = $this->projectTypeExpression('spp');
 
         $filterOptions = [
@@ -195,15 +194,9 @@ class PreImplementationDocumentController extends Controller
             ])
             ->orderByRaw("CASE WHEN spp.funding_year IS NULL OR TRIM(spp.funding_year) = '' THEN 1 ELSE 0 END");
 
-        if ($allProjectsScope) {
-            $projectsQuery
-                ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) DESC')
-                ->orderBy('spp.project_code');
-        } else {
-            $projectsQuery
-                ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) ASC')
-                ->orderBy('spp.project_code');
-        }
+        $projectsQuery
+            ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) DESC')
+            ->orderBy('spp.project_code');
 
         $projects = $projectsQuery
             ->paginate($perPage)
@@ -217,13 +210,13 @@ class PreImplementationDocumentController extends Controller
         $pageConfig = $this->pageConfig($request);
         $routeConfig = $this->routeConfig($request);
         $scopeQuery = $this->scopeQuery($request);
-        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
         if (!$project) {
             abort(404);
         }
 
-        $document = PreImplementationDocument::where('project_code', $project->project_code)->first();
-        $documentFiles = PreImplementationDocumentFile::where('project_code', $project->project_code)->get();
+        $document = LgsfProjectCompletionReport::where('project_code', $project->project_code)->first();
+        $documentFiles = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)->get();
         $documentFilesByType = $documentFiles
             ->groupBy('document_type')
             ->map(function ($group) {
@@ -268,7 +261,6 @@ class PreImplementationDocumentController extends Controller
             'documentFields' => $this->documentFieldMap(),
             'documentGroups' => $this->documentFieldGroups(),
             'multiUploadDocumentTypes' => $this->multiUploadDocumentTypes(),
-            'allowedModeOfContract' => ['By Contract', 'By Administration'],
             'pageConfig' => $pageConfig,
             'routeConfig' => $routeConfig,
             'scopeQuery' => $scopeQuery,
@@ -280,30 +272,27 @@ class PreImplementationDocumentController extends Controller
         $scopeQuery = $this->scopeQuery($request);
         $pageConfig = $this->pageConfig($request);
         $routeConfig = $this->routeConfig($request);
-        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
         if (!$project) {
             abort(404);
         }
 
-        $validationRules = [
-            'mode_of_contract' => ['nullable', 'in:By Contract,By Administration'],
-        ];
+        $validationRules = [];
 
         foreach ($this->singleUploadDocumentTypes() as $field) {
-            $validationRules[$field] = ['nullable', 'file', 'mimes:pdf', 'max:' . $this->documentUploadMaxKilobytes($field)];
+            $validationRules[$field] = ['nullable', 'file', 'mimes:pdf', 'max:15360'];
         }
 
         $validated = $request->validate($validationRules);
 
-        $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
+        $document = LgsfProjectCompletionReport::firstOrNew(['project_code' => $project->project_code]);
         $document->project_title = $project->project_title;
         $document->province = $project->province;
         $document->city_municipality = $project->city_municipality;
         $document->funding_year = $project->funding_year;
-        $document->mode_of_contract = $validated['mode_of_contract'] ?? $document->mode_of_contract;
         $document->updated_by = Auth::user()->idno ?? null;
 
-        $folder = 'pre-implementation/projects/' . Str::slug((string) $project->project_code, '_');
+        $folder = 'project-completion-reports/lgsf/' . Str::slug((string) $project->project_code, '_');
         $now = now();
         $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
@@ -315,7 +304,7 @@ class PreImplementationDocumentController extends Controller
                 continue;
             }
 
-            $fileRecord = PreImplementationDocumentFile::firstOrNew([
+            $fileRecord = LgsfProjectCompletionReportFile::firstOrNew([
                 'project_code' => $project->project_code,
                 'document_type' => $field,
             ]);
@@ -377,7 +366,7 @@ class PreImplementationDocumentController extends Controller
 
         $scopeQuery = $this->scopeQuery($request);
         $routeConfig = $this->routeConfig($request);
-        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
         if (!$project) {
             abort(404);
         }
@@ -386,21 +375,21 @@ class PreImplementationDocumentController extends Controller
             'document_file' => ['required', 'file', 'mimes:pdf', 'max:15360'],
         ]);
 
-        $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
+        $document = LgsfProjectCompletionReport::firstOrNew(['project_code' => $project->project_code]);
         $document->project_title = $project->project_title;
         $document->province = $project->province;
         $document->city_municipality = $project->city_municipality;
         $document->funding_year = $project->funding_year;
         $document->updated_by = Auth::user()->idno ?? null;
 
-        $folder = 'pre-implementation/projects/' . Str::slug((string) $project->project_code, '_') . '/' . Str::slug($documentType, '_');
+        $folder = 'project-completion-reports/lgsf/' . Str::slug((string) $project->project_code, '_') . '/' . Str::slug($documentType, '_');
         $now = now();
         $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
         $isProvincialDilgUploader = $currentUser && $currentUser->isDilgUser() && !$currentUser->isRegionalOfficeAssignment();
         $path = $validated['document_file']->store($folder, 'public');
 
-        $fileRecord = new PreImplementationDocumentFile();
+        $fileRecord = new LgsfProjectCompletionReportFile();
         $fileRecord->project_code = $project->project_code;
         $fileRecord->document_type = $documentType;
         $fileRecord->file_path = $path;
@@ -460,7 +449,7 @@ class PreImplementationDocumentController extends Controller
 
             $documentSummary = count($documentTypes) === 1
                 ? $this->formatDocumentLabel((string) $documentTypes[0])
-                : number_format(count($documentTypes)) . ' pre-implementation documents';
+                : number_format(count($documentTypes)) . ' LGSF completion-report documents';
 
             $messageContext = $projectLabel !== '' ? $projectLabel : 'the project';
             if ($targetOffice !== '') {
@@ -486,7 +475,7 @@ class PreImplementationDocumentController extends Controller
                     $actorId,
                     $message,
                     $url,
-                    'pre-implementation-upload'
+                    'lgsf-project-completion-upload'
                 );
 
                 return;
@@ -504,11 +493,11 @@ class PreImplementationDocumentController extends Controller
                     $actorId,
                     $message,
                     $url,
-                    'pre-implementation-upload'
+                    'lgsf-project-completion-upload'
                 );
             }
         } catch (\Throwable $error) {
-            Log::warning('Failed to create upload notifications (Pre-Implementation).', [
+            Log::warning('Failed to create upload notifications (LGSF Project Completion Reports).', [
                 'project_code' => $project->project_code ?? null,
                 'document_types' => $documentTypes,
                 'error' => $error->getMessage(),
@@ -518,7 +507,7 @@ class PreImplementationDocumentController extends Controller
 
     public function viewDocument(Request $request, string $projectCode, string $documentType)
     {
-        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
         if (!$project) {
             abort(404);
         }
@@ -527,8 +516,8 @@ class PreImplementationDocumentController extends Controller
             abort(404);
         }
 
-        $document = PreImplementationDocument::where('project_code', $project->project_code)->first();
-        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+        $document = LgsfProjectCompletionReport::where('project_code', $project->project_code)->first();
+        $fileRecord = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)
             ->where('document_type', $documentType)
             ->orderByDesc('uploaded_at')
             ->orderByDesc('created_at')
@@ -558,12 +547,12 @@ class PreImplementationDocumentController extends Controller
 
     public function viewDocumentFile(Request $request, string $projectCode, int $fileId)
     {
-        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
         if (!$project) {
             abort(404);
         }
 
-        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+        $fileRecord = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)
             ->where('id', $fileId)
             ->firstOrFail();
 
@@ -593,7 +582,7 @@ class PreImplementationDocumentController extends Controller
     {
         $scopeQuery = $this->scopeQuery($request);
         $routeConfig = $this->routeConfig($request);
-        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
         if (!$project) {
             abort(404);
         }
@@ -613,7 +602,7 @@ class PreImplementationDocumentController extends Controller
             'remarks' => ['nullable', 'string', 'max:1000', 'required_if:action,return'],
         ]);
 
-        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+        $fileRecord = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)
             ->where('document_type', $documentType)
             ->orderByDesc('uploaded_at')
             ->orderByDesc('created_at')
@@ -626,19 +615,19 @@ class PreImplementationDocumentController extends Controller
     {
         $scopeQuery = $this->scopeQuery($request);
         $routeConfig = $this->routeConfig($request);
-        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
         if (!$project) {
             abort(404);
         }
 
-        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+        $fileRecord = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)
             ->where('id', $fileId)
             ->firstOrFail();
 
         return $this->handleDocumentValidation($request, $project, $fileRecord, $routeConfig, $scopeQuery);
     }
 
-    private function handleDocumentValidation(Request $request, object $project, PreImplementationDocumentFile $fileRecord, array $routeConfig, array $scopeQuery)
+    private function handleDocumentValidation(Request $request, object $project, LgsfProjectCompletionReportFile $fileRecord, array $routeConfig, array $scopeQuery)
     {
         $user = Auth::user();
         $isDilg = strtoupper(trim((string) ($user->agency ?? ''))) === 'DILG';
@@ -652,7 +641,7 @@ class PreImplementationDocumentController extends Controller
         ]);
 
         if (empty($fileRecord->file_path)) {
-            return back()->with('error', 'No file uploaded for this document yet.');
+        return back()->with('error', 'No file uploaded for this document yet.');
         }
 
         $documentType = (string) $fileRecord->document_type;
@@ -701,6 +690,8 @@ class PreImplementationDocumentController extends Controller
                 $fileRecord,
                 $action,
                 $isRegionalOffice,
+                $routeConfig,
+                $scopeQuery,
                 null
             );
 
@@ -741,6 +732,8 @@ class PreImplementationDocumentController extends Controller
             $fileRecord,
             $action,
             $isRegionalOffice,
+            $routeConfig,
+            $scopeQuery,
             $remarks !== '' ? $remarks : null
         );
 
@@ -760,9 +753,11 @@ class PreImplementationDocumentController extends Controller
     private function notifyLguUsersAfterRegionalApproval(
         object $project,
         string $documentType,
-        PreImplementationDocumentFile $fileRecord,
+        LgsfProjectCompletionReportFile $fileRecord,
         string $action,
         bool $isRegionalOffice,
+        array $routeConfig,
+        array $scopeQuery,
         ?string $remarks = null
     ): void
     {
@@ -868,7 +863,7 @@ class PreImplementationDocumentController extends Controller
                     $actorId,
                     $message,
                     $url,
-                    substr('pre-implementation-' . $documentType, 0, 100)
+                    substr('lgsf-project-completion-' . $documentType, 0, 100)
                 );
 
                 return;
@@ -899,10 +894,10 @@ class PreImplementationDocumentController extends Controller
                 $actorId,
                 $message,
                 $url,
-                substr('pre-implementation-' . $documentType, 0, 100)
+                substr('lgsf-project-completion-' . $documentType, 0, 100)
             );
         } catch (\Throwable $error) {
-            Log::warning('Failed to create approval notifications (Pre-Implementation).', [
+            Log::warning('Failed to create approval notifications (LGSF Project Completion Reports).', [
                 'project_code' => $project->project_code ?? null,
                 'document_type' => $documentType,
                 'error' => $error->getMessage(),
@@ -975,7 +970,7 @@ class PreImplementationDocumentController extends Controller
             return null;
         }
 
-        if (($context['module'] ?? null) !== 'pre_implementation_documents') {
+        if (($context['module'] ?? null) !== 'lgsf_project_completion_reports') {
             return null;
         }
 
@@ -1018,7 +1013,7 @@ class PreImplementationDocumentController extends Controller
             $logEntries = preg_split('/(?=\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\])/', $content, -1, PREG_SPLIT_NO_EMPTY);
             foreach ($logEntries as $logEntry) {
                 $logEntry = trim($logEntry);
-                if ($logEntry === '' || strpos($logEntry, '"module":"pre_implementation_documents"') === false) {
+                if ($logEntry === '' || strpos($logEntry, '"module":"lgsf_project_completion_reports"') === false) {
                     continue;
                 }
 
@@ -1079,14 +1074,14 @@ class PreImplementationDocumentController extends Controller
         string $projectCode,
         string $action,
         string $actionLabel,
-        PreImplementationDocumentFile $documentFile,
+        LgsfProjectCompletionReportFile $documentFile,
         ?string $remarks = null,
         ?Carbon $timestamp = null
     ): void {
         $timestamp = $timestamp ?: now();
 
         Log::channel('upload_timestamps')->info('Document action', [
-            'module' => 'pre_implementation_documents',
+            'module' => 'lgsf_project_completion_reports',
             'project_code' => $projectCode,
             'document_type' => $documentFile->document_type,
             'document_label' => $this->formatDocumentLabel((string) $documentFile->document_type),
@@ -1098,7 +1093,7 @@ class PreImplementationDocumentController extends Controller
         ]);
     }
 
-    private function buildAccessibleSubayQuery($user, bool $includeAllProjects = false)
+    private function buildAccessibleSubayQuery($user)
     {
         $province = trim((string) ($user->province ?? ''));
         $office = trim((string) ($user->office ?? ''));
@@ -1114,11 +1109,9 @@ class PreImplementationDocumentController extends Controller
 
         $query = DB::table('subay_project_profiles as spp');
 
-        if (!$includeAllProjects) {
-            $query
-                ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2024')
-                ->whereRaw("{$fundSourceExpression} IN ({$lfpSourcePlaceholders})", $lfpSources);
-        }
+        $query
+            ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2024')
+            ->whereRaw("{$fundSourceExpression} IN ({$lfpSourcePlaceholders})", $lfpSources);
 
         if ($user->isLguScopedUser()) {
             if ($office !== '') {
@@ -1158,14 +1151,14 @@ class PreImplementationDocumentController extends Controller
         return $query;
     }
 
-    private function resolveProjectForUser(string $projectCode, $user, bool $includeAllProjects = false): ?object
+    private function resolveProjectForUser(string $projectCode, $user): ?object
     {
         $projectCode = trim($projectCode);
         if ($projectCode === '') {
             return null;
         }
 
-        return $this->buildAccessibleSubayQuery($user, $includeAllProjects)
+        return $this->buildAccessibleSubayQuery($user)
             ->where('spp.project_code', $projectCode)
             ->select([
                 'spp.project_code',
@@ -1204,88 +1197,49 @@ class PreImplementationDocumentController extends Controller
 
     private function subaybayanLfpFundSources(): array
     {
-        return ['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB'];
+        return ['SBDP', 'FALGU', 'GEF'];
     }
 
     private function hasAllProjectsScope(?Request $request = null): bool
     {
-        $request = $request ?: request();
-
-        if ($request->routeIs('initial-project-documents.*')) {
-            return true;
-        }
-
-        return strtolower(trim((string) $request->query('scope', ''))) === 'all';
+        return false;
     }
 
     private function scopeQuery(?Request $request = null): array
     {
-        $request = $request ?: request();
-
-        if ($request->routeIs('initial-project-documents.*')) {
-            return [];
-        }
-
-        return $this->hasAllProjectsScope($request) ? ['scope' => 'all'] : [];
+        return [];
     }
 
     private function pageConfig(?Request $request = null): array
     {
-        if ($this->hasAllProjectsScope($request)) {
-            return [
-                'title' => 'Initial Project Documents',
-                'index_heading' => 'Initial Project Documents',
-                'index_description' => 'View all accessible projects and open each project profile to manage initial project document records.',
-                'show_description' => 'Upload and validate initial project documents for this project.',
-                'empty_state' => 'No accessible projects found.',
-                'save_success_message' => 'Initial project documents saved successfully.',
-            ];
-        }
-
         return [
-            'title' => 'Pre-Implementation Documents',
-            'index_heading' => 'Pre-Implementation Documents',
-            'index_description' => 'View accessible SubayBayan LFP projects from 2024 onward and open each project profile to manage pre-implementation records.',
-            'show_description' => 'Upload and validate pre-implementation documents for this project.',
-            'empty_state' => 'No SubayBayan LFP projects found from 2024 onward.',
-            'save_success_message' => 'Pre-implementation documents saved successfully.',
+            'title' => 'LGSF Project Completion Reports',
+            'index_heading' => 'LGSF Project Completion Reports',
+            'index_description' => 'View accessible FALGU, GEF, and SBDP projects from 2024 onward and open each project profile to manage completion-report submissions and validation.',
+            'show_description' => 'Upload and validate LGSF project completion reports and supporting documents for this project.',
+            'empty_state' => 'No accessible LGSF projects found from 2024 onward.',
+            'save_success_message' => 'LGSF project completion report documents saved successfully.',
         ];
     }
 
     private function routeConfig(?Request $request = null): array
     {
-        if ($this->hasAllProjectsScope($request)) {
-            return [
-                'index' => 'initial-project-documents.index',
-                'show' => 'initial-project-documents.show',
-                'document' => 'initial-project-documents.document',
-                'document_file' => 'initial-project-documents.document-file',
-                'save' => 'initial-project-documents.save',
-                'validate' => 'initial-project-documents.validate',
-                'validate_file' => 'initial-project-documents.validate-file',
-                'upload_multi' => 'initial-project-documents.upload-multi',
-            ];
-        }
-
         return [
-            'index' => 'pre-implementation-documents.index',
-            'show' => 'pre-implementation-documents.show',
-            'document' => 'pre-implementation-documents.document',
-            'document_file' => 'pre-implementation-documents.document-file',
-            'save' => 'pre-implementation-documents.save',
-            'validate' => 'pre-implementation-documents.validate',
-            'validate_file' => 'pre-implementation-documents.validate-file',
-            'upload_multi' => 'pre-implementation-documents.upload-multi',
+            'index' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp',
+            'show' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.show',
+            'document' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.document',
+            'document_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.document-file',
+            'save' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.save',
+            'validate' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.validate',
+            'validate_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.validate-file',
+            'upload_multi' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.upload-multi',
         ];
     }
 
     private function multiUploadDocumentTypes(): array
     {
         return [
-            'variation_orders_path',
-            'suspensions_path',
-            'work_resumptions_path',
-            'time_extensions_path',
+            'photos_path',
         ];
     }
 
@@ -1299,82 +1253,34 @@ class PreImplementationDocumentController extends Controller
         return in_array($documentType, $this->multiUploadDocumentTypes(), true);
     }
 
-    private function documentUploadMaxKilobytes(string $documentType): int
-    {
-        return in_array($documentType, [
-            'program_of_works_path',
-            'design_and_engineering_documents_path',
-        ], true) ? 51200 : 15360;
-    }
-
     private function documentFieldMap(): array
     {
         return [
-            'nadai_path' => 'NADAI',
-            'confirmation_receipt_fund_path' => 'Confirmation on the Receipt of Fund',
-            'proof_transfer_trust_fund_path' => 'Proof on the Transfer of Fund to LGU Trust Fund',
-            'signed_lgu_letter_path' => 'Signed LGU Letter (if any)',
-            'project_proposal_path' => 'Project Proposal',
-            'approved_ldip_path' => 'Approved LDIP',
-            'approved_aip_path' => 'Approved AIP',
-            'approved_dtp_path' => 'Approved DTP',
-            'ecc_or_cnc_path' => 'ECC or CNC',
-            'water_permit_or_application_path' => 'Water Permit or Application',
-            'fpic_or_ncip_certification_path' => 'FPIC / NCIP Certification',
-            'land_ownership_path' => 'Land Ownership',
-            'right_of_way_path' => 'Right of Way',
-            'moa_rural_electrification_path' => 'MOA (For Rural Electrification Projects)',
-            'mwssmp_path' => 'MWSSMP (For GEF & SAFPB Projects)',
-            'itb_posting_philgeps_path' => 'ITB Posting on PhilGEPS',
-            'noa_path' => 'NOA Issuances',
-            'contract_path' => 'Contract',
-            'ntp_path' => 'Notice to Proceed',
-            'program_of_works_path' => 'Program of Works (POW)',
-            'design_and_engineering_documents_path' => 'Design and Engineering Documents (DEDs)',
-            'variation_orders_path' => 'Variation Orders',
-            'suspensions_path' => 'Suspensions',
-            'work_resumptions_path' => 'Work Resumptions',
-            'time_extensions_path' => 'Time Extensions',
-            'cancellation_termination_path' => 'Cancellation / Termination',
+            'project_completion_report_path' => 'Project Completion Report (using prescribed format)',
+            'statement_of_work_accomplished_path' => 'Statement of Work Accomplished',
+            'as_built_plans_path' => 'As-Built Plans',
+            'certificate_of_completion_path' => 'Certificate of Completion',
+            'statement_of_receipts_and_disbursements_path' => 'Statement of Receipts and Disbursements / Reports of Disbursements',
+            'photos_path' => 'Photos',
+            'proof_of_reversion_of_unexpended_funds_path' => 'Proof of Reversion of Unexpended Funds',
+            'copy_of_or_cr_for_vehicles_path' => 'Copy of OR/CR (for vehicles)',
         ];
     }
 
     private function documentFieldGroups(): array
     {
         return [
-            'Initial Project Documents' => [
-                'nadai_path',
-                'confirmation_receipt_fund_path',
-                'proof_transfer_trust_fund_path',
-                'signed_lgu_letter_path',
-                'project_proposal_path',
+            'Project Completion Report' => [
+                'project_completion_report_path',
             ],
-            'Permits and Certifications' => [
-                'approved_ldip_path',
-                'approved_aip_path',
-                'approved_dtp_path',
-                'ecc_or_cnc_path',
-                'water_permit_or_application_path',
-                'fpic_or_ncip_certification_path',
-                'land_ownership_path',
-                'right_of_way_path',
-                'moa_rural_electrification_path',
-                'mwssmp_path',
-            ],
-            'Contract Implementation Documents' => [
-                'itb_posting_philgeps_path',
-                'noa_path',
-                'contract_path',
-                'ntp_path',
-            ],
-            'Implementation Documents' => [
-                'program_of_works_path',
-                'design_and_engineering_documents_path',
-                'variation_orders_path',
-                'suspensions_path',
-                'work_resumptions_path',
-                'time_extensions_path',
-                'cancellation_termination_path',
+            'Supporting Documents' => [
+                'statement_of_work_accomplished_path',
+                'as_built_plans_path',
+                'certificate_of_completion_path',
+                'statement_of_receipts_and_disbursements_path',
+                'photos_path',
+                'proof_of_reversion_of_unexpended_funds_path',
+                'copy_of_or_cr_for_vehicles_path',
             ],
         ];
     }

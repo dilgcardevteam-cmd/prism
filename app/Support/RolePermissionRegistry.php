@@ -118,6 +118,11 @@ class RolePermissionRegistry
                         'label' => 'SBDP Pre-Implementation Documents',
                         'description' => 'View and add the pre-implementation document set required for SBDP projects before project execution.',
                     ],
+                    [
+                        'aspect' => 'project_completion_reports',
+                        'label' => 'LGSF Project Completion Reports',
+                        'description' => 'View, upload, and validate LGSF project completion reports and their supporting project documents.',
+                    ],
                 ],
             ],
             [
@@ -313,6 +318,10 @@ class RolePermissionRegistry
             'swa_annex_f_monthly_reports.add',
             'swa_annex_f_monthly_reports.update',
             'swa_annex_f_monthly_reports.delete',
+            'project_completion_reports.view',
+            'project_completion_reports.add',
+            'project_completion_reports.update',
+            'project_completion_reports.delete',
         ];
 
         $dataManagementPermissions = [
@@ -358,19 +367,27 @@ class RolePermissionRegistry
             User::ROLE_SUPERADMIN => ['*'],
             User::ROLE_REGIONAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $dataManagementPermissions, $ticketingPermissions[User::ROLE_REGIONAL], [
                 'locally_funded_projects.update',
+                'project_completion_reports.update',
             ]),
             User::ROLE_PROVINCIAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_PROVINCIAL], [
                 'locally_funded_projects.update',
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
+                'project_completion_reports.view',
+                'project_completion_reports.add',
+                'project_completion_reports.update',
             ]),
             User::ROLE_MLGOO => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_MLGOO], [
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
+                'project_completion_reports.view',
+                'project_completion_reports.add',
             ]),
             User::ROLE_LGU => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_LGU], [
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
+                'project_completion_reports.view',
+                'project_completion_reports.add',
             ]),
         ];
     }

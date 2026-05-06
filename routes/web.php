@@ -3006,14 +3006,38 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reports/one-time/project-initial-documents', function () {
         return redirect()->route('initial-project-documents.index', request()->query());
     })->name('reports.one-time.project-initial-documents');
-    Route::view(
+    Route::get(
         '/reports/one-time/project-completion-reports/falgu-gef-sbdp',
-        'reports.one-time.shared.show',
-        [
-            'pageTitle' => 'Project Completion Reports - FALGU, GEF, SBDP',
-            'pageSubtitle' => 'Dedicated one-time report page for Project Completion Reports covering FALGU, GEF, and SBDP.',
-        ]
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'index']
     )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp');
+    Route::get(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'show']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.show');
+    Route::get(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/document/{documentType}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'viewDocument']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.document');
+    Route::get(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/document-file/{fileId}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'viewDocumentFile']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.document-file');
+    Route::post(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'save']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.save');
+    Route::post(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/upload/{documentType}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'uploadMultiDocument']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.upload-multi');
+    Route::post(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/validate/{documentType}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'validateDocument']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.validate');
+    Route::post(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/validate-file/{fileId}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'validateDocumentFile']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.validate-file');
     Route::view(
         '/reports/one-time/project-completion-reports/safpb',
         'reports.one-time.shared.show',
@@ -3022,14 +3046,38 @@ Route::middleware(['auth'])->group(function () {
             'pageSubtitle' => 'Dedicated one-time report page for Project Completion Reports covering SAFPB.',
         ]
     )->name('reports.one-time.project-completion-reports.safpb');
-    Route::view(
+    Route::get(
         '/reports/one-time/project-completion-reports/sglgif',
-        'reports.one-time.shared.show',
-        [
-            'pageTitle' => 'Project Completion Reports - SGLGIF',
-            'pageSubtitle' => 'Dedicated one-time report page for Project Completion Reports covering SGLGIF.',
-        ]
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'index']
     )->name('reports.one-time.project-completion-reports.sglgif');
+    Route::get(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'show']
+    )->name('reports.one-time.project-completion-reports.sglgif.show');
+    Route::get(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}/document/{documentType}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'viewDocument']
+    )->name('reports.one-time.project-completion-reports.sglgif.document');
+    Route::get(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}/document-file/{fileId}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'viewDocumentFile']
+    )->name('reports.one-time.project-completion-reports.sglgif.document-file');
+    Route::post(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'save']
+    )->name('reports.one-time.project-completion-reports.sglgif.save');
+    Route::post(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}/upload/{documentType}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'uploadMultiDocument']
+    )->name('reports.one-time.project-completion-reports.sglgif.upload-multi');
+    Route::post(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}/validate/{documentType}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'validateDocument']
+    )->name('reports.one-time.project-completion-reports.sglgif.validate');
+    Route::post(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}/validate-file/{fileId}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'validateDocumentFile']
+    )->name('reports.one-time.project-completion-reports.sglgif.validate-file');
     Route::view(
         '/reports/one-time/pisat',
         'reports.one-time.shared.show',
