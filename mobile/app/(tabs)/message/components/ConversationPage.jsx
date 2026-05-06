@@ -71,6 +71,7 @@ export default function ConversationPage() {
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isRecipientTyping, setIsRecipientTyping] = useState(false);
+  const optimisticCounterRef = useRef(0);
 
   const { session } = useAuth();
   const { activeBaseUrl } = useWebAppRequest();
@@ -113,9 +114,13 @@ export default function ConversationPage() {
     if (!parsedThreadId) return;
 
     const i = setInterval(async () => {
-      const res = await fetchMessages({ threadId: parsedThreadId });
-      setMessages(res?.conversation || []);
-    }, 10000);
+      try {
+        const res = await fetchMessages({ threadId: parsedThreadId });
+        setMessages(res?.conversation || []);
+      } catch (_e) {
+        // ignore transient polling errors
+      }
+    }, 3000);
 
     return () => clearInterval(i);
   }, [parsedThreadId]);
@@ -175,6 +180,18 @@ export default function ConversationPage() {
     const text = reply.trim();
     if (!text) return;
 
+    // optimistic UI: append local pending message immediately
+    const optimisticId = `optimistic-${++optimisticCounterRef.current}`;
+    const optimisticEntry = {
+      id: optimisticId,
+      message: text,
+      time: 'Sending...',
+      is_mine: true,
+      is_pending: true,
+    };
+    setMessages((prev) => [...prev, optimisticEntry]);
+    scrollToBottom(true);
+
     setSending(true);
     setReply("");
     // notify stop typing
@@ -193,8 +210,16 @@ export default function ConversationPage() {
       message: text,
     });
 
-    await loadConversation();
-    scrollToBottom(true);
+    // try to sync with server; fetch will replace optimistic entry with persisted messages
+    try {
+      await loadConversation();
+      scrollToBottom(true);
+    } catch (_e) {
+      // leave optimistic message in UI; polling or echo will reconcile
+    }
+
+    // ensure typing indicator cleared locally after send
+    setIsRecipientTyping(false);
 
     setSending(false);
   };
