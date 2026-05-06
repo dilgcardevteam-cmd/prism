@@ -1,9 +1,13 @@
 import { Feather } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -71,6 +75,9 @@ export default function ConversationPage() {
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isRecipientTyping, setIsRecipientTyping] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [copyTargetMessageId, setCopyTargetMessageId] = useState(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const optimisticCounterRef = useRef(0);
 
   const { session } = useAuth();
@@ -89,6 +96,73 @@ export default function ConversationPage() {
     });
   }, []);
 
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => scrollToBottom(false));
+      });
+    });
+
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [scrollToBottom]);
+
+  const normalizeAttachments = useCallback((selectedAssets = []) => {
+    return selectedAssets
+      .map((asset, index) => ({
+        uri: asset?.uri || "",
+        name: asset?.fileName || `message-${Date.now()}-${index}.jpg`,
+        type: asset?.mimeType || "image/jpeg",
+      }))
+      .filter((asset) => Boolean(asset.uri));
+  }, []);
+
+  const pickAttachments = useCallback(async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets?.length) {
+        return;
+      }
+
+      const nextAttachments = normalizeAttachments(result.assets);
+      if (!nextAttachments.length) {
+        return;
+      }
+
+      setAttachments((current) => {
+        const merged = [...current, ...nextAttachments];
+        return merged.slice(0, 10);
+      });
+    } catch (_error) {
+      // ignore picker failures and leave the composer untouched
+    }
+  }, [normalizeAttachments]);
+
+  const removeAttachment = useCallback((indexToRemove) => {
+    setAttachments((current) => current.filter((_, index) => index !== indexToRemove));
+  }, []);
+
   /* ---------------- LOAD ---------------- */
 
   const loadConversation = useCallback(async () => {
@@ -104,6 +178,12 @@ export default function ConversationPage() {
     //  ALWAYS scroll to bottom after load
     scrollToBottom(false);
   }, [parsedThreadId]);
+
+  useEffect(() => {
+    if (isKeyboardVisible) {
+      scrollToBottom(false);
+    }
+  }, [isKeyboardVisible, messages, scrollToBottom]);
 
   useEffect(() => {
     loadConversation();
@@ -178,7 +258,10 @@ export default function ConversationPage() {
 
   const handleSend = async () => {
     const text = reply.trim();
-    if (!text) return;
+    if (!text && !attachments.length) return;
+
+    const pendingAttachments = attachments;
+    const pendingReply = reply;
 
     // optimistic UI: append local pending message immediately
     const optimisticId = `optimistic-${++optimisticCounterRef.current}`;
@@ -188,12 +271,18 @@ export default function ConversationPage() {
       time: 'Sending...',
       is_mine: true,
       is_pending: true,
+      images: pendingAttachments.map((attachment) => ({
+        url: attachment.uri,
+        name: attachment.name,
+      })),
     };
     setMessages((prev) => [...prev, optimisticEntry]);
     scrollToBottom(true);
 
     setSending(true);
     setReply("");
+    setAttachments([]);
+    setCopyTargetMessageId(null);
     // notify stop typing
     try {
       await fetch(`${activeBaseUrl}/api/mobile/messages/typing`, {
@@ -204,25 +293,49 @@ export default function ConversationPage() {
       });
     } catch (_e) {}
 
-    await sendMessage({
-      threadId: parsedThreadId,
-      recipientIds: parsedRecipientIds,
-      message: text,
-    });
-
-    // try to sync with server; fetch will replace optimistic entry with persisted messages
     try {
+      await sendMessage({
+        threadId: parsedThreadId,
+        recipientIds: parsedRecipientIds,
+        message: text,
+        images: pendingAttachments,
+      });
+    } catch (_e) {
+      setMessages((prev) => prev.filter((entry) => entry.id !== optimisticId));
+      setReply(pendingReply);
+      setAttachments(pendingAttachments);
+      setIsRecipientTyping(false);
+      setSending(false);
+      return;
+    }
+
+    try {
+      // try to sync with server; fetch will replace optimistic entry with persisted messages
       await loadConversation();
       scrollToBottom(true);
     } catch (_e) {
       // leave optimistic message in UI; polling or echo will reconcile
+    } finally {
+      // ensure typing indicator cleared locally after send
+      setIsRecipientTyping(false);
+      setSending(false);
+    }
+  };
+
+  const copyMessageContent = useCallback(async (msg) => {
+    const textContent = String(msg?.message || "").trim();
+    const imageLinks = Array.isArray(msg?.images)
+      ? msg.images.map((image) => String(image?.url || "").trim()).filter(Boolean)
+      : [];
+    const copyText = textContent || imageLinks.join("\n");
+
+    if (!copyText) {
+      return;
     }
 
-    // ensure typing indicator cleared locally after send
-    setIsRecipientTyping(false);
-
-    setSending(false);
-  };
+    await Clipboard.setStringAsync(copyText);
+    setCopyTargetMessageId(null);
+  }, []);
 
   /* Typing indicator emitter (debounced) */
   const sendTyping = useCallback((typing) => {
@@ -278,11 +391,16 @@ export default function ConversationPage() {
 
   const renderMessage = (msg) => {
     const mine = msg?.is_mine;
+    const messageImages = Array.isArray(msg?.images) ? msg.images : [];
+    const showCopyAction = copyTargetMessageId === msg?.id;
 
     return (
-      <View
+      <Pressable
         key={msg.id}
-          className={`mb-3 flex-row items-end ${mine ? "justify-end" : "justify-start"}`}
+        delayLongPress={220}
+        onLongPress={() => setCopyTargetMessageId((current) => (current === msg?.id ? null : msg?.id))}
+        onScrollBeginDrag={() => setCopyTargetMessageId(null)}
+        className={`mb-3 flex-row items-end ${mine ? "justify-end" : "justify-start"}`}
       >
           {!mine ? (
             <View className="mr-2 h-9 w-9 items-center justify-center rounded-full bg-[#dbe7f5]">
@@ -293,14 +411,39 @@ export default function ConversationPage() {
           ) : null}
 
         <View
-            className="max-w-[80%] rounded-2xl px-4 py-3"
+          className="relative max-w-[80%] overflow-visible rounded-2xl px-4 py-3"
           style={{
             backgroundColor: mine ? APP_COLORS.primaryBlue : "#e8edf4",
           }}
         >
-          <Text style={{ color: mine ? "#fff" : APP_COLORS.primaryBlue }}>
-            {msg.message}
-          </Text>
+          {String(msg?.message || "").trim() ? (
+            <Text style={{ color: mine ? "#fff" : APP_COLORS.primaryBlue }}>
+              {msg.message}
+            </Text>
+          ) : null}
+
+          {messageImages.length ? (
+            <View className={String(msg?.message || "").trim() ? "mt-2 gap-2" : "gap-2"}>
+              {messageImages.map((image, index) => (
+                <View
+                  key={`${msg.id}-image-${index}`}
+                  className="overflow-hidden rounded-[18px]"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: mine ? "rgba(255,255,255,0.18)" : "rgba(30, 58, 138, 0.08)",
+                    backgroundColor: mine ? "rgba(255,255,255,0.08)" : "#ffffff",
+                  }}
+                >
+                  <Image
+                    source={{ uri: image.url }}
+                    style={{ width: 220, height: 220, backgroundColor: "#dbe7f5" }}
+                    contentFit="cover"
+                    transition={150}
+                  />
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <Text
             className="text-[11px] mt-2"
@@ -310,8 +453,32 @@ export default function ConversationPage() {
           >
             {formatTime(msg.time)}
           </Text>
+
+          {showCopyAction ? (
+            <View
+              className={`absolute ${mine ? "-top-11 right-0" : "-top-11 left-0"}`}
+              pointerEvents="box-none"
+            >
+              <Pressable
+                onPress={() => copyMessageContent(msg)}
+                className="overflow-visible rounded-2xl px-3 py-2"
+                style={{ backgroundColor: mine ? "rgba(15, 23, 42, 0.92)" : "rgba(30, 58, 138, 0.92)" }}
+              >
+                <View className="flex-row items-center gap-1.5">
+                  <Feather name="copy" size={12} color="#fff" />
+                  <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
+                    Copy
+                  </Text>
+                </View>
+                <View
+                  className={`absolute bottom-[-5px] h-2 w-2 rotate-45 ${mine ? "right-4" : "left-4"}`}
+                  style={{ backgroundColor: mine ? "rgba(15, 23, 42, 0.92)" : "rgba(30, 58, 138, 0.92)" }}
+                />
+              </Pressable>
+            </View>
+          ) : null}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -349,6 +516,7 @@ export default function ConversationPage() {
         <Animated.ScrollView
           ref={scrollRef}
           onScroll={createScrollHandler(scrollY)}
+          onScrollBeginDrag={() => setCopyTargetMessageId(null)}
           scrollEventThrottle={16}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
@@ -391,7 +559,41 @@ export default function ConversationPage() {
 
         {/* INPUT */}
         <View className="px-3 py-2 bg-white border-t border-[#e5edf6]">
+          {attachments.length ? (
+            <View className="mb-2 flex-row flex-wrap gap-2">
+              {attachments.map((attachment, index) => (
+                <View
+                  key={`${attachment.uri}-${index}`}
+                  className="w-[108px] overflow-hidden rounded-[16px] border border-[#dbe7f5] bg-[#f8fbff]"
+                >
+                  <Image
+                    source={{ uri: attachment.uri }}
+                    style={{ width: 108, height: 88, backgroundColor: APP_COLORS.primaryBlueLight }}
+                    contentFit="cover"
+                  />
+                  <View className="flex-row items-center justify-between gap-2 px-2 py-1.5">
+                    <Text className="flex-1 text-[10px] font-semibold" style={{ color: APP_COLORS.primaryBlue }} numberOfLines={1}>
+                      {attachment.name || "Image"}
+                    </Text>
+                    <Pressable onPress={() => removeAttachment(index)} hitSlop={8}>
+                      <Feather name="x" size={14} color={APP_COLORS.primaryBlue} />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           <View className="flex-row items-center bg-[#f1f5fb] rounded-full px-4 py-2">
+            <Pressable
+              onPress={pickAttachments}
+              disabled={sending}
+              className="mr-2 h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: APP_COLORS.primaryBlueLight }}
+            >
+              <Feather name="image" size={16} color={APP_COLORS.primaryBlue} />
+            </Pressable>
+
             <View className="flex-1">
               {isRecipientTyping ? (
                 <Text className="text-sm mb-1" style={{ color: APP_COLORS.tabInactive }}>
@@ -404,15 +606,16 @@ export default function ConversationPage() {
                 onChangeText={onChangeReply}
                 placeholder="Write a message"
                 className="flex-1 py-2"
+                onFocus={() => scrollToBottom(false)}
               />
             </View>
 
             <Pressable
               onPress={handleSend}
-              disabled={!reply.trim() || sending}
+              disabled={sending || (!reply.trim() && !attachments.length)}
               className="ml-2 h-10 w-10 rounded-full items-center justify-center"
               style={{
-                backgroundColor: reply.trim()
+                backgroundColor: (reply.trim() || attachments.length)
                   ? APP_COLORS.primaryBlue
                   : APP_COLORS.primaryBlueLight,
               }}

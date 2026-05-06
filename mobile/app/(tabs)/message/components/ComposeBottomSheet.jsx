@@ -1,11 +1,13 @@
 import { Feather } from "@expo/vector-icons";
 import {
   Modal,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
+  Platform,
 } from "react-native";
 import { APP_COLORS } from "../../../../constants/theme";
 
@@ -19,7 +21,11 @@ export default function ComposeBottomSheet({
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 bg-black/50">
+      <KeyboardAvoidingView
+        className="flex-1 bg-black/50"
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
         <View className="flex-1 justify-end">
           {/* Bottom Sheet */}
           <View className="max-h-[88%] bg-white rounded-t-3xl px-4 pt-4 pb-6">
@@ -66,6 +72,7 @@ export default function ComposeBottomSheet({
             <ScrollView
               showsVerticalScrollIndicator={false}
               className="mt-3"
+              keyboardShouldPersistTaps="handled"
             >
               <View className="rounded-2xl border border-slate-200 overflow-hidden bg-white">
                 {composeRecipientOptions.length ? (
@@ -165,7 +172,7 @@ export default function ComposeBottomSheet({
             </ScrollView>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
