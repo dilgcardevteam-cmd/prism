@@ -378,7 +378,7 @@ export default function ConversationPage() {
                 value={reply}
                 onChangeText={onChangeReply}
                 placeholder="Write a message"
-                className="flex-1"
+                className="flex-1 py-2"
               />
             </View>
 
