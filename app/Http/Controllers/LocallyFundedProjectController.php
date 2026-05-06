@@ -2320,7 +2320,7 @@ $url = route('locally-funded-project.show', $project, false);
             $rawFilterState['fund_source'] = $this->normalizeLocallyFundedFundSourceFilter($rawFilterState['fund_source']);
         }
         $filterHash = md5(serialize($rawFilterState));
-        $cacheKey = "lfp_index_v5:{$userId}:{$filterHash}";
+        $cacheKey = "lfp_index_v6:{$userId}:{$filterHash}";
 
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
@@ -2443,7 +2443,9 @@ $url = route('locally-funded-project.show', $project, false);
                 $join->on('lpu.project_id', '=', 'lfp.id')
                     ->where('lpu.year', '=', $currentYear)
                     ->where('lpu.month', '=', $currentMonth);
-            });
+            })
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%']);
 
         $hasFinancialUpdatesTable = Schema::hasTable('locally_funded_financial_updates');
         if ($hasFinancialUpdatesTable) {
@@ -2465,13 +2467,6 @@ $url = route('locally-funded-project.show', $project, false);
         $projectProvinceExpression = 'COALESCE(lfp.province, spp.province)';
         $projectCityExpression = 'COALESCE(lfp.city_municipality, spp.city_municipality)';
         $projectRegionExpression = 'COALESCE(lfp.region, spp.region)';
-
-        $this->applyUserScopeToLocationQuery(
-            $query,
-            $projectProvinceExpression,
-            $projectCityExpression,
-            $projectRegionExpression
-        );
 
         $select = [
             'spp.project_code',
