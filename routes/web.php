@@ -1453,7 +1453,6 @@ Route::middleware(['auth'])->group(function () {
                     ->whereRaw('TRIM(spp.project_code) <> ""');
 
                 $excludeSglgifFromSubay($subayBaseQuery);
-                $applyRoleScopeToSubay($subayBaseQuery);
 
                 $configuredProvinceLabels = collect(\App\Support\ProjectLocationFilterHelper::buildConfiguredProvinceLabels())
                     ->map($normalizeFilterValue)
@@ -1463,35 +1462,11 @@ Route::middleware(['auth'])->group(function () {
                     ->values();
 
                 if ($configuredProvinceLabels->isNotEmpty()) {
-                    if (($isLguScopedUser || ($isDilgUser && !$isRegionalOfficeUser)) && $province !== '') {
-                        $normalizedScopedProvince = $normalizeComparableLocationValue($province);
-                        $configuredProvinceLabels = $configuredProvinceLabels
-                            ->filter(function ($provinceLabel) use ($normalizedScopedProvince, $normalizeComparableLocationValue) {
-                                return $normalizeComparableLocationValue($provinceLabel) === $normalizedScopedProvince;
-                            })
-                            ->values();
-                    }
-
                     $filterOptions['provinces'] = $configuredProvinceLabels;
 
                     $provinceCityMap = \App\Support\ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy(
                         $configuredProvinceLabels->all()
                     );
-
-                    if ($isLguScopedUser && $office !== '') {
-                        $normalizedOfficeNeedle = $officeComparableLower !== '' ? $officeComparableLower : $normalizeComparableLocationValue($office);
-                        foreach ($provinceCityMap as $provinceLabel => $cityLabels) {
-                            $provinceCityMap[$provinceLabel] = array_values(array_filter(
-                                $cityLabels,
-                                function ($cityLabel) use ($normalizedOfficeNeedle, $normalizeComparableLocationValue, $officeLower) {
-                                    $normalizedCityLabel = strtolower(trim((string) $cityLabel));
-
-                                    return $normalizedCityLabel === $officeLower
-                                        || $normalizeComparableLocationValue($cityLabel) === $normalizedOfficeNeedle;
-                                }
-                            ));
-                        }
-                    }
 
                     $filterOptions['province_city_map'] = $provinceCityMap;
                     $filterOptions['cities'] = collect($filters['province'])
@@ -1506,20 +1481,6 @@ Route::middleware(['auth'])->group(function () {
                     $cityBarangayMap = \App\Support\ProjectLocationFilterHelper::buildConfiguredCityBarangayMapFromHierarchy(
                         $configuredProvinceLabels->all()
                     );
-
-                    if ($isLguScopedUser && $office !== '') {
-                        $normalizedOfficeNeedle = $officeComparableLower !== '' ? $officeComparableLower : $normalizeComparableLocationValue($office);
-                        $cityBarangayMap = array_filter(
-                            $cityBarangayMap,
-                            function ($cityLabel) use ($normalizedOfficeNeedle, $normalizeComparableLocationValue, $officeLower) {
-                                $normalizedCityLabel = strtolower(trim((string) $cityLabel));
-
-                                return $normalizedCityLabel === $officeLower
-                                    || $normalizeComparableLocationValue($cityLabel) === $normalizedOfficeNeedle;
-                            },
-                            ARRAY_FILTER_USE_KEY
-                        );
-                    }
 
                     if (!empty($filters['province'])) {
                         $allowedCityKeys = collect($filters['province'])
