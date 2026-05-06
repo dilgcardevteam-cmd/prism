@@ -24,6 +24,8 @@ const GALLERY_FILTER_OPTIONS = [
   "During",
 ];
 
+const GALLERY_SECTION_ORDER = GALLERY_FILTER_OPTIONS.filter((option) => option !== "All");
+
 const BRAND = {
   primary: "#0f2f7a",
   primarySoft: "#e8f0ff",
@@ -173,6 +175,51 @@ const GalleryImageTile = memo(function GalleryImageTile({ image, onOpenViewer, o
   );
 });
 
+const GalleryStageSection = memo(function GalleryStageSection({ title, images, onOpenViewer, onOpenLocation, onDelete, tileWidth }) {
+  if (!Array.isArray(images) || images.length === 0) {
+    return null;
+  }
+
+  return (
+    <View className="mb-5">
+      <View className="mb-3 flex-row items-center">
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+        <Text className="mx-3 text-[11px] uppercase tracking-[0.9px] text-[#5b719a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+          {title}
+        </Text>
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+      </View>
+
+      <View className="flex-row flex-wrap justify-between">
+        {images.map((image) => (
+          <GalleryImageTile
+            key={String(image.id)}
+            image={image}
+            onOpenViewer={onOpenViewer}
+            onOpenLocation={onOpenLocation}
+            onDelete={onDelete}
+            tileWidth={tileWidth}
+          />
+        ))}
+      </View>
+    </View>
+  );
+});
+
+const GalleryAllHeader = memo(function GalleryAllHeader({ count }) {
+  return (
+    <View className="mb-5">
+      <View className="mb-3 flex-row items-center">
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+        <Text className="mx-3 text-[11px] uppercase tracking-[0.9px] text-[#5b719a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+          All ({count})
+        </Text>
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+      </View>
+    </View>
+  );
+});
+
 export default function Gallery({ project }) {
   const { width } = useWindowDimensions();
   const router = useRouter();
@@ -204,7 +251,7 @@ export default function Gallery({ project }) {
   const savedTranslateY = useSharedValue(0);
   const projectId = Number(project?.id || 0);
   const stageOptions = useMemo(
-    () => GALLERY_FILTER_OPTIONS.filter((option) => option !== "All"),
+    () => GALLERY_SECTION_ORDER,
     []
   );
   const normalizedProjectGallery = useMemo(
@@ -297,6 +344,17 @@ export default function Gallery({ project }) {
     }
 
     return galleryImages.filter((image) => image.category === selectedFilter);
+  }, [galleryImages, selectedFilter]);
+
+  const groupedGallerySections = useMemo(() => {
+    if (selectedFilter !== "All") {
+      return [];
+    }
+
+    return GALLERY_SECTION_ORDER.map((stage) => ({
+      stage,
+      images: galleryImages.filter((image) => image.category === stage),
+    })).filter((section) => section.images.length > 0);
   }, [galleryImages, selectedFilter]);
 
   const openViewer = (image) => {
@@ -681,6 +739,8 @@ export default function Gallery({ project }) {
     [selectedFilter]
   );
 
+  const isAllFilter = selectedFilter === "All";
+
   return (
     <View className="mt-3 overflow-hidden rounded-3xl border border-[#d7e2f5] bg-white">
       <View className="px-4 pt-4" style={{ backgroundColor: BRAND.primarySoft }}>
@@ -715,21 +775,43 @@ export default function Gallery({ project }) {
         onClose={() => setToast((current) => ({ ...current, visible: false }))}
       />
 
-      <FlatList
-        data={filteredImages}
-        keyExtractor={keyExtractor}
-        renderItem={renderGalleryImage}
-        numColumns={isCompactScreen ? 1 : 2}
-        columnWrapperStyle={isCompactScreen ? undefined : { justifyContent: "space-between" }}
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
-        scrollEnabled={false}
-        removeClippedSubviews
-        initialNumToRender={6}
-        maxToRenderPerBatch={6}
-        windowSize={5}
-        updateCellsBatchingPeriod={50}
-      />
+      {isAllFilter ? (
+        <View>
+          {listHeader}
+          <GalleryAllHeader count={filteredImages.length} />
+          {groupedGallerySections.length > 0 ? (
+            groupedGallerySections.map((section) => (
+              <GalleryStageSection
+                key={section.stage}
+                title={section.stage}
+                images={section.images}
+                onOpenViewer={openViewer}
+                onOpenLocation={openImageLocation}
+                onDelete={handleDeleteImage}
+                tileWidth={imageTileWidth}
+              />
+            ))
+          ) : (
+            listEmpty
+          )}
+        </View>
+      ) : (
+        <FlatList
+          data={filteredImages}
+          keyExtractor={keyExtractor}
+          renderItem={renderGalleryImage}
+          numColumns={isCompactScreen ? 1 : 2}
+          columnWrapperStyle={isCompactScreen ? undefined : { justifyContent: "space-between" }}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          scrollEnabled={false}
+          removeClippedSubviews
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+        />
+      )}
       </View>
 
       <Modal
