@@ -131,10 +131,13 @@
     .nadai-index-panel-head {
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
+        align-items: center;
         gap: 16px;
-        padding: 24px 26px 18px;
+        padding: 22px 26px 20px;
         border-bottom: 1px solid #e2e8f0;
+        background:
+            radial-gradient(circle at top right, rgba(191, 219, 254, 0.48), transparent 26%),
+            linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
     }
 
     .nadai-index-section-label {
@@ -165,34 +168,41 @@
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
+        align-self: flex-start;
     }
 
     .nadai-index-summary-chip {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        min-height: 38px;
+        min-height: 36px;
         padding: 0 14px;
         border-radius: 999px;
-        background: #eff6ff;
+        background: rgba(37, 99, 235, 0.08);
         color: #1d4ed8;
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 800;
+        border: 1px solid rgba(96, 165, 250, 0.18);
     }
 
     .nadai-index-filter-body {
-        padding: 20px 26px 26px;
+        padding: 22px 26px 26px;
     }
 
     .nadai-index-filter-form {
         display: grid;
-        gap: 16px;
+        gap: 14px;
+        padding: 18px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        border: 1px solid #dbe7f5;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
     }
 
     .nadai-index-filter-grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-        gap: 12px;
+        gap: 14px;
         align-items: end;
     }
 
@@ -212,25 +222,28 @@
     .nadai-index-label {
         color: #334155;
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 800;
+        letter-spacing: 0.01em;
     }
 
     .nadai-index-select {
         width: 100%;
-        min-height: 46px;
-        padding: 0 14px;
-        border: 1px solid #cbd5e1;
-        border-radius: 14px;
+        min-height: 48px;
+        padding: 0 16px;
+        border: 1px solid #c7d7ee;
+        border-radius: 16px;
         background: #fff;
         color: #0f172a;
         font-size: 13px;
-        transition: border-color 0.16s ease, box-shadow 0.16s ease;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+        transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
     }
 
     .nadai-index-select:focus {
         outline: none;
         border-color: #60a5fa;
         box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
+        transform: translateY(-1px);
     }
 
     .nadai-index-btn-filter {
@@ -240,8 +253,8 @@
     }
 
     .nadai-index-btn-clear {
-        background: #e2e8f0;
-        color: #0f172a;
+        background: #fff;
+        color: #334155;
         box-shadow: inset 0 0 0 1px #cbd5e1;
     }
 
@@ -490,6 +503,11 @@
         .nadai-index-pagination {
             padding-left: 18px;
             padding-right: 18px;
+        }
+
+        .nadai-index-filter-form {
+            padding: 16px;
+            border-radius: 18px;
         }
 
         .nadai-index-pagination {
