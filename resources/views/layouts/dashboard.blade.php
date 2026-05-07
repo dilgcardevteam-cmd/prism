@@ -2150,7 +2150,6 @@
                 </li>
             @endif
             @if($hasAnyReportorialAccess)
-                <li>
                 @php
                     $reportsAnnualRpmesActive = request()->routeIs('reports.annual.rpmes.form-4*');
                     $reportsAnnualAmwpActive = request()->routeIs('reports.annual.amwp*');
@@ -2171,30 +2170,60 @@
                     $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
                     $reportsMonthlyRpmesActive = false;
                     $reportsDilgDeliverablesActive = request()->routeIs('reports.dilg-deliverables');
+                    $reportsDilgMonitoringEvaluationActive = request()->routeIs('reports.dilg-deliverables.monitoring-evaluation');
+                    $reportsDilgRlipLimeActive = request()->routeIs('reports.dilg-deliverables.rlip-lime-monthly');
+                    $reportsDilgQaarActive = request()->routeIs('reports.dilg-deliverables.qaar-tool-monitoring');
+                    $reportsDilgDeliverablesMenuActive = $reportsDilgDeliverablesActive
+                        || $reportsDilgMonitoringEvaluationActive
+                        || $reportsDilgRlipLimeActive
+                        || $reportsDilgQaarActive;
                     $reportsProjectCompletionActive = request()->routeIs('reports.one-time.project-completion-reports.*');
                     $reportsOneTimeActive = request()->routeIs('reports.one-time.*');
                     $reportsMonthlyActive = $reportsMonthlyReportActive || $reportsSwaAnnexFActive;
                     $reportsMenuActive = Route::currentRouteName() == 'reports'
-                        || $reportsDilgDeliverablesActive
                         || $reportsAnnualActive
                         || $reportsQuarterlyActive
                         || $reportsMonthlyActive
                         || $reportsOneTimeActive;
                 @endphp
-                <a href="#" class="@if($reportsMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsMenu')">
-                    <i class="fas fa-file-alt"></i>
-                    <span>LGU Reportorial Requirements</span>
-                    <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
-                </a>
-                <ul id="reportsMenu" class="submenu" style="display: {{ $reportsMenuActive ? 'block' : 'none' }};">
-                    @if($canViewDilgDeliverables)
-                        <li>
-                            <a href="{{ route('reports.dilg-deliverables') }}" class="@if($reportsDilgDeliverablesActive) active @endif">
-                                <i class="fas fa-clipboard-list"></i>
-                                <span>DILG Deliverables</span>
-                            </a>
-                        </li>
-                    @endif
+                @if($canViewDilgDeliverables)
+                    <li>
+                        <a href="#" class="@if($reportsDilgDeliverablesMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsDilgDeliverablesMenu')">
+                            <i class="fas fa-clipboard-list"></i>
+                            <span>DILG Deliverables</span>
+                            <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
+                        </a>
+                        <ul id="reportsDilgDeliverablesMenu" class="submenu" style="display: {{ $reportsDilgDeliverablesMenuActive ? 'block' : 'none' }};">
+                            <li>
+                                <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation') }}" class="@if($reportsDilgMonitoringEvaluationActive) active @endif">
+                                    <i class="fas fa-file-lines"></i>
+                                    <span>Monitoring and Evaluation Reports</span>
+                                </a>
+                            </li>
+                            @if($canViewRlipLimeProjects)
+                                <li>
+                                    <a href="{{ route('reports.dilg-deliverables.rlip-lime-monthly') }}" class="@if($reportsDilgRlipLimeActive) active @endif">
+                                        <i class="fas fa-chart-column"></i>
+                                        <span>RLIP/LIME Monthly Reports</span>
+                                    </a>
+                                </li>
+                            @endif
+                            <li>
+                                <a href="{{ route('reports.dilg-deliverables.qaar-tool-monitoring') }}" class="@if($reportsDilgQaarActive) active @endif">
+                                    <i class="fas fa-clipboard-check"></i>
+                                    <span>QAAR Tool and Monitoring Report</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                @endif
+                <li>
+                    <a href="#" class="@if($reportsMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsMenu')">
+                        <i class="fas fa-file-alt"></i>
+                        <span>LGU Reportorial Requirements</span>
+                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
+                    </a>
+                    <ul id="reportsMenu" class="submenu" style="display: {{ $reportsMenuActive ? 'block' : 'none' }};">
                     @if($canViewRbisAnnualCertification || $canViewAnyAnnualRpmesForm)
                         <li>
                             <a href="#" class="@if($reportsAnnualActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualMenu')">

@@ -4,119 +4,37 @@
 @section('page-title', 'DILG Deliverables')
 
 @section('content')
-    <div class="content-header">
-        <h1>DILG Deliverables</h1>
-        <p>Workspace for deliverables handled by DILG Provincial and Regional Office users.</p>
-    </div>
-
-    <section class="dilg-deliverables-shell">
-        <div class="dilg-deliverables-hero">
-            <div class="dilg-deliverables-icon" aria-hidden="true">
-                <i class="fas fa-clipboard-list"></i>
-            </div>
-            <div>
-                <h2>DILG Office Deliverables</h2>
-                <p>
-                    This page is reserved for DILG Provincial Office and DILG Regional Office users. You can extend
-                    this workspace with deliverable tracking, compliance summaries, and document actions when the
-                    functional requirements are ready.
-                </p>
-            </div>
-        </div>
-
-        <div class="dilg-deliverables-grid">
-            <article class="dilg-deliverables-card">
-                <h3>Provincial Office Queue</h3>
-                <p>Stage deliverables that need provincial review, validation, or endorsement.</p>
-            </article>
-            <article class="dilg-deliverables-card">
-                <h3>Regional Office Oversight</h3>
-                <p>Track escalated deliverables, regional actions, and completion checkpoints.</p>
-            </article>
-            <article class="dilg-deliverables-card">
-                <h3>Compliance Monitoring</h3>
-                <p>Prepare deadline, status, and accomplishment summaries for DILG reporting workflows.</p>
-            </article>
-        </div>
-    </section>
-
-    <style>
-        .dilg-deliverables-shell {
-            background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
-            border: 1px solid #bfdbfe;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-        }
-
-        .dilg-deliverables-hero {
-            display: flex;
-            align-items: flex-start;
-            gap: 16px;
-            margin-bottom: 20px;
-        }
-
-        .dilg-deliverables-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: #dbeafe;
-            color: #1d4ed8;
-            font-size: 22px;
-            flex: 0 0 auto;
-        }
-
-        .dilg-deliverables-hero h2 {
-            margin: 0;
-            color: #1e3a8a;
-            font-size: 22px;
-        }
-
-        .dilg-deliverables-hero p {
-            margin: 8px 0 0;
-            color: #475569;
-            font-size: 14px;
-            line-height: 1.7;
-            max-width: 760px;
-        }
-
-        .dilg-deliverables-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 14px;
-        }
-
-        .dilg-deliverables-card {
-            background: #ffffff;
-            border: 1px solid #dbeafe;
-            border-radius: 14px;
-            padding: 16px;
-        }
-
-        .dilg-deliverables-card h3 {
-            margin: 0 0 8px;
-            color: #1e40af;
-            font-size: 15px;
-        }
-
-        .dilg-deliverables-card p {
-            margin: 0;
-            color: #475569;
-            font-size: 13px;
-            line-height: 1.6;
-        }
-
-        @media (max-width: 640px) {
-            .dilg-deliverables-shell {
-                padding: 16px;
-            }
-
-            .dilg-deliverables-hero {
-                flex-direction: column;
-            }
-        }
-    </style>
+    @include('reports.dilg-deliverables._workspace', [
+        'pageTitle' => 'DILG Deliverables',
+        'pageIntro' => 'Workspace for deliverables handled by DILG Provincial and Regional Office users.',
+        'heroIcon' => 'fas fa-clipboard-list',
+        'heroTitle' => 'DILG Office Deliverables',
+        'heroCopy' => 'Open a dedicated deliverables workspace for monitoring and evaluation, RLIP/LIME monthly reporting, or QAAR tracking. Each page can be extended with status boards, document actions, and compliance summaries.',
+        'workspaceLinks' => [
+            ['name' => 'reports.dilg-deliverables', 'label' => 'Overview', 'route' => route('reports.dilg-deliverables')],
+            ['name' => 'reports.dilg-deliverables.monitoring-evaluation', 'label' => 'Monitoring and Evaluation Reports', 'route' => route('reports.dilg-deliverables.monitoring-evaluation')],
+            ['name' => 'reports.dilg-deliverables.rlip-lime-monthly', 'label' => 'RLIP/LIME Monthly Reports', 'route' => route('reports.dilg-deliverables.rlip-lime-monthly')],
+            ['name' => 'reports.dilg-deliverables.qaar-tool-monitoring', 'label' => 'QAAR Tool and Monitoring Report', 'route' => route('reports.dilg-deliverables.qaar-tool-monitoring')],
+        ],
+        'cards' => [
+            [
+                'title' => 'Monitoring and Evaluation Reports',
+                'copy' => 'Use a dedicated page for monitoring status, evaluation notes, validation checkpoints, and follow-up actions for DILG deliverables.',
+                'href' => route('reports.dilg-deliverables.monitoring-evaluation'),
+                'cta' => 'Open page',
+            ],
+            [
+                'title' => 'RLIP/LIME Monthly Reports',
+                'copy' => 'Stage monthly RLIP/LIME reporting work, review submissions, and route users into the operational RLIP/LIME workspaces when needed.',
+                'href' => route('reports.dilg-deliverables.rlip-lime-monthly'),
+                'cta' => 'Open page',
+            ],
+            [
+                'title' => 'QAAR Tool and Monitoring Report',
+                'copy' => 'Track QAAR monitoring requirements, maintain action items, and prepare report packages before opening the detailed monitoring module.',
+                'href' => route('reports.dilg-deliverables.qaar-tool-monitoring'),
+                'cta' => 'Open page',
+            ],
+        ],
+    ])
 @endsection

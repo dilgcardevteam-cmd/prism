@@ -2559,7 +2559,7 @@ Route::middleware(['auth'])->group(function () {
             ->name('backup-and-restore.test-now');
     });
 
-    Route::get('/reports/dilg-deliverables', function () {
+    $assertDilgDeliverablesAccess = function (): void {
         $user = Auth::user();
 
         $canAccessDilgDeliverables = $user
@@ -2568,9 +2568,33 @@ Route::middleware(['auth'])->group(function () {
             && ($user->isRegionalOfficeAssignment() || $user->normalizedProvince() !== '');
 
         abort_unless($canAccessDilgDeliverables, 403);
+    };
 
-        return view('reports.dilg-deliverables.index');
-    })->name('reports.dilg-deliverables');
+    Route::prefix('/reports/dilg-deliverables')->group(function () use ($assertDilgDeliverablesAccess) {
+        Route::get('/', function () use ($assertDilgDeliverablesAccess) {
+            $assertDilgDeliverablesAccess();
+
+            return view('reports.dilg-deliverables.index');
+        })->name('reports.dilg-deliverables');
+
+        Route::get('/monitoring-and-evaluation-reports', function () use ($assertDilgDeliverablesAccess) {
+            $assertDilgDeliverablesAccess();
+
+            return view('reports.dilg-deliverables.monitoring-evaluation-reports');
+        })->name('reports.dilg-deliverables.monitoring-evaluation');
+
+        Route::get('/rlip-lime-monthly-reports', function () use ($assertDilgDeliverablesAccess) {
+            $assertDilgDeliverablesAccess();
+
+            return view('reports.dilg-deliverables.rlip-lime-monthly-reports');
+        })->name('reports.dilg-deliverables.rlip-lime-monthly');
+
+        Route::get('/qaar-tool-and-monitoring-report', function () use ($assertDilgDeliverablesAccess) {
+            $assertDilgDeliverablesAccess();
+
+            return view('reports.dilg-deliverables.qaar-tool-and-monitoring-report');
+        })->name('reports.dilg-deliverables.qaar-tool-monitoring');
+    });
 
     // Fund Utilization Report routes
     Route::prefix('fund-utilization')->group(function () {
