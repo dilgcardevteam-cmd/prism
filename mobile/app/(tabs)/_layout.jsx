@@ -36,11 +36,15 @@ import {
 const PROJECT_MONITORING_KEY = "project-monitoring";
 const RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY = "rapid-subproject-sustainability-assessment";
 const TICKETING_SYSTEM_KEY = "ticketing-system";
+const LGU_REPORTORIAL_REQUIREMENTS_KEY = "lgu-reportorial-requirements";
+const DATA_MANAGEMENT_KEY = "data-management";
 
 const SUBMENU_HEIGHT_BY_KEY = {
   [PROJECT_MONITORING_KEY]: PROJECT_MONITORING_SUBMENU_HEIGHT,
   [RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY]: 130,
   [TICKETING_SYSTEM_KEY]: 112,
+  [LGU_REPORTORIAL_REQUIREMENTS_KEY]: 180,
+  [DATA_MANAGEMENT_KEY]: 180,
 };
 
 const DRAWER_MENU_ITEMS = [
@@ -110,6 +114,28 @@ const DRAWER_MENU_ITEMS = [
     key: "lgu-reportorial-requirements",
     label: "LGU Reportorial Requirements",
     icon: "file-text",
+    children: [
+      {
+        key: "lgu-annual",
+        label: "Annual",
+        icon: "calendar",
+      },
+      {
+        key: "lgu-quarterly",
+        label: "Quarterly",
+        icon: "calendar",
+      },
+      {
+        key: "lgu-monthly",
+        label: "Monthly",
+        icon: "calendar",
+      },
+      {
+        key: "lgu-onetime",
+        label: "One-Time Report",
+        icon: "file",
+      },
+    ],
   },
   {
     key: "pre-implementation-documents",
@@ -137,6 +163,28 @@ const DRAWER_MENU_ITEMS = [
     key: "data-management",
     label: "Data Management",
     icon: "database",
+    children: [
+      {
+        key: "data-upload-lfp",
+        label: "Upload LFP Data",
+        icon: "upload",
+      },
+      {
+        key: "data-upload-rssa",
+        label: "Upload RSSA Data",
+        icon: "upload",
+      },
+      {
+        key: "data-upload-project-at-risk",
+        label: "Upload Project-at-Risk",
+        icon: "upload",
+      },
+      {
+        key: "data-upload-sglgif",
+        label: "Upload SGLGIF Data",
+        icon: "upload",
+      },
+    ],
   },
   {
     key: "user-management",
@@ -183,11 +231,15 @@ export default function TabLayout() {
     [PROJECT_MONITORING_KEY]: false,
     [RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY]: false,
     [TICKETING_SYSTEM_KEY]: false,
+    [LGU_REPORTORIAL_REQUIREMENTS_KEY]: false,
+    [DATA_MANAGEMENT_KEY]: false,
   });
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const projectMonitoringAnimation = useRef(new Animated.Value(0)).current;
   const rapidSubprojectAnimation = useRef(new Animated.Value(0)).current;
   const ticketingSystemAnimation = useRef(new Animated.Value(0)).current;
+  const lguReportorialRequirementsAnimation = useRef(new Animated.Value(0)).current;
+  const dataManagementAnimation = useRef(new Animated.Value(0)).current;
   const drawerWidth = 320;
   const headerStyle = {
     backgroundColor: APP_COLORS.tabBackgroundLight,
@@ -217,6 +269,8 @@ export default function TabLayout() {
     [PROJECT_MONITORING_KEY]: projectMonitoringAnimation,
     [RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY]: rapidSubprojectAnimation,
     [TICKETING_SYSTEM_KEY]: ticketingSystemAnimation,
+    [LGU_REPORTORIAL_REQUIREMENTS_KEY]: lguReportorialRequirementsAnimation,
+    [DATA_MANAGEMENT_KEY]: dataManagementAnimation,
   };
 
   const isMessagesTab = pathname === "/(tabs)/message" || pathname === "/message";
@@ -522,7 +576,7 @@ export default function TabLayout() {
 
                   return (
                     <View key={item.key ?? item.label ?? idx}>
-                      {item.key === PROJECT_MONITORING_KEY || item.key === "data-management" || item.key === "settings" ? (
+                      {item.key === PROJECT_MONITORING_KEY || item.key === DATA_MANAGEMENT_KEY || item.key === "settings" ? (
                         <View
                           className="my-6 border-t"
                           style={{ borderTopColor: "rgba(255, 255, 255, 0.16)" }}
