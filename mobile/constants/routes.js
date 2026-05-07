@@ -21,10 +21,40 @@ export const TAB_ROUTES = [
     title: "Home",
     icon: "grid"
   },
+  
+  // UTILITITTIES ============================================
   {
     route: "utilities/index",
     title: "Utilities",
     icon: "cog"
+  },
+  {
+    route: "utilities/pages/role-configuration",
+    title: "Role Configuration",
+  },
+  {
+    route: "utilities/pages/activity-logs",
+    title: "Activity Logs",
+  },
+  {
+    route: "utilities/pages/location-configuration",
+    title: "Location Configuration",
+  },
+  {
+    route: "utilities/pages/deadlines-configuration",
+    title: "Deadlines Configuration",
+  },
+  {
+    route: "utilities/pages/bulk-notification",
+    title: "Bulk Notification",
+  },
+  {
+    route: "utilities/pages/database-and-backups",
+    title: "Database and Backups",
+  },
+  {
+    route: "utilities/pages/system-maintenance",
+    title: "System Maintenance",
   },
 ];
 

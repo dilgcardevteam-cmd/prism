@@ -4,6 +4,8 @@ import { TYPOGRAPHY_DEFAULTS } from "../../../../constants/typography";
 
 import { Feather } from "@expo/vector-icons";
 
+import {useRouter} from "expo-router";
+
 // UTILITIES VALUES
 const UTILITIES = [
     {
@@ -11,48 +13,56 @@ const UTILITIES = [
         title: "Role Configuration",
         description: "Configure CRUD access by hierarchy role and apply it to every assigned user from one place.",
         icon: "users",
+        route: "utilities/pages/role-configuration"
     },
     {
         id: 2,
         title: "Activity Logs",
         description: "Review immutable audit events for authentication, CRUD actions, role changes, and other sensitive system activity.",
         icon: "activity",
+        route: "utilities/pages/activity-logs"
     },
     {
         id: 3,
         title: "Location Configuration",
         description: "Review and manage the location-related configuration used accross the application.",
         icon: "map-pin",
+        route: "utilities/pages/location-configuration"
     },
     {
         id: 4,
         title: "Deadlines Configuration",
         description: "Review and maintain deadline settings used across project monitoring and reportorial workflows.",
         icon: "calendar",
+        route: "utilities/pages/deadlines-configuration"
     },
     {
         id: 5,
         title: "Bulk Notification",
         description: "Send announcement emails to role-based audiences and review the notification workspace.",
         icon: "bell",
+        route: "utilities/pages/bulk-notification"
     },
     {
         id: 6,
         title: "Database and Backups",
         description: "Download SQL backups, restore data, and maintain automated backup routines.",
         icon: "database",
+        route: "utilities/pages/database-and-backups"
     },
     {
         id: 7,
         title: "System Maintenance",
         description: "Maintenance tools and controls will be available here in an upcoming release.",
         icon: "tool",
+        route: "utilities/pages/system-maintenance"
     },
 ]
 
-function UtilityCard({title, description, icon}) {
+function UtilityCard({title, description, icon, onPress}) {
   return (
     <Pressable
+      onPress={onPress}
       className="mx-4 mb-4 flex-row items-center rounded-2xl bg-white p-4"
       style={{
         shadowColor: "#000",
@@ -98,6 +108,8 @@ function UtilityCard({title, description, icon}) {
 }
 
 export default function () {
+  const router = useRouter();
+
   return (
     <View>
       {UTILITIES.map((item) => (
@@ -106,6 +118,11 @@ export default function () {
           title={item.title}
           description={item.description}
           icon={item.icon}
+          onPress={() => {
+            if (item.route) {
+              router.push(item.route);
+            }
+          }}
         />
       ))}
     </View>
