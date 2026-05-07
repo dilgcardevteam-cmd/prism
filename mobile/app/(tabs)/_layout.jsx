@@ -34,6 +34,19 @@ import {
 } from "../../utils/animations";
 
 const PROJECT_MONITORING_KEY = "project-monitoring";
+const RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY = "rapid-subproject-sustainability-assessment";
+const TICKETING_SYSTEM_KEY = "ticketing-system";
+const LGU_REPORTORIAL_REQUIREMENTS_KEY = "lgu-reportorial-requirements";
+const DATA_MANAGEMENT_KEY = "data-management";
+
+const SUBMENU_HEIGHT_BY_KEY = {
+  [PROJECT_MONITORING_KEY]: PROJECT_MONITORING_SUBMENU_HEIGHT,
+  [RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY]: 130,
+  [TICKETING_SYSTEM_KEY]: 112,
+  [LGU_REPORTORIAL_REQUIREMENTS_KEY]: 180,
+  [DATA_MANAGEMENT_KEY]: 180,
+};
+
 const DRAWER_MENU_ITEMS = [
   {
     key: "home",
@@ -82,26 +95,96 @@ const DRAWER_MENU_ITEMS = [
     key: "rapid-subproject-sustainability-assessment",
     label: "Rapid Subproject Sustainability Assessment",
     icon: "list",
+    children: [
+      {
+        key: "rapid-locally-funded-projects",
+        label: "Locally Funded Projects",
+        icon: "briefcase",
+        route: APP_ROUTES.projectMonitoring.locallyFundedProjects,
+      },
+      {
+        key: "rapid-lime-development-fund",
+        label: "LIME-20% Development Fund",
+        icon: "feather",
+        route: APP_ROUTES.projectMonitoring.rlipLimeDevelopmentFund,
+      },
+    ],
   },
   {
     key: "lgu-reportorial-requirements",
     label: "LGU Reportorial Requirements",
     icon: "file-text",
+    children: [
+      {
+        key: "lgu-annual",
+        label: "Annual",
+        icon: "calendar",
+      },
+      {
+        key: "lgu-quarterly",
+        label: "Quarterly",
+        icon: "calendar",
+      },
+      {
+        key: "lgu-monthly",
+        label: "Monthly",
+        icon: "calendar",
+      },
+      {
+        key: "lgu-onetime",
+        label: "One-Time Report",
+        icon: "file",
+      },
+    ],
   },
   {
     key: "pre-implementation-documents",
-    label: "Pre-Implementation Documents",
+    label: "NADAI Management",
     icon: "folder",
   },
   {
     key: "ticketing-system",
     label: "Ticketing System",
     icon: "message-square",
+    children: [
+      {
+        key: "ticket-dashboard",
+        label: "Ticket Dashboard",
+        icon: "layout",
+      },
+      {
+        key: "ticket-admin-monitoring",
+        label: "Admin Monitoring",
+        icon: "monitor",
+      },
+    ],
   },
   {
     key: "data-management",
     label: "Data Management",
     icon: "database",
+    children: [
+      {
+        key: "data-upload-lfp",
+        label: "Upload LFP Data",
+        icon: "upload",
+      },
+      {
+        key: "data-upload-rssa",
+        label: "Upload RSSA Data",
+        icon: "upload",
+      },
+      {
+        key: "data-upload-project-at-risk",
+        label: "Upload Project-at-Risk",
+        icon: "upload",
+      },
+      {
+        key: "data-upload-sglgif",
+        label: "Upload SGLGIF Data",
+        icon: "upload",
+      },
+    ],
   },
   {
     key: "user-management",
@@ -112,6 +195,13 @@ const DRAWER_MENU_ITEMS = [
     key: "utilities",
     label: "Utilities",
     icon: "tool",
+    route: APP_ROUTES.utilities,
+  },
+    {
+    key: "activity-logs",
+    label: "Activity Logs",
+    icon: "clock",
+    route: APP_ROUTES.utilities,
   },
   {
     key: "settings",
@@ -138,10 +228,18 @@ export default function TabLayout() {
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState({
-    "project-monitoring": false,
+    [PROJECT_MONITORING_KEY]: false,
+    [RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY]: false,
+    [TICKETING_SYSTEM_KEY]: false,
+    [LGU_REPORTORIAL_REQUIREMENTS_KEY]: false,
+    [DATA_MANAGEMENT_KEY]: false,
   });
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const projectMonitoringAnimation = useRef(new Animated.Value(0)).current;
+  const rapidSubprojectAnimation = useRef(new Animated.Value(0)).current;
+  const ticketingSystemAnimation = useRef(new Animated.Value(0)).current;
+  const lguReportorialRequirementsAnimation = useRef(new Animated.Value(0)).current;
+  const dataManagementAnimation = useRef(new Animated.Value(0)).current;
   const drawerWidth = 320;
   const headerStyle = {
     backgroundColor: APP_COLORS.tabBackgroundLight,
@@ -167,6 +265,14 @@ export default function TabLayout() {
     shadowOffset: { width: 6, height: 0 },
     elevation: 18,
   };
+  const submenuAnimationByKey = {
+    [PROJECT_MONITORING_KEY]: projectMonitoringAnimation,
+    [RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY]: rapidSubprojectAnimation,
+    [TICKETING_SYSTEM_KEY]: ticketingSystemAnimation,
+    [LGU_REPORTORIAL_REQUIREMENTS_KEY]: lguReportorialRequirementsAnimation,
+    [DATA_MANAGEMENT_KEY]: dataManagementAnimation,
+  };
+
   const isMessagesTab = pathname === "/(tabs)/message" || pathname === "/message";
   const isConversationTab =
     pathname === "/(tabs)/message/[threadId]" ||
@@ -192,15 +298,38 @@ export default function TabLayout() {
   };
 
   const toggleMenuSection = (sectionKey) => {
-    const willExpand = !expandedMenus[sectionKey];
+    const isCurrentlyExpanded = expandedMenus[sectionKey];
+    const sectionAnimation = submenuAnimationByKey[sectionKey];
 
-    if (sectionKey === PROJECT_MONITORING_KEY) {
-      animateMenuToggle(projectMonitoringAnimation, willExpand);
+    // If clicking the already-expanded section, close it
+    if (isCurrentlyExpanded) {
+      if (sectionAnimation) {
+        animateMenuToggle(sectionAnimation, false);
+      }
+      setExpandedMenus((currentState) => ({
+        ...currentState,
+        [sectionKey]: false,
+      }));
+      return;
+    }
+
+    // Otherwise, close all other sections and open this one
+    Object.keys(submenuAnimationByKey).forEach((key) => {
+      if (key !== sectionKey && expandedMenus[key]) {
+        const animation = submenuAnimationByKey[key];
+        if (animation) {
+          animateMenuToggle(animation, false);
+        }
+      }
+    });
+
+    if (sectionAnimation) {
+      animateMenuToggle(sectionAnimation, true);
     }
 
     setExpandedMenus((currentState) => ({
       ...currentState,
-      [sectionKey]: !currentState[sectionKey],
+      [sectionKey]: true,
     }));
   };
 
@@ -436,15 +565,18 @@ export default function TabLayout() {
                 {DRAWER_MENU_ITEMS.map((item, idx) => {
                 const hasChildren = Array.isArray(item.children) && item.children.length > 0;
                 const isExpanded = expandedMenus[item.key];
-                const isProjectMonitoringSection = item.key === PROJECT_MONITORING_KEY;
-                const submenuAnimations = createSubmenuInterpolations(
-                  projectMonitoringAnimation,
-                  PROJECT_MONITORING_SUBMENU_HEIGHT
-                );
+                const sectionAnimation = submenuAnimationByKey[item.key];
+                const hasAnimatedSubmenu = !!sectionAnimation;
+                const submenuAnimations = sectionAnimation
+                  ? createSubmenuInterpolations(
+                      sectionAnimation,
+                      SUBMENU_HEIGHT_BY_KEY[item.key] ?? PROJECT_MONITORING_SUBMENU_HEIGHT
+                    )
+                  : null;
 
                   return (
                     <View key={item.key ?? item.label ?? idx}>
-                      {item.key === PROJECT_MONITORING_KEY || item.key === "data-management" || item.key === "settings" ? (
+                      {item.key === PROJECT_MONITORING_KEY || item.key === DATA_MANAGEMENT_KEY || item.key === "settings" ? (
                         <View
                           className="my-6 border-t"
                           style={{ borderTopColor: "rgba(255, 255, 255, 0.16)" }}
@@ -493,7 +625,7 @@ export default function TabLayout() {
                           {item.label}
                         </Text>
                         {hasChildren ? (
-                          isProjectMonitoringSection ? (
+                          hasAnimatedSubmenu ? (
                             <Animated.View style={{ transform: [{ rotate: submenuAnimations.chevronRotate }] }}>
                               <Feather
                                 name="chevron-down"
@@ -511,7 +643,7 @@ export default function TabLayout() {
                         ) : null}
                       </Pressable>
 
-                      {hasChildren && isProjectMonitoringSection ? (
+                      {hasChildren && hasAnimatedSubmenu ? (
                         <Animated.View
                           className="overflow-hidden"
                           pointerEvents={isExpanded ? "auto" : "none"}
@@ -551,7 +683,7 @@ export default function TabLayout() {
                         </Animated.View>
                       ) : null}
 
-                      {hasChildren && !isProjectMonitoringSection && isExpanded ? (
+                      {hasChildren && !hasAnimatedSubmenu && isExpanded ? (
                         <View className="mb-2 ml-3 rounded-xl border border-white/20 bg-white/10 px-2 py-2">
                           {item.children.map((childItem, cidx) => (
                             <Pressable

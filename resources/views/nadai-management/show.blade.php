@@ -268,6 +268,7 @@
     .nadai-table {
         width: 100%;
         min-width: 1120px;
+        table-layout: fixed;
         border-collapse: separate;
         border-spacing: 0;
     }
@@ -315,12 +316,21 @@
         gap: 5px;
     }
 
+    .nadai-col-project {
+        width: 28%;
+    }
+
+    .nadai-col-actions {
+        width: 170px;
+    }
+
     .nadai-project-title {
         margin: 0;
         color: #0f172a;
         font-size: 14px;
         font-weight: 800;
         line-height: 1.5;
+        word-break: break-word;
     }
 
     .nadai-project-meta {
@@ -398,7 +408,8 @@
         align-items: center;
         justify-content: center;
         gap: 8px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        white-space: nowrap;
     }
 
     .nadai-icon-btn {
@@ -779,14 +790,14 @@
                 <table class="nadai-table">
                     <thead>
                         <tr>
-                            <th style="text-align: left;">Project Title</th>
+                            <th class="nadai-col-project" style="text-align: left;">Project Title</th>
                             <th style="text-align: center;">Funding Year</th>
                             <th style="text-align: left;">Program</th>
                             <th style="text-align: center;">NADAI Date</th>
                             <th style="text-align: left;">Document</th>
                             <th style="text-align: center;">Uploaded By</th>
                             <th style="text-align: center;">Uploaded At</th>
-                            <th style="text-align: center;">Actions</th>
+                            <th class="nadai-col-actions" style="text-align: center;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -800,7 +811,7 @@
                                 $programValue = trim((string) ($document->program ?? ''));
                             @endphp
                             <tr>
-                                <td>
+                                <td class="nadai-col-project">
                                     <div class="nadai-project">
                                         <p class="nadai-project-title">{{ $document->project_title }}</p>
                                         <p class="nadai-project-meta">{{ $document->municipality ?: $officeName }}{{ $document->barangay ? ', ' . $document->barangay : '' }}</p>
@@ -836,7 +847,7 @@
                                         {{ $document->uploaded_at ? $document->uploaded_at->setTimezone(config('app.timezone'))->format('M d, Y h:i A') : '-' }}
                                     </span>
                                 </td>
-                                <td style="text-align: center;">
+                                <td class="nadai-col-actions" style="text-align: center;">
                                     <div class="nadai-actions">
                                         <button
                                             type="button"
