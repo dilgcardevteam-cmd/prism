@@ -72,15 +72,15 @@ export const PROJECT_MONITORING_ROUTES = [
     title: "",
   },
   {
-    route: "project-monitoring/rlip-lime-20-development-fund",
+    route: "project-monitoring/rlip-lime-20-development-fund/index",
     title: "RLIP/LIME-20% Development Fund",
   },
   {
-    route: "project-monitoring/project-at-risk",
+    route: "project-monitoring/project-at-risk/index",
     title: "Project At Risk",
   },
   {
-    route: "project-monitoring/sglgif-portal",
+    route: "project-monitoring/sglgif-portal/index",
     title: "SGLGIF Portal",
   },
   {
