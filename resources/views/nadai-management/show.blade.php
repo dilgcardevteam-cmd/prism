@@ -271,8 +271,8 @@
         width: 100%;
         min-width: 100%;
         table-layout: fixed;
-        border-collapse: separate;
-        border-spacing: 0 10px;
+        border-collapse: collapse;
+        border-spacing: 0;
     }
 
     .nadai-table thead th {
@@ -284,7 +284,7 @@
         font-weight: 800;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        border-bottom: none;
+        border-bottom: 1px solid #dbe7f5;
     }
 
     .nadai-th-inner {
@@ -338,36 +338,14 @@
         background: rgba(29, 78, 216, 0.75);
     }
 
-    .nadai-table tbody tr {
-        transition: transform 0.16s ease;
-    }
-
-    .nadai-table tbody tr:hover {
-        transform: translateY(-1px);
-    }
-
     .nadai-table tbody td {
         padding: 18px 14px;
-        border-top: 1px solid #dbe7f5;
         border-bottom: 1px solid #dbe7f5;
-        background: rgba(255, 255, 255, 0.96);
+        background: #fff;
         color: #0f172a;
         font-size: 13px;
         vertical-align: top;
         text-align: center;
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
-    }
-
-    .nadai-table tbody td:first-child {
-        border-left: 1px solid #dbe7f5;
-        border-top-left-radius: 9px;
-        border-bottom-left-radius: 9px;
-    }
-
-    .nadai-table tbody td:last-child {
-        border-right: 1px solid #dbe7f5;
-        border-top-right-radius: 9px;
-        border-bottom-right-radius: 9px;
     }
 
     .nadai-table tbody tr:hover td {
