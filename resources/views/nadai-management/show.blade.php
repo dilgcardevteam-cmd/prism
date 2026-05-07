@@ -68,13 +68,15 @@
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.12);
         color: rgba(255, 255, 255, 0.86);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        font-size: 22px;
+        line-height: 1.2;
+        font-weight: 800;
     }
 
     .nadai-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
         margin: 16px 0 10px;
         color: #fff;
         font-size: clamp(28px, 4vw, 38px);
@@ -83,10 +85,9 @@
     }
 
     .nadai-title-icon {
-        margin-right: 10px;
-        color: rgba(191, 219, 254, 0.95);
+        flex: 0 0 auto;
+        color: #ffffff;
         font-size: 0.8em;
-        vertical-align: middle;
     }
 
     .nadai-hero-pills {
@@ -268,52 +269,83 @@
 
     .nadai-table {
         width: 100%;
-        min-width: 1080px;
-        table-layout: auto;
-        border-collapse: separate;
-        border-spacing: 0 10px;
+        min-width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+        border-spacing: 0;
     }
 
     .nadai-table thead th {
-        padding: 6px 14px 10px;
+        position: relative;
+        padding: 6px 8px 10px 14px;
         background: transparent;
         color: #1e3a8a;
         font-size: 11px;
         font-weight: 800;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        border-bottom: none;
+        border-bottom: 1px solid #dbe7f5;
     }
 
-    .nadai-table tbody tr {
-        transition: transform 0.16s ease;
+    .nadai-th-inner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 28px;
+        position: relative;
+        padding-right: 12px;
     }
 
-    .nadai-table tbody tr:hover {
-        transform: translateY(-1px);
+    .nadai-th-label {
+        display: inline-block;
+        min-width: 0;
+        text-align: center;
+    }
+
+    .nadai-col-resize {
+        flex: 0 0 auto;
+        width: 10px;
+        height: 24px;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        cursor: col-resize;
+        position: absolute;
+        right: -2px;
+        top: 50%;
+        transform: translateY(-50%);
+        touch-action: none;
+    }
+
+    .nadai-col-resize::before {
+        content: '';
+        position: absolute;
+        top: 2px;
+        bottom: 2px;
+        left: 50%;
+        width: 2px;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: rgba(30, 58, 138, 0.18);
+        transition: background 0.16s ease;
+    }
+
+    .nadai-col-resize:hover::before,
+    .nadai-col-resize:focus-visible::before,
+    .nadai-table.is-resizing .nadai-col-resize::before {
+        background: rgba(29, 78, 216, 0.75);
     }
 
     .nadai-table tbody td {
         padding: 18px 14px;
-        border-top: 1px solid #dbe7f5;
         border-bottom: 1px solid #dbe7f5;
-        background: rgba(255, 255, 255, 0.96);
+        background: #fff;
         color: #0f172a;
         font-size: 13px;
         vertical-align: top;
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
-    }
-
-    .nadai-table tbody td:first-child {
-        border-left: 1px solid #dbe7f5;
-        border-top-left-radius: 18px;
-        border-bottom-left-radius: 18px;
-    }
-
-    .nadai-table tbody td:last-child {
-        border-right: 1px solid #dbe7f5;
-        border-top-right-radius: 18px;
-        border-bottom-right-radius: 18px;
+        text-align: center;
     }
 
     .nadai-table tbody tr:hover td {
@@ -323,10 +355,24 @@
     .nadai-project {
         display: grid;
         gap: 7px;
+        justify-items: center;
+        text-align: center;
     }
 
     .nadai-col-project {
         width: 22%;
+    }
+
+    .nadai-col-funding-year {
+        width: 10%;
+    }
+
+    .nadai-col-program {
+        width: 12%;
+    }
+
+    .nadai-col-nadai-date {
+        width: 12%;
     }
 
     .nadai-col-document {
@@ -349,7 +395,7 @@
         margin: 0;
         color: #0f172a;
         font-size: 15px;
-        font-weight: 800;
+        font-weight: 400;
         line-height: 1.45;
         word-break: break-word;
     }
@@ -367,11 +413,11 @@
         justify-content: center;
         min-height: 30px;
         padding: 0 12px;
-        border-radius: 999px;
+        border-radius: 8px;
         background: #e0f2fe;
         color: #075985;
         font-size: 11px;
-        font-weight: 800;
+        font-weight: 400;
         text-transform: uppercase;
         letter-spacing: 0.04em;
         white-space: nowrap;
@@ -385,13 +431,15 @@
     .nadai-file {
         display: grid;
         gap: 6px;
+        justify-items: center;
+        text-align: center;
     }
 
     .nadai-file-name {
         margin: 0;
         color: #0f172a;
         font-size: 14px;
-        font-weight: 700;
+        font-weight: 400;
         line-height: 1.45;
         word-break: break-word;
     }
@@ -423,8 +471,9 @@
     }
 
     .nadai-date {
-        font-weight: 700;
+        font-weight: 400;
         line-height: 1.5;
+        text-align: center;
         white-space: nowrap;
     }
 
@@ -444,7 +493,7 @@
         width: 38px;
         height: 38px;
         border: none;
-        border-radius: 12px;
+        border-radius: 6px;
         color: #fff;
         text-decoration: none;
         cursor: pointer;
@@ -636,7 +685,7 @@
         min-height: 46px;
         padding: 0 14px;
         border: 1px solid #cbd5e1;
-        border-radius: 14px;
+        border-radius: 7px;
         background: #fff;
         color: #0f172a;
         font-size: 13px;
@@ -648,6 +697,129 @@
         outline: none;
         border-color: #60a5fa;
         box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
+    }
+
+    .nadai-searchable-select-source {
+        display: none;
+    }
+
+    .nadai-searchable-select {
+        position: relative;
+    }
+
+    .nadai-searchable-select-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 46px;
+        padding: 0 14px;
+        border: 1px solid #cbd5e1;
+        border-radius: 7px;
+        background: #fff;
+        color: #0f172a;
+        font-size: 13px;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .nadai-searchable-select.is-open .nadai-searchable-select-toggle {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18);
+    }
+
+    .nadai-searchable-select-toggle-icon {
+        color: #94a3b8;
+        font-size: 11px;
+        transition: transform 0.16s ease;
+    }
+
+    .nadai-searchable-select.is-open .nadai-searchable-select-toggle-icon {
+        transform: rotate(180deg);
+    }
+
+    .nadai-searchable-select-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        z-index: 60;
+        border: 1px solid #60a5fa;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 22px 44px rgba(15, 23, 42, 0.18);
+        overflow: hidden;
+    }
+
+    .nadai-searchable-select-search {
+        position: relative;
+        padding: 10px;
+        border-bottom: 1px solid #dbeafe;
+        background: #f8fbff;
+    }
+
+    .nadai-searchable-select-search input {
+        width: 100%;
+        min-height: 38px;
+        padding: 0 38px 0 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 5px;
+        background: #fff;
+        color: #0f172a;
+        font-size: 13px;
+    }
+
+    .nadai-searchable-select-search input:focus {
+        outline: none;
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
+    }
+
+    .nadai-searchable-select-search i {
+        position: absolute;
+        top: 50%;
+        right: 22px;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 13px;
+        pointer-events: none;
+    }
+
+    .nadai-searchable-select-options {
+        max-height: 220px;
+        overflow-y: auto;
+        padding: 4px 0;
+    }
+
+    .nadai-searchable-select-option,
+    .nadai-searchable-select-empty {
+        display: block;
+        width: 100%;
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        color: #0f172a;
+        font-size: 13px;
+        text-align: left;
+    }
+
+    .nadai-searchable-select-option {
+        cursor: pointer;
+        transition: background-color 0.14s ease, color 0.14s ease;
+    }
+
+    .nadai-searchable-select-option:hover {
+        background: #eff6ff;
+    }
+
+    .nadai-searchable-select-option.is-selected {
+        background: #3b82f6;
+        color: #fff;
+    }
+
+    .nadai-searchable-select-empty {
+        color: #64748b;
     }
 
     .nadai-form-helper {
@@ -742,11 +914,11 @@
         <section class="nadai-hero">
             <div class="nadai-hero-grid">
                 <div>
-                    <div class="nadai-eyebrow">
-                        <i class="fas fa-landmark"></i>
-                        NADAI Records
-                    </div>
-                    <h1 class="nadai-title"><i class="fas fa-map-pin nadai-title-icon"></i>{{ $province }}, {{ $officeName }}</h1>
+                    <h2 class="nadai-section-title" style="color: #ffffff; margin-bottom: 12px;">
+                        <i class="fas fa-folder"></i>
+                        Uploaded NADAI Documents
+                    </h2>
+                    <h1 class="nadai-title"><i class="fas fa-landmark nadai-title-icon"></i>{{ $officeName }}, {{ $province }}</h1>
                     <div class="nadai-hero-pills">
                         <span class="nadai-pill">
                             <i class="fas fa-folder-open"></i>
@@ -798,44 +970,77 @@
         @endif
 
         <section class="nadai-records">
-            <div class="nadai-records-head">
-                <div>
-                    <p class="nadai-section-label">Document Library</p>
-                    <h2 class="nadai-section-title">Uploaded NADAI Documents</h2>
-                    <p class="nadai-section-copy">
-                        Each record stores the project title, funding year, program, NADAI date, and uploaded document for this office.
-                    </p>
-                </div>
-                @if (!$canUpload)
+            @if (!$canUpload)
+                <div class="nadai-records-head">
                     <div class="nadai-records-note">
                         <i class="fas fa-lock"></i>
                         Only DILG Regional Office users can upload or edit NADAI files.
                     </div>
-                @endif
-            </div>
+                </div>
+            @endif
 
             <div class="nadai-table-wrap">
-                <table class="nadai-table">
+                <table class="nadai-table" id="nadaiDocumentsTable">
                     <colgroup>
-                        <col class="nadai-col-project">
-                        <col>
-                        <col>
-                        <col>
-                        <col class="nadai-col-document">
-                        <col class="nadai-col-uploader">
-                        <col class="nadai-col-uploaded-at">
-                        <col class="nadai-col-actions">
+                        <col class="nadai-col-project" data-col-index="0">
+                        <col class="nadai-col-funding-year" data-col-index="1">
+                        <col class="nadai-col-program" data-col-index="2">
+                        <col class="nadai-col-nadai-date" data-col-index="3">
+                        <col class="nadai-col-document" data-col-index="4">
+                        <col class="nadai-col-uploader" data-col-index="5">
+                        <col class="nadai-col-uploaded-at" data-col-index="6">
+                        <col class="nadai-col-actions" data-col-index="7">
                     </colgroup>
                     <thead>
                         <tr>
-                            <th class="nadai-col-project" style="text-align: left;">Project Title</th>
-                            <th style="text-align: center;">Funding Year</th>
-                            <th style="text-align: left;">Program</th>
-                            <th style="text-align: center;">NADAI Date</th>
-                            <th class="nadai-col-document" style="text-align: left;">Document</th>
-                            <th class="nadai-col-uploader" style="text-align: center;">Uploaded By</th>
-                            <th class="nadai-col-uploaded-at" style="text-align: center;">Uploaded At</th>
-                            <th class="nadai-col-actions" style="text-align: center;">Actions</th>
+                            <th class="nadai-col-project" data-col-index="0" style="text-align: left;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">Project Title</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="0" aria-label="Resize Project Title column"></button>
+                                </div>
+                            </th>
+                            <th class="nadai-col-funding-year" data-col-index="1" style="text-align: center;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">Funding Year</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="1" aria-label="Resize Funding Year column"></button>
+                                </div>
+                            </th>
+                            <th class="nadai-col-program" data-col-index="2" style="text-align: left;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">Program</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="2" aria-label="Resize Program column"></button>
+                                </div>
+                            </th>
+                            <th class="nadai-col-nadai-date" data-col-index="3" style="text-align: center;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">NADAI Date</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="3" aria-label="Resize NADAI Date column"></button>
+                                </div>
+                            </th>
+                            <th class="nadai-col-document" data-col-index="4" style="text-align: left;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">Document</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="4" aria-label="Resize Document column"></button>
+                                </div>
+                            </th>
+                            <th class="nadai-col-uploader" data-col-index="5" style="text-align: center;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">Uploaded By</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="5" aria-label="Resize Uploaded By column"></button>
+                                </div>
+                            </th>
+                            <th class="nadai-col-uploaded-at" data-col-index="6" style="text-align: center;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">Uploaded At</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="6" aria-label="Resize Uploaded At column"></button>
+                                </div>
+                            </th>
+                            <th class="nadai-col-actions" data-col-index="7" style="text-align: center;">
+                                <div class="nadai-th-inner">
+                                    <span class="nadai-th-label">Actions</span>
+                                    <button type="button" class="nadai-col-resize" data-col-index="7" aria-label="Resize Actions column"></button>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -852,7 +1057,6 @@
                                 <td class="nadai-col-project">
                                     <div class="nadai-project">
                                         <p class="nadai-project-title">{{ $document->project_title }}</p>
-                                        <p class="nadai-project-meta">{{ $document->municipality ?: $officeName }}{{ $document->barangay ? ', ' . $document->barangay : '' }}</p>
                                     </div>
                                 </td>
                                 <td style="text-align: center;">
@@ -871,12 +1075,10 @@
                                 <td class="nadai-col-document">
                                     <div class="nadai-file">
                                         <p class="nadai-file-name">{{ $document->original_filename }}</p>
-                                        <p class="nadai-file-meta">PDF document</p>
                                     </div>
                                 </td>
                                 <td class="nadai-col-uploader" style="text-align: center;">
                                     <span class="nadai-user">
-                                        <span class="nadai-user-avatar">{{ $uploaderInitials }}</span>
                                         <span>{{ $uploaderName !== '' ? $uploaderName : 'Unknown' }}</span>
                                     </span>
                                 </td>
@@ -977,7 +1179,7 @@
                 <div class="nadai-form-grid">
                     <div class="nadai-form-field">
                         <label for="nadai_province" class="nadai-form-label">Province</label>
-                        <select id="nadai_province" name="province" required class="nadai-form-select">
+                        <select id="nadai_province" name="province" required class="nadai-form-select nadai-searchable-select-source">
                             <option value="">Select province</option>
                             @foreach (($uploadFormOptions['provinces'] ?? []) as $provinceOption)
                                 <option value="{{ $provinceOption }}" @selected($selectedUploadProvince === $provinceOption)>{{ $provinceOption }}</option>
@@ -986,7 +1188,7 @@
                     </div>
                     <div class="nadai-form-field">
                         <label for="nadai_municipality" class="nadai-form-label">Municipality</label>
-                        <select id="nadai_municipality" name="municipality" required class="nadai-form-select">
+                        <select id="nadai_municipality" name="municipality" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search municipality">
                             <option value="">Select municipality</option>
                             @foreach ($initialMunicipalityOptions as $municipalityOption)
                                 <option value="{{ $municipalityOption }}" @selected($selectedUploadMunicipality === $municipalityOption)>{{ $municipalityOption }}</option>
@@ -995,7 +1197,7 @@
                     </div>
                     <div class="nadai-form-field">
                         <label for="nadai_barangay" class="nadai-form-label">Barangay</label>
-                        <select id="nadai_barangay" name="barangay" required class="nadai-form-select">
+                        <select id="nadai_barangay" name="barangay" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search barangay">
                             <option value="">Select barangay</option>
                             @foreach ($initialBarangayOptions as $barangayOption)
                                 <option value="{{ $barangayOption }}" @selected($selectedUploadBarangay === $barangayOption)>{{ $barangayOption }}</option>
@@ -1004,7 +1206,7 @@
                     </div>
                     <div class="nadai-form-field">
                         <label for="nadai_funding_year" class="nadai-form-label">Funding Year</label>
-                        <select id="nadai_funding_year" name="funding_year" required class="nadai-form-select">
+                        <select id="nadai_funding_year" name="funding_year" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search funding year">
                             <option value="">Select funding year</option>
                             @foreach (($uploadFormOptions['funding_years'] ?? []) as $fundingYearOption)
                                 <option value="{{ $fundingYearOption }}" @selected($selectedFundingYear === $fundingYearOption)>{{ $fundingYearOption }}</option>
@@ -1013,7 +1215,7 @@
                     </div>
                     <div class="nadai-form-field">
                         <label for="nadai_program" class="nadai-form-label">Program</label>
-                        <select id="nadai_program" name="program" required class="nadai-form-select">
+                        <select id="nadai_program" name="program" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search program">
                             <option value="">Select program</option>
                             @foreach (($uploadFormOptions['programs'] ?? []) as $programOption)
                                 <option value="{{ $programOption }}" @selected($selectedProgram === $programOption)>{{ $programDisplayMap[$programOption] ?? $programOption }}</option>
@@ -1064,7 +1266,7 @@
                     <div class="nadai-form-grid">
                         <div class="nadai-form-field">
                             <label for="edit_nadai_province_{{ $document->id }}" class="nadai-form-label">Province</label>
-                            <select id="edit_nadai_province_{{ $document->id }}" name="province" required class="nadai-form-select">
+                            <select id="edit_nadai_province_{{ $document->id }}" name="province" required class="nadai-form-select nadai-searchable-select-source">
                                 <option value="">Select province</option>
                                 @foreach (($uploadFormOptions['provinces'] ?? []) as $provinceOption)
                                     <option value="{{ $provinceOption }}" @selected((string) old('edit_document_id') === (string) $document->id ? old('province', $document->province) === $provinceOption : $document->province === $provinceOption)>{{ $provinceOption }}</option>
@@ -1073,7 +1275,7 @@
                         </div>
                         <div class="nadai-form-field">
                             <label for="edit_nadai_municipality_{{ $document->id }}" class="nadai-form-label">Municipality</label>
-                            <select id="edit_nadai_municipality_{{ $document->id }}" name="municipality" required class="nadai-form-select">
+                            <select id="edit_nadai_municipality_{{ $document->id }}" name="municipality" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search municipality">
                                 <option value="">Select municipality</option>
                                 @foreach ($editMunicipalityOptions as $municipalityOption)
                                     <option value="{{ $municipalityOption }}" @selected((string) old('edit_document_id') === (string) $document->id ? old('municipality', $document->municipality) === $municipalityOption : $document->municipality === $municipalityOption)>{{ $municipalityOption }}</option>
@@ -1082,7 +1284,7 @@
                         </div>
                         <div class="nadai-form-field">
                             <label for="edit_nadai_barangay_{{ $document->id }}" class="nadai-form-label">Barangay</label>
-                            <select id="edit_nadai_barangay_{{ $document->id }}" name="barangay" required class="nadai-form-select">
+                            <select id="edit_nadai_barangay_{{ $document->id }}" name="barangay" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search barangay">
                                 <option value="">Select barangay</option>
                                 @foreach ($editBarangayOptions as $barangayOption)
                                     <option value="{{ $barangayOption }}" @selected((string) old('edit_document_id') === (string) $document->id ? old('barangay', $document->barangay) === $barangayOption : $document->barangay === $barangayOption)>{{ $barangayOption }}</option>
@@ -1091,7 +1293,7 @@
                         </div>
                         <div class="nadai-form-field">
                             <label for="edit_nadai_funding_year_{{ $document->id }}" class="nadai-form-label">Funding Year</label>
-                            <select id="edit_nadai_funding_year_{{ $document->id }}" name="funding_year" required class="nadai-form-select">
+                            <select id="edit_nadai_funding_year_{{ $document->id }}" name="funding_year" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search funding year">
                                 <option value="">Select funding year</option>
                                 @foreach (($uploadFormOptions['funding_years'] ?? []) as $fundingYearOption)
                                     <option value="{{ $fundingYearOption }}" @selected((string) old('edit_document_id') === (string) $document->id ? old('funding_year', $document->funding_year) === $fundingYearOption : $document->funding_year === $fundingYearOption)>{{ $fundingYearOption }}</option>
@@ -1100,7 +1302,7 @@
                         </div>
                         <div class="nadai-form-field">
                             <label for="edit_nadai_program_{{ $document->id }}" class="nadai-form-label">Program</label>
-                            <select id="edit_nadai_program_{{ $document->id }}" name="program" required class="nadai-form-select">
+                            <select id="edit_nadai_program_{{ $document->id }}" name="program" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search program">
                                 <option value="">Select program</option>
                                 @foreach (($uploadFormOptions['programs'] ?? []) as $programOption)
                                     <option value="{{ $programOption }}" @selected((string) old('edit_document_id') === (string) $document->id ? old('program', $document->program) === $programOption : $document->program === $programOption)>{{ $programDisplayMap[$programOption] ?? $programOption }}</option>
@@ -1137,6 +1339,7 @@
             provinceMunicipalityMap: @json($uploadFormOptions['province_municipality_map'] ?? []),
             municipalityBarangayMap: @json($uploadFormOptions['municipality_barangay_map'] ?? []),
         };
+        const NADAI_COLUMN_WIDTHS_STORAGE_KEY = 'nadai-document-table-widths';
 
         function populateSelectOptions(selectElement, values, placeholder, selectedValue) {
             if (!selectElement) {
@@ -1163,6 +1366,8 @@
                 optionElement.selected = optionValue === normalizedSelectedValue;
                 selectElement.appendChild(optionElement);
             });
+
+            selectElement.dispatchEvent(new CustomEvent('nadai:options-updated'));
         }
 
         function rebuildNadaiBarangayOptions(municipalitySelectId, barangaySelectId, preservedMunicipality, preservedBarangay) {
@@ -1223,6 +1428,367 @@
                 config.initialMunicipality,
                 config.initialBarangay
             );
+        }
+
+        function initNadaiSearchableSelects() {
+            const sourceSelects = Array.from(document.querySelectorAll('.nadai-searchable-select-source'));
+            if (!sourceSelects.length) {
+                return;
+            }
+
+            const instances = [];
+
+            const closeAllPanels = () => {
+                instances.forEach((instance) => {
+                    instance.wrapper.classList.remove('is-open');
+                    instance.toggle.setAttribute('aria-expanded', 'false');
+                    instance.panel.hidden = true;
+                });
+            };
+
+            const buildOptions = (instance, filterValue) => {
+                const query = String(filterValue || '').trim().toLowerCase();
+                const selectedValue = String(instance.select.value || '').trim();
+                const matchingOptions = instance.options.filter((option) => option.label.toLowerCase().includes(query));
+
+                instance.optionsWrap.innerHTML = '';
+
+                if (!matchingOptions.length) {
+                    const emptyState = document.createElement('div');
+                    emptyState.className = 'nadai-searchable-select-empty';
+                    emptyState.textContent = 'No matching options';
+                    instance.optionsWrap.appendChild(emptyState);
+                    return;
+                }
+
+                matchingOptions.forEach((option) => {
+                    const optionButton = document.createElement('button');
+                    optionButton.type = 'button';
+                    optionButton.className = 'nadai-searchable-select-option';
+                    optionButton.textContent = option.label;
+                    optionButton.dataset.value = option.value;
+
+                    if (option.value === selectedValue) {
+                        optionButton.classList.add('is-selected');
+                    }
+
+                    optionButton.addEventListener('click', () => {
+                        instance.select.value = option.value;
+                        instance.toggleLabel.textContent = option.label;
+                        instance.select.dispatchEvent(new Event('change', { bubbles: true }));
+                        instance.searchInput.value = '';
+                        buildOptions(instance, '');
+                        closeAllPanels();
+                    });
+
+                    instance.optionsWrap.appendChild(optionButton);
+                });
+            };
+
+            sourceSelects.forEach((sourceSelect) => {
+                if (sourceSelect.dataset.searchableReady === '1') {
+                    return;
+                }
+
+                sourceSelect.dataset.searchableReady = '1';
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'nadai-searchable-select';
+
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'nadai-searchable-select-toggle';
+                toggle.setAttribute('aria-haspopup', 'listbox');
+                toggle.setAttribute('aria-expanded', 'false');
+
+                const toggleLabel = document.createElement('span');
+                toggleLabel.textContent = 'Select option';
+
+                const toggleIcon = document.createElement('span');
+                toggleIcon.className = 'nadai-searchable-select-toggle-icon';
+                toggleIcon.innerHTML = '<i class="fas fa-chevron-down"></i>';
+
+                toggle.appendChild(toggleLabel);
+                toggle.appendChild(toggleIcon);
+
+                const panel = document.createElement('div');
+                panel.className = 'nadai-searchable-select-panel';
+                panel.hidden = true;
+
+                const searchWrap = document.createElement('div');
+                searchWrap.className = 'nadai-searchable-select-search';
+
+                const searchInput = document.createElement('input');
+                searchInput.type = 'search';
+                searchInput.placeholder = sourceSelect.dataset.searchPlaceholder || 'Search options';
+                searchInput.autocomplete = 'off';
+
+                const searchIcon = document.createElement('i');
+                searchIcon.className = 'fas fa-search';
+
+                searchWrap.appendChild(searchInput);
+                searchWrap.appendChild(searchIcon);
+
+                const optionsWrap = document.createElement('div');
+                optionsWrap.className = 'nadai-searchable-select-options';
+
+                panel.appendChild(searchWrap);
+                panel.appendChild(optionsWrap);
+                wrapper.appendChild(toggle);
+                wrapper.appendChild(panel);
+
+                sourceSelect.insertAdjacentElement('afterend', wrapper);
+
+                const instance = {
+                    options: [],
+                    optionsWrap,
+                    panel,
+                    searchInput,
+                    select: sourceSelect,
+                    toggle,
+                    toggleLabel,
+                    wrapper,
+                };
+
+                const syncFromSelect = () => {
+                    instance.options = Array.from(sourceSelect.options)
+                        .map((option) => ({
+                            value: String(option.value || '').trim(),
+                            label: String(option.textContent || '').trim(),
+                        }))
+                        .filter((option) => option.label !== '');
+
+                    const selectedOption = instance.options.find((option) => option.value === String(sourceSelect.value || '').trim());
+                    toggleLabel.textContent = selectedOption?.label || instance.options[0]?.label || 'Select option';
+                    buildOptions(instance, searchInput.value);
+                };
+
+                syncFromSelect();
+                instances.push(instance);
+
+                toggle.addEventListener('click', () => {
+                    const shouldOpen = panel.hidden;
+                    closeAllPanels();
+
+                    if (!shouldOpen) {
+                        return;
+                    }
+
+                    wrapper.classList.add('is-open');
+                    toggle.setAttribute('aria-expanded', 'true');
+                    panel.hidden = false;
+                    searchInput.focus();
+                    searchInput.select();
+                });
+
+                searchInput.addEventListener('input', () => {
+                    buildOptions(instance, searchInput.value);
+                });
+
+                searchInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeAllPanels();
+                        toggle.focus();
+                    }
+                });
+
+                sourceSelect.addEventListener('change', syncFromSelect);
+                sourceSelect.addEventListener('nadai:options-updated', syncFromSelect);
+            });
+
+            document.addEventListener('click', (event) => {
+                if (instances.some((instance) => instance.wrapper.contains(event.target))) {
+                    return;
+                }
+
+                closeAllPanels();
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    closeAllPanels();
+                }
+            });
+        }
+
+        function initNadaiColumnResizing() {
+            const table = document.getElementById('nadaiDocumentsTable');
+            if (!table) {
+                return;
+            }
+
+            const colElements = Array.from(table.querySelectorAll('colgroup col[data-col-index]'));
+            const resizeHandles = Array.from(table.querySelectorAll('.nadai-col-resize[data-col-index]'));
+            if (!colElements.length || !resizeHandles.length) {
+                return;
+            }
+
+            const minWidthByIndex = {
+                0: 150,
+                1: 85,
+                2: 95,
+                3: 110,
+                4: 150,
+                5: 120,
+                6: 130,
+                7: 140,
+            };
+
+            const setColumnWidth = (index, width) => {
+                const col = colElements.find((element) => Number(element.dataset.colIndex) === index);
+                if (!col) {
+                    return;
+                }
+
+                const minWidth = minWidthByIndex[index] || 100;
+                col.style.width = `${Math.max(minWidth, Math.round(width))}px`;
+            };
+
+            const persistWidths = () => {
+                const widths = {};
+                colElements.forEach((col) => {
+                    const index = Number(col.dataset.colIndex);
+                    widths[index] = Math.round(col.getBoundingClientRect().width);
+                });
+
+                try {
+                    window.localStorage.setItem(NADAI_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(widths));
+                } catch (error) {
+                    // Ignore storage failures and keep resizing functional.
+                }
+            };
+
+            const applyStoredWidths = () => {
+                try {
+                    const rawWidths = window.localStorage.getItem(NADAI_COLUMN_WIDTHS_STORAGE_KEY);
+                    if (!rawWidths) {
+                        return;
+                    }
+
+                    const parsedWidths = JSON.parse(rawWidths);
+                    colElements.forEach((col) => {
+                        const index = Number(col.dataset.colIndex);
+                        const width = Number(parsedWidths?.[index] || 0);
+                        if (width > 0) {
+                            setColumnWidth(index, width);
+                        }
+                    });
+                } catch (error) {
+                    // Ignore malformed storage data.
+                }
+            };
+
+            const applyMeasuredWidths = () => {
+                const headerCells = Array.from(table.querySelectorAll('thead th[data-col-index]'));
+                headerCells.forEach((headerCell) => {
+                    const index = Number(headerCell.dataset.colIndex);
+                    const measuredWidth = headerCell.getBoundingClientRect().width;
+                    if (measuredWidth > 0) {
+                        setColumnWidth(index, measuredWidth);
+                    }
+                });
+            };
+
+            const fitColumnsToContainer = () => {
+                const wrap = table.closest('.nadai-table-wrap');
+                if (!wrap) {
+                    return;
+                }
+
+                const availableWidth = Math.max(0, wrap.clientWidth - 4);
+                if (availableWidth <= 0) {
+                    return;
+                }
+
+                const widths = colElements.map((col) => Math.round(col.getBoundingClientRect().width));
+                let totalWidth = widths.reduce((sum, width) => sum + width, 0);
+                if (totalWidth <= availableWidth) {
+                    return;
+                }
+
+                let nextWidths = [...widths];
+                let guard = 0;
+
+                while (totalWidth > availableWidth && guard < 8) {
+                    const shrinkableIndexes = nextWidths
+                        .map((width, index) => ({ width, index, shrinkable: width - (minWidthByIndex[index] || 100) }))
+                        .filter((entry) => entry.shrinkable > 0);
+
+                    if (!shrinkableIndexes.length) {
+                        break;
+                    }
+
+                    const deficit = totalWidth - availableWidth;
+                    const totalShrinkable = shrinkableIndexes.reduce((sum, entry) => sum + entry.shrinkable, 0);
+
+                    shrinkableIndexes.forEach((entry) => {
+                        const minWidth = minWidthByIndex[entry.index] || 100;
+                        const proportionalReduction = Math.ceil((deficit * entry.shrinkable) / totalShrinkable);
+                        nextWidths[entry.index] = Math.max(minWidth, entry.width - proportionalReduction);
+                    });
+
+                    totalWidth = nextWidths.reduce((sum, width) => sum + width, 0);
+                    guard += 1;
+                }
+
+                if (totalWidth > availableWidth) {
+                    for (let index = nextWidths.length - 1; index >= 0 && totalWidth > availableWidth; index -= 1) {
+                        const minWidth = minWidthByIndex[index] || 100;
+                        while (nextWidths[index] > minWidth && totalWidth > availableWidth) {
+                            nextWidths[index] -= 1;
+                            totalWidth -= 1;
+                        }
+                    }
+                }
+
+                nextWidths.forEach((width, index) => {
+                    setColumnWidth(index, width);
+                });
+            };
+
+            applyMeasuredWidths();
+            applyStoredWidths();
+            fitColumnsToContainer();
+
+            resizeHandles.forEach((handle) => {
+                handle.addEventListener('mousedown', function (event) {
+                    event.preventDefault();
+
+                    const index = Number(this.dataset.colIndex);
+                    const col = colElements.find((element) => Number(element.dataset.colIndex) === index);
+                    if (!col) {
+                        return;
+                    }
+
+                    const startX = event.clientX;
+                    const startWidth = col.getBoundingClientRect().width;
+                    const minWidth = minWidthByIndex[index] || 100;
+
+                    table.classList.add('is-resizing');
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+
+                    const onMouseMove = (moveEvent) => {
+                        const deltaX = moveEvent.clientX - startX;
+                        setColumnWidth(index, Math.max(minWidth, startWidth + deltaX));
+                    };
+
+                    const stopResize = () => {
+                        table.classList.remove('is-resizing');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                        window.removeEventListener('mousemove', onMouseMove);
+                        window.removeEventListener('mouseup', stopResize);
+                        fitColumnsToContainer();
+                        persistWidths();
+                    };
+
+                    window.addEventListener('mousemove', onMouseMove);
+                    window.addEventListener('mouseup', stopResize);
+                });
+            });
+
+            window.addEventListener('resize', fitColumnsToContainer);
         }
 
         function openNadaiUploadModal() {
@@ -1311,6 +1877,9 @@
                 }
             });
         });
+
+        initNadaiSearchableSelects();
+        initNadaiColumnResizing();
 
         @if ($canUpload)
             initNadaiLocationForm({
