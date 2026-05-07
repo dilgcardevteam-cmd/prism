@@ -312,66 +312,34 @@ class NadaiManagementController extends Controller
 
     private function buildIndexFilterOptions($user, array $officeRows): array
     {
-        $configuredProvinces = collect(ProjectLocationFilterHelper::buildConfiguredProvinceLabels())
-            ->map(fn ($value) => trim((string) $value))
-            ->filter()
+        $scopedOfficeRows = collect($officeRows)
+            ->map(function (array $row): array {
+                return [
+                    'province' => trim((string) ($row['province'] ?? '')),
+                    'city_municipality' => trim((string) ($row['city_municipality'] ?? '')),
+                ];
+            })
+            ->filter(fn (array $row) => $row['province'] !== '' && $row['city_municipality'] !== '')
             ->values();
 
-        $provinceMunicipalities = ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy(
-            $configuredProvinces->all()
-        );
-
-        if ($user && $user->isLguScopedUser()) {
-            $matchedProvince = trim((string) ($user->province ?? ''));
-            $matchedOffice = trim((string) ($user->office ?? ''));
-
-            if ($matchedProvince !== '') {
-                $configuredProvinces = $configuredProvinces
-                    ->filter(fn ($province) => strcasecmp((string) $province, $matchedProvince) === 0)
-                    ->values();
-            }
-
-            if ($matchedProvince !== '' && array_key_exists($matchedProvince, $provinceMunicipalities)) {
-                $provinceMunicipalities = [
-                    $matchedProvince => collect($provinceMunicipalities[$matchedProvince] ?? [])
-                        ->filter(fn ($municipality) => $matchedOffice === '' || strcasecmp((string) $municipality, $matchedOffice) === 0)
-                        ->values()
-                        ->all(),
-                ];
-            } else {
-                $provinceMunicipalities = [];
-            }
-        } elseif ($user && $user->isDilgUser() && !empty($user->province) && $user->province !== 'Regional Office') {
-            $matchedProvince = trim((string) $user->province);
-
-            $configuredProvinces = $configuredProvinces
-                ->filter(fn ($province) => strcasecmp((string) $province, $matchedProvince) === 0)
-                ->values();
-
-            if ($matchedProvince !== '' && array_key_exists($matchedProvince, $provinceMunicipalities)) {
-                $provinceMunicipalities = [
-                    $matchedProvince => $provinceMunicipalities[$matchedProvince],
-                ];
-            } else {
-                $provinceMunicipalities = [];
-            }
-        }
-
-        if ($configuredProvinces->isEmpty()) {
-            $scopedOfficeRows = collect($officeRows);
-
-            return [
-                'provinces' => $scopedOfficeRows->pluck('province')->filter()->unique()->sort()->values()->all(),
-                'provinceMunicipalities' => $scopedOfficeRows
-                    ->groupBy('province')
-                    ->map(fn ($rows) => $rows->pluck('city_municipality')->filter()->values()->all())
-                    ->toArray(),
-            ];
-        }
-
         return [
-            'provinces' => $configuredProvinces->all(),
-            'provinceMunicipalities' => $provinceMunicipalities,
+            'provinces' => $scopedOfficeRows
+                ->pluck('province')
+                ->unique()
+                ->sort()
+                ->values()
+                ->all(),
+            'provinceMunicipalities' => $scopedOfficeRows
+                ->groupBy('province')
+                ->map(function ($rows) {
+                    return $rows->pluck('city_municipality')
+                        ->filter()
+                        ->unique()
+                        ->sort()
+                        ->values()
+                        ->all();
+                })
+                ->toArray(),
         ];
     }
 

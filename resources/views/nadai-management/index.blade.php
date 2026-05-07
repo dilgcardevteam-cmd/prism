@@ -14,7 +14,7 @@
     if ($selectedProvinceFilter !== '' && array_key_exists($selectedProvinceFilter, $provinceMunicipalities)) {
         $cityOptions = collect($provinceMunicipalities[$selectedProvinceFilter] ?? []);
     } else {
-        $cityOptions = collect($provinceMunicipalities)->flatten(1);
+        $cityOptions = collect();
     }
     $cityOptions = $cityOptions
         ->map(fn ($city) => trim((string) $city))
@@ -817,7 +817,7 @@
 
         const values = selectedProvince && nadaiProvinceMunicipalities[selectedProvince]
             ? nadaiProvinceMunicipalities[selectedProvince]
-            : Object.values(nadaiProvinceMunicipalities).flat();
+            : [];
 
         const normalizedValues = [...new Set(
             (values || [])

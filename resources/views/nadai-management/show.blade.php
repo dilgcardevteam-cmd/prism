@@ -262,74 +262,95 @@
 
     .nadai-table-wrap {
         overflow-x: auto;
-        padding: 0 10px 10px;
+        padding: 14px 14px 16px;
+        background: linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
     }
 
     .nadai-table {
         width: 100%;
-        min-width: 1120px;
-        table-layout: fixed;
+        min-width: 1080px;
+        table-layout: auto;
         border-collapse: separate;
-        border-spacing: 0;
+        border-spacing: 0 10px;
     }
 
     .nadai-table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        padding: 15px 16px;
-        background: #eff6ff;
+        padding: 6px 14px 10px;
+        background: transparent;
         color: #1e3a8a;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 800;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        border-bottom: 1px solid #dbeafe;
+        border-bottom: none;
     }
 
     .nadai-table tbody tr {
-        transition: background-color 0.16s ease;
-    }
-
-    .nadai-table tbody tr:nth-child(odd) {
-        background: rgba(248, 250, 252, 0.55);
+        transition: transform 0.16s ease;
     }
 
     .nadai-table tbody tr:hover {
-        background: #eff6ff;
+        transform: translateY(-1px);
     }
 
     .nadai-table tbody td {
-        padding: 16px;
-        border-bottom: 1px solid #e2e8f0;
+        padding: 18px 14px;
+        border-top: 1px solid #dbe7f5;
+        border-bottom: 1px solid #dbe7f5;
+        background: rgba(255, 255, 255, 0.96);
         color: #0f172a;
         font-size: 13px;
-        vertical-align: middle;
+        vertical-align: top;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
     }
 
-    .nadai-table tbody tr:last-child td {
-        border-bottom: none;
+    .nadai-table tbody td:first-child {
+        border-left: 1px solid #dbe7f5;
+        border-top-left-radius: 18px;
+        border-bottom-left-radius: 18px;
+    }
+
+    .nadai-table tbody td:last-child {
+        border-right: 1px solid #dbe7f5;
+        border-top-right-radius: 18px;
+        border-bottom-right-radius: 18px;
+    }
+
+    .nadai-table tbody tr:hover td {
+        background: #f8fbff;
     }
 
     .nadai-project {
         display: grid;
-        gap: 5px;
+        gap: 7px;
     }
 
     .nadai-col-project {
-        width: 28%;
+        width: 22%;
+    }
+
+    .nadai-col-document {
+        width: 19%;
+    }
+
+    .nadai-col-uploader {
+        width: 13%;
+    }
+
+    .nadai-col-uploaded-at {
+        width: 13%;
     }
 
     .nadai-col-actions {
-        width: 170px;
+        width: 176px;
     }
 
     .nadai-project-title {
         margin: 0;
         color: #0f172a;
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 800;
-        line-height: 1.5;
+        line-height: 1.45;
         word-break: break-word;
     }
 
@@ -337,14 +358,15 @@
         margin: 0;
         color: #64748b;
         font-size: 12px;
+        font-weight: 600;
     }
 
     .nadai-chip {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 28px;
-        padding: 0 10px;
+        min-height: 30px;
+        padding: 0 12px;
         border-radius: 999px;
         background: #e0f2fe;
         color: #075985;
@@ -362,14 +384,16 @@
 
     .nadai-file {
         display: grid;
-        gap: 4px;
+        gap: 6px;
     }
 
     .nadai-file-name {
         margin: 0;
         color: #0f172a;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 700;
+        line-height: 1.45;
+        word-break: break-word;
     }
 
     .nadai-file-meta {
@@ -379,10 +403,10 @@
     }
 
     .nadai-user {
-        display: inline-flex;
-        align-items: center;
+        display: inline-grid;
+        justify-items: center;
         gap: 8px;
-        justify-content: center;
+        text-align: center;
     }
 
     .nadai-user-avatar {
@@ -400,6 +424,7 @@
 
     .nadai-date {
         font-weight: 700;
+        line-height: 1.5;
         white-space: nowrap;
     }
 
@@ -453,6 +478,9 @@
         padding: 54px 24px;
         text-align: center;
         color: #64748b;
+        background: #fff;
+        border: 1px dashed #cbd5e1;
+        border-radius: 18px;
     }
 
     .nadai-empty i {
@@ -788,15 +816,25 @@
 
             <div class="nadai-table-wrap">
                 <table class="nadai-table">
+                    <colgroup>
+                        <col class="nadai-col-project">
+                        <col>
+                        <col>
+                        <col>
+                        <col class="nadai-col-document">
+                        <col class="nadai-col-uploader">
+                        <col class="nadai-col-uploaded-at">
+                        <col class="nadai-col-actions">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th class="nadai-col-project" style="text-align: left;">Project Title</th>
                             <th style="text-align: center;">Funding Year</th>
                             <th style="text-align: left;">Program</th>
                             <th style="text-align: center;">NADAI Date</th>
-                            <th style="text-align: left;">Document</th>
-                            <th style="text-align: center;">Uploaded By</th>
-                            <th style="text-align: center;">Uploaded At</th>
+                            <th class="nadai-col-document" style="text-align: left;">Document</th>
+                            <th class="nadai-col-uploader" style="text-align: center;">Uploaded By</th>
+                            <th class="nadai-col-uploaded-at" style="text-align: center;">Uploaded At</th>
                             <th class="nadai-col-actions" style="text-align: center;">Actions</th>
                         </tr>
                     </thead>
@@ -830,19 +868,19 @@
                                 <td style="text-align: center;">
                                     <span class="nadai-date">{{ $document->nadai_date?->format('M d, Y') ?: '-' }}</span>
                                 </td>
-                                <td>
+                                <td class="nadai-col-document">
                                     <div class="nadai-file">
                                         <p class="nadai-file-name">{{ $document->original_filename }}</p>
                                         <p class="nadai-file-meta">PDF document</p>
                                     </div>
                                 </td>
-                                <td style="text-align: center;">
+                                <td class="nadai-col-uploader" style="text-align: center;">
                                     <span class="nadai-user">
                                         <span class="nadai-user-avatar">{{ $uploaderInitials }}</span>
                                         <span>{{ $uploaderName !== '' ? $uploaderName : 'Unknown' }}</span>
                                     </span>
                                 </td>
-                                <td style="text-align: center;">
+                                <td class="nadai-col-uploaded-at" style="text-align: center;">
                                     <span class="nadai-date">
                                         {{ $document->uploaded_at ? $document->uploaded_at->setTimezone(config('app.timezone'))->format('M d, Y h:i A') : '-' }}
                                     </span>
