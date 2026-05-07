@@ -90,7 +90,7 @@ const DRAWER_MENU_ITEMS = [
   },
   {
     key: "pre-implementation-documents",
-    label: "Pre-Implementation Documents",
+    label: "NADAI Management",
     icon: "folder",
   },
   {
@@ -112,6 +112,12 @@ const DRAWER_MENU_ITEMS = [
     key: "utilities",
     label: "Utilities",
     icon: "tool",
+    route: APP_ROUTES.utilities,
+  },
+    {
+    key: "activity-logs",
+    label: "Activity Logs",
+    icon: "clock",
     route: APP_ROUTES.utilities,
   },
   {
