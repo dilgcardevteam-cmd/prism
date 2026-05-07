@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { Image, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, Image, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import * as ImagePicker from "expo-image-picker";
@@ -23,6 +23,8 @@ const GALLERY_FILTER_OPTIONS = [
   "Completed",
   "During",
 ];
+
+const GALLERY_SECTION_ORDER = GALLERY_FILTER_OPTIONS.filter((option) => option !== "All");
 
 const BRAND = {
   primary: "#0f2f7a",
@@ -126,6 +128,98 @@ function FilterDropdown({ value, options, onChange }) {
   );
 }
 
+const GalleryImageTile = memo(function GalleryImageTile({ image, onOpenViewer, onOpenLocation, onDelete, tileWidth }) {
+  return (
+    <Pressable
+      onPress={() => onOpenLocation(image)}
+      accessibilityRole="button"
+      accessibilityLabel="Open image location"
+      className="relative mb-3 overflow-hidden rounded-2xl border border-[#d3dff3] bg-[#f8fbff]"
+      style={{ width: tileWidth }}
+    >
+      <Pressable
+        onPress={(event) => {
+          event.stopPropagation?.();
+          onOpenViewer(image);
+        }}
+        className="absolute right-2 top-2 z-20 h-8 w-8 items-center justify-center rounded-full border border-[#d1ddf3] bg-white/95"
+        accessibilityRole="button"
+        accessibilityLabel="Preview full image"
+      >
+        <Feather name="eye" size={14} color="#0f2f7a" />
+      </Pressable>
+      <Pressable
+        onPress={(event) => {
+          event.stopPropagation?.();
+          onDelete(image);
+        }}
+        className="absolute left-2 top-2 z-20 h-8 w-8 items-center justify-center rounded-full border border-[#f5d4d4] bg-white/95"
+        accessibilityRole="button"
+        accessibilityLabel="Delete image"
+      >
+        <Feather name="trash-2" size={14} color="#dc2626" />
+      </Pressable>
+      <Image
+        source={{ uri: image.imageUrl }}
+        className="h-32 w-full bg-[#e2e8f0]"
+        resizeMode="cover"
+        resizeMethod={Platform.OS === "android" ? "resize" : "auto"}
+        fadeDuration={0}
+      />
+      <View className="px-3 pb-3 pt-2">
+        <Text className="text-[11px] text-[#21437f]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+          {image.category || "During"}
+        </Text>
+      </View>
+    </Pressable>
+  );
+});
+
+const GalleryStageSection = memo(function GalleryStageSection({ title, images, onOpenViewer, onOpenLocation, onDelete, tileWidth }) {
+  if (!Array.isArray(images) || images.length === 0) {
+    return null;
+  }
+
+  return (
+    <View className="mb-5">
+      <View className="mb-3 flex-row items-center">
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+        <Text className="mx-3 text-[11px] uppercase tracking-[0.9px] text-[#5b719a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+          {title}
+        </Text>
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+      </View>
+
+      <View className="flex-row flex-wrap justify-between">
+        {images.map((image) => (
+          <GalleryImageTile
+            key={String(image.id)}
+            image={image}
+            onOpenViewer={onOpenViewer}
+            onOpenLocation={onOpenLocation}
+            onDelete={onDelete}
+            tileWidth={tileWidth}
+          />
+        ))}
+      </View>
+    </View>
+  );
+});
+
+const GalleryAllHeader = memo(function GalleryAllHeader({ count }) {
+  return (
+    <View className="mb-5">
+      <View className="mb-3 flex-row items-center">
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+        <Text className="mx-3 text-[11px] uppercase tracking-[0.9px] text-[#5b719a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+          All ({count})
+        </Text>
+        <View className="h-px flex-1 bg-[#d7e2f5]" />
+      </View>
+    </View>
+  );
+});
+
 export default function Gallery({ project }) {
   const { width } = useWindowDimensions();
   const router = useRouter();
@@ -146,6 +240,10 @@ export default function Gallery({ project }) {
   const [toast, setToast] = useState({ visible: false, type: "info", message: "" });
   const [serverImages, setServerImages] = useState(() => normalizeGalleryImages(project?.galleryImages));
   const [deviceLocation, setDeviceLocation] = useState({ latitude: null, longitude: null, accuracy: null });
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [imageToDelete, setImageToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isGalleryRefreshing, setIsGalleryRefreshing] = useState(false);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -154,7 +252,7 @@ export default function Gallery({ project }) {
   const savedTranslateY = useSharedValue(0);
   const projectId = Number(project?.id || 0);
   const stageOptions = useMemo(
-    () => GALLERY_FILTER_OPTIONS.filter((option) => option !== "All"),
+    () => GALLERY_SECTION_ORDER,
     []
   );
   const normalizedProjectGallery = useMemo(
@@ -164,6 +262,8 @@ export default function Gallery({ project }) {
   const galleryImages = useMemo(() => serverImages, [serverImages]);
   const isCompactScreen = width < 360;
   const imageTileWidth = isCompactScreen ? "100%" : "48.5%";
+  const projectLookupKey = String(project?.id ?? project?.code ?? "").trim();
+  const projectCodeLookupKey = String(project?.code ?? "").trim();
 
   const showToast = (type, message) => {
     setToast({ visible: true, type, message: String(message || "") });
@@ -172,6 +272,60 @@ export default function Gallery({ project }) {
   useEffect(() => {
     setServerImages(normalizedProjectGallery);
   }, [project?.id, normalizedProjectGallery]);
+
+  const refreshGalleryData = useCallback(
+    async ({ showSpinner = true } = {}) => {
+      if (!projectLookupKey && !projectCodeLookupKey) {
+        setServerImages(normalizedProjectGallery);
+        return normalizedProjectGallery;
+      }
+
+      if (showSpinner) {
+        setIsGalleryRefreshing(true);
+      }
+
+      try {
+        const queryParams = new URLSearchParams();
+        queryParams.set("per_page", "50");
+        queryParams.set("include_filters", "1");
+
+        const payload = await fetchJsonWithFallback(`/api/mobile/locally-funded?${queryParams.toString()}`, {}, { timeout: 15000 });
+        const rows = Array.isArray(payload?.data) ? payload.data : [];
+        const refreshedProjectRow = rows.find((row) => {
+          const normalizedId = String(row?.lfp_id ?? row?.id ?? "").trim();
+          const normalizedCode = String(row?.subaybayan_project_code ?? row?.code ?? "").trim();
+
+          return (
+            normalizedId === projectLookupKey ||
+            normalizedCode === projectLookupKey ||
+            normalizedCode === projectCodeLookupKey
+          );
+        });
+
+        const refreshedImages = normalizeGalleryImages(refreshedProjectRow?.gallery_images || []);
+        setServerImages(refreshedImages);
+        return refreshedImages;
+      } catch (error) {
+        if (project?.galleryImages) {
+          const fallbackImages = normalizeGalleryImages(project.galleryImages);
+          setServerImages(fallbackImages);
+          return fallbackImages;
+        }
+
+        showToast("error", error?.message || "Unable to refresh gallery right now.");
+        return [];
+      } finally {
+        if (showSpinner) {
+          setIsGalleryRefreshing(false);
+        }
+      }
+    },
+    [fetchJsonWithFallback, normalizedProjectGallery, project?.galleryImages, projectCodeLookupKey, projectLookupKey]
+  );
+
+  useEffect(() => {
+    refreshGalleryData({ showSpinner: false });
+  }, [project?.id, refreshGalleryData]);
 
   useEffect(() => {
     const requestLocationPermission = async () => {
@@ -249,6 +403,17 @@ export default function Gallery({ project }) {
     return galleryImages.filter((image) => image.category === selectedFilter);
   }, [galleryImages, selectedFilter]);
 
+  const groupedGallerySections = useMemo(() => {
+    if (selectedFilter !== "All") {
+      return [];
+    }
+
+    return GALLERY_SECTION_ORDER.map((stage) => ({
+      stage,
+      images: galleryImages.filter((image) => image.category === stage),
+    })).filter((section) => section.images.length > 0);
+  }, [galleryImages, selectedFilter]);
+
   const openViewer = (image) => {
     setSelectedImageUrl(String(image?.imageUrl || ""));
     setSelectedImageLabel(String(image?.category || "Image"));
@@ -284,19 +449,6 @@ export default function Gallery({ project }) {
 
   const closeViewer = () => {
     setIsViewerOpen(false);
-  };
-
-  const appendServerImage = (image) => {
-    const normalized = normalizeGalleryImages([image]);
-    if (normalized.length === 0) {
-      return;
-    }
-
-    setServerImages((current) => {
-      const existingIds = new Set(current.map((item) => String(item.id)));
-      const next = normalized.filter((item) => !existingIds.has(String(item.id)));
-      return [...next, ...current];
-    });
   };
 
   const resolveStageFromCurrentFilter = () => {
@@ -368,17 +520,7 @@ export default function Gallery({ project }) {
       throw new Error("Upload succeeded but response was invalid.");
     }
 
-    appendServerImage({
-      id: uploaded.id,
-      category: uploaded.category || safeStage,
-      image_url: uploaded.image_url,
-      uploaded_by: uploaded.uploaded_by ?? null,
-      uploaded_by_name: uploaded.uploaded_by_name ?? null,
-      latitude: uploaded.latitude ?? null,
-      longitude: uploaded.longitude ?? null,
-      accuracy: uploaded.accuracy ?? null,
-      created_at: uploaded.created_at || null,
-    });
+    await refreshGalleryData({ showSpinner: false });
 
     return payload;
   };
@@ -391,9 +533,11 @@ export default function Gallery({ project }) {
     setIsUploadConfirmationOpen(false);
   };
 
-  const closeAddImageSheet = () => {
+  const closeAddImageSheet = (shouldReset = true) => {
     setIsAddImageSheetOpen(false);
-    resetAddImageFlow();
+    if (shouldReset) {
+      resetAddImageFlow();
+    }
   };
 
   const cancelAddImageSheet = () => {
@@ -408,6 +552,7 @@ export default function Gallery({ project }) {
   const goToUploadFormStep = () => {
     setAddImageSheetStep("upload-form");
     setUploadFormErrors({ photo: "", stage: "" });
+    setUploadPhotoStage(resolveStageFromCurrentFilter());
   };
 
   const pickPhotoForUploadForm = async () => {
@@ -459,6 +604,7 @@ export default function Gallery({ project }) {
       return;
     }
 
+    setIsAddImageSheetOpen(false);
     setIsUploadConfirmationOpen(true);
     // showToast("info", "Please confirm upload.");
   };
@@ -481,6 +627,7 @@ export default function Gallery({ project }) {
       showToast("success", "Image uploaded successfully.");
     } catch (error) {
       setIsUploadConfirmationOpen(false);
+      setIsAddImageSheetOpen(true);
       showToast("error", error?.message || "Upload failed. Please try again.");
     } finally {
       setIsUploading(false);
@@ -524,6 +671,108 @@ export default function Gallery({ project }) {
     }
   };
 
+  const deleteGalleryImageFromServer = async (imageId) => {
+    if (!projectId || !imageId) {
+      throw new Error("Missing project or image ID for deletion.");
+    }
+
+    const payload = await fetchJsonWithFallback(
+      `/api/mobile/locally-funded/${projectId}/gallery/${imageId}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+    return payload;
+  };
+
+  const handleDeleteImage = (image) => {
+    setImageToDelete(image);
+    setDeleteConfirmationOpen(true);
+  };
+
+  const confirmDeleteImage = async () => {
+    if (!imageToDelete || isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await deleteGalleryImageFromServer(imageToDelete.id);
+
+      await refreshGalleryData({ showSpinner: false });
+
+      setDeleteConfirmationOpen(false);
+      setImageToDelete(null);
+      showToast("success", "Image deleted successfully.");
+    } catch (error) {
+      showToast("error", error?.message || "Failed to delete image. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const cancelDeleteImage = () => {
+    setDeleteConfirmationOpen(false);
+    setImageToDelete(null);
+  };
+
+  const renderGalleryImage = useCallback(
+    ({ item }) => (
+      <GalleryImageTile
+        image={item}
+        onOpenViewer={openViewer}
+        onOpenLocation={openImageLocation}
+        onDelete={handleDeleteImage}
+        tileWidth={imageTileWidth}
+      />
+    ),
+    [handleDeleteImage, imageTileWidth, openImageLocation, openViewer]
+  );
+
+  const keyExtractor = useCallback((item) => String(item.id), []);
+
+  const listHeader = useMemo(
+    () => (
+      <Pressable
+        onPress={openAddImageSheet}
+        className="mb-3 items-center justify-center rounded-2xl border border-[#b9cdf0] bg-[#edf4ff] px-3 py-4"
+        style={{ width: imageTileWidth, minHeight: 156 }}
+        accessibilityRole="button"
+        accessibilityLabel="Add image"
+      >
+        <View className="h-11 w-11 items-center justify-center rounded-full border border-[#adc2ec] bg-white">
+          <Feather name="plus" size={22} color="#0f2f7a" />
+        </View>
+        <Text className="mt-3 text-[13px] text-[#0f2f7a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
+          Add image
+        </Text>
+        <Text className="mt-1 text-center text-[11px] text-[#6077a4]" style={{ fontFamily: "Montserrat" }}>
+          Upload or capture site progress
+        </Text>
+      </Pressable>
+    ),
+    [imageTileWidth]
+  );
+
+  const listEmpty = useMemo(
+    () => (
+      <View className="items-center rounded-2xl border border-dashed border-[#c7d8f2] bg-[#f8fbff] px-4 py-5">
+        <View className="mb-2 h-10 w-10 items-center justify-center rounded-full bg-[#e9f1ff]">
+          <Feather name="image" size={18} color="#41619e" />
+        </View>
+        <Text className="text-[12px] text-[#5c719b]" style={{ fontFamily: "Montserrat" }}>
+          No images found for {selectedFilter}.
+        </Text>
+      </View>
+    ),
+    [selectedFilter]
+  );
+
+  const isAllFilter = selectedFilter === "All";
+  const handlePullToRefresh = useCallback(() => refreshGalleryData({ showSpinner: true }), [refreshGalleryData]);
+
   return (
     <View className="mt-3 overflow-hidden rounded-3xl border border-[#d7e2f5] bg-white">
       <View className="px-4 pt-4" style={{ backgroundColor: BRAND.primarySoft }}>
@@ -549,81 +798,58 @@ export default function Gallery({ project }) {
         </View>
       </View>
 
-      <View className="px-4 pb-4 pt-4">
-      <FloatingToast
-        visible={toast.visible}
-        type={toast.type}
-        message={toast.message}
-        duration={2600}
-        onClose={() => setToast((current) => ({ ...current, visible: false }))}
-      />
+      <ScrollView
+        className="px-4 pb-4 pt-4"
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isGalleryRefreshing} onRefresh={handlePullToRefresh} tintColor={BRAND.primary} colors={[BRAND.primary]} />}
+      >
+        <FloatingToast
+          visible={toast.visible}
+          type={toast.type}
+          message={toast.message}
+          duration={2600}
+          onClose={() => setToast((current) => ({ ...current, visible: false }))}
+        />
 
-      <View className="mt-1">
-        <View className="flex-row flex-wrap justify-between">
-          <Pressable
-            onPress={openAddImageSheet}
-            className="mb-3 items-center justify-center rounded-2xl border border-[#b9cdf0] bg-[#edf4ff] px-3 py-4"
-            style={{ width: imageTileWidth, minHeight: 156 }}
-            accessibilityRole="button"
-            accessibilityLabel="Add image"
-          >
-            <View className="h-11 w-11 items-center justify-center rounded-full border border-[#adc2ec] bg-white">
-              <Feather name="plus" size={22} color="#0f2f7a" />
-            </View>
-            <Text className="mt-3 text-[13px] text-[#0f2f7a]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-              Add image
-            </Text>
-            <Text className="mt-1 text-center text-[11px] text-[#6077a4]" style={{ fontFamily: "Montserrat" }}>
-              Upload or capture site progress
-            </Text>
-          </Pressable>
-
-          {filteredImages.map((image) => (
-            <Pressable
-              key={String(image.id)}
-              onPress={() => openImageLocation(image)}
-              accessibilityRole="button"
-              accessibilityLabel="Open image location"
-              className="relative mb-3 overflow-hidden rounded-2xl border border-[#d3dff3] bg-[#f8fbff]"
-              style={{ width: imageTileWidth }}
-            >
-              <Pressable
-                onPress={(event) => {
-                  event.stopPropagation?.();
-                  openViewer(image);
-                }}
-                className="absolute right-2 top-2 z-20 h-8 w-8 items-center justify-center rounded-full border border-[#d1ddf3] bg-white/95"
-                accessibilityRole="button"
-                accessibilityLabel="Preview full image"
-              >
-                <Feather name="eye" size={14} color="#0f2f7a" />
-              </Pressable>
-              <Image
-                source={{ uri: image.imageUrl }}
-                className="h-32 w-full bg-[#e2e8f0]"
-                resizeMode="cover"
-              />
-              <View className="px-3 pb-3 pt-2">
-                <Text className="text-[11px] text-[#21437f]" style={{ fontFamily: "Montserrat-SemiBold" }}>
-                  {image.category || "During"}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        {filteredImages.length === 0 ? (
-          <View className="items-center rounded-2xl border border-dashed border-[#c7d8f2] bg-[#f8fbff] px-4 py-5">
-            <View className="mb-2 h-10 w-10 items-center justify-center rounded-full bg-[#e9f1ff]">
-              <Feather name="image" size={18} color="#41619e" />
-            </View>
-            <Text className="text-[12px] text-[#5c719b]" style={{ fontFamily: "Montserrat" }}>
-              No images found for {selectedFilter}.
-            </Text>
+        {isAllFilter ? (
+          <View>
+            {listHeader}
+            <GalleryAllHeader count={filteredImages.length} />
+            {groupedGallerySections.length > 0 ? (
+              groupedGallerySections.map((section) => (
+                <GalleryStageSection
+                  key={section.stage}
+                  title={section.stage}
+                  images={section.images}
+                  onOpenViewer={openViewer}
+                  onOpenLocation={openImageLocation}
+                  onDelete={handleDeleteImage}
+                  tileWidth={imageTileWidth}
+                />
+              ))
+            ) : (
+              listEmpty
+            )}
           </View>
-        ) : null}
-      </View>
-      </View>
+        ) : (
+          <FlatList
+            data={filteredImages}
+            keyExtractor={keyExtractor}
+            renderItem={renderGalleryImage}
+            numColumns={isCompactScreen ? 1 : 2}
+            columnWrapperStyle={isCompactScreen ? undefined : { justifyContent: "space-between" }}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            scrollEnabled={false}
+            removeClippedSubviews
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={5}
+            updateCellsBatchingPeriod={50}
+          />
+        )}
+      </ScrollView>
 
       <Modal
         visible={isViewerOpen}
@@ -689,16 +915,15 @@ export default function Gallery({ project }) {
         animationType="fade"
         onRequestClose={cancelAddImageSheet}
       >
-        <Pressable
-          onPress={cancelAddImageSheet}
-          className="flex-1 bg-black/35"
-          accessibilityRole="button"
-          accessibilityLabel="Close add image options"
-        >
+        <View className="flex-1 bg-black/35">
           <Pressable
-            onPress={() => {}}
-            className="absolute bottom-0 left-0 right-0 rounded-t-3xl border border-[#d7e2f5] bg-white px-4 pb-8 pt-4"
-          >
+            onPress={cancelAddImageSheet}
+            className="absolute inset-0"
+            accessibilityRole="button"
+            accessibilityLabel="Close add image options"
+          />
+
+          <View className="absolute bottom-0 left-0 right-0 rounded-t-3xl border border-[#d7e2f5] bg-white px-4 pb-8 pt-4">
             <View className="mb-4 self-center rounded-full bg-[#d6deef]" style={{ width: 40, height: 4 }} />
 
             {addImageSheetStep === "menu" ? (
@@ -846,8 +1071,8 @@ export default function Gallery({ project }) {
                 </Pressable>
               </>
             )}
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <ConfirmationModal
@@ -859,9 +1084,22 @@ export default function Gallery({ project }) {
         onConfirm={confirmUploadForm}
         onCancel={() => {
           setIsUploadConfirmationOpen(false);
+          setIsAddImageSheetOpen(true);
           showToast("warning", "Upload cancelled.");
         }}
         loading={isUploading}
+      />
+
+      <ConfirmationModal
+        visible={deleteConfirmationOpen}
+        title="Delete image"
+        message={`Are you sure you want to delete this ${imageToDelete?.category || "gallery"} image? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onConfirm={confirmDeleteImage}
+        onCancel={cancelDeleteImage}
+        loading={isDeleting}
+        isDangerous={true}
       />
     </View>
   );

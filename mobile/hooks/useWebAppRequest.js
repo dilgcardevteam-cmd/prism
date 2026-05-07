@@ -65,12 +65,12 @@ async function requestJson(path, baseUrl, init = {}, timeout = REQUEST_TIMEOUT) 
 /**
  * Retry with exponential backoff
  */
-async function requestWithRetry(path, baseUrl, init, retries = MAX_RETRIES) {
+async function requestWithRetry(path, baseUrl, init, retries = MAX_RETRIES, timeout = REQUEST_TIMEOUT) {
   let attempt = 0;
 
   while (attempt <= retries) {
     try {
-      return await requestJson(path, baseUrl, init);
+      return await requestJson(path, baseUrl, init, timeout);
     } catch (err) {
       if (attempt === retries) throw err;
 
@@ -84,7 +84,7 @@ async function requestWithRetry(path, baseUrl, init, retries = MAX_RETRIES) {
 /**
  * Race requests (fastest wins)
  */
-async function fetchWithRace(path, candidates, init) {
+async function fetchWithRace(path, candidates, init, timeout = REQUEST_TIMEOUT) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let completed = 0;
@@ -92,7 +92,7 @@ async function fetchWithRace(path, candidates, init) {
 
     candidates.forEach((baseUrl, index) => {
       setTimeout(() => {
-        requestWithRetry(path, baseUrl, init)
+        requestWithRetry(path, baseUrl, init, MAX_RETRIES, timeout)
           .then((res) => {
             if (!settled) {
               settled = true;
@@ -163,7 +163,8 @@ export function useWebAppRequest() {
    * Main fetch function
    */
   const fetchJsonWithFallback = useCallback(
-    async (path, init = {}) => {
+    async (path, init = {}, options = {}) => {
+      const timeout = Number.isFinite(options?.timeout) ? options.timeout : REQUEST_TIMEOUT;
       const dedupedCandidates = Array.from(
         new Set([activeBaseUrl, ...candidateBaseUrls].filter(Boolean))
       );
@@ -174,7 +175,7 @@ export function useWebAppRequest() {
         ? [...nonLoopbackCandidates, ...loopbackCandidates]
         : dedupedCandidates;
 
-      const { res, baseUrl } = await fetchWithRace(path, candidates, init);
+      const { res, baseUrl } = await fetchWithRace(path, candidates, init, timeout);
 
       if (baseUrl !== activeBaseUrl) {
         preferredBaseUrl = baseUrl;

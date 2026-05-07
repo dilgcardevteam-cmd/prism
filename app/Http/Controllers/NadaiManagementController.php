@@ -4,13 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Mail\NadaiUploadedMail;
 use App\Models\NadaiManagementDocument;
+use App\Support\ProjectLocationFilterHelper;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class NadaiManagementController extends Controller
 {
@@ -18,7 +22,7 @@ class NadaiManagementController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show', 'viewDocument', 'downloadDocument', 'openDocumentAndRedirect']);
-        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['store']);
+        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['store', 'updateDocument']);
     }
 
     private function getOffices(): array
@@ -148,6 +152,229 @@ class NadaiManagementController extends Controller
             && $user->isRegionalOfficeAssignment();
     }
 
+    private function isProvinceWideOffice(string $officeName): bool
+    {
+        return str_starts_with($officeName, 'PLGU ');
+    }
+
+    private function resolveConfiguredProvinceLabel(string $provinceName, array $configuredProvinceLabels): string
+    {
+        $normalizedProvince = ProjectLocationFilterHelper::normalizeLabel($provinceName);
+        if ($normalizedProvince === '') {
+            return '';
+        }
+
+        foreach ($configuredProvinceLabels as $configuredProvinceLabel) {
+            if (strcasecmp($configuredProvinceLabel, $normalizedProvince) === 0) {
+                return $configuredProvinceLabel;
+            }
+        }
+
+        $comparableProvince = ProjectLocationFilterHelper::normalizeComparableLocationLabel($normalizedProvince);
+        foreach ($configuredProvinceLabels as $configuredProvinceLabel) {
+            if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($configuredProvinceLabel) === $comparableProvince) {
+                return $configuredProvinceLabel;
+            }
+        }
+
+        return $normalizedProvince;
+    }
+
+    private function resolveConfiguredMunicipalityLabel(string $officeName, array $municipalityOptions): ?string
+    {
+        $normalizedOfficeName = ProjectLocationFilterHelper::normalizeLabel($officeName);
+        if ($normalizedOfficeName === '') {
+            return null;
+        }
+
+        foreach ($municipalityOptions as $municipalityOption) {
+            if (strcasecmp($municipalityOption, $normalizedOfficeName) === 0) {
+                return $municipalityOption;
+            }
+        }
+
+        $comparableOfficeName = ProjectLocationFilterHelper::normalizeComparableLocationLabel($normalizedOfficeName);
+        foreach ($municipalityOptions as $municipalityOption) {
+            if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($municipalityOption) === $comparableOfficeName) {
+                return $municipalityOption;
+            }
+        }
+
+        return null;
+    }
+
+    private function buildSubayProfileOptions(): array
+    {
+        if (!Schema::hasTable('subay_project_profiles')) {
+            return [
+                'funding_years' => [],
+                'programs' => [],
+            ];
+        }
+
+        $query = DB::table('subay_project_profiles as spp')
+            ->whereNotNull('spp.project_code')
+            ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''");
+
+        $programs = (clone $query)
+            ->select('spp.program')
+            ->whereRaw("TRIM(COALESCE(spp.program, '')) <> ''")
+            ->distinct()
+            ->orderBy('spp.program')
+            ->pluck('spp.program')
+            ->map(fn ($value) => $this->normalizeProgramValue($value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $fundingYears = (clone $query)
+            ->select('spp.funding_year')
+            ->whereRaw("TRIM(COALESCE(spp.funding_year, '')) <> ''")
+            ->distinct()
+            ->orderByRaw("CAST(COALESCE(NULLIF(TRIM(spp.funding_year), ''), '0') AS UNSIGNED) DESC")
+            ->pluck('spp.funding_year')
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->values()
+            ->all();
+
+        return [
+            'funding_years' => $fundingYears,
+            'programs' => $programs,
+        ];
+    }
+
+    private function normalizeProgramValue($value): string
+    {
+        $normalized = strtoupper(trim((string) $value));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $normalized = preg_replace('/^\d+\s*/', '', $normalized) ?? $normalized;
+
+        return match ($normalized) {
+            'SUPPORT TO THE BARANGAY DEVELOPMENT PROGRAM', 'SBDP' => 'SBDP',
+            'FINANCIAL ASSISTANCE TO LOCAL GOVERNMENT UNIT',
+            'FINANCIAL ASSISTANCE TO LOCAL GOVERNMENT UNIT PROGRAM',
+            'FALGU' => 'FALGU',
+            default => trim((string) $value),
+        };
+    }
+
+    private function buildUploadFormOptions(string $officeName, string $provinceName): array
+    {
+        $configuredProvinceLabels = ProjectLocationFilterHelper::buildConfiguredProvinceLabels();
+        $resolvedProvince = $this->resolveConfiguredProvinceLabel($provinceName, $configuredProvinceLabels);
+        $provinceOptions = array_values(array_filter([$resolvedProvince]));
+
+        $provinceMunicipalityMap = ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy($provinceOptions);
+        $municipalityOptions = $provinceMunicipalityMap[$resolvedProvince] ?? [];
+        $matchedMunicipality = $this->resolveConfiguredMunicipalityLabel($officeName, $municipalityOptions);
+
+        if ($matchedMunicipality !== null && !$this->isProvinceWideOffice($officeName)) {
+            $municipalityOptions = [$matchedMunicipality];
+        } elseif (empty($municipalityOptions) && !$this->isProvinceWideOffice($officeName)) {
+            $fallbackMunicipality = ProjectLocationFilterHelper::normalizeLabel($officeName);
+            if ($fallbackMunicipality !== '') {
+                $municipalityOptions = [$fallbackMunicipality];
+                $matchedMunicipality = $fallbackMunicipality;
+            }
+        }
+
+        $provinceMunicipalityMap[$resolvedProvince] = $municipalityOptions;
+
+        $municipalityBarangayMap = ProjectLocationFilterHelper::buildConfiguredCityBarangayMapFromHierarchy($provinceOptions);
+        if (!empty($municipalityOptions)) {
+            $municipalityBarangayMap = array_intersect_key(
+                $municipalityBarangayMap,
+                array_fill_keys($municipalityOptions, true)
+            );
+        }
+
+        $subayOptions = $this->buildSubayProfileOptions();
+
+        return [
+            'provinces' => $provinceOptions,
+            'province_municipality_map' => $provinceMunicipalityMap,
+            'municipalities' => $municipalityOptions,
+            'municipality_barangay_map' => $municipalityBarangayMap,
+            'funding_years' => $subayOptions['funding_years'],
+            'programs' => $subayOptions['programs'],
+            'default_province' => $resolvedProvince,
+            'default_municipality' => $matchedMunicipality ?? '',
+            'default_barangay' => '',
+            'default_funding_year' => '',
+            'default_program' => '',
+        ];
+    }
+
+    private function buildIndexFilterOptions($user, array $officeRows): array
+    {
+        $configuredProvinces = collect(ProjectLocationFilterHelper::buildConfiguredProvinceLabels())
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->values();
+
+        $provinceMunicipalities = ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy(
+            $configuredProvinces->all()
+        );
+
+        if ($user && $user->isLguScopedUser()) {
+            $matchedProvince = trim((string) ($user->province ?? ''));
+            $matchedOffice = trim((string) ($user->office ?? ''));
+
+            if ($matchedProvince !== '') {
+                $configuredProvinces = $configuredProvinces
+                    ->filter(fn ($province) => strcasecmp((string) $province, $matchedProvince) === 0)
+                    ->values();
+            }
+
+            if ($matchedProvince !== '' && array_key_exists($matchedProvince, $provinceMunicipalities)) {
+                $provinceMunicipalities = [
+                    $matchedProvince => collect($provinceMunicipalities[$matchedProvince] ?? [])
+                        ->filter(fn ($municipality) => $matchedOffice === '' || strcasecmp((string) $municipality, $matchedOffice) === 0)
+                        ->values()
+                        ->all(),
+                ];
+            } else {
+                $provinceMunicipalities = [];
+            }
+        } elseif ($user && $user->isDilgUser() && !empty($user->province) && $user->province !== 'Regional Office') {
+            $matchedProvince = trim((string) $user->province);
+
+            $configuredProvinces = $configuredProvinces
+                ->filter(fn ($province) => strcasecmp((string) $province, $matchedProvince) === 0)
+                ->values();
+
+            if ($matchedProvince !== '' && array_key_exists($matchedProvince, $provinceMunicipalities)) {
+                $provinceMunicipalities = [
+                    $matchedProvince => $provinceMunicipalities[$matchedProvince],
+                ];
+            } else {
+                $provinceMunicipalities = [];
+            }
+        }
+
+        if ($configuredProvinces->isEmpty()) {
+            $scopedOfficeRows = collect($officeRows);
+
+            return [
+                'provinces' => $scopedOfficeRows->pluck('province')->filter()->unique()->sort()->values()->all(),
+                'provinceMunicipalities' => $scopedOfficeRows
+                    ->groupBy('province')
+                    ->map(fn ($rows) => $rows->pluck('city_municipality')->filter()->values()->all())
+                    ->toArray(),
+            ];
+        }
+
+        return [
+            'provinces' => $configuredProvinces->all(),
+            'provinceMunicipalities' => $provinceMunicipalities,
+        ];
+    }
+
     private function sendNadaiUploadEmailNotifications(
         NadaiManagementDocument $document,
         string $officeName,
@@ -231,14 +458,7 @@ class NadaiManagementController extends Controller
             }));
         }
 
-        $scopedOfficeRows = collect($officeRows);
-        $filterOptions = [
-            'provinces' => $scopedOfficeRows->pluck('province')->filter()->unique()->sort()->values()->all(),
-            'provinceMunicipalities' => $scopedOfficeRows
-                ->groupBy('province')
-                ->map(fn ($rows) => $rows->pluck('city_municipality')->filter()->values()->all())
-                ->toArray(),
-        ];
+        $filterOptions = $this->buildIndexFilterOptions($user, $officeRows);
 
         if ($filters['province'] !== '') {
             $officeRows = array_values(array_filter($officeRows, function ($row) use ($filters) {
@@ -357,6 +577,7 @@ class NadaiManagementController extends Controller
 
         $canUpload = $this->canUploadNadai();
         $canDelete = $this->canDeleteNadai();
+        $uploadFormOptions = $this->buildUploadFormOptions($officeName, $province);
 
         return view('nadai-management.show', compact(
             'officeName',
@@ -364,7 +585,8 @@ class NadaiManagementController extends Controller
             'documents',
             'usersById',
             'canUpload',
-            'canDelete'
+            'canDelete',
+            'uploadFormOptions'
         ));
     }
 
@@ -384,7 +606,27 @@ class NadaiManagementController extends Controller
             abort(403, 'Only DILG Regional Office users can upload NADAI documents.');
         }
 
+        $uploadFormOptions = $this->buildUploadFormOptions($officeName, $province);
+        $barangayOptions = $uploadFormOptions['municipality_barangay_map'][
+            trim((string) $request->input('municipality'))
+        ] ?? [];
+
         $validated = $request->validate([
+            'province' => array_merge(['required', 'string'], !empty($uploadFormOptions['provinces'])
+                ? [Rule::in($uploadFormOptions['provinces'])]
+                : []),
+            'municipality' => array_merge(['required', 'string'], !empty($uploadFormOptions['municipalities'])
+                ? [Rule::in($uploadFormOptions['municipalities'])]
+                : []),
+            'barangay' => array_merge(['required', 'string'], !empty($barangayOptions)
+                ? [Rule::in($barangayOptions)]
+                : []),
+            'funding_year' => array_merge(['required', 'string'], !empty($uploadFormOptions['funding_years'])
+                ? [Rule::in($uploadFormOptions['funding_years'])]
+                : []),
+            'program' => array_merge(['required', 'string'], !empty($uploadFormOptions['programs'])
+                ? [Rule::in($uploadFormOptions['programs'])]
+                : []),
             'project_title' => ['required', 'string', 'max:255'],
             'nadai_date' => ['required', 'date'],
             'document' => ['required', 'file', 'mimes:pdf', 'max:15360'],
@@ -398,7 +640,11 @@ class NadaiManagementController extends Controller
 
         $document = NadaiManagementDocument::create([
             'office' => $officeName,
-            'province' => $province,
+            'province' => trim((string) $validated['province']),
+            'municipality' => trim((string) $validated['municipality']),
+            'barangay' => trim((string) $validated['barangay']),
+            'funding_year' => trim((string) $validated['funding_year']),
+            'program' => trim((string) $validated['program']),
             'project_title' => trim((string) $validated['project_title']),
             'nadai_date' => $validated['nadai_date'],
             'original_filename' => $file->getClientOriginalName(),
@@ -480,6 +726,83 @@ class NadaiManagementController extends Controller
             $document->file_path,
             $document->original_filename ?: basename($document->file_path)
         );
+    }
+
+    public function updateDocument(Request $request, string $office, int $docId)
+    {
+        $officeName = $office;
+        $province = $this->findProvinceByOffice($officeName);
+        if (!$province) {
+            abort(404);
+        }
+
+        if (!$this->canAccessOffice($officeName, $province)) {
+            abort(403);
+        }
+
+        if (!$this->canUploadNadai()) {
+            abort(403, 'Only DILG Regional Office users can edit NADAI documents.');
+        }
+
+        $document = NadaiManagementDocument::query()
+            ->where('office', $officeName)
+            ->where('id', $docId)
+            ->firstOrFail();
+
+        $uploadFormOptions = $this->buildUploadFormOptions($officeName, $province);
+        $barangayOptions = $uploadFormOptions['municipality_barangay_map'][
+            trim((string) $request->input('municipality'))
+        ] ?? [];
+
+        $validated = $request->validate([
+            'edit_document_id' => ['required', 'integer', 'in:' . $document->id],
+            'province' => array_merge(['required', 'string'], !empty($uploadFormOptions['provinces'])
+                ? [Rule::in($uploadFormOptions['provinces'])]
+                : []),
+            'municipality' => array_merge(['required', 'string'], !empty($uploadFormOptions['municipalities'])
+                ? [Rule::in($uploadFormOptions['municipalities'])]
+                : []),
+            'barangay' => array_merge(['required', 'string'], !empty($barangayOptions)
+                ? [Rule::in($barangayOptions)]
+                : []),
+            'funding_year' => array_merge(['required', 'string'], !empty($uploadFormOptions['funding_years'])
+                ? [Rule::in($uploadFormOptions['funding_years'])]
+                : []),
+            'program' => array_merge(['required', 'string'], !empty($uploadFormOptions['programs'])
+                ? [Rule::in($uploadFormOptions['programs'])]
+                : []),
+            'project_title' => ['required', 'string', 'max:255'],
+            'nadai_date' => ['required', 'date'],
+            'document' => ['nullable', 'file', 'mimes:pdf', 'max:15360'],
+        ]);
+
+        $oldFilePath = $document->file_path;
+        $file = $request->file('document');
+
+        if ($file) {
+            $officeSlug = Str::slug($officeName, '_');
+            $timestamp = now()->format('Ymd_His');
+            $storedFilename = $timestamp . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME), '_') . '.pdf';
+            $document->file_path = $file->storeAs('nadai-management/' . $officeSlug, $storedFilename, 'public');
+            $document->original_filename = $file->getClientOriginalName();
+        }
+
+        $document->province = trim((string) $validated['province']);
+        $document->municipality = trim((string) $validated['municipality']);
+        $document->barangay = trim((string) $validated['barangay']);
+        $document->funding_year = trim((string) $validated['funding_year']);
+        $document->program = trim((string) $validated['program']);
+        $document->project_title = trim((string) $validated['project_title']);
+        $document->nadai_date = $validated['nadai_date'];
+        $document->save();
+
+        if ($file && $oldFilePath && $oldFilePath !== $document->file_path && Storage::disk('public')->exists($oldFilePath)) {
+            Storage::disk('public')->delete($oldFilePath);
+        }
+
+        return redirect()
+            ->route('nadai-management.show', ['office' => $officeName])
+            ->with('success', 'NADAI document updated successfully.');
     }
 
     public function openDocumentAndRedirect(string $office, int $docId)

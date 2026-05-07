@@ -2032,6 +2032,10 @@
                 $canViewAnyQuarterlyRpmesForm = $canViewQuarterlyRpmesForm2
                     || $canViewQuarterlyRpmesForm5
                     || $canViewQuarterlyRpmesForm6;
+                $currentUser = Auth::user();
+                $canViewDilgDeliverables = $currentUser->isDilgUser()
+                    && !$currentUser->isLguScopedUser()
+                    && ($currentUser->isRegionalOfficeAssignment() || $currentUser->normalizedProvince() !== '');
                 $canViewTicketingSystem = Auth::user()->hasCrudPermission('ticketing_system', 'view');
                 $canViewSubaybayanUploads = Auth::user()->hasCrudPermission('subaybayan_data_uploads', 'view');
                 $canViewRssaLgsfUploads = $canViewSubaybayanUploads;
@@ -2055,7 +2059,8 @@
                     || $canViewFundUtilizationReports
                     || $canViewLpmcReports
                     || $canViewRoadMaintenanceReports
-                    || $canViewAnyQuarterlyRpmesForm;
+                    || $canViewAnyQuarterlyRpmesForm
+                    || $canViewDilgDeliverables;
                 $hasAnyUtilitiesAccess = $canViewUtilitiesSystemSetup
                     || $canViewUtilitiesNotifications
                     || $canViewUtilitiesDeadlines
@@ -2165,10 +2170,12 @@
                     $reportsSwaAnnexFActive = request()->routeIs('reports.monthly.swa-annex-f*');
                     $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
                     $reportsMonthlyRpmesActive = false;
+                    $reportsDilgDeliverablesActive = request()->routeIs('reports.dilg-deliverables');
                     $reportsProjectCompletionActive = request()->routeIs('reports.one-time.project-completion-reports.*');
                     $reportsOneTimeActive = request()->routeIs('reports.one-time.*');
                     $reportsMonthlyActive = $reportsMonthlyReportActive || $reportsSwaAnnexFActive;
                     $reportsMenuActive = Route::currentRouteName() == 'reports'
+                        || $reportsDilgDeliverablesActive
                         || $reportsAnnualActive
                         || $reportsQuarterlyActive
                         || $reportsMonthlyActive
@@ -2180,6 +2187,14 @@
                     <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                 </a>
                 <ul id="reportsMenu" class="submenu" style="display: {{ $reportsMenuActive ? 'block' : 'none' }};">
+                    @if($canViewDilgDeliverables)
+                        <li>
+                            <a href="{{ route('reports.dilg-deliverables') }}" class="@if($reportsDilgDeliverablesActive) active @endif">
+                                <i class="fas fa-clipboard-list"></i>
+                                <span>DILG Deliverables</span>
+                            </a>
+                        </li>
+                    @endif
                     @if($canViewRbisAnnualCertification || $canViewAnyAnnualRpmesForm)
                         <li>
                             <a href="#" class="@if($reportsAnnualActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualMenu')">
