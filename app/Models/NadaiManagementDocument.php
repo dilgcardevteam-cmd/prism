@@ -11,6 +11,10 @@ class NadaiManagementDocument extends Model
     protected $fillable = [
         'office',
         'province',
+        'municipality',
+        'barangay',
+        'funding_year',
+        'program',
         'project_title',
         'nadai_date',
         'original_filename',
