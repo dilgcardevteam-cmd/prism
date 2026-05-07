@@ -263,6 +263,13 @@ class NadaiManagementController extends Controller
         };
     }
 
+    private function normalizeOptionalText($value): ?string
+    {
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
     private function buildUploadFormOptions(string $officeName, string $provinceName): array
     {
         $configuredProvinceLabels = ProjectLocationFilterHelper::buildConfiguredProvinceLabels();
@@ -586,7 +593,7 @@ class NadaiManagementController extends Controller
             'municipality' => array_merge(['required', 'string'], !empty($uploadFormOptions['municipalities'])
                 ? [Rule::in($uploadFormOptions['municipalities'])]
                 : []),
-            'barangay' => array_merge(['required', 'string'], !empty($barangayOptions)
+            'barangay' => array_merge(['nullable', 'string'], !empty($barangayOptions)
                 ? [Rule::in($barangayOptions)]
                 : []),
             'funding_year' => array_merge(['required', 'string'], !empty($uploadFormOptions['funding_years'])
@@ -610,7 +617,7 @@ class NadaiManagementController extends Controller
             'office' => $officeName,
             'province' => trim((string) $validated['province']),
             'municipality' => trim((string) $validated['municipality']),
-            'barangay' => trim((string) $validated['barangay']),
+            'barangay' => $this->normalizeOptionalText($validated['barangay'] ?? null),
             'funding_year' => trim((string) $validated['funding_year']),
             'program' => trim((string) $validated['program']),
             'project_title' => trim((string) $validated['project_title']),
@@ -730,7 +737,7 @@ class NadaiManagementController extends Controller
             'municipality' => array_merge(['required', 'string'], !empty($uploadFormOptions['municipalities'])
                 ? [Rule::in($uploadFormOptions['municipalities'])]
                 : []),
-            'barangay' => array_merge(['required', 'string'], !empty($barangayOptions)
+            'barangay' => array_merge(['nullable', 'string'], !empty($barangayOptions)
                 ? [Rule::in($barangayOptions)]
                 : []),
             'funding_year' => array_merge(['required', 'string'], !empty($uploadFormOptions['funding_years'])
@@ -757,7 +764,7 @@ class NadaiManagementController extends Controller
 
         $document->province = trim((string) $validated['province']);
         $document->municipality = trim((string) $validated['municipality']);
-        $document->barangay = trim((string) $validated['barangay']);
+        $document->barangay = $this->normalizeOptionalText($validated['barangay'] ?? null);
         $document->funding_year = trim((string) $validated['funding_year']);
         $document->program = trim((string) $validated['program']);
         $document->project_title = trim((string) $validated['project_title']);

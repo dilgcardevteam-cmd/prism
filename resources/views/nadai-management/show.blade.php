@@ -90,34 +90,57 @@
         font-size: 0.8em;
     }
 
-    .nadai-hero-pills {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 18px;
-    }
-
-    .nadai-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        min-height: 38px;
-        padding: 0 14px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.12);
-        color: #fff;
-        font-size: 13px;
-        font-weight: 600;
-    }
-
     .nadai-hero-actions {
         display: flex;
-        justify-content: flex-end;
+        flex-direction: column;
         align-items: flex-end;
-        gap: 10px;
+        gap: 14px;
         flex-wrap: wrap;
         margin-top: 0;
         margin-left: auto;
+    }
+
+    .nadai-hero-actions-row {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .nadai-folder-count {
+        position: relative;
+        width: 78px;
+        height: 62px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+    }
+
+    .nadai-folder-count-icon {
+        font-size: 60px;
+        line-height: 1;
+        color: rgba(255, 255, 255, 0.16);
+    }
+
+    .nadai-folder-count-value {
+        position: absolute;
+        top: 56%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1;
+        color: #fff;
+    }
+
+    .nadai-folder-count-label {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
     }
 
     .nadai-btn {
@@ -700,7 +723,16 @@
     }
 
     .nadai-searchable-select-source {
-        display: none;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        border: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
     }
 
     .nadai-searchable-select {
@@ -874,6 +906,7 @@
         .nadai-hero-actions {
             justify-content: flex-start;
             margin-left: 0;
+            align-items: flex-start;
         }
 
         .nadai-records-head {
@@ -919,24 +952,27 @@
                         Uploaded NADAI Documents
                     </h2>
                     <h1 class="nadai-title"><i class="fas fa-landmark nadai-title-icon"></i>{{ $officeName }}, {{ $province }}</h1>
-                    <div class="nadai-hero-pills">
-                        <span class="nadai-pill">
-                            <i class="fas fa-folder-open"></i>
-                            {{ $documents->count() }} {{ \Illuminate\Support\Str::plural('document', $documents->count()) }}
-                        </span>
-                    </div>
                 </div>
                 <div class="nadai-hero-actions">
-                    <a href="{{ route('nadai-management.index') }}" class="nadai-btn nadai-btn-muted">
-                        <i class="fas fa-arrow-left"></i>
-                        Back to List
-                    </a>
-                    @if ($canUpload)
-                        <button type="button" onclick="openNadaiUploadModal()" class="nadai-btn nadai-btn-primary">
-                            <i class="fas fa-upload"></i>
-                            Upload NADAI
-                        </button>
-                    @endif
+                    <div>
+                        <div class="nadai-folder-count" aria-hidden="true">
+                            <i class="fas fa-folder nadai-folder-count-icon"></i>
+                            <span class="nadai-folder-count-value">{{ $documents->count() }}</span>
+                        </div>
+                        <p class="nadai-folder-count-label">{{ \Illuminate\Support\Str::plural('document', $documents->count()) }}</p>
+                    </div>
+                    <div class="nadai-hero-actions-row">
+                        <a href="{{ route('nadai-management.index') }}" class="nadai-btn nadai-btn-muted">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to List
+                        </a>
+                        @if ($canUpload)
+                            <button type="button" onclick="openNadaiUploadModal()" class="nadai-btn nadai-btn-primary">
+                                <i class="fas fa-upload"></i>
+                                Upload NADAI
+                            </button>
+                        @endif
+                    </div>
                 </div>
             </div>
         </section>
@@ -1197,7 +1233,7 @@
                     </div>
                     <div class="nadai-form-field">
                         <label for="nadai_barangay" class="nadai-form-label">Barangay</label>
-                        <select id="nadai_barangay" name="barangay" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search barangay">
+                        <select id="nadai_barangay" name="barangay" class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search barangay">
                             <option value="">Select barangay</option>
                             @foreach ($initialBarangayOptions as $barangayOption)
                                 <option value="{{ $barangayOption }}" @selected($selectedUploadBarangay === $barangayOption)>{{ $barangayOption }}</option>
@@ -1284,7 +1320,7 @@
                         </div>
                         <div class="nadai-form-field">
                             <label for="edit_nadai_barangay_{{ $document->id }}" class="nadai-form-label">Barangay</label>
-                            <select id="edit_nadai_barangay_{{ $document->id }}" name="barangay" required class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search barangay">
+                            <select id="edit_nadai_barangay_{{ $document->id }}" name="barangay" class="nadai-form-select nadai-searchable-select-source" data-search-placeholder="Search barangay">
                                 <option value="">Select barangay</option>
                                 @foreach ($editBarangayOptions as $barangayOption)
                                     <option value="{{ $barangayOption }}" @selected((string) old('edit_document_id') === (string) $document->id ? old('barangay', $document->barangay) === $barangayOption : $document->barangay === $barangayOption)>{{ $barangayOption }}</option>
