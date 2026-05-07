@@ -12,10 +12,20 @@ export const APP_ROUTES = {
     projectAtRisk: "/(tabs)/project-monitoring/project-at-risk",
     sglgifPortal: "/(tabs)/project-monitoring/sglgif-portal",
   },
+  utilities: "/(tabs)/utilities",
 };
 
 export const TAB_ROUTES = [
-  { route: "home/index", title: "Home", icon: "grid" },
+  {
+    route: "home/index",
+    title: "Home",
+    icon: "grid"
+  },
+  {
+    route: "utilities/index",
+    title: "Utilities",
+    icon: "cog"
+  },
 ];
 
 export const PROJECT_MONITORING_ROUTES = [
@@ -50,5 +60,5 @@ export const PROJECT_MONITORING_ROUTES = [
   {
     route: "message/new",
     title: "",
-  }
+  },
 ];

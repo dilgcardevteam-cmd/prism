@@ -112,6 +112,7 @@ const DRAWER_MENU_ITEMS = [
     key: "utilities",
     label: "Utilities",
     icon: "tool",
+    route: APP_ROUTES.utilities,
   },
   {
     key: "settings",
