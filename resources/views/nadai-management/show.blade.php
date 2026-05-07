@@ -411,7 +411,7 @@
     }
 
     .nadai-col-actions {
-        width: 176px;
+        width: 186px;
     }
 
     .nadai-project-title {
@@ -435,7 +435,8 @@
         align-items: center;
         justify-content: center;
         min-height: 30px;
-        padding: 0 12px;
+        max-width: 100%;
+        padding: 6px 10px;
         border-radius: 8px;
         background: #e0f2fe;
         color: #075985;
@@ -443,7 +444,10 @@
         font-weight: 400;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        white-space: nowrap;
+        line-height: 1.35;
+        text-align: center;
+        white-space: normal;
+        word-break: break-word;
     }
 
     .nadai-chip-muted {
@@ -497,14 +501,14 @@
         font-weight: 400;
         line-height: 1.5;
         text-align: center;
-        white-space: nowrap;
+        white-space: normal;
     }
 
     .nadai-actions {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
+        gap: 6px;
         flex-wrap: nowrap;
         white-space: nowrap;
     }
@@ -1662,12 +1666,12 @@
             const minWidthByIndex = {
                 0: 150,
                 1: 85,
-                2: 95,
-                3: 110,
+                2: 120,
+                3: 120,
                 4: 150,
                 5: 120,
                 6: 130,
-                7: 140,
+                7: 186,
             };
 
             const setColumnWidth = (index, width) => {
