@@ -246,17 +246,70 @@
         transform: translateY(-1px);
     }
 
+.nadai-index-btn-filter,
+    .nadai-index-btn-clear {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        min-height: 48px;
+        padding: 0 18px;
+        border-radius: 16px;
+        border: 1px solid transparent;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
     .nadai-index-btn-filter {
         background: linear-gradient(135deg, #0b1f52 0%, #1d4ed8 100%);
         color: #fff;
         box-shadow: 0 14px 28px rgba(29, 78, 216, 0.22);
+        border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    .nadai-index-btn-filter:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 18px 38px rgba(29, 78, 216, 0.28);
+    }
+
+    .nadai-index-btn-filter:active {
+        transform: translateY(0);
+    }
+
+    .nadai-index-btn-filter:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.25), 0 14px 28px rgba(29, 78, 216, 0.22);
     }
 
     .nadai-index-btn-clear {
-        background: #fff;
+        background: rgba(255, 255, 255, 0.92);
         color: #334155;
-        box-shadow: inset 0 0 0 1px #cbd5e1;
+        box-shadow: inset 0 0 0 1px #cbd5e1, 0 10px 20px rgba(15, 23, 42, 0.06);
+        border-color: #d1dbe9;
     }
+
+    .nadai-index-btn-clear:hover {
+        background: #ffffff;
+        transform: translateY(-1px);
+        box-shadow: inset 0 0 0 1px #cbd5e1, 0 14px 24px rgba(15, 23, 42, 0.10);
+        color: #0f172a;
+    }
+
+    .nadai-index-btn-clear:active {
+        transform: translateY(0);
+    }
+
+    .nadai-index-btn-clear:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.22), inset 0 0 0 1px #cbd5e1;
+    }
+
 
     .nadai-index-table-wrap {
         overflow-x: auto;
