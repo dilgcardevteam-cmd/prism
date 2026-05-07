@@ -2559,6 +2559,19 @@ Route::middleware(['auth'])->group(function () {
             ->name('backup-and-restore.test-now');
     });
 
+    Route::get('/reports/dilg-deliverables', function () {
+        $user = Auth::user();
+
+        $canAccessDilgDeliverables = $user
+            && $user->isDilgUser()
+            && !$user->isLguScopedUser()
+            && ($user->isRegionalOfficeAssignment() || $user->normalizedProvince() !== '');
+
+        abort_unless($canAccessDilgDeliverables, 403);
+
+        return view('reports.dilg-deliverables.index');
+    })->name('reports.dilg-deliverables');
+
     // Fund Utilization Report routes
     Route::prefix('fund-utilization')->group(function () {
         Route::get('/', [App\Http\Controllers\FundUtilizationReportController::class, 'index'])->name('fund-utilization.index');
@@ -3084,6 +3097,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('nadai-management.open-document');
     Route::get('/nadai-management/{office}/document/{docId}/download', [App\Http\Controllers\NadaiManagementController::class, 'downloadDocument'])
         ->name('nadai-management.download-document');
+    Route::match(['put', 'patch'], '/nadai-management/{office}/document/{docId}', [App\Http\Controllers\NadaiManagementController::class, 'updateDocument'])
+        ->name('nadai-management.update-document');
     Route::delete('/nadai-management/{office}/document/{docId}', [App\Http\Controllers\NadaiManagementController::class, 'deleteDocument'])
         ->name('nadai-management.delete-document');
 });

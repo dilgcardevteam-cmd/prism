@@ -10,6 +10,10 @@
     $emailLogoSrc = file_exists($emailLogoPath)
         ? (isset($message) ? $message->embed($emailLogoPath) : asset('email-dilg-logo.png'))
         : asset('DILG-Logo.png');
+    $programDisplayMap = [
+        'SBDP' => 'Support to the Barangay Development Program',
+        'FALGU' => 'Financial Assistance to Local Government Unit',
+    ];
 @endphp
 <body style="margin: 0; padding: 8px; background: #f3f4f6; font-family: Arial, Helvetica, sans-serif; color: #0f172a;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #f3f4f6;">
@@ -54,6 +58,29 @@
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #eaf2ff; border: 1px solid #c7dcff; border-radius: 10px;">
                                 <tr>
                                     <td style="padding: 10px 14px; font-size: 12px; line-height: 1.5; color: #334155;">
+                                        <div style="margin-bottom: 8px;">
+                                            <div style="font-weight: 700; color: #0f172a;">Province:</div>
+                                            <div style="padding-top: 1px;">{{ $document->province ?: '—' }}</div>
+                                        </div>
+                                        <div style="margin-bottom: 8px;">
+                                            <div style="font-weight: 700; color: #0f172a;">Municipality:</div>
+                                            <div style="padding-top: 1px;">{{ $document->municipality ?: '—' }}</div>
+                                        </div>
+                                        <div style="margin-bottom: 8px;">
+                                            <div style="font-weight: 700; color: #0f172a;">Barangay:</div>
+                                            <div style="padding-top: 1px;">{{ $document->barangay ?: '—' }}</div>
+                                        </div>
+                                        <div style="margin-bottom: 8px;">
+                                            <div style="font-weight: 700; color: #0f172a;">Funding Year:</div>
+                                            <div style="padding-top: 1px;">{{ $document->funding_year ?: '—' }}</div>
+                                        </div>
+                                        <div style="margin-bottom: 8px;">
+                                            <div style="font-weight: 700; color: #0f172a;">Program:</div>
+                                            @php
+                                                $programValue = trim((string) ($document->program ?? ''));
+                                            @endphp
+                                            <div style="padding-top: 1px; word-break: break-word; overflow-wrap: anywhere;">{{ $programValue !== '' ? ($programDisplayMap[$programValue] ?? $programValue) : '—' }}</div>
+                                        </div>
                                         <div style="margin-bottom: 8px;">
                                             <div style="font-weight: 700; color: #0f172a;">Project Title:</div>
                                             <div style="padding-top: 1px; word-break: break-word; overflow-wrap: anywhere;">{{ $document->project_title }}</div>
