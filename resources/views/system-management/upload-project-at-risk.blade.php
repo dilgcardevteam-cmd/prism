@@ -171,7 +171,7 @@
                     @csrf
                     <div style="margin-bottom: 16px;">
                         <label for="import-file" style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload CSV or Excel .xls File</label>
-                        <input id="import-file" class="dashboard-file-input" type="file" name="file" accept=".csv,.txt,.xls" required>
+                        <input id="import-file" class="dashboard-file-input" type="file" name="file" accept=".csv,.txt,.xls" required data-max-size-kb="51200">
                         <div style="margin-top: 6px; font-size: 11px; color: #6b7280;">Accepted formats: .csv, .txt, and legacy Excel .xls.</div>
                     </div>
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">

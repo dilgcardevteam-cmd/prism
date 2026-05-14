@@ -132,7 +132,7 @@
                     @csrf
                     <div style="margin-bottom: 14px;">
                         <label for="backup_file" style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 13px;">SQL Backup File</label>
-                        <input id="backup_file" class="dashboard-file-input" name="backup_file" type="file" accept=".sql" required>
+                        <input id="backup_file" class="dashboard-file-input" name="backup_file" type="file" accept=".sql" required data-max-size-kb="102400">
                         <div id="backupFileValidationMessage" style="display: none; margin-top: 8px; color: #b91c1c; font-size: 12px; font-weight: 600;">
                             Please select a `.sql` backup file to proceed.
                         </div>

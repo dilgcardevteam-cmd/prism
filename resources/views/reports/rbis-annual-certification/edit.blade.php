@@ -398,6 +398,7 @@
                             accept=".pdf,application/pdf"
                             @disabled($disableUploadInput)
                             class="dashboard-file-input"
+                            data-max-size-kb="15360"
                             style="width: 100%; margin-bottom: 8px; background-color: {{ $disableUploadInput ? '#f3f4f6' : '#ffffff' }}; cursor: {{ $disableUploadInput ? 'not-allowed' : 'auto' }};"
                             onchange="showRbisSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
                         >

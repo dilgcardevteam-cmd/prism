@@ -2908,7 +2908,7 @@
                             @method('PUT')
                             <input type="hidden" name="section" value="monitoring">
                             <label for="pcr_mov_file" style="display: block; font-weight: 600; color: #374151; margin-bottom: 6px;">Upload PCR MOV</label>
-                            <input type="file" id="pcr_mov_file" name="pcr_mov_file" accept="application/pdf,image/*"
+                            <input type="file" id="pcr_mov_file" name="pcr_mov_file" accept="application/pdf,image/*" data-max-size-kb="10240"
                                 data-post-implementation-edit="true" disabled class="dashboard-file-input"
                                 style="width: 100%; box-sizing: border-box;">
                             @if($project->pcr_mov_file_path)

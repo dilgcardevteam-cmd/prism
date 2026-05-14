@@ -120,7 +120,7 @@
                                 <label style="flex:1;min-width:220px;display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px dashed #93c5fd;border-radius:10px;background:#eff6ff;color:#1e3a8a;cursor:pointer;">
                                     <i class="fas fa-file-arrow-up" aria-hidden="true"></i>
                                     <span style="font-size:12px;font-weight:700;white-space:nowrap;">Choose PDF</span>
-                                    <input type="file" id="dilg-mc-2018-19-upload-{{ $quarterCode }}" name="document" accept="application/pdf"
+                                    <input type="file" id="dilg-mc-2018-19-upload-{{ $quarterCode }}" name="document" accept="application/pdf" data-max-size-kb="10240"
                                         data-form-id="dilg-mc-2018-19-upload-form-{{ $quarterCode }}"
                                         style="flex:1;min-width:0;border:none;background:transparent;font-size:12px;color:#1e3a8a;cursor:pointer;">
                                 </label>

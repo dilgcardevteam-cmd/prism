@@ -408,6 +408,7 @@
                             required
                             @disabled($disableUpload)
                             class="pre-impl-upload-input"
+                            data-max-size-kb="15360"
                             data-pre-impl-upload-input
                             data-button-id="{{ $buttonId }}"
                             data-filename-id="{{ $filenameId }}"
@@ -567,7 +568,7 @@
                             @if (!$isRegionalDilg)
                                 <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                                     @csrf
-                                    <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;">
+                                    <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;" data-max-size-kb="15360">
                                     <button type="submit" style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18);">
                                         Upload {{ $isPhotoMultiUpload ? 'Photo' : 'Document' }}
                                     </button>

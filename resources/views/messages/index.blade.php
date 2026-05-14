@@ -549,7 +549,7 @@
                         <form method="POST" action="{{ route('messages.store') }}" class="msg-send-form" id="msgSendForm" enctype="multipart/form-data">
                             @csrf
                             <input type="hidden" name="thread_id" value="{{ (int) $selectedThreadId }}">
-                            <input type="file" name="images[]" id="msgImageInput" class="msg-file-input" accept="image/*" multiple hidden>
+                            <input type="file" name="images[]" id="msgImageInput" class="msg-file-input" accept="image/*" multiple hidden data-max-size-kb="5120" data-file-label="Images">
 
                             <button type="button" class="msg-tool-button msg-tool-button-attach" title="Select image" aria-label="Select image" aria-controls="msgImageInput">
                                 <i class="far fa-image"></i>

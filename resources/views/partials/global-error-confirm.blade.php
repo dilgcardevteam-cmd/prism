@@ -321,10 +321,180 @@
             showToast(message, 'error');
         }
 
+        function formatFileSizeFromKilobytes(maxKilobytes) {
+            const kilobytes = Number(maxKilobytes);
+            if (!Number.isFinite(kilobytes) || kilobytes <= 0) {
+                return '';
+            }
+
+            if (kilobytes >= 1024) {
+                const megabytes = kilobytes / 1024;
+                const roundedMegabytes = Math.round(megabytes * 100) / 100;
+                return Number.isInteger(roundedMegabytes)
+                    ? `${roundedMegabytes} MB`
+                    : `${roundedMegabytes.toFixed(2).replace(/\.?0+$/, '')} MB`;
+            }
+
+            return `${kilobytes} KB`;
+        }
+
+        function resolveFileInputLabel(input) {
+            if (!input) {
+                return 'This upload';
+            }
+
+            const escapeSelector = function(value) {
+                if (window.CSS && typeof window.CSS.escape === 'function') {
+                    return window.CSS.escape(value);
+                }
+
+                return String(value).replace(/["\\]/g, '\\$&');
+            };
+
+            const explicitLabel = (input.getAttribute('data-file-label') || '').trim();
+            if (explicitLabel !== '') {
+                return explicitLabel;
+            }
+
+            if (input.id) {
+                const label = document.querySelector(`label[for="${escapeSelector(input.id)}"]`);
+                const labelText = label ? (label.textContent || '').trim() : '';
+                if (labelText !== '') {
+                    return labelText.replace(/\s+/g, ' ');
+                }
+
+                const controller = document.querySelector(`[aria-controls="${escapeSelector(input.id)}"]`);
+                const controllerText = controller
+                    ? ((controller.getAttribute('aria-label') || controller.getAttribute('title') || controller.textContent || '').trim())
+                    : '';
+                if (controllerText !== '') {
+                    return controllerText.replace(/\s+/g, ' ');
+                }
+            }
+
+            let previousSibling = input.previousElementSibling;
+            while (previousSibling) {
+                if (previousSibling.tagName === 'LABEL') {
+                    const siblingLabelText = (previousSibling.textContent || '').trim();
+                    if (siblingLabelText !== '') {
+                        return siblingLabelText.replace(/\s+/g, ' ');
+                    }
+                }
+                previousSibling = previousSibling.previousElementSibling;
+            }
+
+            const parentLabel = input.parentElement ? input.parentElement.querySelector('label') : null;
+            const parentLabelText = parentLabel ? (parentLabel.textContent || '').trim() : '';
+            if (parentLabelText !== '') {
+                return parentLabelText.replace(/\s+/g, ' ');
+            }
+
+            const ariaLabel = (input.getAttribute('aria-label') || '').trim();
+            if (ariaLabel !== '') {
+                return ariaLabel;
+            }
+
+            const name = (input.getAttribute('name') || '').trim();
+            if (name !== '') {
+                return name.replace(/\[\]$/, '').replace(/[_-]+/g, ' ');
+            }
+
+            return 'This upload';
+        }
+
+        function notifyFileTooLarge(input, file, maxKilobytes) {
+            const limitLabel = formatFileSizeFromKilobytes(maxKilobytes) || 'the allowed size';
+            const fieldLabel = resolveFileInputLabel(input);
+            const fileName = file && typeof file.name === 'string' && file.name.trim() !== ''
+                ? `"${file.name.trim()}"`
+                : 'The selected file';
+
+            showToast(`${fileName} exceeds the ${limitLabel} file size limit for ${fieldLabel}.`, 'error', 6500);
+        }
+
+        function initializeFileSizeValidation() {
+            const initializedAttribute = 'data-app-file-size-check-ready';
+
+            const bindInput = function(input) {
+                if (!(input instanceof HTMLInputElement) || input.type !== 'file') {
+                    return;
+                }
+
+                const maxKilobytes = Number(input.getAttribute('data-max-size-kb'));
+                if (!Number.isFinite(maxKilobytes) || maxKilobytes <= 0) {
+                    return;
+                }
+
+                if (input.hasAttribute(initializedAttribute)) {
+                    return;
+                }
+
+                const limitLabel = formatFileSizeFromKilobytes(maxKilobytes);
+                if (limitLabel !== '') {
+                    const currentTitle = (input.getAttribute('title') || '').trim();
+                    if (!/maximum file size/i.test(currentTitle)) {
+                        input.setAttribute('title', currentTitle !== '' ? `${currentTitle} Maximum file size: ${limitLabel}.` : `Maximum file size: ${limitLabel}.`);
+                    }
+                }
+
+                input.setAttribute(initializedAttribute, '1');
+                input.addEventListener('change', function() {
+                    const files = Array.from(input.files || []);
+                    if (files.length === 0) {
+                        return;
+                    }
+
+                    const maxBytes = maxKilobytes * 1024;
+                    const oversizedFile = files.find(function(file) {
+                        return file && Number.isFinite(file.size) && file.size > maxBytes;
+                    });
+
+                    if (!oversizedFile) {
+                        return;
+                    }
+
+                    input.value = '';
+                    notifyFileTooLarge(input, oversizedFile, maxKilobytes);
+                }, true);
+            };
+
+            document.querySelectorAll('input[type="file"][data-max-size-kb]').forEach(bindInput);
+
+            if (!document.body || typeof MutationObserver !== 'function') {
+                return;
+            }
+
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (!(node instanceof Element)) {
+                            return;
+                        }
+
+                        if (node.matches && node.matches('input[type="file"][data-max-size-kb]')) {
+                            bindInput(node);
+                        }
+
+                        if (node.querySelectorAll) {
+                            node.querySelectorAll('input[type="file"][data-max-size-kb]').forEach(bindInput);
+                        }
+                    });
+                });
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+            });
+        }
+
         window.AppUI = window.AppUI || {};
         window.AppUI.confirm = showConfirm;
         window.AppUI.error = showGlobalError;
         window.AppUI.toast = showToast;
+        window.AppUI.initializeFileSizeValidation = initializeFileSizeValidation;
+
+        initializeFileSizeValidation();
 
         window.addEventListener('error', function(event) {
             const message = (event && (event.message || (event.error && event.error.message))) || 'A script error occurred.';

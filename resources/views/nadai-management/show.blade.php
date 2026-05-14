@@ -1272,7 +1272,7 @@
                     </div>
                     <div class="nadai-form-field nadai-form-field-full">
                         <label for="document" class="nadai-form-label">Upload NADAI Document</label>
-                        <input id="document" type="file" name="document" accept="application/pdf,.pdf" required class="nadai-form-input">
+                        <input id="document" type="file" name="document" accept="application/pdf,.pdf" required class="nadai-form-input" data-max-size-kb="15360">
                         <p class="nadai-form-helper">Allowed format: PDF only, maximum 15MB.</p>
                     </div>
                 </div>
@@ -1359,7 +1359,7 @@
                         </div>
                         <div class="nadai-form-field nadai-form-field-full">
                             <label for="edit_document_{{ $document->id }}" class="nadai-form-label">Replace NADAI Document</label>
-                            <input id="edit_document_{{ $document->id }}" type="file" name="document" accept="application/pdf,.pdf" class="nadai-form-input">
+                            <input id="edit_document_{{ $document->id }}" type="file" name="document" accept="application/pdf,.pdf" class="nadai-form-input" data-max-size-kb="15360">
                             <p class="nadai-form-helper">Leave blank to keep the current PDF. Allowed format: PDF only, maximum 15MB.</p>
                         </div>
                     </div>

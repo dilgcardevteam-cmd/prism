@@ -492,7 +492,7 @@
                     </div>
                     <div>
                         <label for="confirmation_document" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 700;">Upload Confirmation of Fund Receipt Attachment</label>
-                        <input id="confirmation_document" type="file" name="document" accept="application/pdf,.pdf" required class="dashboard-file-input" style="width: 100%;">
+                        <input id="confirmation_document" type="file" name="document" accept="application/pdf,.pdf" required class="dashboard-file-input" style="width: 100%;" data-max-size-kb="15360">
                         <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">Allowed format: PDF only, maximum 15MB.</div>
                     </div>
                 </div>
