@@ -52,7 +52,7 @@ class ProjectLocationFilterHelper
             return $hierarchy;
         }
 
-        if (!preg_match('/export\s+const\s+locationData\s*=\s*(\{.*\})\s*;?\s*$/su', $content, $matches)) {
+        if (!preg_match('/export\s+const\s+locationData\s*=\s*(\{.*?\})\s*;/su', $content, $matches)) {
             return $hierarchy;
         }
 

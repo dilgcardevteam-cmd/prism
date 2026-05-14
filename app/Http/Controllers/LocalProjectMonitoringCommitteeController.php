@@ -8,6 +8,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use App\Support\LguReportorialDeadlineResolver;
+use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -29,6 +30,51 @@ class LocalProjectMonitoringCommitteeController extends Controller
     }
 
     private function getOffices(): array
+    {
+        $configuredHierarchy = ProjectLocationFilterHelper::buildConfiguredLocationHierarchy();
+        if (empty($configuredHierarchy)) {
+            return $this->getFallbackOffices();
+        }
+
+        $fallbackOffices = $this->getFallbackOffices();
+        $configuredOffices = [];
+
+        foreach ($configuredHierarchy as $province => $cityMap) {
+            $provinceLabel = ProjectLocationFilterHelper::normalizeLabel($province);
+            if ($provinceLabel === '') {
+                continue;
+            }
+
+            $legacyProvinceOffices = $fallbackOffices[$provinceLabel] ?? [];
+            $officeLabels = [];
+
+            if (!$this->isIndependentCityProvince($provinceLabel)) {
+                $officeLabels[] = 'PLGU ' . $provinceLabel;
+            }
+
+            foreach (array_keys(is_array($cityMap) ? $cityMap : []) as $cityLabel) {
+                $normalizedCityLabel = ProjectLocationFilterHelper::normalizeLabel($cityLabel);
+                if ($normalizedCityLabel === '') {
+                    continue;
+                }
+
+                $officeLabels[] = $this->resolveConfiguredOfficeLabel($normalizedCityLabel, $legacyProvinceOffices);
+            }
+
+            $configuredOffices[$provinceLabel] = collect($officeLabels)
+                ->map(fn ($label) => ProjectLocationFilterHelper::normalizeLabel($label))
+                ->filter()
+                ->unique(function ($label) {
+                    return mb_strtolower((string) $label);
+                })
+                ->values()
+                ->all();
+        }
+
+        return !empty($configuredOffices) ? $configuredOffices : $fallbackOffices;
+    }
+
+    private function getFallbackOffices(): array
     {
         return [
             'Abra' => [
@@ -59,6 +105,29 @@ class LocalProjectMonitoringCommitteeController extends Controller
                 'Sabangan', 'Sadanga', 'Sagada', 'Tadian',
             ],
         ];
+    }
+
+    private function resolveConfiguredOfficeLabel(string $officeName, array $fallbackOffices): string
+    {
+        foreach ($fallbackOffices as $fallbackOffice) {
+            if (strcasecmp($fallbackOffice, $officeName) === 0) {
+                return $fallbackOffice;
+            }
+        }
+
+        $comparableOffice = ProjectLocationFilterHelper::normalizeComparableLocationLabel($officeName);
+        foreach ($fallbackOffices as $fallbackOffice) {
+            if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($fallbackOffice) === $comparableOffice) {
+                return $fallbackOffice;
+            }
+        }
+
+        return $officeName;
+    }
+
+    private function isIndependentCityProvince(string $provinceName): bool
+    {
+        return ProjectLocationFilterHelper::normalizeComparableLocationLabel($provinceName) === 'baguio';
     }
 
     private function buildOfficeRows(array $offices): array

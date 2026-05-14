@@ -529,14 +529,52 @@
                         </select>
                     </div>
 
-                    <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end;">
-                        <a href="{{ route('dashboard', ['tab' => $activeProjectTab]) }}" style="height: 38px; min-width: 170px; border-radius: 8px; background-color: #3b82f6; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; padding: 0 18px;">
+                    <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                        <a href="{{ route('dashboard', ['tab' => $activeProjectTab]) }}" class="dashboard-filter-reset-link" style="height: 38px; min-width: 170px; border-radius: 8px; padding: 0 18px;">
                             Reset Filter
                         </a>
+                        <button type="button" class="dashboard-filter-export-btn" data-modal-target="dashboard-overview-export-modal" data-export-filename="status-of-projects-by-location" onclick="return window.openDashboardModalById('dashboard-overview-export-modal', event)" onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('dashboard-overview-export-modal', event); }" style="height: 38px; min-width: 170px; border-radius: 8px; padding: 0 18px;">
+                            <i class="fas fa-file-excel" aria-hidden="true"></i>
+                            Export Report
+                        </button>
                     </div>
                 </div>
             </div>
         </form>
+
+        <div id="dashboard-overview-export-modal" class="dashboard-modal" aria-hidden="true">
+            <div class="dashboard-modal-backdrop" data-close-modal></div>
+            <div class="dashboard-modal-dialog dashboard-export-format-modal" role="dialog" aria-modal="true" aria-labelledby="dashboard-overview-export-modal-title">
+                <div class="dashboard-modal-header">
+                    <h3 id="dashboard-overview-export-modal-title">Export Dashboard Report</h3>
+                    <button type="button" class="dashboard-modal-close" data-close-modal aria-label="Close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <p class="dashboard-modal-subtitle">
+                    Choose the file format for the current Status of Projects by Province and City/Municipality report.
+                </p>
+                <div class="dashboard-modal-body">
+                    <div class="dashboard-export-format-grid">
+                        <button type="button" class="dashboard-export-format-option dashboard-export-format-option--excel" onclick="exportDashboardOverviewReport(this, 'excel')" data-export-filename="status-of-projects-by-location">
+                            <span class="dashboard-export-format-option-icon"><i class="fas fa-file-excel" aria-hidden="true"></i></span>
+                            <span class="dashboard-export-format-option-title">Excel</span>
+                            <span class="dashboard-export-format-option-copy">Restores the multi-sheet workbook template.</span>
+                        </button>
+                        <button type="button" class="dashboard-export-format-option dashboard-export-format-option--csv" onclick="exportDashboardOverviewReport(this, 'csv')" data-export-filename="status-of-projects-by-location">
+                            <span class="dashboard-export-format-option-icon"><i class="fas fa-file-csv" aria-hidden="true"></i></span>
+                            <span class="dashboard-export-format-option-title">CSV</span>
+                            <span class="dashboard-export-format-option-copy">Returns the earlier flat export template as CSV.</span>
+                        </button>
+                        <button type="button" class="dashboard-export-format-option dashboard-export-format-option--pdf" onclick="exportDashboardOverviewReport(this, 'pdf')" data-export-filename="status-of-projects-by-location">
+                            <span class="dashboard-export-format-option-icon"><i class="fas fa-file-pdf" aria-hidden="true"></i></span>
+                            <span class="dashboard-export-format-option-title">PDF</span>
+                            <span class="dashboard-export-format-option-copy">Opens a print-ready report window for PDF output.</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="dashboard-top-cards" style="display: grid; gap: 20px; margin-bottom: 0;">
             <div class="dashboard-card total-projects-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
@@ -4390,9 +4428,98 @@
             cursor: not-allowed;
         }
 
+        .dashboard-export-format-modal {
+            max-width: 760px;
+        }
+
+        .dashboard-export-format-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .dashboard-export-format-option {
+            border: 1px solid #dbe4ff;
+            border-radius: 12px;
+            background: #ffffff;
+            padding: 18px 16px;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .dashboard-export-format-option:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10);
+        }
+
+        .dashboard-export-format-option:focus-visible {
+            outline: 2px solid rgba(37, 99, 235, 0.85);
+            outline-offset: 2px;
+        }
+
+        .dashboard-export-format-option-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .dashboard-export-format-option-title {
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .dashboard-export-format-option-copy {
+            color: #475569;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .dashboard-export-format-option--excel {
+            border-color: #bbf7d0;
+            background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+        }
+
+        .dashboard-export-format-option--excel .dashboard-export-format-option-icon {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .dashboard-export-format-option--csv {
+            border-color: #bfdbfe;
+            background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+        }
+
+        .dashboard-export-format-option--csv .dashboard-export-format-option-icon {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .dashboard-export-format-option--pdf {
+            border-color: #fecaca;
+            background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%);
+        }
+
+        .dashboard-export-format-option--pdf .dashboard-export-format-option-icon {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
         @media (max-width: 900px) {
             .dashboard-modal-filter-count {
                 justify-self: start;
+            }
+
+            .dashboard-export-format-grid {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -5241,7 +5368,7 @@
             openDashboardModal(modalElement);
         }, true);
 
-        function triggerDashboardExcelDownload(blob, filename) {
+        function triggerDashboardFileDownload(blob, filename) {
             const downloadUrl = URL.createObjectURL(blob);
             const downloadLink = document.createElement('a');
             downloadLink.href = downloadUrl;
@@ -5252,14 +5379,32 @@
             URL.revokeObjectURL(downloadUrl);
         }
 
-        function normalizeDashboardExcelFilename(rawFilename, fallbackName) {
+        function triggerDashboardExcelDownload(blob, filename) {
+            triggerDashboardFileDownload(blob, filename);
+        }
+
+        function normalizeDashboardExportFilename(rawFilename, fallbackName, extension) {
+            const normalizedExtension = String(extension || 'xls').replace(/^\./, '').trim().toLowerCase() || 'xls';
             const candidate = (rawFilename || '').toString().trim();
-            const safeFallback = `${fallbackName}.xls`;
+            const safeFallback = `${fallbackName}.${normalizedExtension}`;
             if (!candidate) {
                 return safeFallback;
             }
 
-            return candidate.toLowerCase().endsWith('.xls') ? candidate : `${candidate}.xls`;
+            const baseCandidate = candidate.replace(/\.(xls|xlsx|csv|pdf)$/i, '').trim();
+            return `${baseCandidate || fallbackName}.${normalizedExtension}`;
+        }
+
+        function normalizeDashboardExcelFilename(rawFilename, fallbackName) {
+            return normalizeDashboardExportFilename(rawFilename, fallbackName, 'xls');
+        }
+
+        function normalizeDashboardCsvFilename(rawFilename, fallbackName) {
+            return normalizeDashboardExportFilename(rawFilename, fallbackName, 'csv');
+        }
+
+        function normalizeDashboardPdfFilename(rawFilename, fallbackName) {
+            return normalizeDashboardExportFilename(rawFilename, fallbackName, 'pdf');
         }
 
         function escapeDashboardExcelXml(rawValue) {
@@ -6131,429 +6276,437 @@
             return filters;
         }
 
-        function exportDashboardOverviewToExcel(button) {
-            if (!button || button.disabled) {
-                return;
-            }
+        function buildDashboardOverviewExportData(rawFilename) {
+            const generatedAt = new Date().toLocaleString();
+            const selectedFilters = collectDashboardExportFilters();
+            const statusColumns = (Array.isArray(STATUS_LOCATION_EXPORT_STATUSES) ? STATUS_LOCATION_EXPORT_STATUSES : [])
+                .map((statusLabel) => String(statusLabel || '').trim())
+                .filter((statusLabel) => statusLabel !== '');
+            const reportRows = Array.isArray(STATUS_LOCATION_EXPORT_ROWS) ? STATUS_LOCATION_EXPORT_ROWS : [];
+            const groupedStatusRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS)
+                ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS
+                : [];
+            const groupedStatusSourceRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS)
+                ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS
+                : [];
 
-            const exportButtonOriginalHtml = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-file-excel" aria-hidden="true"></i> Exporting...';
+            const toNumber = (value) => {
+                const numeric = Number(value);
+                return Number.isFinite(numeric) ? numeric : 0;
+            };
+            const toInt = (value) => Math.trunc(toNumber(value));
+            const createMergedRow = (value, styleId, columnCount) => ([
+                {
+                    value,
+                    styleId,
+                    mergeAcross: Math.max(0, Math.trunc(columnCount) - 1),
+                },
+            ]);
+            const createBlankRow = (columnCount) => createMergedRow('', 'Cell', columnCount);
 
-            try {
-                const filename = normalizeDashboardExcelFilename(button.dataset.exportFilename, 'status-of-projects-by-location');
-                const generatedAt = new Date().toLocaleString();
-                const selectedFilters = collectDashboardExportFilters();
-                const statusColumns = (Array.isArray(STATUS_LOCATION_EXPORT_STATUSES) ? STATUS_LOCATION_EXPORT_STATUSES : [])
-                    .map((statusLabel) => String(statusLabel || '').trim())
-                    .filter((statusLabel) => statusLabel !== '');
-                const reportRows = Array.isArray(STATUS_LOCATION_EXPORT_ROWS) ? STATUS_LOCATION_EXPORT_ROWS : [];
-                const groupedStatusRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS)
-                    ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS
-                    : [];
-                const groupedStatusSourceRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS)
-                    ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS
-                    : [];
+            const normalizedRows = reportRows.map((row) => ({
+                row_type: String(row?.row_type || '').toLowerCase(),
+                province: String(row?.province || '').trim(),
+                city_municipality: String(row?.city_municipality || '').trim(),
+                counts: row && typeof row === 'object' && row.counts && typeof row.counts === 'object'
+                    ? row.counts
+                    : {},
+            }));
 
-                const toNumber = (value) => {
-                    const numeric = Number(value);
-                    return Number.isFinite(numeric) ? numeric : 0;
-                };
-                const toInt = (value) => Math.trunc(toNumber(value));
-                const createMergedRow = (value, styleId, columnCount) => ([
-                    {
-                        value,
-                        styleId,
-                        mergeAcross: Math.max(0, Math.trunc(columnCount) - 1),
-                    },
-                ]);
-                const createBlankRow = (columnCount) => createMergedRow('', 'Cell', columnCount);
-
-                const normalizedRows = reportRows.map((row) => ({
-                    row_type: String(row?.row_type || '').toLowerCase(),
-                    province: String(row?.province || '').trim(),
-                    city_municipality: String(row?.city_municipality || '').trim(),
-                    counts: row && typeof row === 'object' && row.counts && typeof row.counts === 'object'
-                        ? row.counts
-                        : {},
-                }));
-
-                const provinceSummaryRows = normalizedRows.filter((row) => row.row_type === 'province');
-                const citySummaryRows = normalizedRows.filter((row) => row.row_type === 'city');
-                const summaryRows = provinceSummaryRows.length > 0 ? provinceSummaryRows : citySummaryRows;
-                const statusTotals = {};
+            const provinceSummaryRows = normalizedRows.filter((row) => row.row_type === 'province');
+            const citySummaryRows = normalizedRows.filter((row) => row.row_type === 'city');
+            const summaryRows = provinceSummaryRows.length > 0 ? provinceSummaryRows : citySummaryRows;
+            const statusTotals = {};
+            statusColumns.forEach((statusLabel) => {
+                statusTotals[statusLabel] = 0;
+            });
+            summaryRows.forEach((row) => {
                 statusColumns.forEach((statusLabel) => {
-                    statusTotals[statusLabel] = 0;
+                    statusTotals[statusLabel] += toNumber(row.counts?.[statusLabel] ?? 0);
                 });
-                summaryRows.forEach((row) => {
-                    statusColumns.forEach((statusLabel) => {
-                        statusTotals[statusLabel] += toNumber(row.counts?.[statusLabel] ?? 0);
+            });
+            const totalProjects = statusColumns.reduce((carry, statusLabel) => carry + toNumber(statusTotals[statusLabel] ?? 0), 0);
+            const normalizedGroupedStatusRows = (() => {
+                if (groupedStatusSourceRows.length > 0) {
+                    const aggregatedRows = new Map();
+
+                    groupedStatusSourceRows.forEach((row) => {
+                        const provinceLabel = String(row?.province || '').trim() || 'Unspecified Province';
+                        const fundingYearLabel = String(row?.funding_year || '').trim() || 'Unspecified Funding Year';
+                        const programLabel = String(row?.program || '').trim() || 'Unspecified Program';
+                        const projectStatusLabel = String(row?.project_status || '').trim() || 'Unspecified Status';
+                        const rowKey = [provinceLabel, fundingYearLabel, programLabel, projectStatusLabel].join('||');
+
+                        if (!aggregatedRows.has(rowKey)) {
+                            aggregatedRows.set(rowKey, {
+                                province: provinceLabel,
+                                funding_year: fundingYearLabel,
+                                program: programLabel,
+                                project_status: projectStatusLabel,
+                                total: 0,
+                            });
+                        }
+
+                        aggregatedRows.get(rowKey).total += 1;
                     });
-                });
-                const totalProjects = statusColumns.reduce((carry, statusLabel) => carry + toNumber(statusTotals[statusLabel] ?? 0), 0);
-                const normalizedGroupedStatusRows = (() => {
-                    if (groupedStatusSourceRows.length > 0) {
-                        const aggregatedRows = new Map();
 
-                        groupedStatusSourceRows.forEach((row) => {
-                            const provinceLabel = String(row?.province || '').trim() || 'Unspecified Province';
-                            const fundingYearLabel = String(row?.funding_year || '').trim() || 'Unspecified Funding Year';
-                            const programLabel = String(row?.program || '').trim() || 'Unspecified Program';
-                            const projectStatusLabel = String(row?.project_status || '').trim() || 'Unspecified Status';
-                            const rowKey = [provinceLabel, fundingYearLabel, programLabel, projectStatusLabel].join('||');
-
-                            if (!aggregatedRows.has(rowKey)) {
-                                aggregatedRows.set(rowKey, {
-                                    province: provinceLabel,
-                                    funding_year: fundingYearLabel,
-                                    program: programLabel,
-                                    project_status: projectStatusLabel,
-                                    total: 0,
-                                });
-                            }
-
-                            aggregatedRows.get(rowKey).total += 1;
-                        });
-
-                        return Array.from(aggregatedRows.values());
-                    }
-
-                    return groupedStatusRows.map((row) => ({
-                        province: String(row?.province || '').trim() || 'Unspecified Province',
-                        funding_year: String(row?.funding_year || '').trim() || 'Unspecified Funding Year',
-                        program: String(row?.program || '').trim() || 'Unspecified Program',
-                        project_status: String(row?.project_status || '').trim() || 'Unspecified Status',
-                        total: toInt(row?.total ?? 0),
-                    }));
-                })();
-                const overviewColumnCount = Math.max(statusColumns.length + 3, 3);
-                const overviewColumnWidths = [
-                    140,
-                    180,
-                    ...Array.from({ length: statusColumns.length }, () => 88),
-                    80,
-                ];
-
-                const filterRows = selectedFilters.length > 0
-                    ? selectedFilters.map(([label, value]) => ([
-                        { value: label, styleId: 'Cell' },
-                        { value: value || 'All', styleId: 'Cell' },
-                    ]))
-                    : [[{ value: 'No filters', styleId: 'Cell', mergeAcross: 1 }]];
-
-                const summarySheetRows = [
-                    createMergedRow('Status Of Projects By Province And City/Municipality', 'Title', overviewColumnCount),
-                    createMergedRow(`Generated at: ${generatedAt}`, 'Meta', overviewColumnCount),
-                    createBlankRow(overviewColumnCount),
-                    createMergedRow('Applied Filters', 'SectionHeader', overviewColumnCount),
-                    [
-                        { value: 'Filter', styleId: 'Header' },
-                        { value: 'Value', styleId: 'Header' },
-                    ],
-                    ...filterRows,
-                    createBlankRow(overviewColumnCount),
-                    createMergedRow('Status Summary (All Projects)', 'SectionHeader', overviewColumnCount),
-                    [
-                        { value: 'Status', styleId: 'Header' },
-                        { value: 'Count', styleId: 'Header' },
-                        { value: '% of Projects', styleId: 'Header' },
-                    ],
-                ];
-
-                if (statusColumns.length > 0) {
-                    statusColumns.forEach((statusLabel) => {
-                        const countValue = toNumber(statusTotals[statusLabel] ?? 0);
-                        const shareValue = totalProjects > 0 ? `${((countValue / totalProjects) * 100).toFixed(2)}%` : '0.00%';
-                        summarySheetRows.push([
-                            { value: statusLabel, styleId: 'Cell' },
-                            { value: toInt(countValue), type: 'Number', styleId: 'CellRight' },
-                            { value: shareValue, styleId: 'CellRight' },
-                        ]);
-                    });
-                } else {
-                    summarySheetRows.push(createMergedRow('No status data found for the selected filters.', 'Cell', 3));
+                    return Array.from(aggregatedRows.values());
                 }
 
-                summarySheetRows.push([
-                    { value: 'Total Projects', styleId: 'GroupCell' },
-                    { value: toInt(totalProjects), type: 'Number', styleId: 'GroupCellRight' },
-                    { value: totalProjects > 0 ? '100.00%' : '0.00%', styleId: 'GroupCellRight' },
-                ]);
-                summarySheetRows.push(createBlankRow(overviewColumnCount));
-                summarySheetRows.push(createMergedRow('Province and City/Municipality Breakdown', 'SectionHeader', overviewColumnCount));
-                summarySheetRows.push([
-                    { value: 'Province', styleId: 'Header' },
-                    { value: 'City/Municipality', styleId: 'Header' },
-                    ...statusColumns.map((statusLabel) => ({ value: statusLabel, styleId: 'Header' })),
-                    { value: 'Total', styleId: 'Header' },
-                ]);
+                return groupedStatusRows.map((row) => ({
+                    province: String(row?.province || '').trim() || 'Unspecified Province',
+                    funding_year: String(row?.funding_year || '').trim() || 'Unspecified Funding Year',
+                    program: String(row?.program || '').trim() || 'Unspecified Program',
+                    project_status: String(row?.project_status || '').trim() || 'Unspecified Status',
+                    total: toInt(row?.total ?? 0),
+                }));
+            })();
+            const overviewColumnCount = Math.max(statusColumns.length + 3, 3);
+            const overviewColumnWidths = [
+                140,
+                180,
+                ...Array.from({ length: statusColumns.length }, () => 88),
+                80,
+            ];
 
-                if (normalizedRows.length > 0) {
-                    normalizedRows.forEach((row) => {
-                        const isProvinceRow = row.row_type === 'province';
-                        let rowTotal = 0;
-                        const leftStyleId = isProvinceRow ? 'GroupCell' : 'Cell';
-                        const rightStyleId = isProvinceRow ? 'GroupCellRight' : 'CellRight';
-                        const detailRow = [
-                            { value: row.province || '-', styleId: leftStyleId },
-                            { value: isProvinceRow ? 'All Cities/Municipalities' : (row.city_municipality || '-'), styleId: leftStyleId },
-                        ];
+            const filterRows = selectedFilters.length > 0
+                ? selectedFilters.map(([label, value]) => ([
+                    { value: label, styleId: 'Cell' },
+                    { value: value || 'All', styleId: 'Cell' },
+                ]))
+                : [[{ value: 'No filters', styleId: 'Cell', mergeAcross: 1 }]];
 
-                        statusColumns.forEach((statusLabel) => {
-                            const countValue = toNumber(row.counts?.[statusLabel] ?? 0);
-                            rowTotal += countValue;
-                            detailRow.push({
-                                value: toInt(countValue),
-                                type: 'Number',
-                                styleId: rightStyleId,
-                            });
-                        });
+            const summarySheetRows = [
+                createMergedRow('Status Of Projects By Province And City/Municipality', 'Title', overviewColumnCount),
+                createMergedRow(`Generated at: ${generatedAt}`, 'Meta', overviewColumnCount),
+                createBlankRow(overviewColumnCount),
+                createMergedRow('Applied Filters', 'SectionHeader', overviewColumnCount),
+                [
+                    { value: 'Filter', styleId: 'Header' },
+                    { value: 'Value', styleId: 'Header' },
+                ],
+                ...filterRows,
+                createBlankRow(overviewColumnCount),
+                createMergedRow('Status Summary (All Projects)', 'SectionHeader', overviewColumnCount),
+                [
+                    { value: 'Status', styleId: 'Header' },
+                    { value: 'Count', styleId: 'Header' },
+                    { value: '% of Projects', styleId: 'Header' },
+                ],
+            ];
 
+            if (statusColumns.length > 0) {
+                statusColumns.forEach((statusLabel) => {
+                    const countValue = toNumber(statusTotals[statusLabel] ?? 0);
+                    const shareValue = totalProjects > 0 ? `${((countValue / totalProjects) * 100).toFixed(2)}%` : '0.00%';
+                    summarySheetRows.push([
+                        { value: statusLabel, styleId: 'Cell' },
+                        { value: toInt(countValue), type: 'Number', styleId: 'CellRight' },
+                        { value: shareValue, styleId: 'CellRight' },
+                    ]);
+                });
+            } else {
+                summarySheetRows.push(createMergedRow('No status data found for the selected filters.', 'Cell', 3));
+            }
+
+            summarySheetRows.push([
+                { value: 'Total Projects', styleId: 'GroupCell' },
+                { value: toInt(totalProjects), type: 'Number', styleId: 'GroupCellRight' },
+                { value: totalProjects > 0 ? '100.00%' : '0.00%', styleId: 'GroupCellRight' },
+            ]);
+            summarySheetRows.push(createBlankRow(overviewColumnCount));
+            summarySheetRows.push(createMergedRow('Province and City/Municipality Breakdown', 'SectionHeader', overviewColumnCount));
+            summarySheetRows.push([
+                { value: 'Province', styleId: 'Header' },
+                { value: 'City/Municipality', styleId: 'Header' },
+                ...statusColumns.map((statusLabel) => ({ value: statusLabel, styleId: 'Header' })),
+                { value: 'Total', styleId: 'Header' },
+            ]);
+
+            if (normalizedRows.length > 0) {
+                normalizedRows.forEach((row) => {
+                    const isProvinceRow = row.row_type === 'province';
+                    let rowTotal = 0;
+                    const leftStyleId = isProvinceRow ? 'GroupCell' : 'Cell';
+                    const rightStyleId = isProvinceRow ? 'GroupCellRight' : 'CellRight';
+                    const detailRow = [
+                        { value: row.province || '-', styleId: leftStyleId },
+                        { value: isProvinceRow ? 'All Cities/Municipalities' : (row.city_municipality || '-'), styleId: leftStyleId },
+                    ];
+
+                    statusColumns.forEach((statusLabel) => {
+                        const countValue = toNumber(row.counts?.[statusLabel] ?? 0);
+                        rowTotal += countValue;
                         detailRow.push({
-                            value: toInt(rowTotal),
+                            value: toInt(countValue),
                             type: 'Number',
                             styleId: rightStyleId,
                         });
-                        summarySheetRows.push(detailRow);
                     });
-                } else {
-                    summarySheetRows.push(createMergedRow('No province/city status rows found for the selected filters.', 'Cell', overviewColumnCount));
+
+                    detailRow.push({
+                        value: toInt(rowTotal),
+                        type: 'Number',
+                        styleId: rightStyleId,
+                    });
+                    summarySheetRows.push(detailRow);
+                });
+            } else {
+                summarySheetRows.push(createMergedRow('No province/city status rows found for the selected filters.', 'Cell', overviewColumnCount));
+            }
+
+            const hierarchyColumnCount = statusColumns.length + 2;
+            const compareAlphaLabels = (leftValue, rightValue) =>
+                String(leftValue || '').localeCompare(String(rightValue || ''), undefined, {
+                    numeric: true,
+                    sensitivity: 'base',
+                });
+            const compareFundingYearLabels = (leftValue, rightValue) => {
+                const leftLabel = String(leftValue || '').trim();
+                const rightLabel = String(rightValue || '').trim();
+                const leftIsNumeric = /^\d+$/.test(leftLabel);
+                const rightIsNumeric = /^\d+$/.test(rightLabel);
+
+                if (leftIsNumeric && rightIsNumeric) {
+                    const numericCompare = Number(rightLabel) - Number(leftLabel);
+                    if (numericCompare !== 0) {
+                        return numericCompare;
+                    }
                 }
 
-                const hierarchyColumnCount = statusColumns.length + 2;
-                const compareAlphaLabels = (leftValue, rightValue) =>
-                    String(leftValue || '').localeCompare(String(rightValue || ''), undefined, {
-                        numeric: true,
-                        sensitivity: 'base',
-                    });
-                const compareFundingYearLabels = (leftValue, rightValue) => {
-                    const leftLabel = String(leftValue || '').trim();
-                    const rightLabel = String(rightValue || '').trim();
-                    const leftIsNumeric = /^\d+$/.test(leftLabel);
-                    const rightIsNumeric = /^\d+$/.test(rightLabel);
+                return compareAlphaLabels(leftLabel, rightLabel);
+            };
+            const createEmptyStatusCounts = () => statusColumns.reduce((carry, statusLabel) => {
+                carry[statusLabel] = 0;
+                return carry;
+            }, {});
+            const incrementStatusCounts = (counts, statusLabel, countValue) => {
+                if (!Object.prototype.hasOwnProperty.call(counts, statusLabel)) {
+                    counts[statusLabel] = 0;
+                }
 
-                    if (leftIsNumeric && rightIsNumeric) {
-                        const numericCompare = Number(rightLabel) - Number(leftLabel);
-                        if (numericCompare !== 0) {
-                            return numericCompare;
-                        }
-                    }
+                counts[statusLabel] += toInt(countValue);
+            };
+            const computeCountsTotal = (counts) => statusColumns.reduce(
+                (carry, statusLabel) => carry + toInt(counts?.[statusLabel] ?? 0),
+                0
+            );
+            const createHierarchyMetricCells = (counts, metricStyleId) => {
+                let total = 0;
+                const metricCells = statusColumns.map((statusLabel) => {
+                    const countValue = toInt(counts?.[statusLabel] ?? 0);
+                    total += countValue;
 
-                    return compareAlphaLabels(leftLabel, rightLabel);
-                };
-                const createEmptyStatusCounts = () => statusColumns.reduce((carry, statusLabel) => {
-                    carry[statusLabel] = 0;
-                    return carry;
-                }, {});
-                const incrementStatusCounts = (counts, statusLabel, countValue) => {
-                    if (!Object.prototype.hasOwnProperty.call(counts, statusLabel)) {
-                        counts[statusLabel] = 0;
-                    }
-
-                    counts[statusLabel] += toInt(countValue);
-                };
-                const computeCountsTotal = (counts) => statusColumns.reduce(
-                    (carry, statusLabel) => carry + toInt(counts?.[statusLabel] ?? 0),
-                    0
-                );
-                const createHierarchyMetricCells = (counts, metricStyleId) => {
-                    let total = 0;
-                    const metricCells = statusColumns.map((statusLabel) => {
-                        const countValue = toInt(counts?.[statusLabel] ?? 0);
-                        total += countValue;
-
-                        if (countValue > 0) {
-                            return {
-                                value: countValue,
-                                type: 'Number',
-                                styleId: metricStyleId,
-                            };
-                        }
-
+                    if (countValue > 0) {
                         return {
-                            value: '',
-                            styleId: metricStyleId,
-                        };
-                    });
-
-                    metricCells.push(total > 0
-                        ? {
-                            value: total,
+                            value: countValue,
                             type: 'Number',
                             styleId: metricStyleId,
-                        }
-                        : {
-                            value: '',
-                            styleId: metricStyleId,
-                        });
-
-                    return metricCells;
-                };
-                const completedCountLabel = statusColumns.find((statusLabel) => statusLabel.toLowerCase() === 'completed')
-                    || statusColumns[0]
-                    || 'Completed';
-                const activeFiltersText = selectedFilters
-                    .filter(([, value]) => String(value || '').trim() !== '' && String(value || '').trim() !== 'All')
-                    .map(([label, value]) => `${label}: ${value}`)
-                    .join(' | ') || 'All dashboard filters';
-                const hierarchyTree = new Map();
-                const fundingYearSummaryMap = new Map();
-
-                normalizedGroupedStatusRows.forEach((row) => {
-                    const countValue = toInt(row.total ?? 0);
-
-                    if (!hierarchyTree.has(row.province)) {
-                        hierarchyTree.set(row.province, {
-                            counts: createEmptyStatusCounts(),
-                            fundingYears: new Map(),
-                        });
+                        };
                     }
 
-                    const provinceData = hierarchyTree.get(row.province);
-                    incrementStatusCounts(provinceData.counts, row.project_status, countValue);
-
-                    if (!provinceData.fundingYears.has(row.funding_year)) {
-                        provinceData.fundingYears.set(row.funding_year, {
-                            counts: createEmptyStatusCounts(),
-                            programs: new Map(),
-                        });
-                    }
-
-                    const fundingYearData = provinceData.fundingYears.get(row.funding_year);
-                    incrementStatusCounts(fundingYearData.counts, row.project_status, countValue);
-
-                    if (!fundingYearData.programs.has(row.program)) {
-                        fundingYearData.programs.set(row.program, createEmptyStatusCounts());
-                    }
-
-                    const programCounts = fundingYearData.programs.get(row.program);
-                    incrementStatusCounts(programCounts, row.project_status, countValue);
-
-                    if (!fundingYearSummaryMap.has(row.funding_year)) {
-                        fundingYearSummaryMap.set(row.funding_year, {
-                            counts: createEmptyStatusCounts(),
-                            programs: new Map(),
-                            provinces: new Set(),
-                        });
-                    }
-
-                    const fundingYearSummary = fundingYearSummaryMap.get(row.funding_year);
-                    incrementStatusCounts(fundingYearSummary.counts, row.project_status, countValue);
-                    fundingYearSummary.provinces.add(row.province);
-
-                    if (!fundingYearSummary.programs.has(row.program)) {
-                        fundingYearSummary.programs.set(row.program, createEmptyStatusCounts());
-                    }
-
-                    const fundingYearProgramCounts = fundingYearSummary.programs.get(row.program);
-                    incrementStatusCounts(fundingYearProgramCounts, row.project_status, countValue);
+                    return {
+                        value: '',
+                        styleId: metricStyleId,
+                    };
                 });
 
-                const sortedFundingYearEntries = Array.from(fundingYearSummaryMap.entries())
-                    .sort(([leftFundingYear], [rightFundingYear]) => compareFundingYearLabels(leftFundingYear, rightFundingYear));
-                const hierarchySheetRows = [
-                    createMergedRow('Province, Funding Year, and Program Status Analysis', 'SheetTitle', hierarchyColumnCount),
-                    createMergedRow('Styled matrix with subtotals and funding-year analysis', 'SheetSubtitle', hierarchyColumnCount),
-                    createMergedRow(`Generated at: ${generatedAt} | Filters: ${activeFiltersText}`, 'SheetMeta', hierarchyColumnCount),
-                    createBlankRow(hierarchyColumnCount),
-                    createMergedRow('Funding Year Analysis', 'AnalysisSection', hierarchyColumnCount),
-                    [
-                        { value: 'Funding Year', styleId: 'AnalysisHeader' },
-                        { value: 'Total Projects', styleId: 'AnalysisHeader' },
-                        { value: 'Programs', styleId: 'AnalysisHeader' },
-                        { value: 'Provinces', styleId: 'AnalysisHeader' },
-                        { value: 'Completed', styleId: 'AnalysisHeader' },
-                    ],
-                ];
-
-                if (sortedFundingYearEntries.length > 0) {
-                    sortedFundingYearEntries.forEach(([fundingYearLabel, fundingYearSummary]) => {
-                        const fundingYearTotal = computeCountsTotal(fundingYearSummary.counts);
-                        const completedProjects = toInt(fundingYearSummary.counts?.[completedCountLabel] ?? 0);
-
-                        hierarchySheetRows.push([
-                            { value: fundingYearLabel, styleId: 'AnalysisCell' },
-                            { value: fundingYearTotal, type: 'Number', styleId: 'AnalysisCellRight' },
-                            { value: fundingYearSummary.programs.size, type: 'Number', styleId: 'AnalysisCellRight' },
-                            { value: fundingYearSummary.provinces.size, type: 'Number', styleId: 'AnalysisCellRight' },
-                            { value: completedProjects, type: 'Number', styleId: 'AnalysisCellRight' },
-                        ]);
+                metricCells.push(total > 0
+                    ? {
+                        value: total,
+                        type: 'Number',
+                        styleId: metricStyleId,
+                    }
+                    : {
+                        value: '',
+                        styleId: metricStyleId,
                     });
-                } else {
-                    hierarchySheetRows.push(createMergedRow('No funding year analysis rows found for the selected filters.', 'AnalysisCell', hierarchyColumnCount));
+
+                return metricCells;
+            };
+            const completedCountLabel = statusColumns.find((statusLabel) => statusLabel.toLowerCase() === 'completed')
+                || statusColumns[0]
+                || 'Completed';
+            const activeFiltersText = selectedFilters
+                .filter(([, value]) => String(value || '').trim() !== '' && String(value || '').trim() !== 'All')
+                .map(([label, value]) => `${label}: ${value}`)
+                .join(' | ') || 'All dashboard filters';
+            const hierarchyTree = new Map();
+            const fundingYearSummaryMap = new Map();
+
+            normalizedGroupedStatusRows.forEach((row) => {
+                const countValue = toInt(row.total ?? 0);
+
+                if (!hierarchyTree.has(row.province)) {
+                    hierarchyTree.set(row.province, {
+                        counts: createEmptyStatusCounts(),
+                        fundingYears: new Map(),
+                    });
                 }
 
-                hierarchySheetRows.push(createBlankRow(hierarchyColumnCount));
-                hierarchySheetRows.push(createMergedRow('Status Summary of All Projects', 'AnalysisSection', hierarchyColumnCount));
-                hierarchySheetRows.push([
-                    { value: 'Status', styleId: 'AnalysisHeader' },
-                    { value: 'Projects', styleId: 'AnalysisHeader' },
-                    { value: '% of Total', styleId: 'AnalysisHeader' },
-                ]);
+                const provinceData = hierarchyTree.get(row.province);
+                incrementStatusCounts(provinceData.counts, row.project_status, countValue);
 
-                if (statusColumns.length > 0) {
-                    statusColumns.forEach((statusLabel) => {
-                        const countValue = toInt(statusTotals[statusLabel] ?? 0);
-                        const shareValue = totalProjects > 0
-                            ? `${((countValue / totalProjects) * 100).toFixed(1)}%`
-                            : '0.0%';
-
-                        hierarchySheetRows.push([
-                            { value: statusLabel, styleId: 'AnalysisCell' },
-                            { value: countValue, type: 'Number', styleId: 'AnalysisCellRight' },
-                            { value: shareValue, styleId: 'AnalysisTextRight' },
-                        ]);
+                if (!provinceData.fundingYears.has(row.funding_year)) {
+                    provinceData.fundingYears.set(row.funding_year, {
+                        counts: createEmptyStatusCounts(),
+                        programs: new Map(),
                     });
+                }
+
+                const fundingYearData = provinceData.fundingYears.get(row.funding_year);
+                incrementStatusCounts(fundingYearData.counts, row.project_status, countValue);
+
+                if (!fundingYearData.programs.has(row.program)) {
+                    fundingYearData.programs.set(row.program, createEmptyStatusCounts());
+                }
+
+                const programCounts = fundingYearData.programs.get(row.program);
+                incrementStatusCounts(programCounts, row.project_status, countValue);
+
+                if (!fundingYearSummaryMap.has(row.funding_year)) {
+                    fundingYearSummaryMap.set(row.funding_year, {
+                        counts: createEmptyStatusCounts(),
+                        programs: new Map(),
+                        provinces: new Set(),
+                    });
+                }
+
+                const fundingYearSummary = fundingYearSummaryMap.get(row.funding_year);
+                incrementStatusCounts(fundingYearSummary.counts, row.project_status, countValue);
+                fundingYearSummary.provinces.add(row.province);
+
+                if (!fundingYearSummary.programs.has(row.program)) {
+                    fundingYearSummary.programs.set(row.program, createEmptyStatusCounts());
+                }
+
+                const fundingYearProgramCounts = fundingYearSummary.programs.get(row.program);
+                incrementStatusCounts(fundingYearProgramCounts, row.project_status, countValue);
+            });
+
+            const sortedFundingYearEntries = Array.from(fundingYearSummaryMap.entries())
+                .sort(([leftFundingYear], [rightFundingYear]) => compareFundingYearLabels(leftFundingYear, rightFundingYear));
+            const hierarchySheetRows = [
+                createMergedRow('Province, Funding Year, and Program Status Analysis', 'SheetTitle', hierarchyColumnCount),
+                createMergedRow('Styled matrix with subtotals and funding-year analysis', 'SheetSubtitle', hierarchyColumnCount),
+                createMergedRow(`Generated at: ${generatedAt} | Filters: ${activeFiltersText}`, 'SheetMeta', hierarchyColumnCount),
+                createBlankRow(hierarchyColumnCount),
+                createMergedRow('Funding Year Analysis', 'AnalysisSection', hierarchyColumnCount),
+                [
+                    { value: 'Funding Year', styleId: 'AnalysisHeader' },
+                    { value: 'Total Projects', styleId: 'AnalysisHeader' },
+                    { value: 'Programs', styleId: 'AnalysisHeader' },
+                    { value: 'Provinces', styleId: 'AnalysisHeader' },
+                    { value: 'Completed', styleId: 'AnalysisHeader' },
+                ],
+            ];
+
+            if (sortedFundingYearEntries.length > 0) {
+                sortedFundingYearEntries.forEach(([fundingYearLabel, fundingYearSummary]) => {
+                    const fundingYearTotal = computeCountsTotal(fundingYearSummary.counts);
+                    const completedProjects = toInt(fundingYearSummary.counts?.[completedCountLabel] ?? 0);
 
                     hierarchySheetRows.push([
-                        { value: 'Total Projects', styleId: 'AnalysisCell' },
-                        { value: toInt(totalProjects), type: 'Number', styleId: 'AnalysisCellRight' },
-                        { value: totalProjects > 0 ? '100.0%' : '0.0%', styleId: 'AnalysisTextRight' },
+                        { value: fundingYearLabel, styleId: 'AnalysisCell' },
+                        { value: fundingYearTotal, type: 'Number', styleId: 'AnalysisCellRight' },
+                        { value: fundingYearSummary.programs.size, type: 'Number', styleId: 'AnalysisCellRight' },
+                        { value: fundingYearSummary.provinces.size, type: 'Number', styleId: 'AnalysisCellRight' },
+                        { value: completedProjects, type: 'Number', styleId: 'AnalysisCellRight' },
                     ]);
-                } else {
-                    hierarchySheetRows.push(createMergedRow('No status summary rows found for the selected filters.', 'AnalysisCell', hierarchyColumnCount));
-                }
+                });
+            } else {
+                hierarchySheetRows.push(createMergedRow('No funding year analysis rows found for the selected filters.', 'AnalysisCell', hierarchyColumnCount));
+            }
 
-                hierarchySheetRows.push(createBlankRow(hierarchyColumnCount));
-                hierarchySheetRows.push(createMergedRow('Province > Funding Year > Program Status Matrix', 'AnalysisSection', hierarchyColumnCount));
+            hierarchySheetRows.push(createBlankRow(hierarchyColumnCount));
+            hierarchySheetRows.push(createMergedRow('Status Summary of All Projects', 'AnalysisSection', hierarchyColumnCount));
+            hierarchySheetRows.push([
+                { value: 'Status', styleId: 'AnalysisHeader' },
+                { value: 'Projects', styleId: 'AnalysisHeader' },
+                { value: '% of Total', styleId: 'AnalysisHeader' },
+            ]);
+
+            if (statusColumns.length > 0) {
+                statusColumns.forEach((statusLabel) => {
+                    const countValue = toInt(statusTotals[statusLabel] ?? 0);
+                    const shareValue = totalProjects > 0
+                        ? `${((countValue / totalProjects) * 100).toFixed(1)}%`
+                        : '0.0%';
+
+                    hierarchySheetRows.push([
+                        { value: statusLabel, styleId: 'AnalysisCell' },
+                        { value: countValue, type: 'Number', styleId: 'AnalysisCellRight' },
+                        { value: shareValue, styleId: 'AnalysisTextRight' },
+                    ]);
+                });
+
                 hierarchySheetRows.push([
-                    { value: 'Province', styleId: 'HierarchyHeader' },
-                    ...statusColumns.map((statusLabel) => ({ value: statusLabel, styleId: 'HierarchyHeader' })),
-                    { value: 'Total', styleId: 'HierarchyHeader' },
+                    { value: 'Total Projects', styleId: 'AnalysisCell' },
+                    { value: toInt(totalProjects), type: 'Number', styleId: 'AnalysisCellRight' },
+                    { value: totalProjects > 0 ? '100.0%' : '0.0%', styleId: 'AnalysisTextRight' },
                 ]);
+            } else {
+                hierarchySheetRows.push(createMergedRow('No status summary rows found for the selected filters.', 'AnalysisCell', hierarchyColumnCount));
+            }
 
-                if (hierarchyTree.size > 0) {
-                    Array.from(hierarchyTree.entries())
-                        .sort(([leftProvince], [rightProvince]) => compareAlphaLabels(leftProvince, rightProvince))
-                        .forEach(([provinceLabel, provinceData]) => {
-                            hierarchySheetRows.push([
-                                { value: provinceLabel, styleId: 'HierarchyProvince' },
-                                ...createHierarchyMetricCells(provinceData.counts, 'HierarchyProvinceMetric'),
-                            ]);
+            hierarchySheetRows.push(createBlankRow(hierarchyColumnCount));
+            hierarchySheetRows.push(createMergedRow('Province > Funding Year > Program Status Matrix', 'AnalysisSection', hierarchyColumnCount));
+            hierarchySheetRows.push([
+                { value: 'Province', styleId: 'HierarchyHeader' },
+                ...statusColumns.map((statusLabel) => ({ value: statusLabel, styleId: 'HierarchyHeader' })),
+                { value: 'Total', styleId: 'HierarchyHeader' },
+            ]);
 
-                            Array.from(provinceData.fundingYears.entries())
-                                .sort(([leftFundingYear], [rightFundingYear]) => compareFundingYearLabels(leftFundingYear, rightFundingYear))
-                                .forEach(([fundingYearLabel, fundingYearData]) => {
-                                    hierarchySheetRows.push([
-                                        { value: fundingYearLabel, styleId: 'HierarchyFundingYear' },
-                                        ...createHierarchyMetricCells(fundingYearData.counts, 'HierarchyFundingYearMetric'),
-                                    ]);
+            if (hierarchyTree.size > 0) {
+                Array.from(hierarchyTree.entries())
+                    .sort(([leftProvince], [rightProvince]) => compareAlphaLabels(leftProvince, rightProvince))
+                    .forEach(([provinceLabel, provinceData]) => {
+                        hierarchySheetRows.push([
+                            { value: provinceLabel, styleId: 'HierarchyProvince' },
+                            ...createHierarchyMetricCells(provinceData.counts, 'HierarchyProvinceMetric'),
+                        ]);
 
-                                    Array.from(fundingYearData.programs.entries())
-                                        .sort(([leftProgram], [rightProgram]) => compareAlphaLabels(leftProgram, rightProgram))
-                                        .forEach(([programLabel, programCounts]) => {
-                                            hierarchySheetRows.push([
-                                                { value: programLabel, styleId: 'HierarchyProgram' },
-                                                ...createHierarchyMetricCells(programCounts, 'HierarchyProgramMetric'),
-                                            ]);
-                                        });
-                                });
-                        });
-                } else {
-                    hierarchySheetRows.push(createMergedRow('No province, funding year, or program rows found for the selected filters.', 'Cell', hierarchyColumnCount));
-                }
+                        Array.from(provinceData.fundingYears.entries())
+                            .sort(([leftFundingYear], [rightFundingYear]) => compareFundingYearLabels(leftFundingYear, rightFundingYear))
+                            .forEach(([fundingYearLabel, fundingYearData]) => {
+                                hierarchySheetRows.push([
+                                    { value: fundingYearLabel, styleId: 'HierarchyFundingYear' },
+                                    ...createHierarchyMetricCells(fundingYearData.counts, 'HierarchyFundingYearMetric'),
+                                ]);
 
-                const workbookXml = buildDashboardSpreadsheetXml([
+                                Array.from(fundingYearData.programs.entries())
+                                    .sort(([leftProgram], [rightProgram]) => compareAlphaLabels(leftProgram, rightProgram))
+                                    .forEach(([programLabel, programCounts]) => {
+                                        hierarchySheetRows.push([
+                                            { value: programLabel, styleId: 'HierarchyProgram' },
+                                            ...createHierarchyMetricCells(programCounts, 'HierarchyProgramMetric'),
+                                        ]);
+                                    });
+                            });
+                    });
+            } else {
+                hierarchySheetRows.push(createMergedRow('No province, funding year, or program rows found for the selected filters.', 'Cell', hierarchyColumnCount));
+            }
+
+            const hierarchyColumnWidths = [
+                220,
+                ...statusColumns.map((statusLabel) => {
+                    if (statusLabel.length >= 18) {
+                        return 130;
+                    }
+
+                    if (statusLabel.length >= 12) {
+                        return 110;
+                    }
+
+                    return 90;
+                }),
+                90,
+            ];
+
+            return {
+                rawFilename: rawFilename || 'status-of-projects-by-location',
+                worksheets: [
                     {
                         name: 'Status Overview',
                         columns: overviewColumnWidths,
@@ -6561,33 +6714,273 @@
                     },
                     {
                         name: 'Province FY Program',
-                        columns: [220, ...statusColumns.map((statusLabel) => {
-                            if (statusLabel.length >= 18) {
-                                return 130;
-                            }
-
-                            if (statusLabel.length >= 12) {
-                                return 110;
-                            }
-
-                            return 90;
-                        }), 90],
+                        columns: hierarchyColumnWidths,
                         rows: hierarchySheetRows,
                     },
-                ]);
+                ],
+            };
+        }
 
+        function dashboardWorksheetRowsToPlainRows(rows) {
+            return (Array.isArray(rows) ? rows : []).map((row) => {
+                const plainRow = [];
+                const sourceCells = Array.isArray(row) && row.length > 0
+                    ? row
+                    : [{ value: '', styleId: 'Cell' }];
+
+                sourceCells.forEach((cell) => {
+                    plainRow.push(String(cell?.value ?? ''));
+                    const mergeAcrossValue = Number(cell?.mergeAcross);
+                    if (Number.isFinite(mergeAcrossValue) && mergeAcrossValue > 0) {
+                        for (let index = 0; index < Math.trunc(mergeAcrossValue); index += 1) {
+                            plainRow.push('');
+                        }
+                    }
+                });
+
+                while (plainRow.length > 0 && plainRow[plainRow.length - 1] === '') {
+                    plainRow.pop();
+                }
+
+                return plainRow;
+            });
+        }
+
+        function escapeDashboardCsvValue(value) {
+            const normalizedValue = String(value ?? '');
+            if (/[",\r\n]/.test(normalizedValue)) {
+                return `"${normalizedValue.replace(/"/g, '""')}"`;
+            }
+
+            return normalizedValue;
+        }
+
+        function buildDashboardOverviewCsv(worksheets) {
+            const csvRows = [];
+
+            (Array.isArray(worksheets) ? worksheets : []).forEach((worksheet, worksheetIndex) => {
+                if (worksheetIndex > 0) {
+                    csvRows.push([]);
+                    csvRows.push([]);
+                }
+
+                csvRows.push([worksheet?.name || 'Worksheet']);
+                dashboardWorksheetRowsToPlainRows(worksheet?.rows || []).forEach((row) => {
+                    csvRows.push(row);
+                });
+            });
+
+            return `\ufeff${csvRows.map((row) => row.map((value) => escapeDashboardCsvValue(value)).join(',')).join('\r\n')}`;
+        }
+
+        function escapeDashboardHtml(rawValue) {
+            return String(rawValue ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function dashboardPdfCellClass(styleId) {
+            const classes = ['dashboard-pdf-cell'];
+            const normalizedStyleId = String(styleId || 'Cell');
+
+            if (['Header', 'PlainHeader', 'HierarchyHeader', 'AnalysisHeader'].includes(normalizedStyleId)) {
+                classes.push('dashboard-pdf-cell--header');
+            }
+            if (['Title', 'SectionHeader', 'AnalysisSection', 'SheetTitle', 'SheetSubtitle', 'SheetMeta'].includes(normalizedStyleId)) {
+                classes.push('dashboard-pdf-cell--section');
+            }
+            if (['HierarchyHeader', 'HierarchyProvince', 'HierarchyProvinceMetric'].includes(normalizedStyleId)) {
+                classes.push('dashboard-pdf-cell--inverse');
+            }
+            if (['GroupCell', 'GroupCellRight', 'HierarchyProvince', 'HierarchyProvinceMetric', 'HierarchyFundingYear', 'HierarchyFundingYearMetric'].includes(normalizedStyleId)) {
+                classes.push('dashboard-pdf-cell--strong');
+            }
+            if (['CellRight', 'GroupCellRight', 'HierarchyProvinceMetric', 'HierarchyFundingYearMetric', 'HierarchyProgramMetric', 'AnalysisCellRight', 'AnalysisTextRight'].includes(normalizedStyleId)) {
+                classes.push('dashboard-pdf-cell--right');
+            }
+
+            return classes.join(' ');
+        }
+
+        function buildDashboardOverviewPdfHtml(worksheets, filename) {
+            const renderedSheets = (Array.isArray(worksheets) ? worksheets : []).map((worksheet) => {
+                const renderedRows = (Array.isArray(worksheet?.rows) ? worksheet.rows : []).map((row) => {
+                    const sourceCells = Array.isArray(row) && row.length > 0
+                        ? row
+                        : [{ value: '', styleId: 'Cell' }];
+                    const renderedCells = sourceCells.map((cell) => {
+                        const mergeAcrossValue = Number(cell?.mergeAcross);
+                        const colspan = Number.isFinite(mergeAcrossValue) && mergeAcrossValue > 0
+                            ? ` colspan="${Math.trunc(mergeAcrossValue) + 1}"`
+                            : '';
+                        const styleId = String(cell?.styleId || 'Cell');
+                        const tagName = ['Header', 'PlainHeader', 'HierarchyHeader', 'AnalysisHeader'].includes(styleId) ? 'th' : 'td';
+
+                        return `<${tagName}${colspan} class="${dashboardPdfCellClass(styleId)}">${escapeDashboardHtml(cell?.value ?? '')}</${tagName}>`;
+                    }).join('');
+
+                    return `<tr>${renderedCells}</tr>`;
+                }).join('');
+
+                return `
+                    <section class="dashboard-pdf-sheet">
+                        <div class="dashboard-pdf-sheet-label">${escapeDashboardHtml(worksheet?.name || 'Worksheet')}</div>
+                        <table class="dashboard-pdf-table">
+                            <tbody>${renderedRows}</tbody>
+                        </table>
+                    </section>
+                `;
+            }).join('');
+
+            return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${escapeDashboardHtml(filename)}</title>
+    <style>
+        @page { size: A4 landscape; margin: 10mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: Arial, sans-serif; color: #0f172a; background: #ffffff; }
+        .dashboard-pdf-wrap { padding: 12px; }
+        .dashboard-pdf-sheet { margin-bottom: 18px; page-break-inside: avoid; }
+        .dashboard-pdf-sheet-label { font-size: 13px; font-weight: 700; color: #1e3a8a; margin-bottom: 8px; }
+        .dashboard-pdf-table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+        .dashboard-pdf-cell { border: 1px solid #cbd5e1; padding: 5px 6px; vertical-align: top; }
+        .dashboard-pdf-cell--header { background: #e5e7eb; font-weight: 700; text-align: center; }
+        .dashboard-pdf-cell--section { background: #dbeafe; font-weight: 700; }
+        .dashboard-pdf-cell--inverse { background: #1d4ed8; color: #ffffff; }
+        .dashboard-pdf-cell--strong { font-weight: 700; }
+        .dashboard-pdf-cell--right { text-align: right; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-pdf-wrap">
+        ${renderedSheets}
+    </div>
+</body>
+</html>`;
+        }
+
+        window.exportDashboardOverviewToExcel = function (button) {
+            if (!button || button.disabled) {
+                return;
+            }
+
+            const exportButtonOriginalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-file-excel" aria-hidden="true"></i> Exporting Excel...';
+
+            try {
+                const exportData = buildDashboardOverviewExportData(button.dataset.exportFilename);
+                const filename = normalizeDashboardExcelFilename(exportData.rawFilename, 'status-of-projects-by-location');
+                const workbookXml = buildDashboardSpreadsheetXml(exportData.worksheets);
                 const blob = new Blob([workbookXml], {
                     type: 'application/vnd.ms-excel;charset=utf-8;',
                 });
-                triggerDashboardExcelDownload(blob, filename);
+                triggerDashboardFileDownload(blob, filename);
             } catch (error) {
-                console.error('Dashboard export failed.', error);
-                window.alert('Unable to export dashboard report right now. Please try again.');
+                console.error('Dashboard Excel export failed.', error);
+                window.alert('Unable to export the dashboard report to Excel right now. Please try again.');
             } finally {
                 button.disabled = false;
                 button.innerHTML = exportButtonOriginalHtml;
             }
-        }
+        };
+
+        window.exportDashboardOverviewToCsv = function (button) {
+            if (!button || button.disabled) {
+                return;
+            }
+
+            const exportButtonOriginalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-file-csv" aria-hidden="true"></i> Exporting CSV...';
+
+            try {
+                const exportData = buildDashboardOverviewExportData(button.dataset.exportFilename);
+                const filename = normalizeDashboardCsvFilename(exportData.rawFilename, 'status-of-projects-by-location');
+                const csvContent = buildDashboardOverviewCsv(exportData.worksheets);
+                const blob = new Blob([csvContent], {
+                    type: 'text/csv;charset=utf-8;',
+                });
+                triggerDashboardFileDownload(blob, filename);
+            } catch (error) {
+                console.error('Dashboard CSV export failed.', error);
+                window.alert('Unable to export the dashboard report to CSV right now. Please try again.');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = exportButtonOriginalHtml;
+            }
+        };
+
+        window.exportDashboardOverviewToPdf = function (button) {
+            if (!button || button.disabled) {
+                return;
+            }
+
+            const exportButtonOriginalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-file-pdf" aria-hidden="true"></i> Preparing PDF...';
+
+            try {
+                const exportData = buildDashboardOverviewExportData(button.dataset.exportFilename);
+                const filename = normalizeDashboardPdfFilename(exportData.rawFilename, 'status-of-projects-by-location');
+                const pdfWindow = window.open('', '_blank', 'noopener,noreferrer,width=1280,height=900');
+
+                if (!pdfWindow) {
+                    throw new Error('Unable to open the PDF preview window.');
+                }
+
+                pdfWindow.document.open();
+                pdfWindow.document.write(buildDashboardOverviewPdfHtml(exportData.worksheets, filename));
+                pdfWindow.document.close();
+
+                const triggerPrint = () => {
+                    pdfWindow.focus();
+                    pdfWindow.print();
+                };
+
+                if (pdfWindow.document.readyState === 'complete') {
+                    window.setTimeout(triggerPrint, 250);
+                } else {
+                    pdfWindow.onload = () => window.setTimeout(triggerPrint, 250);
+                }
+            } catch (error) {
+                console.error('Dashboard PDF export failed.', error);
+                window.alert('Unable to open the dashboard PDF preview right now. Please allow pop-ups and try again.');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = exportButtonOriginalHtml;
+            }
+        };
+
+        window.exportDashboardOverviewReport = function (button, format) {
+            if (!button) {
+                return;
+            }
+
+            const modalElement = button.closest('.dashboard-modal');
+            if (modalElement) {
+                closeDashboardModal(modalElement);
+            }
+
+            const normalizedFormat = String(format || '').trim().toLowerCase();
+            if (normalizedFormat === 'csv') {
+                window.exportDashboardOverviewToCsv(button);
+                return;
+            }
+
+            if (normalizedFormat === 'pdf') {
+                window.exportDashboardOverviewToPdf(button);
+                return;
+            }
+
+            window.exportDashboardOverviewToExcel(button);
+        };
 
         function formatDashboardAnimatedBarValue(value, format) {
             if (format === 'currency') {
