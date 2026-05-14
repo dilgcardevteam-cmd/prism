@@ -560,13 +560,55 @@
             return defaultMessages.save;
         }
 
+        function resolveAssociatedForm(el) {
+            if (!el) {
+                return null;
+            }
+
+            if (el.form instanceof HTMLFormElement) {
+                return el.form;
+            }
+
+            const explicitFormId = el.getAttribute ? (el.getAttribute('form') || '').trim() : '';
+            if (explicitFormId !== '') {
+                const explicitForm = document.getElementById(explicitFormId);
+                if (explicitForm instanceof HTMLFormElement) {
+                    return explicitForm;
+                }
+            }
+
+            return el.closest ? el.closest('form') : null;
+        }
+
+        function submitFormSafely(form, submitter) {
+            if (!(form instanceof HTMLFormElement)) {
+                return;
+            }
+
+            const canUseSubmitter = submitter
+                && typeof form.requestSubmit === 'function'
+                && submitter.form === form;
+
+            if (canUseSubmitter) {
+                form.requestSubmit(submitter);
+                return;
+            }
+
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+                return;
+            }
+
+            form.submit();
+        }
+
         function runConfirmedAction(target) {
             if (!target) {
                 return;
             }
 
             const tag = target.tagName ? target.tagName.toLowerCase() : '';
-            const form = target.closest ? target.closest('form') : null;
+            const form = resolveAssociatedForm(target);
 
             if (tag === 'a') {
                 const href = target.getAttribute('href');
@@ -581,11 +623,7 @@
             const isSubmitControl = (tag === 'button' && (resolvedType === '' || resolvedType === 'submit'))
                 || (tag === 'input' && resolvedType === 'submit');
             if (form && isSubmitControl) {
-                if (typeof form.requestSubmit === 'function') {
-                    form.requestSubmit(target);
-                } else {
-                    form.submit();
-                }
+                submitFormSafely(form, target);
                 return;
             }
 
@@ -653,11 +691,7 @@
                     submitter.dataset.appConfirmed = 'true';
                 }
 
-                if (submitter && typeof form.requestSubmit === 'function') {
-                    form.requestSubmit(submitter);
-                } else {
-                    form.submit();
-                }
+                submitFormSafely(form, submitter);
             });
         }, true);
 
