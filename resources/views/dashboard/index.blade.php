@@ -1123,6 +1123,8 @@
                         data-card-url="{{ $statusFilterUrl }}"
                         data-modal-target="{{ $statusModalId }}"
                         data-sg-bar-animate="status-subaybayan"
+                        onclick="return window.openDashboardModalById('{{ $statusModalId }}', event)"
+                        onkeydown="if (event.key === 'Enter' || event.key === ' ') { return window.openDashboardModalById('{{ $statusModalId }}', event); }"
                         style="--status-row-bg: {{ $iconConfig['tileBg'] }}; --status-row-border: {{ $iconConfig['tileBorder'] }}; --status-title-color: {{ $iconConfig['labelColor'] }};"
                     >
                         <div class="sglgif-bar-head">
@@ -1893,6 +1895,34 @@
             $statusModalId = 'status-subaybayan-' . ($statusModalKey !== '' ? $statusModalKey : 'unspecified') . '-modal';
             $statusModalTitleId = $statusModalId . '-title';
             $statusModalProjects = collect($statusSubaybayanProjectsModalMap[$status] ?? []);
+            $statusModalProvinceOptions = $statusModalProjects
+                ->pluck('province')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values();
+            $statusModalCityOptions = $statusModalProjects
+                ->pluck('city_municipality')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values();
+            $statusModalFundingYearOptions = $statusModalProjects
+                ->pluck('funding_year')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values();
+            $statusModalStatusOptions = $statusModalProjects
+                ->pluck('status')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter(fn ($value) => $value !== '')
+                ->unique()
+                ->sort()
+                ->values();
         @endphp
         <div id="{{ $statusModalId }}" class="dashboard-modal" aria-hidden="true">
             <div class="dashboard-modal-backdrop" data-close-modal></div>
@@ -1908,6 +1938,59 @@
                 </p>
                 <div class="dashboard-modal-body">
                     @if ($statusModalProjects->isNotEmpty())
+                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $statusModalProjects->count() }}">
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Code</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Project Title</span>
+                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Province</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($statusModalProvinceOptions as $provinceOption)
+                                        <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>City/Municipality</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($statusModalCityOptions as $cityOption)
+                                        <option value="{{ $cityOption }}">{{ $cityOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Funding Year</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="4" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($statusModalFundingYearOptions as $fundingYearOption)
+                                        <option value="{{ $fundingYearOption }}">{{ $fundingYearOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <label class="dashboard-modal-filter-field">
+                                <span>Status</span>
+                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="5" onchange="return window.runDashboardModalFilters(this)">
+                                    <option value="">All</option>
+                                    @foreach ($statusModalStatusOptions as $statusOption)
+                                        <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <div class="dashboard-modal-filter-actions">
+                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
+                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
+                            </div>
+                        </div>
+                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
+                            No projects match the selected modal filters.
+                        </div>
                         <div class="dashboard-modal-table-wrap">
                             <table class="dashboard-modal-table">
                                 <thead>

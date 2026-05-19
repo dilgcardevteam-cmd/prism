@@ -132,9 +132,23 @@ class ConfirmationOfFundReceiptController extends Controller
     {
         $user = auth()->user();
 
-        return $user
-            && $user->isLguScopedUser()
-            && $user->matchesAssignedOffice($officeName);
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->isLguScopedUser()) {
+            return $user->matchesAssignedOffice($officeName);
+        }
+
+        if ($user->isDilgUser() && !$user->isRegionalOfficeAssignment()) {
+            $officeProvince = $this->findProvinceByOffice($officeName);
+
+            return $officeProvince !== null
+                && $user->normalizedProvince() !== ''
+                && $user->normalizedProvince() === Str::lower(trim($officeProvince));
+        }
+
+        return false;
     }
 
     private function canUploadConfirmationDocument(string $officeName): bool
@@ -455,7 +469,7 @@ class ConfirmationOfFundReceiptController extends Controller
         }
 
         if (!$this->canAcceptDocument($officeName)) {
-            abort(403, 'Only the assigned LGU user can accept this uploaded NADAI document.');
+            abort(403, 'Only the assigned LGU user or the assigned provincial DILG user can accept this uploaded NADAI document.');
         }
 
         $validated = request()->validate([
