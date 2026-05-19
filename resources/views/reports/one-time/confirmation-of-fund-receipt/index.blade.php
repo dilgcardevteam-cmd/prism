@@ -26,7 +26,7 @@
 
 <div class="content-header">
     <h1>Confirmation of Fund Receipt</h1>
-    <p>Adopt the uploaded NADAI records from NADAI Management and track LGU acceptance plus Confirmation of Fund Receipt attachments per LGU and PLGU.</p>
+    <p>Adopt the uploaded NADAI records from NADAI Management and track NADAI acceptance plus Confirmation of Fund Receipt attachments per LGU and PLGU.</p>
 </div>
 
 @if (session('success'))

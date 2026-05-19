@@ -273,7 +273,7 @@
         <div class="cfr-show-card-note">All NADAI submissions adopted from NADAI Management.</div>
     </div>
     <div class="cfr-show-card">
-        <div class="cfr-show-card-label">Accepted by LGU</div>
+        <div class="cfr-show-card-label">Accepted NADAI</div>
         <div class="cfr-show-card-value">{{ $acceptedNadaiRecords }}</div>
         <div class="cfr-show-card-note">Accepted NADAI records ready for CFR processing.</div>
     </div>
@@ -378,7 +378,7 @@
                                         For NADAI Acceptance
                                     </span>
                                 </div>
-                                <div class="cfr-show-action-note">The assigned LGU user needs to confirm receipt of the NADAI first.</div>
+                                <div class="cfr-show-action-note">The assigned LGU user or provincial DILG user needs to confirm receipt of the NADAI first.</div>
                             @elseif (!$confirmationDocument)
                                 <span class="cfr-show-status cfr-show-status-accepted">
                                     <i class="fas fa-circle-check"></i> NADAI Accepted
@@ -449,7 +449,7 @@
                                     @if ($confirmationDocument)
                                         <div class="cfr-show-subline">NADAI accepted and CFR attachment already uploaded.</div>
                                     @elseif (!$isAccepted)
-                                        <div class="cfr-show-subline">Waiting for LGU acceptance before CFR upload.</div>
+                                        <div class="cfr-show-subline">Waiting for NADAI acceptance before CFR upload.</div>
                                     @endif
                                 @endif
                             </div>
