@@ -1021,6 +1021,10 @@ class SystemManagementController extends Controller
                 $inserted += count($batchRows);
             }
 
+            if ($dataTable === 'subay_project_profiles') {
+                $this->refreshSubayDerivedColumnsForScope($uploadPage);
+            }
+
             return $inserted;
         });
     }
@@ -1461,6 +1465,112 @@ class SystemManagementController extends Controller
                 });
             })
             ->delete();
+    }
+
+    private function refreshSubayDerivedColumnsForScope(array $uploadPage): void
+    {
+        if ($this->resolveUploadDataTable($uploadPage) !== 'subay_project_profiles') {
+            return;
+        }
+
+        if (!Schema::hasColumn('subay_project_profiles', 'project_code_key')) {
+            return;
+        }
+
+        $scope = (string) ($uploadPage['snapshotScope'] ?? 'subaybayan');
+        $dateExpression = $this->subayParsedDateExpression('date');
+
+        $whereClause = match ($scope) {
+            'sglgif' => "UPPER(TRIM(COALESCE(program, ''))) = 'SGLGIF'",
+            'subaybayan_2025_above' => "subaybayan_dataset_group = '2025_above'",
+            default => "(
+                (program IS NULL OR UPPER(TRIM(COALESCE(program, ''))) <> 'SGLGIF')
+                AND
+                (subaybayan_dataset_group IS NULL OR subaybayan_dataset_group <> '2025_above')
+            )",
+        };
+
+        DB::statement("
+            UPDATE subay_project_profiles
+            SET
+                project_code_key = LOWER(TRIM(COALESCE(project_code, ''))),
+                province_key = LOWER(TRIM(COALESCE(province, ''))),
+                city_municipality_key = LOWER(TRIM(COALESCE(city_municipality, ''))),
+                funding_year_key = TRIM(COALESCE(funding_year, '')),
+                funding_year_num = CASE
+                    WHEN TRIM(COALESCE(funding_year, '')) REGEXP '^[0-9]+$' THEN CAST(TRIM(COALESCE(funding_year, '')) AS UNSIGNED)
+                    ELSE NULL
+                END,
+                program_key = UPPER(TRIM(COALESCE(program, ''))),
+                fund_source_key = {$this->subayFundSourceExpression()},
+                procurement_key = LOWER(TRIM(COALESCE(procurement_type, procurement, ''))),
+                status_key = LOWER(TRIM(COALESCE(status, ''))),
+                date_parsed = {$dateExpression},
+                allocation_num = {$this->subayNumericExpression('national_subsidy_original_allocation')},
+                obligation_num = {$this->subayNumericExpression('obligation')},
+                disbursement_num = {$this->subayNumericExpression('disbursement')},
+                liquidations_num = {$this->subayNumericExpression('liquidations')},
+                accomplishment_num = {$this->subayNumericExpression('total_accomplishment')}
+            WHERE {$whereClause}
+        ");
+    }
+
+    private function subayParsedDateExpression(string $column): string
+    {
+        $trimmed = "NULLIF(TRIM(COALESCE({$column}, '')), '')";
+
+        return "
+            COALESCE(
+                IF(
+                    TRIM(COALESCE({$column}, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$',
+                    DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE({$column}, '')) AS DECIMAL(12,4))) DAY),
+                    NULL
+                ),
+                STR_TO_DATE({$trimmed}, '%Y-%m-%d'),
+                STR_TO_DATE({$trimmed}, '%Y-%m-%d %H:%i:%s'),
+                STR_TO_DATE({$trimmed}, '%m/%d/%Y'),
+                STR_TO_DATE({$trimmed}, '%m/%d/%Y %H:%i'),
+                STR_TO_DATE({$trimmed}, '%m/%d/%Y %H:%i:%s'),
+                STR_TO_DATE({$trimmed}, '%m/%d/%Y %h:%i:%s %p'),
+                STR_TO_DATE({$trimmed}, '%m/%d/%y'),
+                STR_TO_DATE({$trimmed}, '%d/%m/%Y'),
+                STR_TO_DATE({$trimmed}, '%d-%m-%Y'),
+                STR_TO_DATE({$trimmed}, '%d-%b-%Y'),
+                STR_TO_DATE({$trimmed}, '%b %e, %Y'),
+                STR_TO_DATE({$trimmed}, '%M %e, %Y')
+            )
+        ";
+    }
+
+    private function subayNumericExpression(string $column): string
+    {
+        $sanitized = "REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE({$column}, '')), ',', ''), '%', ''), '₱', ''), ' ', '')";
+
+        return "
+            CASE
+                WHEN {$sanitized} REGEXP '^-?[0-9]+(\\.[0-9]+)?$' THEN CAST({$sanitized} AS DECIMAL(18,4))
+                ELSE NULL
+            END
+        ";
+    }
+
+    private function subayFundSourceExpression(): string
+    {
+        return "
+            CASE
+                WHEN UPPER(TRIM(COALESCE(project_code, ''))) LIKE 'SBDP%' THEN 'SBDP'
+                WHEN UPPER(TRIM(COALESCE(project_code, ''))) LIKE 'FA-%' THEN 'FALGU'
+                WHEN UPPER(TRIM(COALESCE(project_code, ''))) LIKE 'FALGU%' THEN 'FALGU'
+                WHEN UPPER(TRIM(COALESCE(project_code, ''))) LIKE 'CMGP%' THEN 'CMGP'
+                WHEN UPPER(TRIM(COALESCE(project_code, ''))) LIKE 'GEF%' THEN 'GEF'
+                WHEN UPPER(TRIM(COALESCE(project_code, ''))) LIKE 'SAFPB%' THEN 'SAFPB'
+                WHEN UPPER(TRIM(COALESCE(project_code, ''))) LIKE 'SGLGIF%' THEN 'SGLGIF'
+                WHEN UPPER(TRIM(COALESCE(program, ''))) LIKE '%FALGU%' THEN 'FALGU'
+                WHEN UPPER(TRIM(COALESCE(program, ''))) IN ('GROWTH EQUITY FUND', 'GEF') THEN 'GEF'
+                WHEN UPPER(TRIM(COALESCE(program, ''))) IN ('SUPPORT TO THE BARANGAY DEVELOPMENT PROGRAM', 'SBDP') THEN 'SBDP'
+                ELSE UPPER(TRIM(COALESCE(program, '')))
+            END
+        ";
     }
 
     private function normalizeHeader($value): string

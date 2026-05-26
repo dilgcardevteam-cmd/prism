@@ -319,21 +319,43 @@
                     return route($listRouteName, $query);
                 };
             @endphp
+            <div class="lfp-table-preferences">
+                <div class="lfp-freeze-control">
+                    <label for="lfp-freeze-column">Freeze column</label>
+                    <select id="lfp-freeze-column" data-lfp-freeze-select aria-label="Freeze table column">
+                        <option value="">None</option>
+                        <option value="project_code">Project Code</option>
+                        <option value="project_title">Project Title</option>
+                        <option value="location">Location</option>
+                        <option value="funding_year">Funding Year</option>
+                        <option value="fund_source">Fund Source</option>
+                        <option value="procurement_type">Procurement Type</option>
+                        <option value="lgsf_allocation">LGSF Allocation</option>
+                        <option value="obligation">Obligation</option>
+                        <option value="utilization_rate">Utilization Rate</option>
+                        <option value="physical_status_subaybayan">Physical Status (Subaybayan %)</option>
+                        <option value="status_actual">Status (Actual)</option>
+                        <option value="status_subaybayan">Status (Subaybayan)</option>
+                        <option value="last_updated_at">Last Updated At</option>
+                        <option value="action">Action</option>
+                    </select>
+                </div>
+            </div>
             <div class="lfp-table-wrap" role="region" aria-label="Locally Funded Projects table" tabindex="0">
                 <table id="lfp-table" style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed;">
                     <thead>
                         <tr style="background-color: #f3f4f6; border-bottom: 2px solid #d1d5db;">
-                            <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">
+                            <th data-column-key="project_code" style="padding: 12px; text-align: left; font-weight: 600; color: #374151;">
                                 <a href="{{ $sortUrl('project_code') }}" class="lfp-sort-link" style="display: flex; align-items: center; gap: 4px; width: 100%; justify-content: flex-start;">
                                     <span>Project Code</span><span class="lfp-sort-indicator">{{ $sortIndicator('project_code') }}</span>
                                 </a>
                             </th>
-                            <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151; min-width: 240px;">
+                            <th data-column-key="project_title" style="padding: 12px; text-align: left; font-weight: 600; color: #374151; min-width: 240px;">
                                 <a href="{{ $sortUrl('project_title') }}" class="lfp-sort-link" style="display: flex; align-items: center; gap: 4px; width: 100%; justify-content: flex-start;">
                                     <span>Project Title</span><span class="lfp-sort-indicator">{{ $sortIndicator('project_title') }}</span>
                                 </a>
                             </th>
-                            <th style="padding: 12px; text-align: left; font-weight: 600; color: #374151; min-width: 220px;">
+                            <th data-column-key="location" style="padding: 12px; text-align: left; font-weight: 600; color: #374151; min-width: 220px;">
                                 <a href="{{ $sortUrl('location') }}" class="lfp-sort-link" style="display: flex; align-items: center; gap: 4px; width: 100%; justify-content: flex-start;">
                                     <span>Location</span><span class="lfp-sort-indicator">{{ $sortIndicator('location') }}</span>
                                 </a>
@@ -388,7 +410,7 @@
                                     <span>Last Updated At</span><span class="lfp-sort-indicator">{{ $sortIndicator('last_updated') }}</span>
                                 </a>
                             </th>
-                            <th style="padding: 12px; text-align: center; font-weight: 600; color: #374151;">Action</th>
+                            <th data-column-key="action" style="padding: 12px; text-align: center; font-weight: 600; color: #374151;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -639,8 +661,9 @@
                             <input type="hidden" name="status" value="{{ $activeFilters['status'] ?? '' }}">
                             <input type="hidden" name="sort_by" value="{{ $currentSortBy }}">
                             <input type="hidden" name="sort_dir" value="{{ $currentSortDir }}">
+                            <label for="per-page" style="font-size: 12px; color: #6b7280; margin-right: 8px;">Rows per page</label>
                             <select id="per-page" name="per_page" onchange="this.form.submit()" aria-label="Rows per page" title="Rows per page" style="padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;">
-                                @foreach([10, 15, 25, 50] as $option)
+                                @foreach([5, 10, 15, 20] as $option)
                                     <option value="{{ $option }}" {{ ($perPage ?? 10) == $option ? 'selected' : '' }}>{{ $option }}</option>
                                 @endforeach
                             </select>
@@ -732,11 +755,47 @@
         .lfp-table-wrap {
             width: 100%;
             overflow-x: auto;
-            overflow-y: hidden;
+            overflow-y: auto;
+            max-height: 720px;
             -webkit-overflow-scrolling: touch;
+            scrollbar-gutter: stable;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
             background: #ffffff;
+        }
+
+        .lfp-table-preferences {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .lfp-freeze-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .lfp-freeze-control label {
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .lfp-freeze-control select {
+            min-width: 210px;
+            padding: 6px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #ffffff;
+            color: #111827;
+            font-size: 12px;
         }
 
         .lfp-mobile-cards {
@@ -997,6 +1056,30 @@
             padding: 8px !important;
         }
 
+        #lfp-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f3f4f6;
+        }
+
+        #lfp-table .lfp-frozen-col {
+            position: sticky;
+            left: 0;
+            background: #ffffff;
+            z-index: 1;
+            box-shadow: 1px 0 0 #e5e7eb, 8px 0 12px -12px rgba(15, 23, 42, 0.3);
+        }
+
+        #lfp-table thead .lfp-frozen-col {
+            z-index: 4;
+            background: #f3f4f6;
+        }
+
+        #lfp-table tbody tr:hover .lfp-frozen-col {
+            background: #f9fafb;
+        }
+
         #lfp-table th:nth-child(2),
         #lfp-table td:nth-child(2) {
             min-width: 320px;
@@ -1096,6 +1179,10 @@
         }
 
         @media (max-width: 768px) {
+            .lfp-table-preferences {
+                display: none;
+            }
+
             #lfp-filters-form > div {
                 width: 100%;
                 min-width: 0 !important;
@@ -1178,11 +1265,102 @@
             const barangayData = @json($cityBarangays ?? []);
             const selectedCity = citySelect ? (citySelect.dataset.selectedCity || '') : '';
             const selectedBarangay = barangaySelect ? (barangaySelect.dataset.selectedBarangay || '') : '';
+            const freezeColumnStorageKey = 'lfp.locallyFunded.freezeColumn';
+            const defaultFrozenColumnKey = 'project_code';
             let isFetchingResults = false;
+
+            function readFrozenColumnKey() {
+                try {
+                    const storedValue = window.localStorage.getItem(freezeColumnStorageKey);
+                    return storedValue === null ? defaultFrozenColumnKey : storedValue;
+                } catch (error) {
+                    return defaultFrozenColumnKey;
+                }
+            }
+
+            function writeFrozenColumnKey(columnKey) {
+                try {
+                    window.localStorage.setItem(freezeColumnStorageKey, columnKey || '');
+                } catch (error) {
+                    // Ignore storage errors and keep UI functional.
+                }
+            }
+
+            function applyFrozenColumnByKey(columnKey) {
+                const table = document.getElementById('lfp-table');
+                const freezeSelect = document.querySelector('[data-lfp-freeze-select]');
+
+                if (freezeSelect) {
+                    freezeSelect.value = columnKey || '';
+                }
+
+                if (!table) {
+                    return;
+                }
+
+                table.querySelectorAll('.lfp-frozen-col').forEach(function (cell) {
+                    cell.classList.remove('lfp-frozen-col');
+                    cell.style.left = '';
+                });
+
+                if (!columnKey) {
+                    return;
+                }
+
+                const headerRow = table.tHead && table.tHead.rows ? table.tHead.rows[0] : null;
+                if (!headerRow) {
+                    return;
+                }
+
+                const headerCell = headerRow.querySelector('[data-column-key="' + columnKey + '"]');
+                if (!headerCell) {
+                    return;
+                }
+
+                const targetColumnIndex = Array.prototype.indexOf.call(headerRow.cells, headerCell) + 1;
+                if (targetColumnIndex < 1) {
+                    return;
+                }
+
+                let leftOffset = 0;
+
+                for (let columnIndex = 1; columnIndex <= targetColumnIndex; columnIndex += 1) {
+                    const selector = 'thead tr > *:nth-child(' + columnIndex + '), tbody tr > *:nth-child(' + columnIndex + ')';
+                    const columnCells = table.querySelectorAll(selector);
+                    columnCells.forEach(function (cell) {
+                        cell.classList.add('lfp-frozen-col');
+                        cell.style.left = leftOffset + 'px';
+                    });
+
+                    const headerColumnCell = headerRow.cells[columnIndex - 1];
+                    leftOffset += headerColumnCell ? headerColumnCell.getBoundingClientRect().width : 0;
+                }
+            }
+
+            function syncFrozenColumnControl() {
+                const freezeSelect = document.querySelector('[data-lfp-freeze-select]');
+                if (!freezeSelect) {
+                    applyFrozenColumnByKey('');
+                    return;
+                }
+
+                const availableValues = Array.from(freezeSelect.options).map(function (option) {
+                    return option.value;
+                });
+
+                const preferredColumnKey = readFrozenColumnKey();
+                const resolvedColumnKey = availableValues.includes(preferredColumnKey)
+                    ? preferredColumnKey
+                    : defaultFrozenColumnKey;
+
+                applyFrozenColumnByKey(resolvedColumnKey);
+            }
 
             if (filtersPanel && window.matchMedia('(max-width: 768px)').matches) {
                 filtersPanel.removeAttribute('open');
             }
+
+            syncFrozenColumnControl();
 
             if (!filtersForm || !provinceSelect || !citySelect || !barangaySelect) {
                 return;
@@ -1299,6 +1477,7 @@
 
                     resultsContainer.replaceWith(nextResultsContainer);
                     resultsContainer = nextResultsContainer;
+                    syncFrozenColumnControl();
                     window.history.replaceState({}, '', url);
                 } catch (error) {
                     window.location.assign(url);
@@ -1406,6 +1585,21 @@
                 });
 
                 fetchResults(perPageForm.action + (params.toString() ? '?' + params.toString() : ''));
+            });
+
+            document.addEventListener('change', function (event) {
+                const freezeSelect = event.target.closest('[data-lfp-freeze-select]');
+                if (!freezeSelect) {
+                    return;
+                }
+
+                const columnKey = String(freezeSelect.value || '');
+                writeFrozenColumnKey(columnKey);
+                applyFrozenColumnByKey(columnKey);
+            });
+
+            window.addEventListener('resize', function () {
+                applyFrozenColumnByKey(readFrozenColumnKey());
             });
         });
     </script>
