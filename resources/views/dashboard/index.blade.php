@@ -41,6 +41,56 @@
         .dashboard-stacked-filter-menu {
             display: none;
         }
+
+        /* Apply the dashboard shell layout before the larger page style block loads
+           so the first card does not briefly expand to full width. */
+        .dashboard-main-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.7fr) minmax(360px, 1fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .dashboard-main-layout-filter {
+            grid-column: 1 / -1;
+            grid-row: 1;
+        }
+
+        .dashboard-main-layout > * {
+            min-width: 0;
+        }
+
+        .dashboard-top-cards {
+            grid-column: 1;
+            grid-row: 2;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .dashboard-main-layout > .dashboard-status-row {
+            grid-column: 2;
+            grid-row: 2;
+            align-self: start;
+        }
+
+        .dashboard-status-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-main-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-top-cards,
+            .dashboard-main-layout > .dashboard-status-row {
+                grid-column: 1;
+                grid-row: auto;
+            }
+        }
     </style>
 @endsection
 
@@ -155,6 +205,7 @@
             }
 
             modalElement.classList.add('is-open');
+            modalElement.hidden = false;
             modalElement.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
             if (typeof window.runDashboardModalFilters === 'function') {
@@ -169,6 +220,7 @@
             }
 
             modalElement.classList.remove('is-open');
+            modalElement.hidden = true;
             modalElement.setAttribute('aria-hidden', 'true');
 
             if (!document.querySelector('.dashboard-modal.is-open')) {
@@ -461,7 +513,7 @@
                 <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px 22px; align-items: end;">
                     <div>
                         <label for="province" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Province</label>
-                        <select id="province" name="province" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <select id="province" name="province" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
                             <option value="">All</option>
                             @foreach (($filterOptions['provinces'] ?? collect()) as $option)
                                 <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProvinceFilters) === (string) $option)>{{ $option }}</option>
@@ -471,7 +523,7 @@
 
                     <div>
                         <label for="city_municipality" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">City/Municipality</label>
-                        <select id="city_municipality" name="city_municipality" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <select id="city_municipality" name="city_municipality" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
                             <option value="">All</option>
                             @foreach ($dashboardCityOptions as $option)
                                 <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedCityFilters) === (string) $option)>{{ $option }}</option>
@@ -481,7 +533,7 @@
 
                     <div>
                         <label for="barangay" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Barangay</label>
-                        <select id="barangay" name="barangay" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <select id="barangay" name="barangay" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
                             <option value="">All</option>
                             @foreach ($dashboardBarangayOptions as $option)
                                 <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedBarangayFilters) === (string) $option)>{{ $option }}</option>
@@ -491,7 +543,7 @@
 
                     <div>
                         <label for="program" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Program</label>
-                        <select id="program" name="program" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <select id="program" name="program" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
                             <option value="">All</option>
                             @foreach (($filterOptions['programs'] ?? collect()) as $option)
                                 <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProgramFilters) === (string) $option)>{{ $option }}</option>
@@ -501,7 +553,7 @@
 
                     <div>
                         <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year</label>
-                        <select id="funding_year" name="funding_year" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <select id="funding_year" name="funding_year" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
                             <option value="">All</option>
                             @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
                                 <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedFundingYearFilters) === (string) $option)>{{ $option }}</option>
@@ -511,7 +563,7 @@
 
                     <div>
                         <label for="project_type" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Type</label>
-                        <select id="project_type" name="project_type" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <select id="project_type" name="project_type" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
                             <option value="">All</option>
                             @foreach (($filterOptions['project_types'] ?? collect()) as $option)
                                 <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProjectTypeFilters) === (string) $option)>{{ $option }}</option>
@@ -521,7 +573,7 @@
 
                     <div>
                         <label for="project_status" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Project Status</label>
-                        <select id="project_status" name="project_status" onchange="this.form.submit()" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                        <select id="project_status" name="project_status" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
                             <option value="">All</option>
                             @foreach (($filterOptions['project_statuses'] ?? collect()) as $option)
                                 <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedProjectStatusFilters) === (string) $option)>{{ $option }}</option>
@@ -530,6 +582,10 @@
                     </div>
 
                     <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                        <button type="submit" class="dashboard-filter-apply-btn" style="height: 38px; min-width: 170px; border-radius: 8px; padding: 0 18px;">
+                            <i class="fas fa-filter" aria-hidden="true"></i>
+                            Apply Filter
+                        </button>
                         <a href="{{ route('dashboard', ['tab' => $activeProjectTab]) }}" class="dashboard-filter-reset-link" style="height: 38px; min-width: 170px; border-radius: 8px; padding: 0 18px;">
                             Reset Filter
                         </a>
@@ -542,7 +598,7 @@
             </div>
         </form>
 
-        <div id="dashboard-overview-export-modal" class="dashboard-modal" aria-hidden="true">
+        <div id="dashboard-overview-export-modal" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog dashboard-export-format-modal" role="dialog" aria-modal="true" aria-labelledby="dashboard-overview-export-modal-title">
                 <div class="dashboard-modal-header">
@@ -1924,7 +1980,7 @@
                 ->sort()
                 ->values();
         @endphp
-        <div id="{{ $statusModalId }}" class="dashboard-modal" aria-hidden="true">
+            <div id="{{ $statusModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $statusModalTitleId }}">
                 <div class="dashboard-modal-header">
@@ -2049,7 +2105,7 @@
                         ?? []
                 );
             @endphp
-            <div id="{{ $fundSourceModalId }}" class="dashboard-modal" aria-hidden="true">
+            <div id="{{ $fundSourceModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
                 <div class="dashboard-modal-backdrop" data-close-modal></div>
                 <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $fundSourceModalTitleId }}">
                     <div class="dashboard-modal-header">
@@ -2217,7 +2273,7 @@
         ];
     @endphp
     @foreach ($financialStatusModalConfigs as $financialModalConfig)
-        <div id="{{ $financialModalConfig['modal_id'] }}" class="dashboard-modal" aria-hidden="true">
+        <div id="{{ $financialModalConfig['modal_id'] }}" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $financialModalConfig['title_id'] }}">
                 <div class="dashboard-modal-header">
@@ -2309,7 +2365,7 @@
             </div>
         </div>
     @endforeach
-    <div id="{{ $balanceProjectsModalId }}" class="dashboard-modal" aria-hidden="true">
+    <div id="{{ $balanceProjectsModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
         <div class="dashboard-modal-backdrop" data-close-modal></div>
         <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $balanceProjectsModalTitleId }}">
             <div class="dashboard-modal-header">
@@ -2444,7 +2500,7 @@
             $modalProjects = $projectAtRiskAgingProjectsModal[$riskLabel] ?? collect();
             $subtitleText = $projectAtRiskAgingModalSubtitles[$riskLabel] ?? '';
         @endphp
-        <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true">
+        <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $modalTitleId }}">
                 <div class="dashboard-modal-header">
@@ -2577,7 +2633,7 @@
             $modalProjects = collect($projectAtRiskSlippageProjectsModal[$riskLabel] ?? []);
             $subtitleText = $projectAtRiskSlippageModalSubtitles[$riskLabel] ?? '';
         @endphp
-        <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true">
+        <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $modalTitleId }}">
                 <div class="dashboard-modal-header">
@@ -2728,7 +2784,7 @@
             }
         }
     @endphp
-    <div id="{{ $projectUpdateAllStatusModalId }}" class="dashboard-modal" aria-hidden="true">
+    <div id="{{ $projectUpdateAllStatusModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
         <div class="dashboard-modal-backdrop" data-close-modal></div>
         <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $projectUpdateAllStatusModalTitleId }}">
             <div class="dashboard-modal-header">
@@ -2819,7 +2875,7 @@
             $modalProjects = $projectUpdateRiskProjectsModal[$riskLabel] ?? collect();
             $subtitleText = $projectUpdateModalSubtitles[$riskLabel] ?? '';
         @endphp
-        <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true">
+        <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $modalTitleId }}">
                 <div class="dashboard-modal-header">
@@ -4298,6 +4354,10 @@
             padding: 20px;
         }
 
+        .dashboard-modal[hidden] {
+            display: none !important;
+        }
+
         .dashboard-modal.is-open {
             display: flex;
         }
@@ -5380,6 +5440,7 @@
             }
 
             modalElement.classList.add('is-open');
+            modalElement.hidden = false;
             modalElement.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
             if (typeof window.runDashboardModalFilters === 'function') {
@@ -5393,6 +5454,7 @@
             }
 
             modalElement.classList.remove('is-open');
+            modalElement.hidden = true;
             modalElement.setAttribute('aria-hidden', 'true');
 
             const hasOpenModal = document.querySelector('.dashboard-modal.is-open');
@@ -7168,6 +7230,7 @@
             }
 
             modalElements.forEach((modalElement) => {
+                modalElement.hidden = !modalElement.classList.contains('is-open');
                 modalElement.querySelectorAll('[data-close-modal]').forEach((closeControl) => {
                     if (closeControl.dataset.closeModalInitialized === '1') {
                         return;

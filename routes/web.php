@@ -5,6 +5,7 @@ use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\LocallyFundedProject;
@@ -549,9 +550,11 @@ Route::middleware(['auth'])->group(function () {
             }
 
             $subayUploadDateLabel = 'No SubayBAYAN upload yet';
+            $latestSubayUploadCacheToken = 'none';
             if (Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'created_at')) {
                 $latestSubayUploadAt = DB::table('subay_project_profiles')->max('created_at');
                 if ($latestSubayUploadAt) {
+                    $latestSubayUploadCacheToken = (string) $latestSubayUploadAt;
                     try {
                         $subayUploadDateLabel = \Illuminate\Support\Carbon::parse($latestSubayUploadAt)->format('F d, Y h:i A');
                     } catch (\Throwable $error) {
@@ -615,6 +618,18 @@ Route::middleware(['auth'])->group(function () {
                 $filters['barangay'] = [];
             }
 
+            $dashboardCacheKey = 'dashboard_locally_funded_v2:' . md5(serialize([
+                'user_id' => Auth::id(),
+                'tab' => $activeProjectTab,
+                'filters' => $filters,
+                'subay_upload' => $latestSubayUploadCacheToken,
+            ]));
+
+            $cachedDashboardViewData = Cache::get($dashboardCacheKey);
+            if (is_array($cachedDashboardViewData)) {
+                return view('dashboard.index', $cachedDashboardViewData);
+            }
+
             $filterOptions = [
                 'provinces' => collect(),
                 'cities' => collect(),
@@ -627,6 +642,42 @@ Route::middleware(['auth'])->group(function () {
                 'project_types' => collect(),
                 'project_statuses' => collect(),
             ];
+
+            $hasSubayProjectCodeKeyColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'project_code_key');
+            $hasSubayProvinceKeyColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'province_key');
+            $hasSubayStatusKeyColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'status_key');
+            $hasSubayFundingYearKeyColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'funding_year_key');
+            $hasSubayFundingYearNumColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'funding_year_num');
+            $hasSubayFundSourceKeyColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'fund_source_key');
+            $hasSubayDateParsedColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'date_parsed');
+
+            $subayProjectCodeFilterExpr = $hasSubayProjectCodeKeyColumn
+                ? 'spp.project_code_key'
+                : 'spp.project_code';
+            $subayProvinceFilterExpr = $hasSubayProvinceKeyColumn
+                ? 'spp.province_key'
+                : 'spp.province';
+            $subayStatusFilterExpr = $hasSubayStatusKeyColumn
+                ? 'spp.status_key'
+                : 'spp.status';
+            $subayFundingYearFilterExpr = $hasSubayFundingYearKeyColumn
+                ? 'spp.funding_year_key'
+                : 'spp.funding_year';
+            $subayProjectCodeGroupExpr = $hasSubayProjectCodeKeyColumn
+                ? 'spp.project_code_key'
+                : 'UPPER(TRIM(spp.project_code))';
+            $subayProvinceGroupExpr = $hasSubayProvinceKeyColumn
+                ? 'spp.province_key'
+                : 'TRIM(COALESCE(spp.province, ""))';
+            $subayStatusGroupExpr = $hasSubayStatusKeyColumn
+                ? 'spp.status_key'
+                : 'UPPER(TRIM(COALESCE(spp.status, "")))';
+            $subayFundingYearGroupExpr = $hasSubayFundingYearKeyColumn
+                ? 'spp.funding_year_key'
+                : 'TRIM(COALESCE(spp.funding_year, ""))';
+            $subayFundingYearOrderExpr = $hasSubayFundingYearNumColumn
+                ? 'spp.funding_year_num'
+                : 'CAST(spp.funding_year AS UNSIGNED)';
 
             $normalizeComparableLocationValue = function ($value): string {
                 return \App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($value);
@@ -655,24 +706,25 @@ Route::middleware(['auth'])->group(function () {
                 $isLguScopedUser,
                 $isDilgUser,
                 $isRegionalOfficeUser,
-                $applyOfficeScopeToSubay
+                $applyOfficeScopeToSubay,
+                $subayProvinceFilterExpr
             ) {
                 if ($isLguScopedUser) {
                     if ($office !== '') {
                         if ($province !== '') {
-                            $query->whereRaw('LOWER(TRIM(COALESCE(spp.province, ""))) = ?', [$provinceLower]);
+                            $query->whereRaw('LOWER(TRIM(COALESCE(' . $subayProvinceFilterExpr . ', ""))) = ?', [$provinceLower]);
                             $applyOfficeScopeToSubay($query);
                         } else {
                             $applyOfficeScopeToSubay($query);
                         }
                     } elseif ($province !== '') {
-                        $query->whereRaw('LOWER(TRIM(COALESCE(spp.province, ""))) = ?', [$provinceLower]);
+                        $query->whereRaw('LOWER(TRIM(COALESCE(' . $subayProvinceFilterExpr . ', ""))) = ?', [$provinceLower]);
                     }
                 } elseif ($isDilgUser) {
                     if ($isRegionalOfficeUser) {
                         // Regional Office users can see all projects.
                     } elseif ($province !== '') {
-                        $query->whereRaw('LOWER(TRIM(COALESCE(spp.province, ""))) = ?', [$provinceLower]);
+                        $query->whereRaw('LOWER(TRIM(COALESCE(' . $subayProvinceFilterExpr . ', ""))) = ?', [$provinceLower]);
                     } elseif ($region !== '') {
                         $query->whereRaw('LOWER(TRIM(COALESCE(spp.region, ""))) = ?', [$regionLower]);
                     }
@@ -755,23 +807,26 @@ Route::middleware(['auth'])->group(function () {
                 $query->whereRaw($normalizedComparableLocationSql($column) . " IN ({$placeholders})", $normalizedValues);
             };
 
-            $fundSourceFromProjectCodeExpr = "
-                CASE
-                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'SBDP%' THEN 'SBDP'
-                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'FA-%' THEN 'FALGU'
-                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'FALGU%' THEN 'FALGU'
-                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'CMGP%' THEN 'CMGP'
-                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'GEF%' THEN 'GEF'
-                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'SAFPB%' THEN 'SAFPB'
-                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'SGLGIF%' THEN 'SGLGIF'
-                    WHEN TRIM(COALESCE(spp.program, '')) <> '' THEN UPPER(TRIM(COALESCE(spp.program, '')))
-                    ELSE 'UNSPECIFIED'
-                END
-            ";
+            $fundSourceFromProjectCodeExpr = $hasSubayFundSourceKeyColumn
+                ? 'spp.fund_source_key'
+                : "
+                    CASE
+                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'SBDP%' THEN 'SBDP'
+                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'FA-%' THEN 'FALGU'
+                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'FALGU%' THEN 'FALGU'
+                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'CMGP%' THEN 'CMGP'
+                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'GEF%' THEN 'GEF'
+                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'SAFPB%' THEN 'SAFPB'
+                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'SGLGIF%' THEN 'SGLGIF'
+                        WHEN TRIM(COALESCE(spp.program, '')) <> '' THEN UPPER(TRIM(COALESCE(spp.program, '')))
+                        ELSE 'UNSPECIFIED'
+                    END
+                ";
 
-            $excludeSglgifFromSubay = function ($query) {
-                $query->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
-                    ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF']);
+            $excludeSglgifFromSubay = function ($query) use ($fundSourceFromProjectCodeExpr, $subayProjectCodeFilterExpr) {
+                $query->whereRaw($subayProjectCodeFilterExpr . " IS NOT NULL")
+                    ->whereRaw($subayProjectCodeFilterExpr . " <> ''")
+                    ->whereRaw("{$fundSourceFromProjectCodeExpr} <> ?", ['SGLGIF']);
             };
 
             $excludeSglgifFromFallback = function ($query) {
@@ -779,26 +834,26 @@ Route::middleware(['auth'])->group(function () {
                     ->whereRaw('UPPER(TRIM(COALESCE(fund_source, ""))) <> ?', ['SGLGIF']);
             };
 
-            $applyDashboardFiltersToSubay = function ($query) use ($filters, $applyExactMultiFilterToSubay, $applyDelimitedMultiFilterToSubay, $applyComparableLocationMultiFilterToSubay, $fundSourceFromProjectCodeExpr) {
-                $applyExactMultiFilterToSubay($query, 'spp.province', $filters['province']);
+            $applyDashboardFiltersToSubay = function ($query) use ($filters, $applyExactMultiFilterToSubay, $applyDelimitedMultiFilterToSubay, $applyComparableLocationMultiFilterToSubay, $fundSourceFromProjectCodeExpr, $subayProvinceFilterExpr, $subayFundingYearFilterExpr, $subayStatusFilterExpr, $subayProjectCodeFilterExpr) {
+                $applyExactMultiFilterToSubay($query, $subayProvinceFilterExpr, $filters['province']);
                 $applyComparableLocationMultiFilterToSubay($query, 'spp.city_municipality', $filters['city_municipality']);
                 $applyDelimitedMultiFilterToSubay($query, 'spp.barangay', $filters['barangay']);
                 $applyExactMultiFilterToSubay($query, 'spp.program', $filters['programs']);
                 $applyExactMultiFilterToSubay($query, $fundSourceFromProjectCodeExpr, $filters['fund_source']);
-                $applyExactMultiFilterToSubay($query, 'spp.funding_year', $filters['funding_year']);
+                $applyExactMultiFilterToSubay($query, $subayFundingYearFilterExpr, $filters['funding_year']);
                 $applyExactMultiFilterToSubay($query, 'spp.type_of_project', $filters['project_type']);
-                $applyExactMultiFilterToSubay($query, 'spp.status', $filters['project_status']);
+                $applyExactMultiFilterToSubay($query, $subayStatusFilterExpr, $filters['project_status']);
 
                 if ($filters['search'] !== '') {
                     $searchNeedle = '%' . strtolower($filters['search']) . '%';
-                    $query->where(function ($searchQuery) use ($searchNeedle) {
+                    $query->where(function ($searchQuery) use ($searchNeedle, $subayProjectCodeFilterExpr, $subayProvinceFilterExpr, $fundSourceFromProjectCodeExpr) {
                         $searchQuery
-                            ->orWhereRaw('LOWER(TRIM(COALESCE(spp.project_code, ""))) LIKE ?', [$searchNeedle])
+                            ->orWhereRaw('LOWER(TRIM(COALESCE(' . $subayProjectCodeFilterExpr . ', ""))) LIKE ?', [$searchNeedle])
                             ->orWhereRaw('LOWER(TRIM(COALESCE(spp.project_title, ""))) LIKE ?', [$searchNeedle])
-                            ->orWhereRaw('LOWER(TRIM(COALESCE(spp.province, ""))) LIKE ?', [$searchNeedle])
+                            ->orWhereRaw('LOWER(TRIM(COALESCE(' . $subayProvinceFilterExpr . ', ""))) LIKE ?', [$searchNeedle])
                             ->orWhereRaw('LOWER(TRIM(COALESCE(spp.city_municipality, ""))) LIKE ?', [$searchNeedle])
                             ->orWhereRaw('LOWER(TRIM(COALESCE(spp.barangay, ""))) LIKE ?', [$searchNeedle])
-                            ->orWhereRaw('LOWER(TRIM(COALESCE(spp.program, ""))) LIKE ?', [$searchNeedle]);
+                            ->orWhereRaw('LOWER(TRIM(COALESCE(' . $fundSourceFromProjectCodeExpr . ', ""))) LIKE ?', [$searchNeedle]);
                     });
                 }
             };
@@ -1353,27 +1408,29 @@ Route::middleware(['auth'])->group(function () {
                 return $projectsByRisk;
             };
 
-            $projectUpdateStatusParsedDateExpression = "
-                COALESCE(
-                    IF(
-                        TRIM(COALESCE(spp.date, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$',
-                        DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE(spp.date, '')) AS DECIMAL(12,4))) DAY),
-                        NULL
-                    ),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%Y-%m-%d'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%Y-%m-%d %H:%i:%s'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %H:%i'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %H:%i:%s'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%Y %h:%i:%s %p'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%m/%d/%y'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d/%m/%Y'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d-%m-%Y'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%d-%b-%Y'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%b %e, %Y'),
-                    STR_TO_DATE(TRIM(COALESCE(spp.date, '')), '%M %e, %Y')
-                )
-            ";
+            $projectUpdateStatusParsedDateExpression = $hasSubayDateParsedColumn
+                ? 'spp.date_parsed'
+                : "
+                    COALESCE(
+                        IF(
+                            TRIM(COALESCE(spp.date, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$',
+                            DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE(spp.date, '')) AS DECIMAL(12,4))) DAY),
+                            NULL
+                        ),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%Y-%m-%d'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%Y-%m-%d %H:%i:%s'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%m/%d/%Y'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%m/%d/%Y %H:%i'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%m/%d/%Y %H:%i:%s'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%m/%d/%Y %h:%i:%s %p'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%m/%d/%y'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%d/%m/%Y'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%d-%m-%Y'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%d-%b-%Y'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%b %e, %Y'),
+                        STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%M %e, %Y')
+                    )
+                ";
 
             $expectedCompletionParsedDateExpression = "
                 COALESCE(
@@ -1397,14 +1454,14 @@ Route::middleware(['auth'])->group(function () {
                 )
             ";
 
-            $computeProjectUpdateStatusCountsFromSubay = function ($subayQuery, array &$targetCounts) use ($projectUpdateStatusParsedDateExpression) {
+            $computeProjectUpdateStatusCountsFromSubay = function ($subayQuery, array &$targetCounts) use ($projectUpdateStatusParsedDateExpression, $subayStatusGroupExpr, $subayProjectCodeGroupExpr) {
 
                 $projectUpdateRowsQuery = (clone $subayQuery)
-                    ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+                    ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
                     ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
                     ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
-                    ->selectRaw("LOWER(TRIM(COALESCE(spp.status, ''))) as status_raw")
+                    ->selectRaw("LOWER(TRIM(COALESCE({$subayStatusGroupExpr}, ''))) as status_raw")
                     ->selectRaw("{$projectUpdateStatusParsedDateExpression} as latest_update_date");
 
                 $counts = DB::query()
@@ -1420,13 +1477,13 @@ Route::middleware(['auth'])->group(function () {
                 $targetCounts['No Risk'] = (int) ($counts->no_risk_total ?? 0);
             };
 
-            $fetchProjectUpdateProjectsFromSubay = function ($subayQuery, string $riskLabel) use ($projectUpdateStatusParsedDateExpression) {
+            $fetchProjectUpdateProjectsFromSubay = function ($subayQuery, string $riskLabel) use ($projectUpdateStatusParsedDateExpression, $subayStatusGroupExpr, $subayProjectCodeGroupExpr) {
                 $projectUpdateRowsQuery = (clone $subayQuery)
-                    ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+                    ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
                     ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
                     ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
-                    ->selectRaw("LOWER(TRIM(COALESCE(spp.status, ''))) as status_raw")
+                    ->selectRaw("LOWER(TRIM(COALESCE({$subayStatusGroupExpr}, ''))) as status_raw")
                     ->selectRaw("{$projectUpdateStatusParsedDateExpression} as latest_update_date");
 
                 $statusRowsQuery = DB::query()
@@ -1461,8 +1518,8 @@ Route::middleware(['auth'])->group(function () {
 
             if (Schema::hasTable('subay_project_profiles')) {
                 $subayBaseQuery = DB::table('subay_project_profiles as spp')
-                    ->whereNotNull('spp.project_code')
-                    ->whereRaw('TRIM(spp.project_code) <> ""');
+                    ->whereRaw($subayProjectCodeFilterExpr . ' IS NOT NULL')
+                    ->whereRaw($subayProjectCodeFilterExpr . " <> ''");
 
                 $excludeSglgifFromSubay($subayBaseQuery);
 
@@ -1665,7 +1722,7 @@ Route::middleware(['auth'])->group(function () {
                 }
 
                 $programOptionsQuery = clone $subayBaseQuery;
-                $applyExactMultiFilterToSubay($programOptionsQuery, 'spp.province', $filters['province']);
+                $applyExactMultiFilterToSubay($programOptionsQuery, $subayProvinceFilterExpr, $filters['province']);
                 $applyComparableLocationMultiFilterToSubay($programOptionsQuery, 'spp.city_municipality', $filters['city_municipality']);
                 $applyExactMultiFilterToSubay($programOptionsQuery, 'spp.barangay', $filters['barangay']);
                 $filterOptions['programs'] = $programOptionsQuery
@@ -1688,7 +1745,7 @@ Route::middleware(['auth'])->group(function () {
                     ->whereNotNull('spp.funding_year')
                     ->whereRaw('TRIM(spp.funding_year) <> ""')
                     ->distinct()
-                    ->orderByRaw('CAST(spp.funding_year AS UNSIGNED) DESC')
+                    ->orderByRaw("{$subayFundingYearOrderExpr} DESC")
                     ->pluck('spp.funding_year');
 
                 $filterOptions['project_types'] = (clone $subayBaseQuery)
@@ -1713,9 +1770,9 @@ Route::middleware(['auth'])->group(function () {
                 $totalProjects = (int) (clone $subayDashboardQuery)->count();
 
                 $subayProvinceProjectRows = (clone $subayDashboardQuery)
-                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('MAX(TRIM(COALESCE(spp.province, ""))) as province')
                     ->selectRaw('COUNT(*) as total')
-                    ->groupBy(DB::raw('TRIM(COALESCE(spp.province, ""))'))
+                    ->groupBy(DB::raw($subayProvinceGroupExpr))
                     ->get();
 
                 foreach ($subayProvinceProjectRows as $row) {
@@ -1728,7 +1785,7 @@ Route::middleware(['auth'])->group(function () {
                 }
 
                 $balanceByProjectQuery = (clone $subayDashboardQuery)
-                    ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+                    ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('MAX(TRIM(COALESCE(spp.project_title, ""))) as project_title')
                     ->selectRaw('MAX(TRIM(COALESCE(spp.status, ""))) as status')
                     ->selectRaw("MAX(CAST(NULLIF(REPLACE(REPLACE(TRIM(COALESCE(spp.national_subsidy_original_allocation, '')), ',', ''), ' ', ''), '') AS DECIMAL(20,2))) as original_allocation")
@@ -1736,7 +1793,7 @@ Route::middleware(['auth'])->group(function () {
                     ->selectRaw("MAX(CAST(NULLIF(REPLACE(REPLACE(TRIM(COALESCE(spp.obligation, '')), ',', ''), ' ', ''), '') AS DECIMAL(20,2))) as obligation")
                     ->selectRaw("MAX(CAST(NULLIF(REPLACE(REPLACE(TRIM(COALESCE(spp.disbursement, '')), ',', ''), ' ', ''), '') AS DECIMAL(20,2))) as disbursement")
                     ->selectRaw("MAX(CAST(NULLIF(REPLACE(REPLACE(TRIM(COALESCE(spp.national_subsidy_reverted_amount, '')), ',', ''), ' ', ''), '') AS DECIMAL(20,2))) as reverted_allocation")
-                    ->groupBy(DB::raw('UPPER(TRIM(spp.project_code))'));
+                    ->groupBy(DB::raw($subayProjectCodeGroupExpr));
 
                 $balanceFormulaExpression = 'COALESCE(balance_projects.original_allocation, 0) - (COALESCE(balance_projects.disbursement, 0) + COALESCE(balance_projects.reverted_allocation, 0))';
                 $revertedAllocationExpression = 'COALESCE(balance_projects.reverted_allocation, 0)';
@@ -1784,7 +1841,7 @@ Route::middleware(['auth'])->group(function () {
                     : 0.0;
 
                 $projectsExpectedCompletionBaseQuery = (clone $subayDashboardQuery)
-                    ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+                    ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
                     ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
                     ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
@@ -1814,13 +1871,13 @@ Route::middleware(['auth'])->group(function () {
 
                 $fundSourceProjectRows = (clone $subayDashboardQuery)
                     ->selectRaw("{$fundSourceFromProjectCodeExpr} as fund_source")
-                    ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+                    ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
                     ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
                     ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
                     ->selectRaw('TRIM(COALESCE(spp.status, "")) as status')
                     ->orderByRaw("{$fundSourceFromProjectCodeExpr}")
-                    ->orderByRaw('UPPER(TRIM(spp.project_code))')
+                    ->orderByRaw($subayProjectCodeGroupExpr)
                     ->orderByRaw('TRIM(COALESCE(spp.project_title, ""))')
                     ->get();
 
@@ -1871,9 +1928,9 @@ Route::middleware(['auth'])->group(function () {
                 }
 
                 $subayStatusRows = (clone $subayDashboardQuery)
-                    ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
+                    ->selectRaw("{$subayStatusGroupExpr} as status_raw")
                     ->selectRaw('COUNT(*) as total')
-                    ->groupBy(DB::raw('UPPER(TRIM(COALESCE(spp.status, "")))'))
+                    ->groupBy(DB::raw($subayStatusGroupExpr))
                     ->get();
 
                 foreach ($subayStatusRows as $row) {
@@ -1884,14 +1941,14 @@ Route::middleware(['auth'])->group(function () {
                 }
 
                 $subayStatusLocationRows = (clone $subayDashboardQuery)
-                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
+                    ->selectRaw('MAX(TRIM(COALESCE(spp.province, ""))) as province')
                     ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
-                    ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
+                    ->selectRaw("{$subayStatusGroupExpr} as status_raw")
                     ->selectRaw('COUNT(*) as total')
                     ->groupBy(
-                        DB::raw('TRIM(COALESCE(spp.province, ""))'),
+                        DB::raw($subayProvinceGroupExpr),
                         DB::raw('TRIM(COALESCE(spp.city_municipality, ""))'),
-                        DB::raw('UPPER(TRIM(COALESCE(spp.status, "")))')
+                        DB::raw($subayStatusGroupExpr)
                     )
                     ->get();
 
@@ -1952,16 +2009,16 @@ Route::middleware(['auth'])->group(function () {
                 }
 
                 $subayProvinceFundingYearProgramStatusRows = (clone $subayDashboardQuery)
-                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
-                    ->selectRaw('TRIM(COALESCE(spp.funding_year, "")) as funding_year')
+                    ->selectRaw('MAX(TRIM(COALESCE(spp.province, ""))) as province')
+                    ->selectRaw('MAX(TRIM(COALESCE(spp.funding_year, ""))) as funding_year')
                     ->selectRaw('TRIM(COALESCE(spp.program, "")) as program')
-                    ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
+                    ->selectRaw("{$subayStatusGroupExpr} as status_raw")
                     ->selectRaw('COUNT(*) as total')
                     ->groupBy(
-                        DB::raw('TRIM(COALESCE(spp.province, ""))'),
-                        DB::raw('TRIM(COALESCE(spp.funding_year, ""))'),
+                        DB::raw($subayProvinceGroupExpr),
+                        DB::raw($subayFundingYearGroupExpr),
                         DB::raw('TRIM(COALESCE(spp.program, ""))'),
-                        DB::raw('UPPER(TRIM(COALESCE(spp.status, "")))')
+                        DB::raw($subayStatusGroupExpr)
                     )
                     ->get();
 
@@ -2031,15 +2088,15 @@ Route::middleware(['auth'])->group(function () {
                 });
 
                 $subayStatusProjectRows = (clone $subayDashboardQuery)
-                    ->selectRaw('UPPER(TRIM(COALESCE(spp.status, ""))) as status_raw')
-                    ->selectRaw('UPPER(TRIM(spp.project_code)) as project_code')
+                    ->selectRaw("{$subayStatusGroupExpr} as status_raw")
+                    ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
                     ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
                     ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
                     ->selectRaw('TRIM(COALESCE(spp.funding_year, "")) as funding_year')
                     ->selectRaw('TRIM(COALESCE(spp.program, "")) as program')
-                    ->orderByRaw('UPPER(TRIM(COALESCE(spp.status, "")))')
-                    ->orderByRaw('UPPER(TRIM(spp.project_code))')
+                    ->orderByRaw($subayStatusGroupExpr)
+                    ->orderByRaw($subayProjectCodeGroupExpr)
                     ->orderByRaw('TRIM(COALESCE(spp.project_title, ""))')
                     ->get();
 
@@ -2072,7 +2129,7 @@ Route::middleware(['auth'])->group(function () {
                 }
 
                 $filteredProjectCodesQuery = (clone $subayDashboardQuery)
-                    ->selectRaw('DISTINCT UPPER(TRIM(spp.project_code)) as project_code');
+                    ->selectRaw("DISTINCT {$subayProjectCodeGroupExpr} as project_code");
                 $computeProjectAtRiskCounts(clone $filteredProjectCodesQuery, 'risk_level', $projectAtRiskCounts);
                 $computeProjectAtRiskAgingCounts(clone $filteredProjectCodesQuery, $projectAtRiskAgingCounts);
                 $projectAtRiskSlippageProjects = $fetchProjectAtRiskSlippageProjects(clone $filteredProjectCodesQuery);
@@ -2371,7 +2428,7 @@ Route::middleware(['auth'])->group(function () {
                 ? (int) max($carProvinceProjectCounts)
                 : 0;
 
-            return view('dashboard.index', compact(
+            $dashboardViewData = compact(
                 'totalProjects',
                 'statusActualCounts',
                 'statusSubaybayanCounts',
@@ -2403,7 +2460,11 @@ Route::middleware(['auth'])->group(function () {
                 'carProvinceProjectCounts',
                 'carProvinceProjectMaxCount',
                 'activeProjectTab'
-            ));
+            );
+
+            Cache::put($dashboardCacheKey, $dashboardViewData, now()->addMinutes(5));
+
+            return view('dashboard.index', $dashboardViewData);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Dashboard view error',
