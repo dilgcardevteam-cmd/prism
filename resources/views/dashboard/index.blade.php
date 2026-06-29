@@ -3114,7 +3114,7 @@
             overflow-y: auto;
             overflow-x: hidden;
             box-sizing: border-box;
-            z-index: 1250;
+            z-index: 980;
         }
 
         .dashboard-stacked-filter-menu.is-open {
@@ -6210,6 +6210,31 @@
             });
         }
 
+        function closeAllDashboardStackedFilters() {
+            document.querySelectorAll('[data-stacked-filter]').forEach((stackedFilter) => {
+                if (typeof stackedFilter.__closeDropdown === 'function') {
+                    stackedFilter.__closeDropdown();
+                }
+            });
+        }
+
+        function initializeDashboardNavigationDismissals() {
+            if (document.body.dataset.dashboardNavigationDismissalsInitialized === '1') {
+                return;
+            }
+
+            document.body.dataset.dashboardNavigationDismissalsInitialized = '1';
+
+            document.addEventListener('click', function (event) {
+                const navigationLink = event.target.closest('.sidebar a[href], .topbar a[href]');
+                if (!navigationLink) {
+                    return;
+                }
+
+                closeAllDashboardStackedFilters();
+            }, true);
+        }
+
         function initializeDashboardLocationDependencies() {
             const provinceSelect = document.getElementById('province');
             const citySelect = document.getElementById('city_municipality');
@@ -7377,6 +7402,7 @@
             const forms = document.querySelectorAll('.project-filter-form');
             const legendBlocks = document.querySelectorAll('.dashboard-legend-block');
             initializeStackedFilters();
+            initializeDashboardNavigationDismissals();
             initializeDashboardLocationDependencies();
 
             forms.forEach((form) => {

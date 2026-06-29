@@ -66,8 +66,9 @@
         @endif
     </div>
 
-    <section id="usersPanel" class="project-tab-panel {{ $activeUserTab === 'usersPanel' ? 'is-active' : '' }}" role="tabpanel">
-        <div class="user-management-panel">
+    @if($activeUserTab === 'usersPanel')
+        <section id="usersPanel" class="project-tab-panel is-active" role="tabpanel">
+            <div class="user-management-panel">
             <div class="user-management-header">
                 <h2 style="color: #002C76; font-size: 18px; margin: 0;">Users ({{ $users->total() }})</h2>
                 <a href="{{ route('users.create', $selectedRole !== '' ? ['role' => $selectedRole] : []) }}" class="user-management-add-btn" style="padding: 10px 20px; background-color: #002C76; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease;">
@@ -333,11 +334,12 @@
             <div style="margin-top: 20px;">
                 @include('admin.users.partials.pagination', ['paginator' => $users->appends(['tab' => 'users'])])
             </div>
-        </div>
-    </section>
+            </div>
+        </section>
+    @endif
 
-    @if($viewerIsSuperAdmin)
-        <section id="accessGrantsPanel" class="project-tab-panel {{ $activeUserTab === 'accessGrantsPanel' ? 'is-active' : '' }}" role="tabpanel">
+    @if($viewerIsSuperAdmin && $activeUserTab === 'accessGrantsPanel')
+        <section id="accessGrantsPanel" class="project-tab-panel is-active" role="tabpanel">
             <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 24px; flex-wrap: wrap;">
                     <div>
@@ -1363,44 +1365,6 @@
     </style>
 
     <script>
-        (function attachUserManagementTabs() {
-            const tabs = Array.from(document.querySelectorAll('[data-user-tab-target]'));
-            const panels = Array.from(document.querySelectorAll('.project-tab-panel'));
-
-            if (tabs.length === 0 || panels.length === 0) {
-                return;
-            }
-
-            function activateTab(panelId) {
-                const tabKey = panelId === 'accessGrantsPanel' ? 'access-grants' : 'users';
-                tabs.forEach((tab) => {
-                    const isActive = tab.dataset.userTabTarget === panelId;
-                    tab.classList.toggle('is-active', isActive);
-                    tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
-                });
-
-                panels.forEach((panel) => {
-                    panel.classList.toggle('is-active', panel.id === panelId);
-                });
-
-                document.querySelectorAll('[data-user-tab-input]').forEach((input) => {
-                    input.value = tabKey;
-                });
-            }
-
-            tabs.forEach((tab) => {
-                tab.addEventListener('click', function (event) {
-                    const nextUrl = tab.getAttribute('href');
-                    activateTab(tab.dataset.userTabTarget);
-
-                    if (nextUrl && window.history && typeof window.history.replaceState === 'function') {
-                        event.preventDefault();
-                        window.history.replaceState(null, '', nextUrl);
-                    }
-                });
-            });
-        }());
-
         (function attachUserMobileCards() {
             const cards = Array.from(document.querySelectorAll('[data-user-mobile-card]'));
 
