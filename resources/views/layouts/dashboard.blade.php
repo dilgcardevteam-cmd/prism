@@ -1454,6 +1454,63 @@
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
         }
 
+        .freeze-columns-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .freeze-columns-toolbar-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .freeze-columns-toolbar-select {
+            min-width: 180px;
+            height: 38px;
+            padding: 0 36px 0 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+        }
+
+        .freeze-columns-toolbar-select:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+        }
+
+        .freeze-columns-shell.has-frozen-columns {
+            position: relative;
+        }
+
+        .freeze-columns-shell [data-freeze-column-cell="true"] {
+            background-clip: padding-box;
+        }
+
+        @media (max-width: 768px) {
+            .freeze-columns-toolbar {
+                justify-content: stretch;
+            }
+
+            .freeze-columns-toolbar-label,
+            .freeze-columns-toolbar-select {
+                width: 100%;
+            }
+        }
+
         /* Scoped detail/edit page refinement */
         .ops-detail-page .content-header {
             background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
@@ -1776,6 +1833,7 @@
     </style>
     
     @yield('styles')
+    @stack('styles')
 </head>
 <body>
     <!-- Sidebar Navigation -->
@@ -2003,70 +2061,90 @@
                 </a>
             </li>
             @php
-                $canViewLocallyFundedProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
+                $currentUser = Auth::user();
+                $canViewLocallyFundedProjects = $currentUser->hasCrudPermission('locally_funded_projects', 'view');
                 $canViewRssaProjects = $canViewLocallyFundedProjects;
-                $canViewRlipLimeProjects = Auth::user()->hasCrudPermission('rlip_lime_projects', 'view');
-                $canViewProjectAtRiskProjects = Auth::user()->hasCrudPermission('project_at_risk_projects', 'view');
-                $canViewSglgifPortal = Auth::user()->hasCrudPermission('sglgif_portal', 'view');
-                $canViewPreImplementationDocuments = Auth::user()->hasCrudPermission('pre_implementation_documents', 'view');
-                $canViewRbisAnnualCertification = Auth::user()->hasCrudPermission('rbis_annual_certification', 'view');
-                $canViewAnnualAmwp = $canViewRbisAnnualCertification;
-                $canViewAnnualRpmesBase = $canViewRbisAnnualCertification;
-                $canViewAnnualRpmesForm4 = $canViewAnnualRpmesBase
-                    || Auth::user()->hasCrudPermission('annual_rpmes_form_4', 'view');
+                $canViewRlipLimeProjects = $currentUser->hasCrudPermission('rlip_lime_projects', 'view');
+                $canViewProjectAtRiskProjects = $currentUser->hasCrudPermission('project_at_risk_projects', 'view');
+                $canViewSglgifPortal = $currentUser->hasCrudPermission('sglgif_portal', 'view');
+                $canViewProjectDocuments = $currentUser->hasCrudPermission('pre_implementation_documents', 'view');
+                $canViewRbisAnnualCertification = $currentUser->hasCrudPermission('rbis_annual_certification', 'view');
+                $canViewAnnualAmwp = $currentUser->hasCrudPermission('annual_maintenance_work_program', 'view');
+                $canViewAnnualRpmesForm4 = $currentUser->hasCrudPermission('annual_rpmes_form_4', 'view');
                 $canViewAnyAnnualRpmesForm = $canViewAnnualRpmesForm4;
-                $canViewPdNoPbbmMonthlyReports = Auth::user()->hasCrudPermission('pd_no_pbbm_monthly_reports', 'view');
-                $canViewSwaAnnexFMonthlyReports = Auth::user()->hasCrudPermission('swa_annex_f_monthly_reports', 'view');
-                $canViewFundUtilizationReports = Auth::user()->hasCrudPermission('fund_utilization_reports', 'view');
-                $canViewLpmcReports = Auth::user()->hasCrudPermission('local_project_monitoring_committee', 'view');
-                $canViewRoadMaintenanceReports = Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'view');
-                $canViewQuarterlyRpmesBase = $canViewFundUtilizationReports
-                    || $canViewLpmcReports
-                    || $canViewRoadMaintenanceReports;
-                $canViewQuarterlyRpmesForm2 = $canViewQuarterlyRpmesBase
-                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_2', 'view');
-                $canViewQuarterlyRpmesForm5 = $canViewQuarterlyRpmesBase
-                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_5', 'view');
-                $canViewQuarterlyRpmesForm6 = $canViewQuarterlyRpmesBase
-                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_6', 'view');
+                $canViewPdNoPbbmMonthlyReports = $currentUser->hasCrudPermission('pd_no_pbbm_monthly_reports', 'view');
+                $canViewSwaAnnexFMonthlyReports = $currentUser->hasCrudPermission('swa_annex_f_monthly_reports', 'view');
+                $canViewFundUtilizationReports = $currentUser->hasCrudPermission('fund_utilization_reports', 'view');
+                $canViewLpmcReports = $currentUser->hasCrudPermission('local_project_monitoring_committee', 'view');
+                $canViewRoadMaintenanceReports = $currentUser->hasCrudPermission('road_maintenance_status_reports', 'view');
+                $canViewQuarterlyDilgMc201819 = $currentUser->hasCrudPermission('quarterly_dilg_mc_2018_19', 'view');
+                $canViewQuarterlyDilgMc201830 = $currentUser->hasCrudPermission('quarterly_dilg_mc_2018_30', 'view');
+                $canViewQuarterlyRpmesForm2 = $currentUser->hasCrudPermission('quarterly_rpmes_form_2', 'view');
+                $canViewQuarterlyRpmesForm5 = $currentUser->hasCrudPermission('quarterly_rpmes_form_5', 'view');
+                $canViewQuarterlyRpmesForm6 = $currentUser->hasCrudPermission('quarterly_rpmes_form_6', 'view');
                 $canViewAnyQuarterlyRpmesForm = $canViewQuarterlyRpmesForm2
                     || $canViewQuarterlyRpmesForm5
                     || $canViewQuarterlyRpmesForm6;
-                $currentUser = Auth::user();
-                $canViewDilgDeliverables = $currentUser->isDilgUser()
+                $canViewConfirmationOfFundReceipt = config('features.confirmation_of_fund_receipt')
+                    && $currentUser->hasCrudPermission('confirmation_of_fund_receipt', 'view');
+                $canViewLgsfProjectCompletionReports = $currentUser->hasCrudPermission('lgsf_project_completion_reports', 'view');
+                $canViewSglgifProjectCompletionReports = $currentUser->hasCrudPermission('sglgif_project_completion_reports', 'view');
+                $canViewPisatReports = $currentUser->hasCrudPermission('pisat_reports', 'view');
+                $canViewNadaiManagement = config('features.nadai_management')
+                    && $currentUser->hasCrudPermission('nadai_management', 'view');
+                $canViewDilgDeliverablesBase = $currentUser->isDilgUser()
                     && !$currentUser->isLguScopedUser()
                     && ($currentUser->isRegionalOfficeAssignment() || $currentUser->normalizedProvince() !== '');
-                $canViewTicketingSystem = Auth::user()->hasCrudPermission('ticketing_system', 'view');
-                $canViewSubaybayanUploads = Auth::user()->hasCrudPermission('subaybayan_data_uploads', 'view');
+                $canViewDilgDeliverablesMonitoringEvaluation = $canViewDilgDeliverablesBase
+                    && $currentUser->hasCrudPermission('dilg_deliverables_monitoring_evaluation', 'view');
+                $canViewDilgDeliverablesRlipLimeMonthly = $canViewDilgDeliverablesBase
+                    && $currentUser->hasCrudPermission('dilg_deliverables_rlip_lime_monthly', 'view');
+                $canViewDilgDeliverablesQaarToolMonitoring = $canViewDilgDeliverablesBase
+                    && $currentUser->hasCrudPermission('dilg_deliverables_qaar_tool_monitoring', 'view');
+                $canViewAnyDilgDeliverables = $canViewDilgDeliverablesMonitoringEvaluation
+                    || $canViewDilgDeliverablesRlipLimeMonthly
+                    || $canViewDilgDeliverablesQaarToolMonitoring;
+                $canViewTicketingSystem = $currentUser->hasCrudPermission('ticketing_system', 'view');
+                $canViewSubaybayanUploads = $currentUser->hasCrudPermission('subaybayan_data_uploads', 'view');
                 $canViewRssaLgsfUploads = $canViewSubaybayanUploads;
-                $canViewRlipLimeUploads = Auth::user()->hasCrudPermission('rlip_lime_data_uploads', 'view');
+                $canViewRlipLimeUploads = $currentUser->hasCrudPermission('rlip_lime_data_uploads', 'view');
                 $canViewRssaUploads = $canViewRssaLgsfUploads || $canViewRlipLimeUploads;
-                $canViewProjectAtRiskUploads = Auth::user()->hasCrudPermission('project_at_risk_data_uploads', 'view');
-                $canViewSglgifUploads = Auth::user()->hasCrudPermission('sglgif_data_uploads', 'view');
-                $canViewUtilitiesSystemSetup = Auth::user()->hasCrudPermission('utilities_system_setup', 'view');
-                $canViewUtilitiesNotifications = Auth::user()->hasCrudPermission('utilities_bulk_notifications', 'view');
-                $canViewUtilitiesDeadlines = Auth::user()->hasCrudPermission('utilities_deadlines_configuration', 'view');
-                $canViewUtilitiesLocation = Auth::user()->hasCrudPermission('utilities_location_configuration', 'view');
-                $canViewUtilitiesBackup = Auth::user()->hasCrudPermission('utilities_backup_restore', 'view');
+                $canViewProjectAtRiskUploads = $currentUser->hasCrudPermission('project_at_risk_data_uploads', 'view');
+                $canViewSglgifUploads = $currentUser->hasCrudPermission('sglgif_data_uploads', 'view');
+                $canViewUtilitiesSystemSetup = $currentUser->hasCrudPermission('utilities_system_setup', 'view');
+                $canViewUtilitiesNotifications = $currentUser->hasCrudPermission('utilities_bulk_notifications', 'view');
+                $canViewUtilitiesDeadlines = $currentUser->hasCrudPermission('utilities_deadlines_configuration', 'view');
+                $canViewUtilitiesLocation = $currentUser->hasCrudPermission('utilities_location_configuration', 'view');
+                $canViewUtilitiesBackup = $currentUser->hasCrudPermission('utilities_backup_restore', 'view');
+                $canViewUtilitiesActivityLogs = $currentUser->hasCrudPermission('utilities_activity_logs', 'view');
+                $hasAnyOneTimeReportAccess = $canViewConfirmationOfFundReceipt
+                    || $canViewProjectDocuments
+                    || $canViewLgsfProjectCompletionReports
+                    || $canViewSglgifProjectCompletionReports
+                    || $canViewPisatReports;
                 $hasAnyProjectMonitoringAccess = $canViewLocallyFundedProjects
                     || $canViewRlipLimeProjects
                     || $canViewProjectAtRiskProjects
                     || $canViewSglgifPortal;
                 $hasAnyReportorialAccess = $canViewRbisAnnualCertification
+                    || $canViewAnnualAmwp
                     || $canViewAnyAnnualRpmesForm
                     || $canViewPdNoPbbmMonthlyReports
                     || $canViewSwaAnnexFMonthlyReports
                     || $canViewFundUtilizationReports
                     || $canViewLpmcReports
                     || $canViewRoadMaintenanceReports
+                    || $canViewQuarterlyDilgMc201819
+                    || $canViewQuarterlyDilgMc201830
                     || $canViewAnyQuarterlyRpmesForm
-                    || $canViewDilgDeliverables;
+                    || $hasAnyOneTimeReportAccess
+                    || $canViewAnyDilgDeliverables;
                 $hasAnyUtilitiesAccess = $canViewUtilitiesSystemSetup
                     || $canViewUtilitiesNotifications
                     || $canViewUtilitiesDeadlines
                     || $canViewUtilitiesLocation
                     || $canViewUtilitiesBackup
-                    || Auth::user()->isSuperAdmin();
+                    || $canViewUtilitiesActivityLogs;
             @endphp
             @if($hasAnyProjectMonitoringAccess)
                 <li>
@@ -2177,8 +2255,12 @@
                         || $reportsDilgMonitoringEvaluationActive
                         || $reportsDilgRlipLimeActive
                         || $reportsDilgQaarActive;
+                    $reportsProjectDocumentsActive = request()->routeIs('reports.one-time.project-initial-documents')
+                        || request()->routeIs('initial-project-documents.*')
+                        || (request()->routeIs('pre-implementation-documents.*') && request()->query('scope') === 'all');
                     $reportsProjectCompletionActive = request()->routeIs('reports.one-time.project-completion-reports.*');
-                    $reportsOneTimeActive = request()->routeIs('reports.one-time.*');
+                    $reportsOneTimeActive = request()->routeIs('reports.one-time.*')
+                        || $reportsProjectDocumentsActive;
                     $reportsMonthlyActive = $reportsMonthlyReportActive || $reportsSwaAnnexFActive;
                     $reportsMenuActive = Route::currentRouteName() == 'reports'
                         || $reportsAnnualActive
@@ -2186,7 +2268,7 @@
                         || $reportsMonthlyActive
                         || $reportsOneTimeActive;
                 @endphp
-                @if($canViewDilgDeliverables)
+                @if($canViewAnyDilgDeliverables)
                     <li>
                         <a href="#" class="@if($reportsDilgDeliverablesMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsDilgDeliverablesMenu')">
                             <i class="fas fa-clipboard-list"></i>
@@ -2194,13 +2276,15 @@
                             <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                         </a>
                         <ul id="reportsDilgDeliverablesMenu" class="submenu" style="display: {{ $reportsDilgDeliverablesMenuActive ? 'block' : 'none' }};">
-                            <li>
-                                <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation') }}" class="@if($reportsDilgMonitoringEvaluationActive) active @endif">
-                                    <i class="fas fa-file-lines"></i>
-                                    <span>Monitoring and Evaluation Reports</span>
-                                </a>
-                            </li>
-                            @if($canViewRlipLimeProjects)
+                            @if($canViewDilgDeliverablesMonitoringEvaluation)
+                                <li>
+                                    <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation') }}" class="@if($reportsDilgMonitoringEvaluationActive) active @endif">
+                                        <i class="fas fa-file-lines"></i>
+                                        <span>Monitoring and Evaluation Reports</span>
+                                    </a>
+                                </li>
+                            @endif
+                            @if($canViewDilgDeliverablesRlipLimeMonthly)
                                 <li>
                                     <a href="{{ route('reports.dilg-deliverables.rlip-lime-monthly') }}" class="@if($reportsDilgRlipLimeActive) active @endif">
                                         <i class="fas fa-chart-column"></i>
@@ -2208,12 +2292,14 @@
                                     </a>
                                 </li>
                             @endif
-                            <li>
-                                <a href="{{ route('reports.dilg-deliverables.qaar-tool-monitoring') }}" class="@if($reportsDilgQaarActive) active @endif">
-                                    <i class="fas fa-clipboard-check"></i>
-                                    <span>QAAR Tool and Monitoring Report</span>
-                                </a>
-                            </li>
+                            @if($canViewDilgDeliverablesQaarToolMonitoring)
+                                <li>
+                                    <a href="{{ route('reports.dilg-deliverables.qaar-tool-monitoring') }}" class="@if($reportsDilgQaarActive) active @endif">
+                                        <i class="fas fa-clipboard-check"></i>
+                                        <span>QAAR Tool and Monitoring Report</span>
+                                    </a>
+                                </li>
+                            @endif
                         </ul>
                     </li>
                 @endif
@@ -2224,7 +2310,7 @@
                         <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                     </a>
                     <ul id="reportsMenu" class="submenu" style="display: {{ $reportsMenuActive ? 'block' : 'none' }};">
-                    @if($canViewRbisAnnualCertification || $canViewAnyAnnualRpmesForm)
+                    @if($canViewRbisAnnualCertification || $canViewAnnualAmwp || $canViewAnyAnnualRpmesForm)
                         <li>
                             <a href="#" class="@if($reportsAnnualActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualMenu')">
                                 <i class="fas fa-calendar-alt"></i>
@@ -2270,7 +2356,7 @@
                             </ul>
                         </li>
                     @endif
-                    @if($canViewFundUtilizationReports || $canViewLpmcReports || $canViewRoadMaintenanceReports || $canViewAnyQuarterlyRpmesForm)
+                    @if($canViewFundUtilizationReports || $canViewLpmcReports || $canViewRoadMaintenanceReports || $canViewQuarterlyDilgMc201819 || $canViewQuarterlyDilgMc201830 || $canViewAnyQuarterlyRpmesForm)
                         <li>
                             <a href="#" class="@if($reportsQuarterlyActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyMenu')">
                                 <i class="fas fa-calendar-check"></i>
@@ -2302,18 +2388,22 @@
                                         </a>
                                     </li>
                                 @endif
-                                <li>
-                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-19') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-19*')) active @endif" title="Monitoring of Roads and Other Similar Public Works in Compliance with DILG MC No. 2018-19">
-                                        <i class="fas fa-file-lines"></i>
-                                        <span>DILG MC No. 2018-19</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-30') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-30*')) active @endif" title="Report on Monitoring of Local Government Projects on Contractor's Compliance to Inform the Public before Commencement of Road Projects">
-                                        <i class="fas fa-file-lines"></i>
-                                        <span>DILG MC No. 2018-30</span>
-                                    </a>
-                                </li>
+                                @if($canViewQuarterlyDilgMc201819)
+                                    <li>
+                                        <a href="{{ route('reports.quarterly.dilg-mc-2018-19') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-19*')) active @endif" title="Monitoring of Roads and Other Similar Public Works in Compliance with DILG MC No. 2018-19">
+                                            <i class="fas fa-file-lines"></i>
+                                            <span>DILG MC No. 2018-19</span>
+                                        </a>
+                                    </li>
+                                @endif
+                                @if($canViewQuarterlyDilgMc201830)
+                                    <li>
+                                        <a href="{{ route('reports.quarterly.dilg-mc-2018-30') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-30*')) active @endif" title="Report on Monitoring of Local Government Projects on Contractor's Compliance to Inform the Public before Commencement of Road Projects">
+                                            <i class="fas fa-file-lines"></i>
+                                            <span>DILG MC No. 2018-30</span>
+                                        </a>
+                                    </li>
+                                @endif
                                 @if($canViewAnyQuarterlyRpmesForm)
                                     <li>
                                         <a href="#" class="@if($reportsQuarterlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyRpmesMenu')">
@@ -2397,60 +2487,72 @@
                             </ul>
                         </li>
                     @endif
-                    <li>
-                        <a href="#" class="@if($reportsOneTimeActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsOneTimeMenu')">
-                            <i class="fas fa-file-circle-check"></i>
-                            <span>One-Time Report</span>
-                            <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
-                        </a>
-                        <ul id="reportsOneTimeMenu" class="submenu" style="display: {{ $reportsOneTimeActive ? 'block' : 'none' }};">
-                            <li>
-                                <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.index') }}" class="@if(request()->routeIs('reports.one-time.confirmation-of-fund-receipt.*')) active @endif">
-                                    <i class="fas fa-receipt"></i>
-                                    <span>Confirmation of Fund Receipt</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents') || request()->routeIs('initial-project-documents.*') || (request()->routeIs('pre-implementation-documents.*') && request()->query('scope') === 'all')) active @endif">
-                                    <i class="fas fa-folder-tree"></i>
-                                    <span>Project Documents</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" class="@if($reportsProjectCompletionActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsProjectCompletionMenu')">
-                                    <i class="fas fa-flag-checkered"></i>
-                                    <span>Project Completion Reports</span>
-                                    <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
-                                </a>
-                                <ul id="reportsProjectCompletionMenu" class="submenu" style="display: {{ $reportsProjectCompletionActive ? 'block' : 'none' }};">
+                    @if($hasAnyOneTimeReportAccess)
+                        <li>
+                            <a href="#" class="@if($reportsOneTimeActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsOneTimeMenu')">
+                                <i class="fas fa-file-circle-check"></i>
+                                <span>One-Time Report</span>
+                                <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                            </a>
+                            <ul id="reportsOneTimeMenu" class="submenu" style="display: {{ $reportsOneTimeActive ? 'block' : 'none' }};">
+                                @if($canViewConfirmationOfFundReceipt)
                                     <li>
-                                        <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp*')) active @endif">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span>LGSF</span>
+                                        <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.index') }}" class="@if(request()->routeIs('reports.one-time.confirmation-of-fund-receipt.*')) active @endif">
+                                            <i class="fas fa-receipt"></i>
+                                            <span>Confirmation of Fund Receipt</span>
                                         </a>
                                     </li>
+                                @endif
+                                @if($canViewProjectDocuments)
                                     <li>
-                                    </li>
-                                    <li>
-                                        <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif*')) active @endif">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span>SGLGIF</span>
+                                        <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents') || request()->routeIs('initial-project-documents.*') || (request()->routeIs('pre-implementation-documents.*') && request()->query('scope') === 'all')) active @endif">
+                                            <i class="fas fa-folder-tree"></i>
+                                            <span>Project Documents</span>
                                         </a>
                                     </li>
-                                </ul>
-                            </li>
-                            <li>
-                                <a href="{{ route('reports.one-time.pisat') }}" class="@if(request()->routeIs('reports.one-time.pisat')) active @endif">
-                                    <i class="fas fa-clipboard-check"></i>
-                                    <span>PISAT</span>
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
+                                @endif
+                                @if($canViewLgsfProjectCompletionReports || $canViewSglgifProjectCompletionReports)
+                                    <li>
+                                        <a href="#" class="@if($reportsProjectCompletionActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsProjectCompletionMenu')">
+                                            <i class="fas fa-flag-checkered"></i>
+                                            <span>Project Completion Reports</span>
+                                            <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                        </a>
+                                        <ul id="reportsProjectCompletionMenu" class="submenu" style="display: {{ $reportsProjectCompletionActive ? 'block' : 'none' }};">
+                                            @if($canViewLgsfProjectCompletionReports)
+                                                <li>
+                                                    <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp*')) active @endif">
+                                                        <i class="fas fa-file-alt"></i>
+                                                        <span>LGSF</span>
+                                                    </a>
+                                                </li>
+                                            @endif
+                                            @if($canViewSglgifProjectCompletionReports)
+                                                <li>
+                                                    <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif*')) active @endif">
+                                                        <i class="fas fa-file-alt"></i>
+                                                        <span>SGLGIF</span>
+                                                    </a>
+                                                </li>
+                                            @endif
+                                        </ul>
+                                    </li>
+                                @endif
+                                @if($canViewPisatReports)
+                                    <li>
+                                        <a href="{{ route('reports.one-time.pisat') }}" class="@if(request()->routeIs('reports.one-time.pisat')) active @endif">
+                                            <i class="fas fa-clipboard-check"></i>
+                                            <span>PISAT</span>
+                                        </a>
+                                    </li>
+                                @endif
+                            </ul>
+                        </li>
+                    @endif
                 </ul>
             </li>
             @endif
-            @if($canViewPreImplementationDocuments)
+            @if($canViewNadaiManagement)
                 <li>
                     <a href="{{ route('nadai-management.index') }}" class="@if(request()->routeIs('nadai-management.*')) active @endif" title="Notice of Authority to Debit Account Issued">
                         <i class="fas fa-folder-tree"></i>
@@ -2662,7 +2764,7 @@
                 </ul>
                 </li>
             @endif
-            @if(Auth::user()->isSuperAdmin())
+            @if($canViewUtilitiesActivityLogs)
             <li>
                 <a href="{{ route('utilities.activity-logs.index') }}" class="@if(request()->routeIs('utilities.activity-logs.*')) active @endif">
                     <i class="fas fa-history"></i>
@@ -4608,6 +4710,251 @@
     </script>
     
     @yield('scripts')
+
+    <script>
+        (function initializeFreezeColumnSelection() {
+            const shellSelector = '[data-freeze-columns]';
+            const storagePrefix = 'pdmuoms.freeze-columns';
+            const observedTables = new WeakSet();
+
+            function getStorage() {
+                try {
+                    return window.localStorage;
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            function parsePositiveInt(value, fallback) {
+                const parsed = Number.parseInt(value, 10);
+
+                return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+            }
+
+            function getColumnCells(row) {
+                return Array.from(row.children).filter(function (cell) {
+                    return cell.tagName === 'TD' || cell.tagName === 'TH';
+                });
+            }
+
+            function getStorageKey(shell, table, index) {
+                const shellKey = shell.dataset.freezeColumnsKey || table.id || ('table-' + index);
+
+                return [storagePrefix, window.location.pathname, shellKey].join(':');
+            }
+
+            function getFrozenCountLimit(shell, table) {
+                const headerRow = table.tHead && table.tHead.rows.length
+                    ? table.tHead.rows[table.tHead.rows.length - 1]
+                    : table.rows[0];
+                const totalColumns = headerRow ? getColumnCells(headerRow).length : 0;
+                const configuredLimit = parsePositiveInt(shell.dataset.freezeColumnsMax, 2);
+
+                return Math.max(0, Math.min(configuredLimit, Math.max(0, totalColumns - 1)));
+            }
+
+            function buildToolbar(shell, table, index) {
+                const existingToolbar = shell.querySelector('.freeze-columns-toolbar');
+                if (existingToolbar) {
+                    return existingToolbar;
+                }
+
+                const maxColumns = getFrozenCountLimit(shell, table);
+                if (maxColumns < 1) {
+                    return null;
+                }
+
+                shell.classList.add('freeze-columns-shell');
+
+                const toolbar = document.createElement('div');
+                toolbar.className = 'freeze-columns-toolbar';
+
+                const label = document.createElement('label');
+                label.className = 'freeze-columns-toolbar-label';
+                label.innerHTML = '<i class="fas fa-thumbtack" aria-hidden="true"></i><span>Freeze left columns</span>';
+
+                const select = document.createElement('select');
+                select.className = 'freeze-columns-toolbar-select';
+                select.setAttribute('aria-label', 'Freeze left columns');
+
+                for (let columnCount = 0; columnCount <= maxColumns; columnCount += 1) {
+                    const option = document.createElement('option');
+                    option.value = String(columnCount);
+                    option.textContent = columnCount === 0
+                        ? 'No frozen columns'
+                        : columnCount === 1
+                            ? 'Freeze 1 column'
+                            : 'Freeze ' + columnCount + ' columns';
+                    select.appendChild(option);
+                }
+
+                const storage = getStorage();
+                const storageKey = getStorageKey(shell, table, index);
+                const savedValue = storage ? storage.getItem(storageKey) : null;
+                const initialCount = Math.min(
+                    maxColumns,
+                    Math.max(0, parsePositiveInt(savedValue ?? shell.dataset.freezeColumnsDefault, 0))
+                );
+
+                select.value = String(initialCount);
+                shell.dataset.freezeColumnsActive = String(initialCount);
+
+                select.addEventListener('change', function () {
+                    const nextCount = Math.min(maxColumns, Math.max(0, parsePositiveInt(select.value, 0)));
+                    shell.dataset.freezeColumnsActive = String(nextCount);
+
+                    if (storage) {
+                        storage.setItem(storageKey, String(nextCount));
+                    }
+
+                    applyFrozenColumns(shell, table);
+                });
+
+                label.appendChild(select);
+                toolbar.appendChild(label);
+                shell.insertBefore(toolbar, shell.firstChild);
+
+                return toolbar;
+            }
+
+            function clearFrozenColumns(table) {
+                table.querySelectorAll('[data-freeze-column-cell="true"]').forEach(function (cell) {
+                    cell.style.position = '';
+                    cell.style.left = '';
+                    cell.style.zIndex = '';
+                    cell.style.backgroundColor = '';
+                    cell.style.boxShadow = '';
+                    cell.style.backgroundClip = '';
+                    cell.removeAttribute('data-freeze-column-cell');
+                });
+            }
+
+            function getCellBackground(cell, fallback) {
+                const backgroundColor = window.getComputedStyle(cell).backgroundColor;
+                if (!backgroundColor || backgroundColor === 'rgba(0, 0, 0, 0)' || backgroundColor === 'transparent') {
+                    return fallback;
+                }
+
+                return backgroundColor;
+            }
+
+            function applyFrozenColumns(shell, table) {
+                clearFrozenColumns(table);
+
+                const frozenCount = parsePositiveInt(shell.dataset.freezeColumnsActive, 0);
+                shell.classList.toggle('has-frozen-columns', frozenCount > 0);
+
+                if (frozenCount < 1) {
+                    return;
+                }
+
+                const referenceRow = table.tHead && table.tHead.rows.length
+                    ? table.tHead.rows[table.tHead.rows.length - 1]
+                    : table.rows[0];
+
+                if (!referenceRow) {
+                    return;
+                }
+
+                const referenceCells = getColumnCells(referenceRow);
+                const activeCount = Math.min(frozenCount, referenceCells.length);
+                const offsets = [];
+                let runningLeft = 0;
+
+                for (let columnIndex = 0; columnIndex < activeCount; columnIndex += 1) {
+                    offsets[columnIndex] = runningLeft;
+                    runningLeft += referenceCells[columnIndex].getBoundingClientRect().width;
+                }
+
+                Array.from(table.rows).forEach(function (row) {
+                    const rowCells = getColumnCells(row);
+                    const rowActiveCount = Math.min(activeCount, rowCells.length);
+                    const rowGroupTag = row.parentElement ? row.parentElement.tagName : '';
+                    const isHeaderRow = rowGroupTag === 'THEAD' || rowCells.every(function (cell) {
+                        return cell.tagName === 'TH';
+                    });
+
+                    for (let columnIndex = 0; columnIndex < rowActiveCount; columnIndex += 1) {
+                        const cell = rowCells[columnIndex];
+                        const fallbackBackground = isHeaderRow ? '#edf3ff' : '#ffffff';
+
+                        cell.setAttribute('data-freeze-column-cell', 'true');
+                        cell.style.position = 'sticky';
+                        cell.style.left = offsets[columnIndex] + 'px';
+                        cell.style.zIndex = String((isHeaderRow ? 14 : 8) + (rowActiveCount - columnIndex));
+                        cell.style.backgroundColor = getCellBackground(cell, fallbackBackground);
+                        cell.style.backgroundClip = 'padding-box';
+                        cell.style.boxShadow = columnIndex === rowActiveCount - 1
+                            ? '2px 0 0 rgba(148, 163, 184, 0.35), 10px 0 14px -12px rgba(15, 23, 42, 0.55)'
+                            : '1px 0 0 rgba(226, 232, 240, 0.85)';
+                    }
+                });
+            }
+
+            function observeTable(shell, table) {
+                if (observedTables.has(table) || typeof MutationObserver === 'undefined') {
+                    if (typeof ResizeObserver !== 'undefined') {
+                        const resizeObserver = new ResizeObserver(function () {
+                            applyFrozenColumns(shell, table);
+                        });
+
+                        resizeObserver.observe(shell);
+                        resizeObserver.observe(table);
+                    }
+
+                    return;
+                }
+
+                const observer = new MutationObserver(function () {
+                    applyFrozenColumns(shell, table);
+                });
+
+                observer.observe(table, {
+                    childList: true,
+                    subtree: true,
+                });
+
+                observedTables.add(table);
+
+                if (typeof ResizeObserver !== 'undefined') {
+                    const resizeObserver = new ResizeObserver(function () {
+                        applyFrozenColumns(shell, table);
+                    });
+
+                    resizeObserver.observe(shell);
+                    resizeObserver.observe(table);
+                }
+            }
+
+            function initializeShell(shell, index) {
+                const table = shell.querySelector('table');
+                if (!table) {
+                    return;
+                }
+
+                const toolbar = buildToolbar(shell, table, index);
+                if (!toolbar) {
+                    return;
+                }
+
+                applyFrozenColumns(shell, table);
+                observeTable(shell, table);
+            }
+
+            function init() {
+                document.querySelectorAll(shellSelector).forEach(function (shell, index) {
+                    initializeShell(shell, index);
+                });
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init, { once: true });
+                return;
+            }
+
+            init();
+        })();
+    </script>
 
     <script>
         (function initializePersistentTabState() {

@@ -2942,6 +2942,7 @@
         </div>
     @endforeach
 
+    @push('styles')
     <style>
         .project-filter-toggle {
             width: 100%;
@@ -5064,6 +5065,7 @@
         }
 
     </style>
+    @endpush
 
     <script>
         const PROJECT_FILTER_STATE_KEY = 'dashboard.project_filter_collapsed';

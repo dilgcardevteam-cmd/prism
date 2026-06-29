@@ -427,7 +427,7 @@
                         <div style="font-size: 14px; font-weight: 600; color: #6b7280;">No activity recorded yet.</div>
                     </div>
                 @else
-                    <div style="overflow-x: auto;">
+                    <div style="overflow-x: auto;" data-freeze-columns data-freeze-columns-max="2" data-freeze-columns-key="pd-no-pbbm-monthly-edit-activity-log">
                         <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
                             <thead>
                                 <tr style="background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);">

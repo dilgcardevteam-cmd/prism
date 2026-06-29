@@ -55,7 +55,6 @@ class AnnualRpmesForm4Controller extends AbstractQuarterlyRpmesFormController
             return false;
         }
 
-        return parent::userCanAccessReport($user)
-            || $user->hasCrudPermission('rbis_annual_certification', 'view');
+        return parent::userCanAccessReport($user);
     }
 }

@@ -20,7 +20,7 @@ class ActivityLogController extends Controller
     public function __construct(
         private readonly ActivityLogService $activityLogService,
     ) {
-        $this->middleware(['auth', 'superadmin']);
+        $this->middleware('auth');
     }
 
     public function index(Request $request): View

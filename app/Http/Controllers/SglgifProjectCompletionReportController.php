@@ -21,9 +21,9 @@ class SglgifProjectCompletionReportController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:project_completion_reports,view')->only(['index', 'show']);
-        $this->middleware('crud_permission:project_completion_reports,add')->only(['save', 'uploadMultiDocument']);
-        $this->middleware('crud_permission:project_completion_reports,update')->only(['validateDocument', 'validateDocumentFile']);
+        $this->middleware('crud_permission:sglgif_project_completion_reports,view')->only(['index', 'show']);
+        $this->middleware('crud_permission:sglgif_project_completion_reports,add')->only(['save', 'uploadMultiDocument']);
+        $this->middleware('crud_permission:sglgif_project_completion_reports,update')->only(['validateDocument', 'validateDocumentFile']);
     }
 
     public function index(Request $request)

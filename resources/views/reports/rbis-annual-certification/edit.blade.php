@@ -453,7 +453,7 @@
                         No activity recorded yet.
                     </div>
                 @else
-                    <div style="overflow-x: auto;">
+                    <div style="overflow-x: auto;" data-freeze-columns data-freeze-columns-max="2" data-freeze-columns-key="{{ $reportConfig['indexRoute'] }}-activity-log">
                         <table style="width: 100%; border-collapse: collapse;">
                             <thead>
                                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">

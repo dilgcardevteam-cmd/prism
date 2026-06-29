@@ -168,6 +168,8 @@ class UserManagementController extends Controller
 
         if (in_array('*', $normalizedPermissions, true)) {
             $normalizedPermissions = RolePermissionRegistry::validPermissionKeys();
+        } else {
+            $normalizedPermissions = RolePermissionRegistry::expandPermissions($normalizedPermissions);
         }
 
         sort($normalizedPermissions);

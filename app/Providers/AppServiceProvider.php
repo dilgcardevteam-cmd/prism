@@ -141,8 +141,8 @@ class AppServiceProvider extends ServiceProvider
                 return Gate::forUser($user)->allows('ticketing.manageProvince', $ticket);
             }
 
-            if ($user->isRegionalUser() && $ticket->current_level === Ticket::LEVEL_REGIONAL) {
-                return Gate::forUser($user)->allows('ticketing.manageRegion', $ticket);
+            if ($user->isRegionalUser()) {
+                return Gate::forUser($user)->allows('ticketing.view', $ticket);
             }
 
             return Gate::forUser($user)->allows('ticketing.view', $ticket);

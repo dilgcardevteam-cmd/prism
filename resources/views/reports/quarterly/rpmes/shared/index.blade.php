@@ -146,7 +146,7 @@
     </form>
 
     <div style="background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); border: 1px solid #e5e7eb; overflow: hidden;">
-        <div style="overflow-x: auto;">
+        <div style="overflow-x: auto;" data-freeze-columns data-freeze-columns-max="3" data-freeze-columns-key="{{ $formMeta['index_route'] ?? 'quarterly-rpmes-shared-index' }}">
             <table style="width: 100%; border-collapse: collapse; min-width: 1520px;">
                 <thead>
                     <tr style="background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);">

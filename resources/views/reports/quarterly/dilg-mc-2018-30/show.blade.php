@@ -145,6 +145,7 @@
                                 Upload History
                             </div>
                             <div style="border:1px solid #e5e7eb;border-radius:12px;background:#fff;overflow:hidden;">
+                                <div style="overflow-x:auto;" data-freeze-columns data-freeze-columns-max="2" data-freeze-columns-key="dilg-mc-2018-30-upload-history">
                                 <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
                                     <thead>
                                         <tr style="background:#f8fafc;border-bottom:1px solid #e5e7eb;">
@@ -326,6 +327,7 @@
                                         @endforeach
                                     </tbody>
                                 </table>
+                                </div>
                             </div>
                         </div>
                     @endif
@@ -430,7 +432,7 @@
                         <div style="font-size:14px;font-weight:600;color:#6b7280;">No activity logs found for this workspace.</div>
                     </div>
                 @else
-                    <div style="overflow-x:auto;">
+                    <div style="overflow-x:auto;" data-freeze-columns data-freeze-columns-max="2" data-freeze-columns-key="dilg-mc-2018-30-activity-log">
                         <table style="width:100%;border-collapse:collapse;min-width:720px;">
                             <thead>
                                 <tr style="background:linear-gradient(135deg, #002C76 0%, #003d9e 100%);">

@@ -15,7 +15,14 @@ class ConfirmationOfFundReceiptController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show', 'viewDocument', 'viewConfirmationDocument']);
+        $this->middleware(function ($request, $next) {
+            abort_unless(config('features.confirmation_of_fund_receipt'), 404);
+
+            return $next($request);
+        });
+        $this->middleware('crud_permission:confirmation_of_fund_receipt,view')->only(['index', 'show', 'viewDocument', 'viewConfirmationDocument']);
+        $this->middleware('crud_permission:confirmation_of_fund_receipt,add')->only(['store']);
+        $this->middleware('crud_permission:confirmation_of_fund_receipt,update')->only(['acceptDocument']);
     }
 
     private function getOffices(): array
@@ -376,8 +383,13 @@ class ConfirmationOfFundReceiptController extends Controller
                     : User::query()->whereIn('idno', $ids->all())->get()->keyBy('idno');
             });
 
-        $canAccept = $this->canAcceptDocument($officeName);
-        $canUploadConfirmation = $this->canUploadConfirmationDocument($officeName);
+        $user = auth()->user();
+        $canAccept = $this->canAcceptDocument($officeName)
+            && $user
+            && $user->hasCrudPermission('confirmation_of_fund_receipt', 'update');
+        $canUploadConfirmation = $this->canUploadConfirmationDocument($officeName)
+            && $user
+            && $user->hasCrudPermission('confirmation_of_fund_receipt', 'add');
 
         return view('reports.one-time.confirmation-of-fund-receipt.show', compact(
             'officeName',

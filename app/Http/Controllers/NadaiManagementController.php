@@ -21,8 +21,15 @@ class NadaiManagementController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show', 'viewDocument', 'downloadDocument', 'openDocumentAndRedirect']);
-        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['store', 'updateDocument']);
+        $this->middleware(function ($request, $next) {
+            abort_unless(config('features.nadai_management'), 404);
+
+            return $next($request);
+        });
+        $this->middleware('crud_permission:nadai_management,view')->only(['index', 'show', 'viewDocument', 'downloadDocument', 'openDocumentAndRedirect']);
+        $this->middleware('crud_permission:nadai_management,add')->only(['store']);
+        $this->middleware('crud_permission:nadai_management,update')->only(['updateDocument']);
+        $this->middleware('crud_permission:nadai_management,delete')->only(['deleteDocument']);
     }
 
     private function getOffices(): array
@@ -550,8 +557,16 @@ class NadaiManagementController extends Controller
                     : User::query()->whereIn('idno', $ids->all())->get()->keyBy('idno');
             });
 
-        $canUpload = $this->canUploadNadai();
-        $canDelete = $this->canDeleteNadai();
+        $user = auth()->user();
+        $canUpload = $this->canUploadNadai()
+            && $user
+            && $user->hasCrudPermission('nadai_management', 'add');
+        $canEdit = $this->canUploadNadai()
+            && $user
+            && $user->hasCrudPermission('nadai_management', 'update');
+        $canDelete = $this->canDeleteNadai()
+            && $user
+            && $user->hasCrudPermission('nadai_management', 'delete');
         $uploadFormOptions = $this->buildUploadFormOptions($officeName, $province);
 
         return view('nadai-management.show', compact(
@@ -560,6 +575,7 @@ class NadaiManagementController extends Controller
             'documents',
             'usersById',
             'canUpload',
+            'canEdit',
             'canDelete',
             'uploadFormOptions'
         ));

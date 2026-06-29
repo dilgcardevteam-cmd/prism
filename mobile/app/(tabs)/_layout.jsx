@@ -38,6 +38,7 @@ const RAPID_SUBPROJECT_SUSTAINABILITY_ASSESSMENT_KEY = "rapid-subproject-sustain
 const TICKETING_SYSTEM_KEY = "ticketing-system";
 const LGU_REPORTORIAL_REQUIREMENTS_KEY = "lgu-reportorial-requirements";
 const DATA_MANAGEMENT_KEY = "data-management";
+const ENABLE_NADAI_MANAGEMENT = false;
 
 const SUBMENU_HEIGHT_BY_KEY = {
   [PROJECT_MONITORING_KEY]: PROJECT_MONITORING_SUBMENU_HEIGHT,
@@ -137,11 +138,13 @@ const DRAWER_MENU_ITEMS = [
       },
     ],
   },
-  {
-    key: "pre-implementation-documents",
-    label: "NADAI Management",
-    icon: "folder",
-  },
+  ENABLE_NADAI_MANAGEMENT
+    ? {
+        key: "pre-implementation-documents",
+        label: "NADAI Management",
+        icon: "folder",
+      }
+    : null,
   {
     key: "ticketing-system",
     label: "Ticketing System",
@@ -216,7 +219,7 @@ const DRAWER_MENU_ITEMS = [
     action: "logout",
     destructive: true,
   },
-];
+].filter(Boolean);
 
 export default function TabLayout() {
   const router = useRouter();

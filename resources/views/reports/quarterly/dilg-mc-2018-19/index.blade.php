@@ -97,7 +97,7 @@
                         </form>
                     </div>
 
-                    <div class="report-table-shell" style="background:#fff;padding:24px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.1);overflow-x:auto;">
+                    <div class="report-table-shell" data-freeze-columns data-freeze-columns-max="3" data-freeze-columns-key="dilg-mc-2018-19-index" style="background:#fff;padding:24px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.1);overflow-x:auto;">
                         <table style="width:100%;border-collapse:collapse;min-width:1040px;">
                             <thead>
                                 <tr style="background:#f3f4f6;border-bottom:2px solid #e5e7eb;">

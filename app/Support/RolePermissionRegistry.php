@@ -61,6 +61,11 @@ class RolePermissionRegistry
                         'description' => 'Manage annual RBIS certification documents and related validation actions.',
                     ],
                     [
+                        'aspect' => 'annual_maintenance_work_program',
+                        'label' => 'Annual / Annual Maintenance Work Program (AMWP)',
+                        'description' => 'Manage annual AMWP uploads, approvals, and document validation actions.',
+                    ],
+                    [
                         'aspect' => 'annual_rpmes_form_4',
                         'label' => 'Annual / RPMES Form 4 : Project Results',
                         'description' => 'Manage annual RPMES Form 4 project results submissions, uploads, and DILG validation workflow.',
@@ -79,6 +84,16 @@ class RolePermissionRegistry
                         'aspect' => 'road_maintenance_status_reports',
                         'label' => 'Quarterly / Road Maintenance Status Report',
                         'description' => 'Manage quarterly road maintenance status submissions, document uploads, and validation steps.',
+                    ],
+                    [
+                        'aspect' => 'quarterly_dilg_mc_2018_19',
+                        'label' => 'Quarterly / DILG MC No. 2018-19',
+                        'description' => 'Manage the quarterly DILG MC No. 2018-19 monitoring workspace, including encoding, uploads, and approvals.',
+                    ],
+                    [
+                        'aspect' => 'quarterly_dilg_mc_2018_30',
+                        'label' => 'Quarterly / DILG MC No. 2018-30',
+                        'description' => 'Manage the quarterly DILG MC No. 2018-30 monitoring workspace, including encoding, uploads, and approvals.',
                     ],
                     [
                         'aspect' => 'quarterly_rpmes_form_2',
@@ -110,18 +125,69 @@ class RolePermissionRegistry
                 ],
             ],
             [
-                'module' => 'Pre-Implementation Documents',
-                'description' => 'Document requirements collected before implementation begins.',
+                'module' => 'One-Time Reports',
+                'description' => 'One-time project reportorial pages, document submissions, and supporting attachments.',
                 'items' => [
                     [
                         'aspect' => 'pre_implementation_documents',
-                        'label' => 'SBDP Pre-Implementation Documents',
+                        'label' => 'Project Documents',
                         'description' => 'View and add the pre-implementation document set required for SBDP projects before project execution.',
                     ],
                     [
-                        'aspect' => 'project_completion_reports',
-                        'label' => 'LGSF Project Completion Reports',
+                        'aspect' => 'confirmation_of_fund_receipt',
+                        'label' => 'Confirmation of Fund Receipt',
+                        'description' => 'Track NADAI acceptance and upload the matching Confirmation of Fund Receipt attachments per LGU and PLGU.',
+                    ],
+                    [
+                        'aspect' => 'lgsf_project_completion_reports',
+                        'label' => 'Project Completion Reports / LGSF',
                         'description' => 'View, upload, and validate LGSF project completion reports and their supporting project documents.',
+                    ],
+                    [
+                        'aspect' => 'sglgif_project_completion_reports',
+                        'label' => 'Project Completion Reports / SGLGIF',
+                        'description' => 'View, upload, and validate SGLGIF project completion reports and their supporting project documents.',
+                    ],
+                    [
+                        'aspect' => 'pisat_reports',
+                        'label' => 'PISAT',
+                        'description' => 'Open the PISAT one-time report page.',
+                        'actions' => ['view'],
+                    ],
+                ],
+            ],
+            [
+                'module' => 'Project Document Management',
+                'description' => 'Project document workspaces that operate outside the regular reportorial cycles.',
+                'items' => [
+                    [
+                        'aspect' => 'nadai_management',
+                        'label' => 'NADAI Management',
+                        'description' => 'Manage uploaded NADAI records, including document viewing, uploads, edits, and deletion based on the assigned role scope.',
+                    ],
+                ],
+            ],
+            [
+                'module' => 'DILG Deliverables',
+                'description' => 'DILG-only deliverable pages for monitoring, evaluation, and related reporting outputs.',
+                'items' => [
+                    [
+                        'aspect' => 'dilg_deliverables_monitoring_evaluation',
+                        'label' => 'Monitoring and Evaluation Reports',
+                        'description' => 'Open the DILG deliverables monitoring and evaluation report page.',
+                        'actions' => ['view'],
+                    ],
+                    [
+                        'aspect' => 'dilg_deliverables_rlip_lime_monthly',
+                        'label' => 'RLIP/LIME Monthly Reports',
+                        'description' => 'Open the DILG deliverables RLIP/LIME monthly report page.',
+                        'actions' => ['view'],
+                    ],
+                    [
+                        'aspect' => 'dilg_deliverables_qaar_tool_monitoring',
+                        'label' => 'QAAR Tool and Monitoring Report',
+                        'description' => 'Open the DILG deliverables QAAR tool and monitoring report page.',
+                        'actions' => ['view'],
                     ],
                 ],
             ],
@@ -196,9 +262,101 @@ class RolePermissionRegistry
                         'description' => 'Open the backup workspace, download backups, restore database snapshots, and update automation settings.',
                         'actions' => ['view', 'update'],
                     ],
+                    [
+                        'aspect' => 'utilities_activity_logs',
+                        'label' => 'Activity Logs',
+                        'description' => 'Open the audit trail and export activity log records.',
+                        'actions' => ['view'],
+                    ],
                 ],
             ],
         ];
+    }
+
+    public static function aspectFallbacks(): array
+    {
+        return [
+            'annual_maintenance_work_program' => ['rbis_annual_certification'],
+            'quarterly_dilg_mc_2018_19' => ['road_maintenance_status_reports'],
+            'quarterly_dilg_mc_2018_30' => ['road_maintenance_status_reports'],
+            'nadai_management' => ['pre_implementation_documents'],
+            'confirmation_of_fund_receipt' => ['pre_implementation_documents'],
+            'lgsf_project_completion_reports' => ['project_completion_reports'],
+            'sglgif_project_completion_reports' => ['project_completion_reports'],
+        ];
+    }
+
+    public static function aspectCandidates(string $aspect): array
+    {
+        $normalizedAspect = strtolower(trim($aspect));
+
+        return array_values(array_unique(array_filter([
+            $normalizedAspect,
+            ...(self::aspectFallbacks()[$normalizedAspect] ?? []),
+        ])));
+    }
+
+    public static function legacyPermissionKeys(): array
+    {
+        return collect([
+            'project_completion_reports' => array_keys(self::actionOptions()),
+        ])->flatMap(function (array $actions, string $aspect) {
+            return collect($actions)->map(
+                fn (string $action) => strtolower(trim($aspect)) . '.' . strtolower(trim($action))
+            );
+        })->unique()->values()->all();
+    }
+
+    public static function acceptedPermissionKeys(): array
+    {
+        return collect(self::validPermissionKeys())
+            ->merge(self::legacyPermissionKeys())
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public static function expandPermissions(array $permissions): array
+    {
+        $normalizedPermissions = collect($permissions)
+            ->map(fn ($permission) => strtolower(trim((string) $permission)))
+            ->filter(fn ($permission) => $permission === '*' || in_array($permission, self::acceptedPermissionKeys(), true))
+            ->unique()
+            ->values()
+            ->all();
+
+        if (in_array('*', $normalizedPermissions, true)) {
+            return self::validPermissionKeys();
+        }
+
+        $legacyExpansionMap = [];
+        foreach (self::aspectFallbacks() as $aspect => $fallbacks) {
+            foreach ($fallbacks as $fallbackAspect) {
+                $legacyExpansionMap[$fallbackAspect] ??= [];
+                $legacyExpansionMap[$fallbackAspect][] = $aspect;
+            }
+        }
+
+        return collect($normalizedPermissions)
+            ->flatMap(function (string $permission) use ($legacyExpansionMap) {
+                [$aspect, $action] = array_pad(explode('.', $permission, 2), 2, '');
+                if ($aspect === '' || $action === '') {
+                    return [];
+                }
+
+                $candidateAspects = [trim($aspect)];
+                foreach ($legacyExpansionMap[trim($aspect)] ?? [] as $expandedAspect) {
+                    $candidateAspects[] = $expandedAspect;
+                }
+
+                return collect($candidateAspects)
+                    ->unique()
+                    ->map(fn (string $candidateAspect) => $candidateAspect . '.' . trim($action))
+                    ->filter(fn (string $candidatePermission) => in_array($candidatePermission, self::validPermissionKeys(), true));
+            })
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public static function actionsForItem(array $item): array
@@ -296,6 +454,14 @@ class RolePermissionRegistry
             'road_maintenance_status_reports.add',
             'road_maintenance_status_reports.update',
             'road_maintenance_status_reports.delete',
+            'quarterly_dilg_mc_2018_19.view',
+            'quarterly_dilg_mc_2018_19.add',
+            'quarterly_dilg_mc_2018_19.update',
+            'quarterly_dilg_mc_2018_19.delete',
+            'quarterly_dilg_mc_2018_30.view',
+            'quarterly_dilg_mc_2018_30.add',
+            'quarterly_dilg_mc_2018_30.update',
+            'quarterly_dilg_mc_2018_30.delete',
             'quarterly_rpmes_form_2.view',
             'quarterly_rpmes_form_2.add',
             'quarterly_rpmes_form_2.update',
@@ -306,6 +472,10 @@ class RolePermissionRegistry
             'rbis_annual_certification.add',
             'rbis_annual_certification.update',
             'rbis_annual_certification.delete',
+            'annual_maintenance_work_program.view',
+            'annual_maintenance_work_program.add',
+            'annual_maintenance_work_program.update',
+            'annual_maintenance_work_program.delete',
             'annual_rpmes_form_4.view',
             'annual_rpmes_form_4.add',
             'annual_rpmes_form_4.update',
@@ -318,10 +488,14 @@ class RolePermissionRegistry
             'swa_annex_f_monthly_reports.add',
             'swa_annex_f_monthly_reports.update',
             'swa_annex_f_monthly_reports.delete',
-            'project_completion_reports.view',
-            'project_completion_reports.add',
-            'project_completion_reports.update',
-            'project_completion_reports.delete',
+            'lgsf_project_completion_reports.view',
+            'lgsf_project_completion_reports.add',
+            'lgsf_project_completion_reports.update',
+            'lgsf_project_completion_reports.delete',
+            'sglgif_project_completion_reports.view',
+            'sglgif_project_completion_reports.add',
+            'sglgif_project_completion_reports.update',
+            'sglgif_project_completion_reports.delete',
         ];
 
         $dataManagementPermissions = [
@@ -347,6 +521,7 @@ class RolePermissionRegistry
             User::ROLE_SUPERADMIN => ['*'],
             User::ROLE_REGIONAL => [
                 'ticketing_system.view',
+                'ticketing_system.add',
                 'ticketing_system.update',
             ],
             User::ROLE_PROVINCIAL => [
@@ -367,27 +542,40 @@ class RolePermissionRegistry
             User::ROLE_SUPERADMIN => ['*'],
             User::ROLE_REGIONAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $dataManagementPermissions, $ticketingPermissions[User::ROLE_REGIONAL], [
                 'locally_funded_projects.update',
-                'project_completion_reports.update',
+                'dilg_deliverables_monitoring_evaluation.view',
+                'dilg_deliverables_rlip_lime_monthly.view',
+                'dilg_deliverables_qaar_tool_monitoring.view',
             ]),
             User::ROLE_PROVINCIAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_PROVINCIAL], [
                 'locally_funded_projects.update',
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
-                'project_completion_reports.view',
-                'project_completion_reports.add',
-                'project_completion_reports.update',
+                'nadai_management.view',
+                'confirmation_of_fund_receipt.view',
+                'confirmation_of_fund_receipt.add',
+                'confirmation_of_fund_receipt.update',
+                'dilg_deliverables_monitoring_evaluation.view',
+                'dilg_deliverables_rlip_lime_monthly.view',
+                'dilg_deliverables_qaar_tool_monitoring.view',
             ]),
             User::ROLE_MLGOO => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_MLGOO], [
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
-                'project_completion_reports.view',
-                'project_completion_reports.add',
+                'nadai_management.view',
+                'confirmation_of_fund_receipt.view',
+                'confirmation_of_fund_receipt.add',
+                'confirmation_of_fund_receipt.update',
+                'dilg_deliverables_monitoring_evaluation.view',
+                'dilg_deliverables_rlip_lime_monthly.view',
+                'dilg_deliverables_qaar_tool_monitoring.view',
             ]),
             User::ROLE_LGU => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_LGU], [
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
-                'project_completion_reports.view',
-                'project_completion_reports.add',
+                'nadai_management.view',
+                'confirmation_of_fund_receipt.view',
+                'confirmation_of_fund_receipt.add',
+                'confirmation_of_fund_receipt.update',
             ]),
         ];
     }
@@ -401,17 +589,17 @@ class RolePermissionRegistry
         }
 
         if (is_array($configuredPermissions)) {
-            return self::normalizePermissions($configuredPermissions);
+            return self::expandPermissions($configuredPermissions);
         }
 
-        return self::normalizePermissions(self::defaultPermissionsByRole()[$normalizedRole] ?? []);
+        return self::expandPermissions(self::defaultPermissionsByRole()[$normalizedRole] ?? []);
     }
 
     public static function normalizePermissions(array $permissions): array
     {
         return collect($permissions)
             ->map(fn ($permission) => strtolower(trim((string) $permission)))
-            ->filter(fn ($permission) => $permission === '*' || in_array($permission, self::validPermissionKeys(), true))
+            ->filter(fn ($permission) => $permission === '*' || in_array($permission, self::acceptedPermissionKeys(), true))
             ->unique()
             ->values()
             ->all();

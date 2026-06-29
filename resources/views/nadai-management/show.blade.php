@@ -1010,7 +1010,7 @@
         @endif
 
         <section class="nadai-records">
-            @if (!$canUpload)
+            @if (!$canUpload && !$canEdit)
                 <div class="nadai-records-head">
                     <div class="nadai-records-note">
                         <i class="fas fa-lock"></i>
@@ -1146,7 +1146,7 @@
                                         >
                                             <i class="fas fa-download"></i>
                                         </a>
-                                        @if ($canUpload)
+                                        @if ($canEdit)
                                             <button
                                                 type="button"
                                                 onclick="openNadaiEditModal({{ $document->id }})"
@@ -1283,7 +1283,9 @@
             </form>
         </div>
     </div>
+@endif
 
+@if ($canEdit)
     @foreach ($documents as $document)
         @php
             $editMunicipalityOptions = $uploadFormOptions['province_municipality_map'][$document->province] ?? ($uploadFormOptions['municipalities'] ?? []);
@@ -1371,7 +1373,6 @@
             </div>
         </div>
     @endforeach
-
 @endif
 
 <script>
@@ -1929,7 +1930,9 @@
                 initialMunicipality: @json($selectedUploadMunicipality),
                 initialBarangay: @json($selectedUploadBarangay),
             });
+        @endif
 
+        @if ($canEdit)
             @foreach ($documents as $document)
                 initNadaiLocationForm({
                     provinceId: 'edit_nadai_province_{{ $document->id }}',
@@ -1939,7 +1942,9 @@
                     initialBarangay: @json((string) old('edit_document_id') === (string) $document->id ? old('barangay', $document->barangay) : $document->barangay),
                 });
             @endforeach
+        @endif
 
+        @if ($canUpload || $canEdit)
             @if ($errors->any())
                 @if (old('edit_document_id'))
                     openNadaiEditModal(@json((int) old('edit_document_id')));

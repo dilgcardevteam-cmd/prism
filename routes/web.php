@@ -2549,10 +2549,10 @@ Route::middleware(['auth'])->group(function () {
 
     Route::prefix('utilities')->name('utilities.')->group(function () {
         Route::get('/activity-logs', [App\Http\Controllers\ActivityLogController::class, 'index'])
-            ->middleware('superadmin')
+            ->middleware('crud_permission:utilities_activity_logs,view')
             ->name('activity-logs.index');
         Route::get('/activity-logs/export', [App\Http\Controllers\ActivityLogController::class, 'export'])
-            ->middleware('superadmin')
+            ->middleware('crud_permission:utilities_activity_logs,view')
             ->name('activity-logs.export');
         Route::get('/system-setup', [App\Http\Controllers\DatabaseUtilityController::class, 'systemSetup'])
             ->middleware('crud_permission:utilities_system_setup,view')
@@ -2631,27 +2631,49 @@ Route::middleware(['auth'])->group(function () {
         abort_unless($canAccessDilgDeliverables, 403);
     };
 
-    Route::prefix('/reports/dilg-deliverables')->group(function () use ($assertDilgDeliverablesAccess) {
+    $assertDilgDeliverablesPermission = function (string $aspect) use ($assertDilgDeliverablesAccess): void {
+        $assertDilgDeliverablesAccess();
+
+        $user = Auth::user();
+
+        abort_unless($user && $user->hasCrudPermission($aspect, 'view'), 403);
+    };
+
+    Route::prefix('/reports/dilg-deliverables')->group(function () use ($assertDilgDeliverablesAccess, $assertDilgDeliverablesPermission) {
         Route::get('/', function () use ($assertDilgDeliverablesAccess) {
             $assertDilgDeliverablesAccess();
+
+            $aspects = [
+                'dilg_deliverables_monitoring_evaluation',
+                'dilg_deliverables_rlip_lime_monthly',
+                'dilg_deliverables_qaar_tool_monitoring',
+            ];
+
+            $hasAnyPermission = collect($aspects)->contains(function (string $aspect) {
+                $user = Auth::user();
+
+                return $user && $user->hasCrudPermission($aspect, 'view');
+            });
+
+            abort_unless($hasAnyPermission, 403);
 
             return view('reports.dilg-deliverables.index');
         })->name('reports.dilg-deliverables');
 
-        Route::get('/monitoring-and-evaluation-reports', function () use ($assertDilgDeliverablesAccess) {
-            $assertDilgDeliverablesAccess();
+        Route::get('/monitoring-and-evaluation-reports', function () use ($assertDilgDeliverablesPermission) {
+            $assertDilgDeliverablesPermission('dilg_deliverables_monitoring_evaluation');
 
             return view('reports.dilg-deliverables.monitoring-evaluation-reports');
         })->name('reports.dilg-deliverables.monitoring-evaluation');
 
-        Route::get('/rlip-lime-monthly-reports', function () use ($assertDilgDeliverablesAccess) {
-            $assertDilgDeliverablesAccess();
+        Route::get('/rlip-lime-monthly-reports', function () use ($assertDilgDeliverablesPermission) {
+            $assertDilgDeliverablesPermission('dilg_deliverables_rlip_lime_monthly');
 
             return view('reports.dilg-deliverables.rlip-lime-monthly-reports');
         })->name('reports.dilg-deliverables.rlip-lime-monthly');
 
-        Route::get('/qaar-tool-and-monitoring-report', function () use ($assertDilgDeliverablesAccess) {
-            $assertDilgDeliverablesAccess();
+        Route::get('/qaar-tool-and-monitoring-report', function () use ($assertDilgDeliverablesPermission) {
+            $assertDilgDeliverablesPermission('dilg_deliverables_qaar_tool_monitoring');
 
             return view('reports.dilg-deliverables.qaar-tool-and-monitoring-report');
         })->name('reports.dilg-deliverables.qaar-tool-monitoring');
@@ -3156,7 +3178,7 @@ Route::middleware(['auth'])->group(function () {
             'pageTitle' => 'PISAT',
             'pageSubtitle' => 'Dedicated one-time report page for PISAT.',
         ]
-    )->name('reports.one-time.pisat');
+    )->middleware('crud_permission:pisat_reports,view')->name('reports.one-time.pisat');
 
     Route::get('/reports/rbis-annual-certification', [App\Http\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');

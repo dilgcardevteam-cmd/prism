@@ -516,6 +516,10 @@ class DatabaseUtilityController extends Controller
                 'route' => route('rbis-annual-certification.index'),
                 'icon' => 'fas fa-bridge',
             ],
+            'annual_maintenance_work_program' => [
+                'route' => route('reports.annual.amwp'),
+                'icon' => 'fas fa-file-lines',
+            ],
             'annual_rpmes_form_4' => [
                 'route' => route('reports.annual.rpmes.form-4'),
                 'icon' => 'fas fa-diagram-project',
@@ -531,6 +535,14 @@ class DatabaseUtilityController extends Controller
             'road_maintenance_status_reports' => [
                 'route' => route('road-maintenance-status.index'),
                 'icon' => 'fas fa-road',
+            ],
+            'quarterly_dilg_mc_2018_19' => [
+                'route' => route('reports.quarterly.dilg-mc-2018-19'),
+                'icon' => 'fas fa-file-lines',
+            ],
+            'quarterly_dilg_mc_2018_30' => [
+                'route' => route('reports.quarterly.dilg-mc-2018-30'),
+                'icon' => 'fas fa-file-lines',
             ],
             'quarterly_rpmes_form_2' => [
                 'route' => route('reports.quarterly.rpmes.form-2'),

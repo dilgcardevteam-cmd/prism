@@ -18,9 +18,9 @@ class AnnualMaintenanceWorkProgramController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:rbis_annual_certification,view')->only(['index', 'edit', 'viewDocument']);
-        $this->middleware('crud_permission:rbis_annual_certification,add')->only(['upload']);
-        $this->middleware('crud_permission:rbis_annual_certification,update')->only(['approveDocument']);
+        $this->middleware('crud_permission:annual_maintenance_work_program,view')->only(['index', 'edit', 'viewDocument']);
+        $this->middleware('crud_permission:annual_maintenance_work_program,add')->only(['upload']);
+        $this->middleware('crud_permission:annual_maintenance_work_program,update')->only(['approveDocument']);
         $this->middleware('superadmin')->only(['deleteDocument']);
     }
 

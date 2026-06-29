@@ -408,10 +408,7 @@ class QuarterlyRpmesForm2Controller extends AbstractQuarterlyRpmesFormController
             return false;
         }
 
-        return $user->hasCrudPermission('fund_utilization_reports', 'view')
-            || $user->hasCrudPermission('local_project_monitoring_committee', 'view')
-            || $user->hasCrudPermission('road_maintenance_status_reports', 'view')
-            || $user->hasCrudPermission('quarterly_rpmes_form_2', 'view');
+        return $user->hasCrudPermission('quarterly_rpmes_form_2', 'view');
     }
 
     protected function userCanApproveReport($user): bool

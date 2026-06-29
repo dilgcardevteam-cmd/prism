@@ -194,7 +194,7 @@
                     <span>Adjust the current filters or reload the imported SGLGIF dataset.</span>
                 </div>
             @else
-                <div class="sglgif-table-wrap">
+                <div class="sglgif-table-wrap" data-freeze-columns data-freeze-columns-max="4" data-freeze-columns-key="swa-annex-f-index">
                     <table class="sglgif-table sglgif-table--full">
                         <thead>
                             <tr>
@@ -719,6 +719,5 @@
         }
     </style>
 @endsection
-
 
 

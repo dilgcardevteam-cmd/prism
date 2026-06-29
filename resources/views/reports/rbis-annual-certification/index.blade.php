@@ -173,7 +173,7 @@
 </div>
 
 <div class="report-table-card" style="background: white; padding: 24px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);">
-    <div class="report-table-scroll">
+    <div class="report-table-scroll" data-freeze-columns data-freeze-columns-max="3" data-freeze-columns-key="{{ $reportConfig['indexRoute'] }}">
         <table id="rbis-office-table" style="width: 100%; border-collapse: collapse; min-width: 1450px;">
             <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">

@@ -447,10 +447,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             return false;
         }
 
-        return $user->hasCrudPermission('fund_utilization_reports', 'view')
-            || $user->hasCrudPermission('local_project_monitoring_committee', 'view')
-            || $user->hasCrudPermission('road_maintenance_status_reports', 'view')
-            || $user->hasCrudPermission($this->permissionAspect(), 'view');
+        return $user->hasCrudPermission($this->permissionAspect(), 'view');
     }
 
     protected function userCanApproveReport($user): bool

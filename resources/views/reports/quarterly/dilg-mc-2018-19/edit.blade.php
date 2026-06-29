@@ -147,7 +147,7 @@
                 </div>
             </div>
 
-            <div style="overflow-x:auto;">
+            <div style="overflow-x:auto;" data-freeze-columns data-freeze-columns-max="3" data-freeze-columns-key="dilg-mc-2018-19-encoding">
                 <table id="dilg-mc-2018-19-encoding-table" style="width:100%;border-collapse:collapse;min-width:1500px;table-layout:fixed;">
                     <colgroup>
                         <col style="width:56px;min-width:56px;">

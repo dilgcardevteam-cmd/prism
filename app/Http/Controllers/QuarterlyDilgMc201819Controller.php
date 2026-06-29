@@ -19,10 +19,10 @@ class QuarterlyDilgMc201819Controller extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:road_maintenance_status_reports,view')->only(['index', 'show', 'viewDocument']);
-        $this->middleware('crud_permission:road_maintenance_status_reports,add')->only(['edit', 'saveEncoding', 'exportEncoding', 'upload']);
-        $this->middleware('crud_permission:road_maintenance_status_reports,update')->only(['approveDocument']);
-        $this->middleware('crud_permission:road_maintenance_status_reports,delete')->only(['deleteDocument']);
+        $this->middleware('crud_permission:quarterly_dilg_mc_2018_19,view')->only(['index', 'show', 'viewDocument']);
+        $this->middleware('crud_permission:quarterly_dilg_mc_2018_19,add')->only(['edit', 'saveEncoding', 'exportEncoding', 'upload']);
+        $this->middleware('crud_permission:quarterly_dilg_mc_2018_19,update')->only(['approveDocument']);
+        $this->middleware('crud_permission:quarterly_dilg_mc_2018_19,delete')->only(['deleteDocument']);
     }
 
     public function index(Request $request)
@@ -144,7 +144,7 @@ class QuarterlyDilgMc201819Controller extends Controller
         $user = auth()->user();
         abort_unless(
             $user
-            && $user->hasCrudPermission('road_maintenance_status_reports', 'add')
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_19', 'add')
             && !$user->isRegionalOfficeAssignment(),
             403
         );
@@ -193,7 +193,7 @@ class QuarterlyDilgMc201819Controller extends Controller
         $user = auth()->user();
         abort_unless(
             $user
-            && $user->hasCrudPermission('road_maintenance_status_reports', 'add')
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_19', 'add')
             && !$user->isRegionalOfficeAssignment(),
             403
         );
@@ -252,7 +252,7 @@ class QuarterlyDilgMc201819Controller extends Controller
         $user = auth()->user();
         abort_unless(
             $user
-            && $user->hasCrudPermission('road_maintenance_status_reports', 'add')
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_19', 'add')
             && !$user->isRegionalOfficeAssignment(),
             403
         );
@@ -658,13 +658,13 @@ class QuarterlyDilgMc201819Controller extends Controller
 
         $user = auth()->user();
         $canUpload = (bool) ($user
-            && $user->hasCrudPermission('road_maintenance_status_reports', 'add')
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_19', 'add')
             && !$user->isRegionalOfficeAssignment());
         $canDelete = (bool) ($user
-            && $user->hasCrudPermission('road_maintenance_status_reports', 'delete')
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_19', 'delete')
             && $user->isDilgUser());
         $canValidate = (bool) ($user
-            && $user->hasCrudPermission('road_maintenance_status_reports', 'update')
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_19', 'update')
             && $user->isDilgUser());
 
         return view('reports.quarterly.dilg-mc-2018-19.show', compact(

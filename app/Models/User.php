@@ -521,7 +521,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return RolePermissionRegistry::validPermissionKeys();
         }
 
-        return RolePermissionRegistry::normalizePermissions($permissions);
+        return RolePermissionRegistry::expandPermissions($permissions);
     }
 
     public function hasCustomCrudPermissions(): bool
@@ -543,9 +543,17 @@ class User extends Authenticatable implements MustVerifyEmail
             $normalizedAction === 'view' ? 'delete' : null,
         ])));
 
-        return array_map(function ($candidateAction) use ($normalizedAspect) {
-            return $normalizedAspect . '.' . $candidateAction;
-        }, $candidateActions);
+        $candidateAspects = RolePermissionRegistry::aspectCandidates($normalizedAspect);
+
+        return collect($candidateAspects)
+            ->flatMap(function (string $candidateAspect) use ($candidateActions) {
+                return array_map(function (string $candidateAction) use ($candidateAspect) {
+                    return $candidateAspect . '.' . $candidateAction;
+                }, $candidateActions);
+            })
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function hasDefaultCrudPermission(string $aspect, string $action): bool
