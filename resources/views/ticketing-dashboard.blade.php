@@ -39,7 +39,7 @@
                     <p class="ticketing-card-subtitle">Open the pages and queues available for your role.</p>
                 </div>
                 <div class="ticketing-toolbar-actions">
-                    @if ($user->isLguUser())
+                    @can('ticketing.submit')
                         <a href="{{ route('ticketing.create') }}" class="ticketing-btn ticketing-btn--primary">
                             <i class="fas fa-plus"></i>
                             Submit Ticket
@@ -52,17 +52,23 @@
                             <i class="fas fa-route"></i>
                             Track Status
                         </a>
-                    @elseif ($user->isProvincialUser())
+                    @endcan
+
+                    @if ($user->isProvincialUser())
                         <a href="{{ route('ticketing.province.index') }}" class="ticketing-btn ticketing-btn--primary">
                             <i class="fas fa-inbox"></i>
                             Provincial Queue
                         </a>
-                    @elseif ($user->isRegionalUser())
+                    @endif
+
+                    @if ($user->isRegionalUser())
                         <a href="{{ route('ticketing.region.index') }}" class="ticketing-btn ticketing-btn--primary">
                             <i class="fas fa-inbox"></i>
                             Regional Queue
                         </a>
-                    @else
+                    @endif
+
+                    @if ($user->isSuperAdmin())
                         <a href="{{ route('ticketing.admin.index') }}" class="ticketing-btn ticketing-btn--primary">
                             <i class="fas fa-chart-pie"></i>
                             Admin Monitoring

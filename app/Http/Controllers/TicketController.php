@@ -44,6 +44,10 @@ class TicketController extends Controller
 
     public function store(TicketStoreRequest $request, TicketWorkflowService $workflowService): RedirectResponse|Response
     {
+        if (!Gate::forUser($request->user())->allows('ticketing.submit')) {
+            return $this->restricted();
+        }
+
         try {
             $ticket = $workflowService->submit(
                 submitter: $request->user(),
@@ -63,14 +67,14 @@ class TicketController extends Controller
 
     public function myTickets(Request $request)
     {
-        if (!$request->user()->isLguUser()) {
+        if (!Gate::forUser($request->user())->allows('ticketing.submit')) {
             return $this->restricted();
         }
 
         return view('ticketing-my-tickets', [
-            'tickets' => $this->applyFilters($request, Ticket::query()
+            'tickets' => $this->applyFilters($request, $this->submittedTicketsQuery($request->user())
                 ->with(['category', 'submitter', 'assignee'])
-                ->visibleTo($request->user()))
+                )
                 ->orderByDesc('created_at')
                 ->paginate(12)
                 ->withQueryString(),
@@ -82,14 +86,14 @@ class TicketController extends Controller
 
     public function track(Request $request)
     {
-        if (!$request->user()->isLguUser()) {
+        if (!Gate::forUser($request->user())->allows('ticketing.submit')) {
             return $this->restricted();
         }
 
         return view('ticketing-track', [
-            'tickets' => $this->applyFilters($request, Ticket::query()
+            'tickets' => $this->applyFilters($request, $this->submittedTicketsQuery($request->user())
                 ->with(['category', 'submitter', 'assignee'])
-                ->visibleTo($request->user()))
+                )
                 ->orderByDesc('last_status_changed_at')
                 ->orderByDesc('updated_at')
                 ->paginate(12)
@@ -332,6 +336,11 @@ class TicketController extends Controller
             ->when($request->filled('status'), fn (Builder $builder) => $builder->where('status', $request->input('status')))
             ->when($request->filled('priority'), fn (Builder $builder) => $builder->where('priority', $request->input('priority')))
             ->when($request->filled('category_id'), fn (Builder $builder) => $builder->where('category_id', $request->input('category_id')));
+    }
+
+    protected function submittedTicketsQuery($user): Builder
+    {
+        return Ticket::query()->where('submitted_by', $user->getKey());
     }
 
     protected function restricted(): Response

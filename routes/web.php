@@ -2494,7 +2494,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/tickets/{ticket}/history', [App\Http\Controllers\TicketHistoryController::class, 'index'])->name('history.index');
         Route::post('/tickets/{ticket}/comments', [App\Http\Controllers\TicketCommentController::class, 'store'])->name('comments.store');
 
-        Route::middleware('role:lgu')->group(function () {
+        Route::middleware('crud_permission:ticketing_system,add')->group(function () {
             Route::get('/submit', [App\Http\Controllers\TicketController::class, 'create'])->name('create');
             Route::post('/submit', [App\Http\Controllers\TicketController::class, 'store'])->name('store');
             Route::get('/my-tickets', [App\Http\Controllers\TicketController::class, 'myTickets'])->name('my-tickets');

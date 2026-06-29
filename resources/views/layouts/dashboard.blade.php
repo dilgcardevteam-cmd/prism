@@ -2475,7 +2475,7 @@
                                 <span>Ticket Dashboard</span>
                             </a>
                         </li>
-                        @if(Auth::user()->isLguUser())
+                        @can('ticketing.submit')
                             <li>
                                 <a href="{{ route('ticketing.create') }}" class="@if(request()->routeIs('ticketing.create')) active @endif">
                                     <i class="fas fa-plus-circle"></i>
@@ -2494,7 +2494,7 @@
                                     <span>Track Ticket Status</span>
                                 </a>
                             </li>
-                        @endif
+                        @endcan
                         @if(Auth::user()->isProvincialUser())
                             <li>
                                 <a href="{{ route('ticketing.province.index') }}" class="@if(request()->routeIs('ticketing.province.*')) active @endif">
