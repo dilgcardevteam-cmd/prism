@@ -74,7 +74,7 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
-        Gate::define('ticketing.submit', fn ($user) => $user->isLguUser());
+        Gate::define('ticketing.submit', fn ($user) => $user->hasCrudPermission('ticketing_system', 'add'));
 
         Gate::define('ticketing.view', function ($user, Ticket $ticket): bool {
             $userRegionComparable = method_exists($user, 'normalizedRegionComparable')
@@ -88,7 +88,7 @@ class AppServiceProvider extends ServiceProvider
                 return true;
             }
 
-            if ($user->isLguUser()) {
+            if ((int) $ticket->submitted_by === (int) $user->getKey()) {
                 return (int) $ticket->submitted_by === (int) $user->getKey();
             }
 
