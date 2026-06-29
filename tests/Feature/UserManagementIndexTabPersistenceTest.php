@@ -56,7 +56,7 @@ class UserManagementIndexTabPersistenceTest extends TestCase
         });
     }
 
-    public function test_access_grants_tab_state_is_preserved_in_filter_form_and_clear_link(): void
+    public function test_default_users_tab_does_not_render_role_access_panel(): void
     {
         $admin = User::factory()->create([
             'role' => User::ROLE_SUPERADMIN,
@@ -65,14 +65,11 @@ class UserManagementIndexTabPersistenceTest extends TestCase
 
         User::factory()->count(3)->create();
 
-        $response = $this->actingAs($admin)->get(route('users.index', [
-            'tab' => 'access-grants',
-            'role' => User::ROLE_LGU,
-        ]));
+        $response = $this->actingAs($admin)->get(route('users.index'));
 
         $response->assertOk();
-        $response->assertSee('name="tab" value="access-grants"', false);
-        $response->assertSee(route('users.index', ['tab' => 'access-grants']), false);
+        $response->assertSee('Users (', false);
+        $response->assertDontSee('Role-Based Access', false);
     }
 
     public function test_access_grants_pagination_links_keep_the_active_tab(): void
@@ -94,5 +91,23 @@ class UserManagementIndexTabPersistenceTest extends TestCase
             '/href="[^"]*(?:page=2&amp;tab=access-grants|tab=access-grants&amp;page=2)[^"]*"/',
             $response->getContent()
         );
+    }
+
+    public function test_access_grants_tab_renders_role_access_panel_without_users_filter_form(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+
+        User::factory()->count(3)->create();
+
+        $response = $this->actingAs($admin)->get(route('users.index', [
+            'tab' => 'access-grants',
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Role-Based Access', false);
+        $response->assertDontSee('class="user-filters-form"', false);
     }
 }
