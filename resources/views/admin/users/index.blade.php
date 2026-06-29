@@ -5,7 +5,8 @@
 
 @section('content')
     @php
-        $activeUserTab = request()->query('tab') === 'access-grants' ? 'accessGrantsPanel' : 'usersPanel';
+        $selectedTabKey = request()->query('tab') === 'access-grants' ? 'access-grants' : 'users';
+        $activeUserTab = $selectedTabKey === 'access-grants' ? 'accessGrantsPanel' : 'usersPanel';
         $viewerIsSuperAdmin = Auth::user()->isSuperAdmin();
         $selectedRole = $filters['role'] ?? '';
         $selectedStatus = $filters['status'] ?? '';
@@ -15,6 +16,8 @@
         $selectedRoleLabel = $selectedRole !== '' ? ($roleOptions[$selectedRole] ?? null) : null;
         $selectedStatusLabel = $selectedStatus !== '' ? ($statusOptions[$selectedStatus] ?? null) : null;
         $hasActiveFilters = $searchTerm !== '' || $selectedRole !== '' || $selectedStatus !== '' || $selectedProvince !== '' || $selectedLgu !== '';
+        $usersTabQuery = array_merge(request()->query(), ['tab' => 'users']);
+        $accessGrantsTabQuery = array_merge(request()->query(), ['tab' => 'access-grants']);
     @endphp
 
     <div class="content-header">
@@ -37,27 +40,29 @@
     @endif
 
     <div class="project-tabs" role="tablist" aria-label="User management sections" style="margin-top: 28px;">
-        <button
-            type="button"
+        <a
+            href="{{ route('users.index', $usersTabQuery) }}"
             class="project-tab {{ $activeUserTab === 'usersPanel' ? 'is-active' : '' }}"
             data-user-tab-target="usersPanel"
+            data-user-tab-key="users"
             role="tab"
             aria-controls="usersPanel"
             aria-selected="{{ $activeUserTab === 'usersPanel' ? 'true' : 'false' }}"
         >
             Users
-        </button>
+        </a>
         @if($viewerIsSuperAdmin)
-            <button
-                type="button"
+            <a
+                href="{{ route('users.index', $accessGrantsTabQuery) }}"
                 class="project-tab {{ $activeUserTab === 'accessGrantsPanel' ? 'is-active' : '' }}"
                 data-user-tab-target="accessGrantsPanel"
+                data-user-tab-key="access-grants"
                 role="tab"
                 aria-controls="accessGrantsPanel"
                 aria-selected="{{ $activeUserTab === 'accessGrantsPanel' ? 'true' : 'false' }}"
             >
                 Role Access
-            </button>
+            </a>
         @endif
     </div>
 
@@ -71,6 +76,7 @@
             </div>
 
             <form method="GET" action="{{ route('users.index') }}" class="user-filters-form">
+                <input type="hidden" name="tab" value="{{ $selectedTabKey }}" data-user-tab-input>
                 <div class="user-filters-grid">
                     <label class="user-filter-field">
                         <span>Search</span>
@@ -135,7 +141,7 @@
                         <span>Apply Filters</span>
                     </button>
                     @if($hasActiveFilters)
-                        <a href="{{ route('users.index') }}" class="user-filter-btn user-filter-btn--clear">
+                        <a href="{{ route('users.index', ['tab' => $selectedTabKey]) }}" class="user-filter-btn user-filter-btn--clear">
                             <i class="fas fa-undo" aria-hidden="true"></i>
                             <span>Clear Filters</span>
                         </a>
@@ -325,7 +331,7 @@
             </div>
 
             <div style="margin-top: 20px;">
-                @include('admin.users.partials.pagination', ['paginator' => $users])
+                @include('admin.users.partials.pagination', ['paginator' => $users->appends(['tab' => 'users'])])
             </div>
         </div>
     </section>
@@ -1366,6 +1372,7 @@
             }
 
             function activateTab(panelId) {
+                const tabKey = panelId === 'accessGrantsPanel' ? 'access-grants' : 'users';
                 tabs.forEach((tab) => {
                     const isActive = tab.dataset.userTabTarget === panelId;
                     tab.classList.toggle('is-active', isActive);
@@ -1375,11 +1382,21 @@
                 panels.forEach((panel) => {
                     panel.classList.toggle('is-active', panel.id === panelId);
                 });
+
+                document.querySelectorAll('[data-user-tab-input]').forEach((input) => {
+                    input.value = tabKey;
+                });
             }
 
             tabs.forEach((tab) => {
-                tab.addEventListener('click', function () {
+                tab.addEventListener('click', function (event) {
+                    const nextUrl = tab.getAttribute('href');
                     activateTab(tab.dataset.userTabTarget);
+
+                    if (nextUrl && window.history && typeof window.history.replaceState === 'function') {
+                        event.preventDefault();
+                        window.history.replaceState(null, '', nextUrl);
+                    }
                 });
             });
         }());
