@@ -21,28 +21,92 @@
         padding: 12px 14px;
         border-radius: 10px;
         border: 1px solid;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.22);
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
         font-size: 13px;
         line-height: 1.4;
         animation: app-global-toast-in 180ms ease-out;
     }
 
-    .app-global-toast.error {
-        background: #fef2f2;
-        border-color: #fecaca;
-        color: #991b1b;
+    .app-global-toast.success {
+        background: #ecfdf3;
+        border-color: #86efac;
+        color: #14532d;
     }
 
-    .app-global-toast.success {
-        background: #ecfdf5;
-        border-color: #a7f3d0;
-        color: #065f46;
+    .app-global-toast.warning {
+        background: #fff7e6;
+        border-color: #fcd34d;
+        color: #92400e;
+    }
+
+    .app-global-toast.error {
+        background: #fef2f2;
+        border-color: #fca5a5;
+        color: #991b1b;
     }
 
     .app-global-toast.info {
         background: #eff6ff;
-        border-color: #bfdbfe;
-        color: #1e3a8a;
+        border-color: #93c5fd;
+        color: #1d4ed8;
+    }
+
+    .app-global-toast-body {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .app-global-toast-icon {
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        flex: 0 0 18px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        background: currentColor;
+        color: #ffffff;
+    }
+
+    .app-global-toast.warning .app-global-toast-icon {
+        color: #92400e;
+        background: #fed7aa;
+    }
+
+    .app-global-toast.error .app-global-toast-icon {
+        color: #991b1b;
+        background: #fecaca;
+    }
+
+    .app-global-toast.info .app-global-toast-icon {
+        color: #1d4ed8;
+        background: #dbeafe;
+    }
+
+    .app-global-toast-text {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .app-global-toast-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+
+    .app-global-toast-message {
+        margin-top: 2px;
+        font-size: 12px;
+        line-height: 1.45;
+        opacity: 0.92;
     }
 
     .app-global-toast-close {
@@ -169,20 +233,55 @@
             return 'An unexpected error occurred.';
         }
 
+        function getToastMeta(type) {
+            if (type === 'success') {
+                return { title: 'Success', icon: '✓' };
+            }
+            if (type === 'warning') {
+                return { title: 'Warning', icon: '!' };
+            }
+            if (type === 'info') {
+                return { title: 'Info', icon: 'i' };
+            }
+            return { title: 'Error', icon: '!' };
+        }
+
         function showToast(message, type, duration) {
             if (!toastStack) {
                 return;
             }
 
             const toast = document.createElement('div');
-            const safeType = type === 'success' || type === 'info' ? type : 'error';
-            const timeout = Number.isFinite(duration) ? duration : (safeType === 'error' ? 6000 : 4000);
+            const safeType = type === 'success' || type === 'warning' || type === 'info' ? type : 'error';
+            const timeout = Number.isFinite(duration) ? duration : (safeType === 'error' ? 6000 : 4200);
+            const meta = getToastMeta(safeType);
 
             toast.className = 'app-global-toast ' + safeType;
 
+            const body = document.createElement('div');
+            body.className = 'app-global-toast-body';
+
+            const icon = document.createElement('div');
+            icon.className = 'app-global-toast-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.textContent = meta.icon;
+
             const text = document.createElement('div');
-            text.textContent = normalizeMessage(message);
-            toast.appendChild(text);
+            text.className = 'app-global-toast-text';
+
+            const title = document.createElement('div');
+            title.className = 'app-global-toast-title';
+            title.textContent = meta.title;
+
+            const messageNode = document.createElement('div');
+            messageNode.className = 'app-global-toast-message';
+            messageNode.textContent = normalizeMessage(message);
+
+            text.appendChild(title);
+            text.appendChild(messageNode);
+            body.appendChild(icon);
+            body.appendChild(text);
+            toast.appendChild(body);
 
             const closeButton = document.createElement('button');
             closeButton.type = 'button';
@@ -496,6 +595,27 @@
 
         initializeFileSizeValidation();
 
+        const initialFlashMessages = [];
+        @if (session('success'))
+            initialFlashMessages.push({ message: @json(session('success')), type: 'success' });
+        @endif
+        @if (session('warning'))
+            initialFlashMessages.push({ message: @json(session('warning')), type: 'warning' });
+        @endif
+        @if (session('info'))
+            initialFlashMessages.push({ message: @json(session('info')), type: 'info' });
+        @endif
+        @if (session('error'))
+            initialFlashMessages.push({ message: @json(session('error')), type: 'error' });
+        @endif
+        @if ($errors->any())
+            initialFlashMessages.push({ message: @json($errors->first()), type: 'error' });
+        @endif
+
+        initialFlashMessages.forEach(function(entry) {
+            showToast(entry.message, entry.type);
+        });
+
         window.addEventListener('error', function(event) {
             const message = (event && (event.message || (event.error && event.error.message))) || 'A script error occurred.';
             showGlobalError(message);
@@ -695,15 +815,5 @@
             });
         }, true);
 
-        const initialErrors = [];
-        @if (session('error'))
-            initialErrors.push(@json(session('error')));
-        @endif
-        @if ($errors->any())
-            initialErrors.push(@json($errors->first()));
-        @endif
-        initialErrors.forEach(function(message) {
-            showGlobalError(message);
-        });
     })();
 </script>

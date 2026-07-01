@@ -100,13 +100,6 @@
         </div>
     </div>
 
-    @if (session('success'))
-        <div style="background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 16px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
-            <i class="fas fa-check-circle"></i>
-            <span>{{ session('success') }}</span>
-        </div>
-    @endif
-
     <!-- Project Information Card -->
     <div style="background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(15,23,42,0.09); margin-bottom: 28px; overflow: hidden;">
         <div style="display: flex; align-items: center; gap: 12px; padding: 16px 24px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);">
@@ -194,8 +187,197 @@
     </div>
 
     @php
-        $isProvincialDilgViewer = Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office';
-        $resolveUploaderMeta = function ($record, ?string $uploadedAtField = null, ?string $encoderField = null) use ($isProvincialDilgViewer) {
+        $currentUser = Auth::user();
+        $userLookupCache = [];
+        $isProvincialValidator = $currentUser && $currentUser->normalizedRole() === \App\Models\User::ROLE_PROVINCIAL;
+        $isRegionalValidator = $currentUser && ($currentUser->normalizedRole() === \App\Models\User::ROLE_REGIONAL || $currentUser->isRegionalOfficeAssignment());
+        $isWorkflowValidator = $isProvincialValidator || $isRegionalValidator;
+        $isLguWorkflowUser = $currentUser && $currentUser->isLguScopedUser();
+        $canUploadFundUtilizationDocuments = $currentUser && in_array($currentUser->normalizedRole(), [
+            \App\Models\User::ROLE_LGU,
+            \App\Models\User::ROLE_PROVINCIAL,
+        ], true);
+        $isProvincialDilgViewer = $isProvincialValidator;
+        $resolveUserById = function ($userId) use (&$userLookupCache) {
+            $normalizedUserId = trim((string) $userId);
+            if ($normalizedUserId === '') {
+                return null;
+            }
+
+            if (!array_key_exists($normalizedUserId, $userLookupCache)) {
+                $userLookupCache[$normalizedUserId] = \App\Models\User::where('idno', $normalizedUserId)->first();
+            }
+
+            return $userLookupCache[$normalizedUserId];
+        };
+        $resolveUploaderLevel = function ($record, ?string $encoderField = null) use ($resolveUserById) {
+            if (!$record) {
+                return null;
+            }
+
+            $encoderId = $encoderField ? ($record->{$encoderField} ?? null) : null;
+            if (!$encoderId) {
+                $encoderId = $record->encoder_id ?? null;
+            }
+
+            $uploader = $resolveUserById($encoderId);
+            if (!$uploader) {
+                return null;
+            }
+
+            if ($uploader->normalizedRole() === \App\Models\User::ROLE_PROVINCIAL) {
+                return 'provincial';
+            }
+
+            if ($uploader->normalizedRole() === \App\Models\User::ROLE_LGU || $uploader->normalizedAgency() === 'lgu') {
+                return 'lgu';
+            }
+
+            if ($uploader->normalizedAgency() === 'dilg' && !$uploader->isRegionalOfficeAssignment()) {
+                return 'provincial';
+            }
+
+            return null;
+        };
+        $resolveValidationState = function (
+            $record,
+            bool $hasDocument,
+            string $workflowDocumentType,
+            string $quarter,
+            ?string $statusField = 'status',
+            ?string $poTimestampField = 'approved_at_dilg_po',
+            ?string $roTimestampField = 'approved_at_dilg_ro',
+            ?string $encoderField = null
+        ) use ($resolveUploaderLevel, $submissionWorkflows, $currentUser, $isProvincialValidator, $isRegionalValidator) {
+            $status = $record && $statusField ? strtolower(trim((string) ($record->{$statusField} ?? ''))) : '';
+            $uploaderLevel = $resolveUploaderLevel($record, $encoderField);
+            $poApprovedAt = $record && $poTimestampField ? ($record->{$poTimestampField} ?? null) : null;
+            $roApprovedAt = $record && $roTimestampField ? ($record->{$roTimestampField} ?? null) : null;
+            $requiredValidator = 'provincial';
+            $workflowKey = $workflowDocumentType . '::' . $quarter;
+            $workflow = $submissionWorkflows[$workflowKey] ?? null;
+            $workflowStatus = trim((string) ($workflow->status ?? ''));
+            $currentApproverId = $workflow?->current_approver_id ? (int) $workflow->current_approver_id : null;
+            $currentApprovalLevel = (int) ($workflow->current_approval_level ?? 0);
+            $currentApproverRole = trim((string) ($workflow->current_approver_role ?? ''));
+            $isReturnOnly = $workflow
+                && $workflowStatus === 'Returned by Regional Officer'
+                && $currentApprovalLevel === 1
+                && trim((string) ($workflow->uploader_role ?? '')) === \App\Models\User::ROLE_LGU;
+            if ($workflow) {
+                $requiredValidator = ((int) ($workflow->current_approval_level ?? 1)) >= 2
+                    ? 'regional'
+                    : 'provincial';
+            } elseif ($uploaderLevel === 'provincial') {
+                $requiredValidator = 'regional';
+            } elseif ($status === 'pending' && $poApprovedAt && !$roApprovedAt) {
+                // LGU uploads proceed to Regional validation after Provincial approval.
+                $requiredValidator = 'regional';
+            }
+
+            $isReturned = $workflow
+                ? $hasDocument && str_starts_with($workflowStatus, 'Returned by ')
+                : $hasDocument && $status === 'returned';
+            $isPendingProvincial = $workflow
+                ? $hasDocument && $workflowStatus === 'Pending Level 1 Approval'
+                : $hasDocument && $status === 'pending' && $requiredValidator === 'provincial';
+            $isPendingRegional = $workflow
+                ? $hasDocument && $workflowStatus === 'Pending Level 2 Approval'
+                : $hasDocument && $status === 'pending' && $requiredValidator === 'regional';
+            $isApproved = $workflow
+                ? $hasDocument && $workflowStatus === 'Approved'
+                : $hasDocument && $status === 'approved';
+            $canValidate = $workflow
+                ? ($currentUser
+                    ? \Illuminate\Support\Facades\Gate::forUser($currentUser)->allows('fund-utilization.validateWorkflow', $workflow)
+                    : false)
+                : (($requiredValidator === 'regional' ? $isRegionalValidator : $isProvincialValidator) ?? false);
+
+            return [
+                'uploader_level' => $uploaderLevel,
+                'required_validator' => $requiredValidator,
+                'validator_label' => $requiredValidator === 'regional' ? 'DILG Regional Office' : 'DILG Provincial Office',
+                'is_returned' => $isReturned,
+                'is_pending_provincial' => $isPendingProvincial,
+                'is_pending_regional' => $isPendingRegional,
+                'is_approved' => $isApproved,
+                'po_approved_at' => $poApprovedAt,
+                'ro_approved_at' => $roApprovedAt,
+                'workflow_status' => $workflowStatus !== '' ? $workflowStatus : null,
+                'current_approver_id' => $currentApproverId,
+                'can_validate' => $canValidate,
+                'return_only' => $isReturnOnly,
+            ];
+        };
+        $canValidateDocument = function (array $validationState) use ($isProvincialValidator, $isRegionalValidator) {
+            if (array_key_exists('can_validate', $validationState)) {
+                return (bool) $validationState['can_validate'];
+            }
+
+            return ($validationState['required_validator'] ?? 'provincial') === 'regional'
+                ? $isRegionalValidator
+                : $isProvincialValidator;
+        };
+        $shouldHideLguDeleteUntilProvincialReturn = function (array $validationState) {
+            return ($validationState['uploader_level'] ?? null) === 'lgu'
+                && (($validationState['required_validator'] ?? 'provincial') === 'provincial')
+                && !(($validationState['is_returned'] ?? false));
+        };
+        $isDocumentPendingValidation = function (array $validationState) {
+            return ($validationState['is_pending_provincial'] ?? false)
+                || ($validationState['is_pending_regional'] ?? false);
+        };
+        $shouldShowValidationActions = function (array $validationState) use ($canValidateDocument, $isDocumentPendingValidation) {
+            $isReturnOnly = (bool) ($validationState['return_only'] ?? false);
+
+            return ($isDocumentPendingValidation($validationState) || $isReturnOnly)
+                && $canValidateDocument($validationState)
+                && (!($validationState['is_returned'] ?? false) || $isReturnOnly);
+        };
+        $canDeleteFundUtilizationDocument = function ($record, ?string $statusField = 'status', ?string $encoderField = null) use ($currentUser, $resolveUserById) {
+            if (!$currentUser || !$record) {
+                return false;
+            }
+
+            $uploaderId = $encoderField ? ($record->{$encoderField} ?? null) : null;
+            if ($uploaderId === null || trim((string) $uploaderId) === '') {
+                $uploaderId = $record->encoder_id ?? null;
+            }
+
+            $normalizedUploaderId = trim((string) $uploaderId);
+            if ($normalizedUploaderId === '') {
+                return false;
+            }
+
+            if ($normalizedUploaderId === trim((string) $currentUser->idno)) {
+                return true;
+            }
+
+            $status = strtolower(trim((string) ($statusField ? ($record->{$statusField} ?? '') : '')));
+            if ($status !== 'returned') {
+                return false;
+            }
+
+            $uploader = $resolveUserById($normalizedUploaderId);
+            if (!$uploader || $currentUser->normalizedRole() !== $uploader->normalizedRole()) {
+                return false;
+            }
+
+            if ($uploader->normalizedRole() === \App\Models\User::ROLE_LGU) {
+                return $currentUser->normalizedProvince() !== ''
+                    && $currentUser->normalizedProvince() === $uploader->normalizedProvince()
+                    && $currentUser->normalizedOfficeComparable() !== ''
+                    && $currentUser->normalizedOfficeComparable() === $uploader->normalizedOfficeComparable();
+            }
+
+            if ($uploader->normalizedRole() === \App\Models\User::ROLE_PROVINCIAL) {
+                return $currentUser->normalizedProvince() !== ''
+                    && $currentUser->normalizedProvince() === $uploader->normalizedProvince();
+            }
+
+            return false;
+        };
+        $resolveUploaderMeta = function ($record, ?string $uploadedAtField = null, ?string $encoderField = null) use ($isProvincialDilgViewer, $resolveUserById) {
             if (!$record) {
                 return ['time' => null, 'name' => 'Unknown'];
             }
@@ -220,7 +402,7 @@
                 $encoderId = $record->approved_by_dilg_po ?? $record->approved_by ?? null;
             }
 
-            $encoderUser = $encoderId ? \App\Models\User::where('idno', $encoderId)->first() : null;
+            $encoderUser = $resolveUserById($encoderId);
             $encoderName = $encoderUser ? trim($encoderUser->fname . ' ' . $encoderUser->lname) : 'Unknown';
 
             return ['time' => $uploadedTime, 'name' => $encoderName];
@@ -270,9 +452,9 @@
             $quarterWindow = $quarterWindows[$quarter] ?? '';
             $configuredQuarterDeadline = $configuredQuarterDeadlines[$quarter] ?? null;
             $quarterDeadlineDisplay = trim((string) ($configuredQuarterDeadline['display'] ?? ''));
-            $isExpandedByDefault = $loop->first;
-            $displayStyle = $isExpandedByDefault ? 'block' : 'none';
-            $iconRotation = $isExpandedByDefault ? 'rotate(180deg)' : 'rotate(0deg)';
+            $isExpandedByDefault = false;
+            $displayStyle = 'none';
+            $iconRotation = 'rotate(0deg)';
 
             // Define FDP variables early to avoid undefined variable errors
             $isFdpReturned = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_status === 'returned';
@@ -302,32 +484,55 @@
 
             <!-- Quarter Content -->
             <div id="quarter-{{ $quarter }}" style="display: {{ $displayStyle }}; padding: 22px 24px;">
+            @php
+                $isQuarterIndividualUploadLocked = (
+                    ($batchDocuments[$quarter] && $batchDocuments[$quarter]->approved_at_dilg_ro)
+                    || ($movUploads[$quarter] && $movUploads[$quarter]->approved_at_dilg_ro)
+                );
+                $individualUploadLockTitle = $isQuarterIndividualUploadLocked
+                    ? 'This quarter is already validated by DILG Regional Office. Individual document uploads are disabled.'
+                    : '';
+            @endphp
+            <div style="border: 1px solid #dbe3f0; border-radius: 12px; overflow: hidden; background: #f8fafc; margin-bottom: 18px;">
+                <button type="button" onclick="toggleAccordion('individual-documents-{{ $quarter }}')" style="width: 100%; padding: 14px 18px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); color: #1e3a8a; border: none; text-align: left; cursor: pointer; font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="display: flex; align-items: center; gap: 10px;">
+                        <span style="width: 30px; height: 30px; background: rgba(37,99,235,0.12); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-folder-open" style="font-size: 13px;"></i>
+                        </span>
+                        <span>Individual Documents</span>
+                    </span>
+                    <i class="fas fa-chevron-down" id="icon-individual-documents-{{ $quarter }}" style="transition: transform 0.3s; transform: rotate(0deg);"></i>
+                </button>
+                <div id="individual-documents-{{ $quarter }}" style="display: none; padding: 18px 18px 0;">
             <!-- Fund Utilization Report (MOV) Section -->
             @php
                 $hasMovFile = $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path;
+                $movValidationState = $resolveValidationState(
+                    $movUploads[$quarter],
+                    (bool) $hasMovFile,
+                    'mov',
+                    $quarter,
+                    'status',
+                    'approved_at_dilg_po',
+                    'approved_at_dilg_ro',
+                    'mov_encoder_id'
+                );
                 $movStatusColor = $hasMovFile ? '#10b981' : '#f59e0b';
                 $movBackgroundColor = $hasMovFile ? '#fffbeb' : 'transparent';
                 
-                // Initialize variables
-                $isPendingDilgRoValidation = false;
-                $isApprovedByDilgRo = false;
-                
-                // Check if document was returned
-                $isMovReturned = $movUploads[$quarter] && $movUploads[$quarter]->status === 'returned';
+                $isPendingDilgRoValidation = $movValidationState['is_pending_regional'];
+                $isApprovedByDilgRo = $movValidationState['is_approved'] && $movValidationState['required_validator'] === 'regional';
+                $isMovReturned = $movValidationState['is_returned'];
                 
                 if ($isMovReturned) {
                     $movStatusColor = '#ef4444';
                     $movStatusLabel = 'Returned';
                     $movBackgroundColor = '#fee2e2';
                 } else {
-                    // Check if DILG PO has approved (waiting for RO validation)
-                    $isPendingDilgRoValidation = $movUploads[$quarter] && $movUploads[$quarter]->approved_at_dilg_po && !$movUploads[$quarter]->approved_at_dilg_ro;
-                    $isApprovedByDilgRo = $movUploads[$quarter] && $movUploads[$quarter]->approved_at_dilg_ro;
-                    
-                    if ($isApprovedByDilgRo) {
+                    if ($movValidationState['is_approved']) {
                         $movStatusColor = '#059669';
                         $movStatusLabel = 'Approved';
-                    } elseif ($isPendingDilgRoValidation) {
+                    } elseif ($movValidationState['is_pending_regional']) {
                         $movStatusColor = '#3b82f6';
                         $movStatusLabel = 'For DILG Regional Office Validation';
                     } else {
@@ -335,7 +540,7 @@
                     }
                 }
 
-                $isMovForPoValidation = $hasMovFile && !$isMovReturned && !$isPendingDilgRoValidation && !$isApprovedByDilgRo;
+                $isMovForPoValidation = $movValidationState['is_pending_provincial'];
                 $isMovUnderValidation = $isPendingDilgRoValidation || $isMovForPoValidation;
             @endphp
             <div style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $movStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
@@ -379,7 +584,7 @@
                             </span>
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                 $hasPoApproval = $movUploads[$quarter] && $movUploads[$quarter]->approved_at_dilg_po;
                             @endphp
                             @if($hasPoApproval)
@@ -418,7 +623,7 @@
                     <form action="{{ route('fund-utilization.upload-mov', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned ? 'disabled' : '' }} title="{{ $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned ? 'Document was returned. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="10240">
+                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned) ? 'Document was returned. Delete the current file to upload a new one.' : '')) }}">
                         <button type="submit" id="mov-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -429,7 +634,7 @@
                         @endif
                     </div>
 
-                    @if(Auth::user()->agency === 'LGU')
+                    @if($isLguWorkflowUser)
                         @if($movUploads[$quarter] && ($movUploads[$quarter]->mov_file_path || $isMovReturned))
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                 @if($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path)
@@ -437,7 +642,7 @@
                                         <i class="fas fa-eye"></i> View
                                     </a>
                                 @endif
-                                @if((!$movUploads[$quarter]->encoder_id || $movUploads[$quarter]->encoder_id !== Auth::user()->idno || $isMovReturned) && !$isMovUnderValidation && $movUploads[$quarter]->status !== 'approved')
+                                @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation && $movUploads[$quarter]->status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($movValidationState))
                                     <button type="button" onclick="deleteDocument('mov', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
@@ -447,7 +652,7 @@
 
     @endif
 
-@if(Auth::user()->agency === 'LGU' && $movUploads[$quarter])
+@if($isLguWorkflowUser && $movUploads[$quarter])
 
     <button type="button" onclick="toggleAccordion('mov-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
 
@@ -467,7 +672,7 @@
 
 @endif
 
-@elseif(Auth::user()->agency === 'DILG')
+@elseif($isWorkflowValidator)
                         @if($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path)
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -479,24 +684,18 @@
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                @if(
-                                    (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isMovForPoValidation)
-                                    || (!$isMovForPoValidation && (!$isPendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-                                )
-                                    @if(!$shouldHideDeleteForDilgMov && (Auth::user()->province === 'Regional Office' || $movUploads[$quarter]->status !== 'approved'))
+                                @if($shouldShowValidationActions($movValidationState))
+                                    @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation && $movUploads[$quarter]->status !== 'approved')
                                         <button type="button" onclick="deleteDocument('mov', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                             <i class="fas fa-trash-alt"></i> Delete
                                         </button>
                                     @endif
-                                    @if($movUploads[$quarter]->status !== 'approved')
-                                        <button type="button" onclick="openRemarksModal('mov', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                                            <i class="fas fa-check"></i> Approve
-                                        </button>
-                                    @endif
-                                    @if(
-                                        Auth::user()->province === 'Regional Office'
-                                        || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isMovForPoValidation)
-                                    )
+                                    @if($movUploads[$quarter]->status === 'pending')
+                                        @if(!($movValidationState['return_only'] ?? false))
+                                            <button type="button" onclick="openRemarksModal('mov', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                                <i class="fas fa-check"></i> Approve
+                                            </button>
+                                        @endif
                                         <button type="button" onclick="openRemarksModal('mov', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                             <i class="fas fa-undo"></i> Return
                                         </button>
@@ -520,7 +719,7 @@
                 </div>
                 @if ($movUploads[$quarter])
                     <!-- DILG Approval Buttons -->
-                    @if(Auth::user()->agency === 'DILG')
+                    @if($isWorkflowValidator)
                         <!-- Remarks Section -->
                         @if($movUploads[$quarter]->approval_remarks)
                             <div style="margin-top: 12px; padding: 10px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
@@ -528,7 +727,7 @@
                                 <p style="color: #374151; font-size: 13px; margin: 0;">{{ $movUploads[$quarter]->approval_remarks }}</p>
                             </div>
                         @endif
-                    @elseif(Auth::user()->agency === 'LGU' && $movUploads[$quarter]->approval_remarks)
+                    @elseif($isLguWorkflowUser && $movUploads[$quarter]->approval_remarks)
                         <!-- View Remarks for LGU -->
                         <div style="margin-top: 12px; padding: 10px; background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 4px;">
                             <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">DILG Remarks:</p>
@@ -576,38 +775,40 @@
                             <!-- Secretary of DBM -->
                             @php
                                 $hasDbmFile = $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path;
+                                $dbmValidationState = $resolveValidationState(
+                                    $writtenNotices[$quarter],
+                                    (bool) $hasDbmFile,
+                                    'written-notice-dbm',
+                                    $quarter,
+                                    'dbm_status',
+                                    'dbm_approved_at_dilg_po',
+                                    'dbm_approved_at_dilg_ro',
+                                    'dbm_encoder_id'
+                                );
                                 $dbmFieldBg = $hasDbmFile ? '#fffbeb' : '#f9fafb';
-                                
-                                // Initialize variables
-                                $isDbmPendingDilgRoValidation = false;
-                                $isDbmApprovedByDilgRo = false;
-                                
-                                // Check if document was returned - using individual dbm_status field
-                                $isDbmReturned = $writtenNotices[$quarter] && $writtenNotices[$quarter]->dbm_status === 'returned';
+
+                                $isDbmPendingDilgRoValidation = $dbmValidationState['is_pending_regional'];
+                                $isDbmApprovedByDilgRo = $dbmValidationState['is_approved'] && $dbmValidationState['required_validator'] === 'regional';
+                                $isDbmReturned = $dbmValidationState['is_returned'];
                                 
                                 if ($isDbmReturned) {
                                     $dbmStatusColor = '#ef4444';
                                     $dbmStatusLabel = 'Returned';
                                     $dbmFieldBg = '#fee2e2';
                                 } else {
-                                    // Use individual DBM approval fields so approval is per-document.
-                                    $hasDbmApproval = $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $writtenNotices[$quarter]->dbm_approved_at;
-                                    $isDbmPendingDilgRoValidation = $hasDbmApproval && $writtenNotices[$quarter]->dbm_status === 'pending';
-                                    $isDbmApprovedByDilgRo = $hasDbmApproval && $writtenNotices[$quarter]->dbm_status === 'approved';
-                                    
-                                    if ($isDbmApprovedByDilgRo) {
+                                    if ($dbmValidationState['is_approved']) {
                                         $dbmStatusColor = '#059669';
                                         $dbmStatusLabel = 'Approved';
-                                    } elseif ($isDbmPendingDilgRoValidation) {
+                                    } elseif ($dbmValidationState['is_pending_regional']) {
                                         $dbmStatusColor = '#3b82f6';
                                         $dbmStatusLabel = 'For DILG Regional Office Validation';
-                                } else {
-                                    $dbmStatusColor = $hasDbmFile ? '#10b981' : '#f59e0b';
-                                    $dbmStatusLabel = $hasDbmFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
+                                    } else {
+                                        $dbmStatusColor = $hasDbmFile ? '#10b981' : '#f59e0b';
+                                        $dbmStatusLabel = $hasDbmFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
+                                    }
                                 }
-                            }
 
-                                $isDbmForPoValidation = $hasDbmFile && !$isDbmReturned && !$isDbmPendingDilgRoValidation && !$isDbmApprovedByDilgRo;
+                                $isDbmForPoValidation = $dbmValidationState['is_pending_provincial'];
                                 $isDbmUnderValidation = $isDbmPendingDilgRoValidation || $isDbmForPoValidation;
                             @endphp
                             <div style="padding: 12px; background-color: {{ $dbmFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
@@ -642,7 +843,7 @@
                                             </span>
                                             @php
                                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                                $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                                $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                                 $hasPoApproval = $writtenNotices[$quarter]
                                                     && $writtenNotices[$quarter]->dbm_approved_at_dilg_po;
                                             @endphp
@@ -678,7 +879,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned ? 'Document was returned. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="5120">
+                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned) ? 'Document was returned. Delete the current file to upload a new one.' : '')) }}">
                                     <button type="submit" id="dbm-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -690,13 +891,13 @@
                                 </div>
 
 
-@if(Auth::user()->agency === 'LGU')
+@if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path)
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$isDbmUnderValidation && $writtenNotices[$quarter]->dbm_status !== 'approved')
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dbm_status', 'dbm_encoder_id') && !$isDbmUnderValidation && $writtenNotices[$quarter]->dbm_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($dbmValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-dbm', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -713,7 +914,7 @@
             <button type="button" onclick="saveRemarksAjax('dbm-secretary', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
         </div>
     @endif
-@elseif(Auth::user()->agency === 'DILG')
+@elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
                                         $isDilgPODbm = in_array(Auth::user()->province, $cordilleraProvinces) || Auth::user()->province === 'Regional Office';
@@ -725,24 +926,18 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$shouldHideDeleteForDilgDbm && (Auth::user()->province === 'Regional Office' || $writtenNotices[$quarter]->dbm_status !== 'approved'))
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dbm_status', 'dbm_encoder_id') && !$isDbmUnderValidation && $writtenNotices[$quarter]->dbm_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($dbmValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-dbm', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
-            @if(
-                (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isDbmForPoValidation)
-                || (!$isDbmForPoValidation && (!$isDbmPendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-            )
-                @if($writtenNotices[$quarter]->dbm_status !== 'approved')
-                    <button type="button" onclick="openRemarksModal('written-notice-dbm', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                @endif
-                @if(
-                    Auth::user()->province === 'Regional Office'
-                    || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isDbmForPoValidation)
-                )
+            @if($shouldShowValidationActions($dbmValidationState))
+                @if($writtenNotices[$quarter]->dbm_status === 'pending')
+                    @if(!($dbmValidationState['return_only'] ?? false))
+                        <button type="button" onclick="openRemarksModal('written-notice-dbm', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                    @endif
                     <button type="button" onclick="openRemarksModal('written-notice-dbm', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                         <i class="fas fa-undo"></i> Return
                     </button>
@@ -765,38 +960,40 @@
                             <!-- Secretary of DILG -->
                             @php
                                 $hasDilgFile = $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path;
+                                $dilgValidationState = $resolveValidationState(
+                                    $writtenNotices[$quarter],
+                                    (bool) $hasDilgFile,
+                                    'written-notice-dilg',
+                                    $quarter,
+                                    'dilg_status',
+                                    'dilg_approved_at_dilg_po',
+                                    'dilg_approved_at_dilg_ro',
+                                    'dilg_encoder_id'
+                                );
                                 $dilgFieldBg = $hasDilgFile ? '#fffbeb' : '#f9fafb';
-                                
-                                // Initialize variables
-                                $isDilgPendingDilgRoValidation = false;
-                                $isDilgApprovedByDilgRo = false;
-                                
-                                // Check if document was returned - using individual dilg_status field
-                                $isDilgReturned = $writtenNotices[$quarter] && $writtenNotices[$quarter]->dilg_status === 'returned';
+
+                                $isDilgPendingDilgRoValidation = $dilgValidationState['is_pending_regional'];
+                                $isDilgApprovedByDilgRo = $dilgValidationState['is_approved'] && $dilgValidationState['required_validator'] === 'regional';
+                                $isDilgReturned = $dilgValidationState['is_returned'];
                                 
                                 if ($isDilgReturned) {
                                     $dilgStatusColor = '#ef4444';
                                     $dilgStatusLabel = 'Returned';
                                     $dilgFieldBg = '#fee2e2';
                                 } else {
-                                    // Use individual DILG approval fields so approval is per-document.
-                                    $hasDilgApproval = $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && $writtenNotices[$quarter]->dilg_approved_at;
-                                    $isDilgPendingDilgRoValidation = $hasDilgApproval && $writtenNotices[$quarter]->dilg_status === 'pending';
-                                    $isDilgApprovedByDilgRo = $hasDilgApproval && $writtenNotices[$quarter]->dilg_status === 'approved';
-                                    
-                                    if ($isDilgApprovedByDilgRo) {
+                                    if ($dilgValidationState['is_approved']) {
                                         $dilgStatusColor = '#059669';
                                         $dilgStatusLabel = 'Approved';
-                                    } elseif ($isDilgPendingDilgRoValidation) {
+                                    } elseif ($dilgValidationState['is_pending_regional']) {
                                         $dilgStatusColor = '#3b82f6';
                                         $dilgStatusLabel = 'For DILG Regional Office Validation';
-                                } else {
-                                    $dilgStatusColor = $hasDilgFile ? '#10b981' : '#f59e0b';
-                                    $dilgStatusLabel = $hasDilgFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
+                                    } else {
+                                        $dilgStatusColor = $hasDilgFile ? '#10b981' : '#f59e0b';
+                                        $dilgStatusLabel = $hasDilgFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
+                                    }
                                 }
-                            }
 
-                                $isDilgForPoValidation = $hasDilgFile && !$isDilgReturned && !$isDilgPendingDilgRoValidation && !$isDilgApprovedByDilgRo;
+                                $isDilgForPoValidation = $dilgValidationState['is_pending_provincial'];
                                 $isDilgUnderValidation = $isDilgPendingDilgRoValidation || $isDilgForPoValidation;
                             @endphp
                             <div style="padding: 12px; background-color: {{ $dilgFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
@@ -831,7 +1028,7 @@
                                             </span>
                                             @php
                                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                                $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                                $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                                 $hasPoApproval = $writtenNotices[$quarter]
                                                     && $writtenNotices[$quarter]->dilg_approved_at_dilg_po;
                                             @endphp
@@ -867,7 +1064,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="5120">
+                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
                                     <button type="submit" id="dilg-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -879,7 +1076,7 @@
                                 </div>
 
 
-@if(Auth::user()->agency === 'LGU')
+@if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->secretary_dilg_path || $isDilgReturned))
             @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path)
@@ -887,7 +1084,7 @@
                     <i class="fas fa-eye"></i> View
                 </a>
             @endif
-            @if(!$isDilgUnderValidation && $writtenNotices[$quarter]->dilg_status !== 'approved')
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dilg_status', 'dilg_encoder_id') && !$isDilgUnderValidation && $writtenNotices[$quarter]->dilg_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($dilgValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-dilg', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -904,7 +1101,7 @@
             <button type="button" onclick="saveRemarksAjax('dilg-secretary', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
         </div>
     @endif
-@elseif(Auth::user()->agency === 'DILG')
+@elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
                                         $isDilgPODilg = in_array(Auth::user()->province, $cordilleraProvinces) || Auth::user()->province === 'Regional Office';
@@ -916,24 +1113,18 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$shouldHideDeleteForDilgDilg && (Auth::user()->province === 'Regional Office' || $writtenNotices[$quarter]->dilg_status !== 'approved'))
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dilg_status', 'dilg_encoder_id') && !$isDilgUnderValidation && $writtenNotices[$quarter]->dilg_status !== 'approved')
                 <button type="button" onclick="deleteDocument('written-notice-dilg', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
-            @if(
-                (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isDilgForPoValidation)
-                || (!$isDilgForPoValidation && (!$isDilgPendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-            )
-                @if($writtenNotices[$quarter]->dilg_status !== 'approved')
-                    <button type="button" onclick="openRemarksModal('written-notice-dilg', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                @endif
-                @if(
-                    Auth::user()->province === 'Regional Office'
-                    || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isDilgForPoValidation)
-                )
+            @if($shouldShowValidationActions($dilgValidationState))
+                @if($writtenNotices[$quarter]->dilg_status === 'pending')
+                    @if(!($dilgValidationState['return_only'] ?? false))
+                        <button type="button" onclick="openRemarksModal('written-notice-dilg', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                    @endif
                     <button type="button" onclick="openRemarksModal('written-notice-dilg', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                         <i class="fas fa-undo"></i> Return
                     </button>
@@ -959,29 +1150,31 @@
                             <!-- Speaker of the House -->
                             @php
                                 $hasSpeakerFile = $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path;
+                                $speakerValidationState = $resolveValidationState(
+                                    $writtenNotices[$quarter],
+                                    (bool) $hasSpeakerFile,
+                                    'written-notice-speaker',
+                                    $quarter,
+                                    'speaker_status',
+                                    'speaker_approved_at_dilg_po',
+                                    'speaker_approved_at_dilg_ro',
+                                    'speaker_encoder_id'
+                                );
                                 $speakerFieldBg = $hasSpeakerFile ? '#fffbeb' : '#f9fafb';
-                                
-                                // Initialize variables
-                                $isSpeakerPendingDilgRoValidation = false;
-                                $isSpeakerApprovedByDilgRo = false;
-                                
-                                // Check if document was returned - using individual speaker_status field
-                                $isSpeakerReturned = $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_status === 'returned';
+
+                                $isSpeakerPendingDilgRoValidation = $speakerValidationState['is_pending_regional'];
+                                $isSpeakerApprovedByDilgRo = $speakerValidationState['is_approved'] && $speakerValidationState['required_validator'] === 'regional';
+                                $isSpeakerReturned = $speakerValidationState['is_returned'];
                                 
                                 if ($isSpeakerReturned) {
                                     $speakerStatusColor = '#ef4444';
                                     $speakerStatusLabel = 'Returned';
                                     $speakerFieldBg = '#fee2e2';
                                 } else {
-                                    // Use individual speaker approval fields so approval is per-document.
-                                    $hasSpeakerApproval = $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && $writtenNotices[$quarter]->speaker_approved_at;
-                                    $isSpeakerPendingDilgRoValidation = $hasSpeakerApproval && $writtenNotices[$quarter]->speaker_status === 'pending';
-                                    $isSpeakerApprovedByDilgRo = $hasSpeakerApproval && $writtenNotices[$quarter]->speaker_status === 'approved';
-                                    
-                                    if ($isSpeakerApprovedByDilgRo) {
+                                    if ($speakerValidationState['is_approved']) {
                                         $speakerStatusColor = '#059669';
                                         $speakerStatusLabel = 'Approved';
-                                    } elseif ($isSpeakerPendingDilgRoValidation) {
+                                    } elseif ($speakerValidationState['is_pending_regional']) {
                                         $speakerStatusColor = '#3b82f6';
                                         $speakerStatusLabel = 'For DILG Regional Office Validation';
                                     } else {
@@ -990,7 +1183,7 @@
                                     }
                                 }
 
-                                $isSpeakerForPoValidation = $hasSpeakerFile && !$isSpeakerReturned && !$isSpeakerPendingDilgRoValidation && !$isSpeakerApprovedByDilgRo;
+                                $isSpeakerForPoValidation = $speakerValidationState['is_pending_provincial'];
                                 $isSpeakerUnderValidation = $isSpeakerPendingDilgRoValidation || $isSpeakerForPoValidation;
                             @endphp
                             <div style="padding: 12px; background-color: {{ $speakerFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
@@ -1021,7 +1214,7 @@
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                            $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                            $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                             $hasPoApproval = $writtenNotices[$quarter]
                                                 && $writtenNotices[$quarter]->speaker_approved_at_dilg_po;
                                         @endphp
@@ -1048,7 +1241,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="5120">
+                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
                                     <button type="submit" id="speaker-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1059,13 +1252,13 @@
                                     @endif
                                 </div>
 
-@if(Auth::user()->agency === 'LGU')
+@if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path)
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$isSpeakerUnderValidation && $writtenNotices[$quarter]->speaker_status !== 'approved')
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'speaker_status', 'speaker_encoder_id') && !$isSpeakerUnderValidation && $writtenNotices[$quarter]->speaker_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($speakerValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-speaker', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1082,7 +1275,7 @@
             <button type="button" onclick="saveRemarksAjax('speaker-house', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
         </div>
     @endif
-@elseif(Auth::user()->agency === 'DILG')
+@elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
                                         $isDilgPOSpeaker = in_array(Auth::user()->province, $cordilleraProvinces) || Auth::user()->province === 'Regional Office';
@@ -1094,24 +1287,18 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$shouldHideDeleteForDilgSpeaker && (Auth::user()->province === 'Regional Office' || $writtenNotices[$quarter]->speaker_status !== 'approved'))
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'speaker_status', 'speaker_encoder_id') && !$isSpeakerUnderValidation && $writtenNotices[$quarter]->speaker_status !== 'approved')
                 <button type="button" onclick="deleteDocument('written-notice-speaker', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
-            @if(
-                (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isSpeakerForPoValidation)
-                || (!$isSpeakerForPoValidation && (!$isSpeakerPendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-            )
-                @if($writtenNotices[$quarter]->speaker_status !== 'approved')
-                    <button type="button" onclick="openRemarksModal('written-notice-speaker', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                @endif
-                @if(
-                    Auth::user()->province === 'Regional Office'
-                    || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isSpeakerForPoValidation)
-                )
+            @if($shouldShowValidationActions($speakerValidationState))
+                @if($writtenNotices[$quarter]->speaker_status === 'pending')
+                    @if(!($speakerValidationState['return_only'] ?? false))
+                        <button type="button" onclick="openRemarksModal('written-notice-speaker', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                    @endif
                     <button type="button" onclick="openRemarksModal('written-notice-speaker', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                         <i class="fas fa-undo"></i> Return
                     </button>
@@ -1135,24 +1322,31 @@
                             <!-- President of the Senate -->
                             @php
                                 $hasPresidentFile = $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path;
+                                $presidentValidationState = $resolveValidationState(
+                                    $writtenNotices[$quarter],
+                                    (bool) $hasPresidentFile,
+                                    'written-notice-president',
+                                    $quarter,
+                                    'president_status',
+                                    'president_approved_at_dilg_po',
+                                    'president_approved_at_dilg_ro',
+                                    'president_encoder_id'
+                                );
                                 $presidentFieldBg = $hasPresidentFile ? '#fffbeb' : '#f9fafb';
-                                $isPresidentReturned = $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_status === 'returned';
+                                $isPresidentReturned = $presidentValidationState['is_returned'];
                                 if ($isPresidentReturned) {
                                     $presidentFieldBg = '#fee2e2';
                                 }
-                                
-                                // Use individual president approval fields so approval is per-document.
-                                $hasPresidentApproval = $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && $writtenNotices[$quarter]->president_approved_at;
-                                $isPresidentPendingDilgRoValidation = $hasPresidentApproval && $writtenNotices[$quarter]->president_status === 'pending';
-                                $isPresidentApprovedByDilgRo = $hasPresidentApproval && $writtenNotices[$quarter]->president_status === 'approved';
+                                $isPresidentPendingDilgRoValidation = $presidentValidationState['is_pending_regional'];
+                                $isPresidentApprovedByDilgRo = $presidentValidationState['is_approved'] && $presidentValidationState['required_validator'] === 'regional';
                                 
                                 if ($isPresidentReturned) {
                                     $presidentStatusColor = '#ef4444';
                                     $presidentStatusLabel = 'Returned';
-                                } elseif ($isPresidentApprovedByDilgRo) {
+                                } elseif ($presidentValidationState['is_approved']) {
                                     $presidentStatusColor = '#059669';
                                     $presidentStatusLabel = 'Approved';
-                                } elseif ($isPresidentPendingDilgRoValidation) {
+                                } elseif ($presidentValidationState['is_pending_regional']) {
                                     $presidentStatusColor = '#3b82f6';
                                     $presidentStatusLabel = 'For DILG Regional Office Validation';
                                 } else {
@@ -1160,7 +1354,7 @@
                                     $presidentStatusLabel = $hasPresidentFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
                                 }
 
-                                $isPresidentForPoValidation = $hasPresidentFile && !$isPresidentReturned && !$isPresidentPendingDilgRoValidation && !$isPresidentApprovedByDilgRo;
+                                $isPresidentForPoValidation = $presidentValidationState['is_pending_provincial'];
                                 $isPresidentUnderValidation = $isPresidentPendingDilgRoValidation || $isPresidentForPoValidation;
                             @endphp
                             <div style="padding: 12px; background-color: {{ $presidentFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
@@ -1191,7 +1385,7 @@
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                            $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                            $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                             $hasPoApproval = $writtenNotices[$quarter]
                                                 && $writtenNotices[$quarter]->president_approved_at_dilg_po;
                                         @endphp
@@ -1218,7 +1412,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="5120">
+                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
                                     <button type="submit" id="president-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1229,20 +1423,20 @@
                                     @endif
                                 </div>
 
-@if(Auth::user()->agency === 'LGU')
+@if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path)
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$isPresidentUnderValidation && $writtenNotices[$quarter]->president_status !== 'approved')
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'president_status', 'president_encoder_id') && !$isPresidentUnderValidation && $writtenNotices[$quarter]->president_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($presidentValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-president', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
         @endif
     </div>
-@elseif(Auth::user()->agency === 'DILG')
+@elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
                                         $isDilgPOPresident = in_array(Auth::user()->province, $cordilleraProvinces) || Auth::user()->province === 'Regional Office';
@@ -1254,24 +1448,18 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$shouldHideDeleteForDilgPresident && (Auth::user()->province === 'Regional Office' || $writtenNotices[$quarter]->president_status !== 'approved'))
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'president_status', 'president_encoder_id') && !$isPresidentUnderValidation && $writtenNotices[$quarter]->president_status !== 'approved')
                 <button type="button" onclick="deleteDocument('written-notice-president', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
-            @if(
-                (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isPresidentForPoValidation)
-                || (!$isPresidentForPoValidation && (!$isPresidentPendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-            )
-                @if($writtenNotices[$quarter]->president_status !== 'approved')
-                    <button type="button" onclick="openRemarksModal('written-notice-president', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                @endif
-                @if(
-                    Auth::user()->province === 'Regional Office'
-                    || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isPresidentForPoValidation)
-                )
+            @if($shouldShowValidationActions($presidentValidationState))
+                @if($writtenNotices[$quarter]->president_status === 'pending')
+                    @if(!($presidentValidationState['return_only'] ?? false))
+                        <button type="button" onclick="openRemarksModal('written-notice-president', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                    @endif
                     <button type="button" onclick="openRemarksModal('written-notice-president', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                         <i class="fas fa-undo"></i> Return
                     </button>
@@ -1295,29 +1483,31 @@
                             <!-- House Committee on Appropriation -->
                             @php
                                 $hasHouseFile = $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path;
+                                $houseValidationState = $resolveValidationState(
+                                    $writtenNotices[$quarter],
+                                    (bool) $hasHouseFile,
+                                    'written-notice-house',
+                                    $quarter,
+                                    'house_status',
+                                    'house_approved_at_dilg_po',
+                                    'house_approved_at_dilg_ro',
+                                    'house_encoder_id'
+                                );
                                 $houseFieldBg = $hasHouseFile ? '#fffbeb' : '#f9fafb';
-                                
-                                // Initialize variables
-                                $isHousePendingDilgRoValidation = false;
-                                $isHouseApprovedByDilgRo = false;
-                                
-                                // Check if document was returned - using individual house_status field
-                                $isHouseReturned = $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_status === 'returned';
+
+                                $isHousePendingDilgRoValidation = $houseValidationState['is_pending_regional'];
+                                $isHouseApprovedByDilgRo = $houseValidationState['is_approved'] && $houseValidationState['required_validator'] === 'regional';
+                                $isHouseReturned = $houseValidationState['is_returned'];
                                 
                                 if ($isHouseReturned) {
                                     $houseStatusColor = '#ef4444';
                                     $houseStatusLabel = 'Returned';
                                     $houseFieldBg = '#fee2e2';
                                 } else {
-                                    // Use individual house approval fields so approval is per-document.
-                                    $hasHouseApproval = $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && $writtenNotices[$quarter]->house_approved_at;
-                                    $isHousePendingDilgRoValidation = $hasHouseApproval && $writtenNotices[$quarter]->house_status === 'pending';
-                                    $isHouseApprovedByDilgRo = $hasHouseApproval && $writtenNotices[$quarter]->house_status === 'approved';
-                                    
-                                    if ($isHouseApprovedByDilgRo) {
+                                    if ($houseValidationState['is_approved']) {
                                         $houseStatusColor = '#059669';
                                         $houseStatusLabel = 'Approved';
-                                    } elseif ($isHousePendingDilgRoValidation) {
+                                    } elseif ($houseValidationState['is_pending_regional']) {
                                         $houseStatusColor = '#3b82f6';
                                         $houseStatusLabel = 'For DILG Regional Office Validation';
                                     } else {
@@ -1326,7 +1516,7 @@
                                     }
                                 }
 
-                                $isHouseForPoValidation = $hasHouseFile && !$isHouseReturned && !$isHousePendingDilgRoValidation && !$isHouseApprovedByDilgRo;
+                                $isHouseForPoValidation = $houseValidationState['is_pending_provincial'];
                                 $isHouseUnderValidation = $isHousePendingDilgRoValidation || $isHouseForPoValidation;
                             @endphp
                             <div style="padding: 12px; background-color: {{ $houseFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
@@ -1357,7 +1547,7 @@
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                            $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                            $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                             $hasPoApproval = $writtenNotices[$quarter]
                                                 && $writtenNotices[$quarter]->house_approved_at_dilg_po;
                                         @endphp
@@ -1384,7 +1574,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="5120">
+                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
                                     <button type="submit" id="house-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1395,20 +1585,20 @@
                                     @endif
                                 </div>
 
-@if(Auth::user()->agency === 'LGU')
+@if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path)
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$isHouseUnderValidation && $writtenNotices[$quarter]->house_status !== 'approved')
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'house_status', 'house_encoder_id') && !$isHouseUnderValidation && $writtenNotices[$quarter]->house_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($houseValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-house', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
         @endif
     </div>
-@elseif(Auth::user()->agency === 'DILG')
+@elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
                                         $isDilgPOHouse = in_array(Auth::user()->province, $cordilleraProvinces) || Auth::user()->province === 'Regional Office';
@@ -1420,24 +1610,18 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$shouldHideDeleteForDilgHouse && (Auth::user()->province === 'Regional Office' || $writtenNotices[$quarter]->house_status !== 'approved'))
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'house_status', 'house_encoder_id') && !$isHouseUnderValidation && $writtenNotices[$quarter]->house_status !== 'approved')
                 <button type="button" onclick="deleteDocument('written-notice-house', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
-            @if(
-                (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isHouseForPoValidation)
-                || (!$isHouseForPoValidation && (!$isHousePendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-            )
-                @if($writtenNotices[$quarter]->house_status !== 'approved')
-                    <button type="button" onclick="openRemarksModal('written-notice-house', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                @endif
-                @if(
-                    Auth::user()->province === 'Regional Office'
-                    || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isHouseForPoValidation)
-                )
+            @if($shouldShowValidationActions($houseValidationState))
+                @if($writtenNotices[$quarter]->house_status === 'pending')
+                    @if(!($houseValidationState['return_only'] ?? false))
+                        <button type="button" onclick="openRemarksModal('written-notice-house', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                    @endif
                     <button type="button" onclick="openRemarksModal('written-notice-house', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                         <i class="fas fa-undo"></i> Return
                     </button>
@@ -1461,28 +1645,32 @@
                             <!-- Senate Committee on Finance -->
                             @php
                                 $hasSenateFile = $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path;
+                                $senateValidationState = $resolveValidationState(
+                                    $writtenNotices[$quarter],
+                                    (bool) $hasSenateFile,
+                                    'written-notice-senate',
+                                    $quarter,
+                                    'senate_status',
+                                    'senate_approved_at_dilg_po',
+                                    'senate_approved_at_dilg_ro',
+                                    'senate_encoder_id'
+                                );
                                 $senateFieldBg = $hasSenateFile ? '#fffbeb' : '#f9fafb';
+                                $isSenateReturned = $senateValidationState['is_returned'];
                                 
-                                // Check if Senate document was returned
-                                $isSenateReturned = $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_status === 'returned';
-                                
-                                // Apply returned styling if applicable
                                 if ($isSenateReturned) {
                                     $senateFieldBg = '#fee2e2';
                                 }
-                                
-                                // Use individual senate approval fields so approval is per-document.
-                                $hasSenateApproval = $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && $writtenNotices[$quarter]->senate_approved_at;
-                                $isSenatePendingDilgRoValidation = $hasSenateApproval && $writtenNotices[$quarter]->senate_status === 'pending';
-                                $isSenateApprovedByDilgRo = $hasSenateApproval && $writtenNotices[$quarter]->senate_status === 'approved';
+                                $isSenatePendingDilgRoValidation = $senateValidationState['is_pending_regional'];
+                                $isSenateApprovedByDilgRo = $senateValidationState['is_approved'] && $senateValidationState['required_validator'] === 'regional';
                                 
                                 if ($isSenateReturned) {
                                     $senateStatusColor = '#ef4444';
                                     $senateStatusLabel = 'Returned';
-                                } elseif ($isSenateApprovedByDilgRo) {
+                                } elseif ($senateValidationState['is_approved']) {
                                     $senateStatusColor = '#059669';
                                     $senateStatusLabel = 'Approved';
-                                } elseif ($isSenatePendingDilgRoValidation) {
+                                } elseif ($senateValidationState['is_pending_regional']) {
                                     $senateStatusColor = '#3b82f6';
                                     $senateStatusLabel = 'For DILG Regional Office Validation';
                                 } else {
@@ -1490,7 +1678,7 @@
                                     $senateStatusLabel = $hasSenateFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
                                 }
 
-                                $isSenateForPoValidation = $hasSenateFile && !$isSenateReturned && !$isSenatePendingDilgRoValidation && !$isSenateApprovedByDilgRo;
+                                $isSenateForPoValidation = $senateValidationState['is_pending_provincial'];
                                 $isSenateUnderValidation = $isSenatePendingDilgRoValidation || $isSenateForPoValidation;
                             @endphp
                             <div style="padding: 12px; background-color: {{ $senateFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
@@ -1521,7 +1709,7 @@
                                         </span>
                                         @php
                                             $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                            $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                            $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                             $hasPoApproval = $writtenNotices[$quarter]
                                                 && $writtenNotices[$quarter]->senate_approved_at_dilg_po;
                                         @endphp
@@ -1548,7 +1736,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned ? 'disabled' : '' }} title="{{ $writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="5120">
+                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
                                     <button type="submit" id="senate-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1559,20 +1747,20 @@
                                     @endif
                                 </div>
 
-@if(Auth::user()->agency === 'LGU')
+@if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path)
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if(!$isSenateUnderValidation && $writtenNotices[$quarter]->senate_status !== 'approved')
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'senate_status', 'senate_encoder_id') && !$isSenateUnderValidation && $writtenNotices[$quarter]->senate_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($senateValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-senate', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
         @endif
     </div>
-                                @elseif(Auth::user()->agency === 'DILG')
+                                @elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
                                         $isDilgPOSenate = in_array(Auth::user()->province, $cordilleraProvinces) || Auth::user()->province === 'Regional Office';
@@ -1584,24 +1772,18 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if((!$shouldHideDeleteForDilgSenate || $isSenateReturned) && (Auth::user()->province === 'Regional Office' || $writtenNotices[$quarter]->senate_status !== 'approved'))
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'senate_status', 'senate_encoder_id') && !$isSenateUnderValidation && $writtenNotices[$quarter]->senate_status !== 'approved')
                 <button type="button" onclick="deleteDocument('written-notice-senate', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
-            @if(
-                (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isSenateForPoValidation)
-                || (!$isSenateForPoValidation && (!$isSenatePendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-            )
-                @if($writtenNotices[$quarter]->senate_status !== 'approved')
-                    <button type="button" onclick="openRemarksModal('written-notice-senate', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                @endif
-                @if(
-                    Auth::user()->province === 'Regional Office'
-                    || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isSenateForPoValidation)
-                )
+            @if($shouldShowValidationActions($senateValidationState))
+                @if($writtenNotices[$quarter]->senate_status === 'pending')
+                    @if(!($senateValidationState['return_only'] ?? false))
+                        <button type="button" onclick="openRemarksModal('written-notice-senate', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                    @endif
                     <button type="button" onclick="openRemarksModal('written-notice-senate', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                         <i class="fas fa-undo"></i> Return
                     </button>
@@ -1629,7 +1811,7 @@
 
                 @if($writtenNotices[$quarter])
                     <!-- DILG Approval Buttons -->
-                    @if(Auth::user()->agency === 'DILG')
+                    @if($isWorkflowValidator)
                         <!-- Remarks Section -->
                         @if($writtenNotices[$quarter]->approval_remarks)
                             <div style="margin-top: 12px; padding: 10px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
@@ -1637,7 +1819,7 @@
                                 <p style="color: #374151; font-size: 13px; margin: 0;">{{ $writtenNotices[$quarter]->approval_remarks }}</p>
                             </div>
                         @endif
-                    @elseif(Auth::user()->agency === 'LGU' && $writtenNotices[$quarter]->approval_remarks)
+                    @elseif($isLguWorkflowUser && $writtenNotices[$quarter]->approval_remarks)
                         <!-- View Remarks for LGU -->
                         <div style="margin-top: 12px; padding: 10px; background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 4px;">
                             <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">DILG Remarks:</p>
@@ -1670,25 +1852,29 @@
                     </span>
                     @php
                         $hasFdpFile = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path;
-                        $isFdpPendingDilgRoValidation = false;
-                        $isFdpApprovedByDilgRo = false;
-                        
-                        // Check if document was returned
-                        $isFdpReturned = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_status === 'returned';
+                        $fdpValidationState = $resolveValidationState(
+                            $fdpDocuments[$quarter],
+                            (bool) $hasFdpFile,
+                            'fdp',
+                            $quarter,
+                            'fdp_status',
+                            'approved_at_dilg_po',
+                            'approved_at_dilg_ro',
+                            'fdp_encoder_id'
+                        );
+                        $isFdpPendingDilgRoValidation = $fdpValidationState['is_pending_regional'];
+                        $isFdpApprovedByDilgRo = $fdpValidationState['is_approved'] && $fdpValidationState['required_validator'] === 'regional';
+                        $isFdpReturned = $fdpValidationState['is_returned'];
 
                         if ($isFdpReturned) {
                             $fdpStatusColor = '#ef4444';
                             $fdpStatusLabel = 'Returned';
                             $fdpBackgroundColor = '#fee2e2';
                         } else {
-                            // Check if DILG PO has approved (waiting for RO validation)
-                            $isFdpPendingDilgRoValidation = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && $fdpDocuments[$quarter]->approved_at_dilg_po && !$fdpDocuments[$quarter]->approved_at_dilg_ro;
-                            $isFdpApprovedByDilgRo = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->approved_at_dilg_ro;
-                            
-                            if ($isFdpApprovedByDilgRo) {
+                            if ($fdpValidationState['is_approved']) {
                                 $fdpStatusColor = '#059669';
                                 $fdpStatusLabel = 'Approved';
-                            } elseif ($isFdpPendingDilgRoValidation) {
+                            } elseif ($fdpValidationState['is_pending_regional']) {
                                 $fdpStatusColor = '#3b82f6';
                                 $fdpStatusLabel = 'For DILG Regional Office Validation';
                             } else {
@@ -1697,7 +1883,7 @@
                             }
                         }
 
-                        $isFdpForPoValidation = $hasFdpFile && !$isFdpReturned && !$isFdpPendingDilgRoValidation && !$isFdpApprovedByDilgRo;
+                        $isFdpForPoValidation = $fdpValidationState['is_pending_provincial'];
                         $isFdpUnderValidation = $isFdpPendingDilgRoValidation || $isFdpForPoValidation;
                     @endphp
                     <span style="display: inline-flex; align-items: center; padding: 3px 10px; background-color: {{ $fdpStatusColor }}; color: white; border-radius: 999px; font-size: 10px; font-weight: 700; white-space: nowrap; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.04em;">
@@ -1728,7 +1914,7 @@
                             </span>
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                 $hasPoApproval = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->approved_at_dilg_po;
                             @endphp
                             @if($hasPoApproval)
@@ -1768,7 +1954,7 @@
                     <form action="{{ route('fund-utilization.upload-fdp', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned ? 'disabled' : '' }} title="{{ $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned ? 'File already uploaded. Delete the current file to upload a new one.' : '' }}" data-max-size-kb="10240">
+                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
                         <button type="submit" id="fdp-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -1779,20 +1965,20 @@
                         @endif
                     </div>
 
-                    @if(Auth::user()->agency === 'LGU')
+                    @if($isLguWorkflowUser)
                         @if($fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path)
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                @if(!$isFdpUnderValidation && $fdpDocuments[$quarter]->fdp_status !== 'approved')
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation && $fdpDocuments[$quarter]->fdp_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
                                     <button type="button" onclick="deleteDocument('fdp', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
                                 @endif
                             </div>
                         @endif
-                    @elseif(Auth::user()->agency === 'DILG')
+                    @elseif($isWorkflowValidator)
                         @if($fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path)
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1804,24 +1990,18 @@
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                @if(
-                                    (Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province']) && $isFdpForPoValidation)
-                                    || (!$isFdpForPoValidation && (!$isFdpPendingDilgRoValidation || (Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office')))
-                                )
-                                    @if(!$shouldHideDeleteForDilgFdp && (Auth::user()->province === 'Regional Office' || $fdpDocuments[$quarter]->fdp_status !== 'approved'))
+                                @if($shouldShowValidationActions($fdpValidationState))
+                                    @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation && $fdpDocuments[$quarter]->fdp_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
                                         <button type="button" onclick="deleteDocument('fdp', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                             <i class="fas fa-trash-alt"></i> Delete
                                         </button>
                                     @endif
-                                    @if($fdpDocuments[$quarter]->fdp_status !== 'approved')
-                                        <button type="button" onclick="openRemarksModal('fdp', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                                            <i class="fas fa-check"></i> Approve
-                                        </button>
-                                    @endif
-                                    @if(
-                                        Auth::user()->province === 'Regional Office'
-                                        || (Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office' && $isFdpForPoValidation)
-                                    )
+                                    @if($fdpDocuments[$quarter]->fdp_status === 'pending')
+                                        @if(!($fdpValidationState['return_only'] ?? false))
+                                            <button type="button" onclick="openRemarksModal('fdp', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                                <i class="fas fa-check"></i> Approve
+                                            </button>
+                                        @endif
                                         <button type="button" onclick="openRemarksModal('fdp', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                             <i class="fas fa-undo"></i> Return
                                         </button>
@@ -1841,7 +2021,7 @@
                         @endif
                     @endif
 
-                    @if(Auth::user()->agency === 'LGU' && $fdpDocuments[$quarter])
+                    @if($isLguWorkflowUser && $fdpDocuments[$quarter])
                         <button type="button" onclick="toggleAccordion('fdp-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
                             <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
                             <i class="fas fa-chevron-down" id="icon-fdp-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
@@ -1860,17 +2040,30 @@
                 $postingLinkValue = $fdpDocuments[$quarter]->posting_link ?? '';
                 $safePostingLink = \App\Support\InputSanitizer::sanitizeHttpUrl($postingLinkValue);
                 $hasPostingLink = $fdpDocuments[$quarter] && $postingLinkValue !== '';
+                $postingValidationState = $resolveValidationState(
+                    $fdpDocuments[$quarter],
+                    $hasPostingLink,
+                    'posting-link',
+                    $quarter,
+                    'posting_status',
+                    'posting_approved_at_dilg_po',
+                    'posting_approved_at_dilg_ro',
+                    'posting_encoder_id'
+                );
                 $hasSafePostingLink = !empty($safePostingLink);
-                $isPostingReturned = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->posting_status === 'returned';
+                $isPostingReturned = $postingValidationState['is_returned'];
                 $postingBackgroundColor = $hasPostingLink ? '#fffbeb' : 'transparent';
 
                 if ($isPostingReturned) {
                     $postingStatusColor = '#ef4444';
                     $postingStatusLabel = 'Returned';
                     $postingBackgroundColor = '#fee2e2';
-                } elseif ($hasPostingLink && $fdpDocuments[$quarter]->posting_status === 'approved') {
+                } elseif ($postingValidationState['is_approved']) {
                     $postingStatusColor = '#059669';
                     $postingStatusLabel = 'Approved';
+                } elseif ($postingValidationState['is_pending_regional']) {
+                    $postingStatusColor = '#3b82f6';
+                    $postingStatusLabel = 'For DILG Regional Office Validation';
                 } else {
                     $postingStatusColor = $hasPostingLink ? '#10b981' : '#f59e0b';
                     $postingStatusLabel = $hasPostingLink ? 'For DILG Provincial Office Validation' : 'Pending Upload';
@@ -1915,7 +2108,7 @@
                             </span>
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
-                                $isDilgPO = Auth::user()->agency === 'DILG' && in_array(Auth::user()->province, $cordilleraProvinces);
+                                $isDilgPO = $isWorkflowValidator && in_array(Auth::user()->province, $cordilleraProvinces);
                                 $hasPoApproval = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->posting_approved_at_dilg_po;
                                 $hasRoApproval = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->posting_approved_at_dilg_ro;
                             @endphp
@@ -1950,7 +2143,7 @@
                     <form action="{{ route('fund-utilization.save-posting-link', $report->project_code) }}" method="POST" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="text" name="posting_link" value="{{ $postingLinkValue }}" placeholder="https://example.com/post" style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" oninput="showSaveButtonForText(this, 'posting-save-btn-{{ $quarter }}')">
+                        <input type="text" name="posting_link" value="{{ $postingLinkValue }}" placeholder="https://example.com/post" style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" oninput="showSaveButtonForText(this, 'posting-save-btn-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : '') }}">
                         <button type="submit" id="posting-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-save"></i> Submit
                         </button>
@@ -1968,7 +2161,7 @@
                         @endif
                     </div>
 
-                    @if(Auth::user()->agency === 'LGU')
+                    @if($isLguWorkflowUser)
                         @if($hasPostingLink || $isPostingReturned)
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                 @if($hasSafePostingLink)
@@ -1976,14 +2169,14 @@
                                         <i class="fas fa-eye"></i> Open Link
                                     </a>
                                 @endif
-                                @if(!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved')
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'posting_status', 'posting_encoder_id') && (!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved') && !$shouldHideLguDeleteUntilProvincialReturn($postingValidationState))
                                     <button type="button" onclick="deleteDocument('posting-link', '{{ $quarter }}')" title="Delete link" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
                                 @endif
                             </div>
                         @endif
-                    @elseif(Auth::user()->agency === 'DILG')
+                    @elseif($isWorkflowValidator)
                         @if($hasPostingLink)
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                 @if($hasSafePostingLink)
@@ -1991,12 +2184,17 @@
                                         <i class="fas fa-eye"></i> Open Link
                                     </a>
                                 @endif
-                                @if(!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved')
-                                    <button type="button" onclick="openRemarksModal('posting-link', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                                        <i class="fas fa-check"></i> Approve
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'posting_status', 'posting_encoder_id') && (!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved') && !$shouldHideLguDeleteUntilProvincialReturn($postingValidationState))
+                                    <button type="button" onclick="deleteDocument('posting-link', '{{ $quarter }}')" title="Delete link" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                        <i class="fas fa-trash-alt"></i> Delete
                                     </button>
                                 @endif
-                                @if(Auth::user()->province === 'Regional Office')
+                                @if($shouldShowValidationActions($postingValidationState) && (!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved'))
+                                    @if(!($postingValidationState['return_only'] ?? false))
+                                        <button type="button" onclick="openRemarksModal('posting-link', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                            <i class="fas fa-check"></i> Approve
+                                        </button>
+                                    @endif
                                     <button type="button" onclick="openRemarksModal('posting-link', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-undo"></i> Return
                                     </button>
@@ -2006,6 +2204,23 @@
                     @endif
                 </div>
             </div>
+            </div>
+                </div>
+            </div>
+
+            <div style="border: 1px solid #fde7c7; border-radius: 12px; overflow: hidden; background: #fffaf0;">
+                <button type="button" onclick="toggleAccordion('batch-documents-{{ $quarter }}')" style="width: 100%; padding: 14px 18px; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); color: #9a3412; border: none; text-align: left; cursor: pointer; font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="display: flex; align-items: center; gap: 10px;">
+                        <span style="width: 30px; height: 30px; background: rgba(217,119,6,0.12); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-box-archive" style="font-size: 13px;"></i>
+                        </span>
+                        <span>Batch Documents</span>
+                    </span>
+                    <i class="fas fa-chevron-down" id="icon-batch-documents-{{ $quarter }}" style="transition: transform 0.3s; transform: rotate(0deg);"></i>
+                </button>
+                <div id="batch-documents-{{ $quarter }}" style="display: none; padding: 18px 18px 0;">
+                    @include('reports.fund-utilization.partials.batch-documents-card')
+                </div>
             </div>
 
             </div>
@@ -2045,6 +2260,19 @@
             background-color: rgba(15, 23, 42, 0.55);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
+        }
+
+        body.no-scroll {
+            overflow: hidden;
+        }
+
+        body.viewer-modal-open .ops-detail-page > :not(#batchDocumentViewerModal) {
+            user-select: none;
+        }
+
+        body.viewer-modal-open #batchDocumentViewerModal,
+        body.viewer-modal-open #batchDocumentViewerModal * {
+            pointer-events: auto;
         }
 
         .modal-content {
@@ -2098,6 +2326,138 @@
             cursor: pointer;
             font-weight: 600;
             font-size: 14px;
+        }
+
+        .document-viewer-frame {
+            width: 100%;
+            height: min(78vh, 780px);
+            border: 0;
+            display: block;
+            background: #fff;
+        }
+
+        #batchDocumentViewerModal {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        #batchDocumentViewerModal .modal-content {
+            margin: 0;
+            width: min(1100px, 96vw);
+            max-width: min(1100px, 96vw);
+            max-height: calc(100vh - 48px);
+        }
+
+        .action-confirm-modal .modal-content {
+            max-width: 520px;
+            padding: 0;
+            overflow: hidden;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+        }
+
+        .action-confirm-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px 10px;
+            border-bottom: 1px solid #f1f5f9;
+            background: #ffffff;
+        }
+
+        .action-confirm-header-main {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .action-confirm-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 44, 118, 0.1);
+            color: #002c76;
+            flex-shrink: 0;
+        }
+
+        .action-confirm-close {
+            border: none;
+            background: transparent;
+            color: #64748b;
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .action-confirm-body {
+            padding: 14px 18px;
+            background: #ffffff;
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            width: min(360px, calc(100% - 32px));
+            z-index: 1300;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            color: white;
+            font-size: 13px;
+            line-height: 1.4;
+            box-shadow: 0 22px 44px rgba(15, 23, 42, 0.18);
+            opacity: 0;
+            transform: translateX(18px);
+            animation: toastEnter 220ms ease-out forwards;
+            pointer-events: auto;
+        }
+
+        .toast.success { background: #059669; }
+        .toast.error { background: #dc2626; }
+        .toast.info { background: #2563eb; }
+
+        .toast button {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.95);
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        @keyframes toastEnter {
+            from { opacity: 0; transform: translateX(18px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes toastExit {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(18px); }
         }
 
         .logs-table {
@@ -2197,6 +2557,7 @@
                                     $docType = $log['document_type'] ?? 'n/a';
                                     $docLabelMap = [
                                         'mov' => 'MOV',
+                                        'batch-document' => 'Batch Documents',
                                         'fdp' => 'FDP',
                                         'posting-link' => 'LGU Posting Link',
                                         'written-notice' => 'Written Notice',
@@ -2252,10 +2613,63 @@
         </div>
     </div>
 
+    <div id="actionConfirmModal" class="modal action-confirm-modal">
+        <div class="modal-content system-dialog-card">
+            <div id="actionConfirmHeader" class="modal-header action-confirm-header system-dialog-header">
+                <div class="action-confirm-header-main">
+                    <div id="actionConfirmIcon" class="action-confirm-icon">
+                        <i class="fas fa-circle-question"></i>
+                    </div>
+                    <div>
+                        <h2 id="actionConfirmTitle" class="system-dialog-title" style="margin: 0; color: #0f172a; font-size: 18px;">Confirm action</h2>
+                    </div>
+                </div>
+                <button id="actionConfirmCloseBtn" class="close-modal action-confirm-close" data-confirm-skip="true" onclick="closeActionConfirmModal()">&times;</button>
+            </div>
+            <div id="actionConfirmBody" class="action-confirm-body system-dialog-body">
+                <div id="actionConfirmMessage">Are you sure you want to continue?</div>
+                <div class="system-dialog-actions" style="padding: 12px 0 0;">
+                    <button type="button" class="system-dialog-btn cancel" data-confirm-skip="true" onclick="closeActionConfirmModal()">Cancel</button>
+                    <button type="button" id="actionConfirmBtn" class="system-dialog-btn confirm" data-confirm-skip="true" onclick="handleActionConfirmButtonClick()">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <div id="batchDocumentViewerModal" class="modal" aria-hidden="true">
+        <div class="modal-content" style="padding: 0; overflow: hidden; background: #f8fafc;">
+            <div class="modal-header" style="margin: 0; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12);">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                    <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <i class="fas fa-eye" style="color: white; font-size: 13px;"></i>
+                    </div>
+                    <div style="min-width: 0;">
+                        <h2 id="batchDocumentViewerTitle" style="margin: 0; color: white; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">View Document</h2>
+                        <div id="batchDocumentViewerSubtitle" style="margin-top: 2px; color: rgba(255,255,255,0.78); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+                    </div>
+                </div>
+                <button class="close-modal" onclick="closeBatchDocumentViewerModal()" style="color: rgba(255,255,255,0.85); font-size: 22px; line-height: 1; flex-shrink: 0;">&times;</button>
+            </div>
+            <div style="padding: 0; background: #e2e8f0;">
+                <iframe id="batchDocumentViewerFrame" class="document-viewer-frame" title="Batch document viewer" loading="lazy"></iframe>
+            </div>
+            <div style="display: flex; justify-content: flex-end; padding: 14px 20px; background: #f8fafc; border-top: 1px solid #cbd5e1;">
+                <button type="button" onclick="closeBatchDocumentViewerModal()" style="padding: 10px 18px; border: none; border-radius: 8px; background: #475569; color: white; font-size: 13px; font-weight: 700; cursor: pointer;">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentUploadType = '';
         let currentQuarter = '';
         let currentAction = '';
+        let batchDocumentViewerInertElements = [];
+        let actionConfirmCallback = null;
+        let flashToastsShown = false;
         const projectCode = '{{ $report->project_code }}';
         const baseUrl = '{{ url("/fund-utilization") }}';
 
@@ -2267,6 +2681,137 @@
         function closeLogsModal() {
             const modal = document.getElementById('logsModal');
             modal.style.display = 'none';
+        }
+
+        function showToast(message, type = 'success', duration = 3800) {
+            const toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer) {
+                return;
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const messageSpan = document.createElement('span');
+            messageSpan.textContent = message;
+
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.setAttribute('aria-label', 'Dismiss toast');
+            closeButton.innerHTML = '&times;';
+
+            closeButton.addEventListener('click', () => {
+                toast.style.animation = 'toastExit 180ms ease-out forwards';
+                toast.addEventListener('animationend', () => toast.remove());
+            });
+
+            toast.appendChild(messageSpan);
+            toast.appendChild(closeButton);
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                if (!toast.parentElement) return;
+                toast.style.animation = 'toastExit 180ms ease-out forwards';
+                toast.addEventListener('animationend', () => toast.remove());
+            }, duration);
+        }
+
+        function openActionConfirmModal(options = {}) {
+            const modal = document.getElementById('actionConfirmModal');
+            const modalContent = modal ? modal.querySelector('.modal-content') : null;
+            const headerElement = document.getElementById('actionConfirmHeader');
+            const bodyElement = document.getElementById('actionConfirmBody');
+            const titleElement = document.getElementById('actionConfirmTitle');
+            const messageElement = document.getElementById('actionConfirmMessage');
+            const confirmButton = document.getElementById('actionConfirmBtn');
+            const iconElement = document.getElementById('actionConfirmIcon');
+            const closeButton = document.getElementById('actionConfirmCloseBtn');
+
+            if (!modal || !modalContent || !headerElement || !bodyElement || !titleElement || !messageElement || !confirmButton || !iconElement || !closeButton) {
+                return;
+            }
+
+            titleElement.textContent = options.title || 'Confirm action';
+            if (options.messageHtml) {
+                messageElement.innerHTML = options.messageHtml;
+            } else {
+                messageElement.textContent = options.message || 'Are you sure you want to continue?';
+            }
+            confirmButton.textContent = options.confirmLabel || 'Confirm';
+            confirmButton.style.background = options.confirmBackground || options.confirmColor || '#002c76';
+            confirmButton.style.color = options.confirmTextColor || '#ffffff';
+            modalContent.style.maxWidth = options.maxWidth || '520px';
+            headerElement.style.background = options.headerBackground || '#ffffff';
+            headerElement.style.borderBottomColor = options.headerBorderColor || '#f1f5f9';
+            bodyElement.style.background = options.bodyBackground || '#ffffff';
+            titleElement.style.color = options.titleColor || '#0f172a';
+            closeButton.style.color = options.closeColor || '#64748b';
+            iconElement.style.background = options.iconBackground || 'rgba(0, 44, 118, 0.1)';
+            iconElement.style.color = options.iconColor || '#002c76';
+            iconElement.innerHTML = options.iconHtml || '<i class="fas fa-circle-question"></i>';
+            actionConfirmCallback = typeof options.onConfirm === 'function' ? options.onConfirm : null;
+
+            modal.style.display = 'block';
+        }
+
+        function closeActionConfirmModal() {
+            const modal = document.getElementById('actionConfirmModal');
+            const modalContent = modal ? modal.querySelector('.modal-content') : null;
+            const headerElement = document.getElementById('actionConfirmHeader');
+            const bodyElement = document.getElementById('actionConfirmBody');
+            const messageElement = document.getElementById('actionConfirmMessage');
+            const confirmButton = document.getElementById('actionConfirmBtn');
+            const titleElement = document.getElementById('actionConfirmTitle');
+            const iconElement = document.getElementById('actionConfirmIcon');
+            const closeButton = document.getElementById('actionConfirmCloseBtn');
+
+            if (modal) {
+                modal.style.display = 'none';
+            }
+
+            if (modalContent) {
+                modalContent.style.maxWidth = '520px';
+            }
+
+            if (headerElement) {
+                headerElement.style.background = '#ffffff';
+                headerElement.style.borderBottomColor = '#f1f5f9';
+            }
+
+            if (bodyElement) {
+                bodyElement.style.background = '#ffffff';
+            }
+
+            if (messageElement) {
+                messageElement.textContent = 'Are you sure you want to continue?';
+            }
+
+            if (confirmButton) {
+                confirmButton.style.background = '#002c76';
+                confirmButton.style.color = '#ffffff';
+            }
+
+            if (titleElement) {
+                titleElement.style.color = '#0f172a';
+            }
+
+            if (iconElement) {
+                iconElement.style.background = 'rgba(0, 44, 118, 0.1)';
+                iconElement.style.color = '#002c76';
+                iconElement.innerHTML = '<i class="fas fa-circle-question"></i>';
+            }
+
+            if (closeButton) {
+                closeButton.style.color = '#64748b';
+            }
+
+            actionConfirmCallback = null;
+        }
+
+        function handleActionConfirmButtonClick() {
+            if (typeof actionConfirmCallback === 'function') {
+                actionConfirmCallback();
+            }
+            closeActionConfirmModal();
         }
 
         function openRemarksModal(uploadType, quarter, action) {
@@ -2329,14 +2874,185 @@
             modal.style.display = 'none';
         }
 
+        function getBatchUploadReminderMessageHtml() {
+            return `
+                <div style="margin: 0 0 14px; color: #475569; font-size: 13px; line-height: 1.6;">
+                    Please check if the following are available in the document to be uploaded:
+                </div>
+                <div style="padding: 16px 18px; border: 1px solid #c9d8ef; border-radius: 12px; background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);">
+                    <div style="color: #002C76; font-size: 13px; font-weight: 700; margin-bottom: 10px; letter-spacing: 0.01em;">Required items</div>
+                    <div style="color: #334155; font-size: 13px; line-height: 1.72;">
+                        <div style="font-weight: 700; color: #0f172a; margin-bottom: 6px;">Fund Utilization Report</div>
+                        <div style="font-weight: 700; color: #0f172a; margin-bottom: 4px;">Written Notices</div>
+                        <div style="color: #475569; margin-bottom: 4px;">Distribution Recipients:</div>
+                        <ul style="margin: 0 0 10px 0; padding-left: 20px; color: #475569; line-height: 1.72; list-style-type: disc;">
+                            <li>Secretary of DBM</li>
+                            <li>Secretary of DILG</li>
+                            <li>Speaker of the House</li>
+                            <li>President of the Senate</li>
+                            <li>House Committee on Appropriation</li>
+                            <li>Senate Committee on Finance</li>
+                        </ul>
+                        <div style="font-weight: 700; color: #0f172a; margin-bottom: 6px;">Full Disclosure Policy (FDP)</div>
+                        <div style="font-weight: 700; color: #0f172a;">LGU Website / Social Media</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openBatchUploadReminder(onConfirm) {
+            openActionConfirmModal({
+                title: 'Batch Upload Reminder',
+                messageHtml: getBatchUploadReminderMessageHtml(),
+                confirmLabel: 'Confirm and Continue',
+                confirmBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
+                headerBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
+                headerBorderColor: 'rgba(255,255,255,0.12)',
+                titleColor: '#ffffff',
+                closeColor: 'rgba(255,255,255,0.85)',
+                iconBackground: 'rgba(255,255,255,0.15)',
+                iconColor: '#ffffff',
+                iconHtml: '<i class="fas fa-clipboard-check"></i>',
+                maxWidth: '640px',
+                onConfirm: onConfirm,
+            });
+        }
+
+        function showFlashToasts() {
+            if (flashToastsShown) {
+                return;
+            }
+
+            flashToastsShown = true;
+
+            const successMessage = @json(session('success'));
+            const errorMessage = @json(session('error'));
+            const validationErrorMessage = @json($errors->any() ? $errors->first() : null);
+
+            if (successMessage) {
+                showToast(successMessage, 'success');
+            }
+
+            if (errorMessage) {
+                showToast(errorMessage, 'error');
+            }
+
+            if (validationErrorMessage && validationErrorMessage !== errorMessage) {
+                showToast(validationErrorMessage, 'error');
+            }
+        }
+
+        function initializeCustomConfirmationBypass() {
+            const selectors = [
+                '.ops-detail-page button[onclick*="deleteDocument("]',
+                '.ops-detail-page a[onclick*="deleteDocument("]',
+                '.ops-detail-page button[onclick*="deleteProjectConfirm("]',
+                '#actionConfirmBtn',
+            ];
+
+            document.querySelectorAll(selectors.join(', ')).forEach((element) => {
+                element.dataset.confirmSkip = 'true';
+            });
+        }
+
+        function setBatchDocumentViewerBackgroundState(isOpen) {
+            const page = document.querySelector('.ops-detail-page');
+            if (!page) {
+                return;
+            }
+
+            if (isOpen) {
+                batchDocumentViewerInertElements = [];
+
+                Array.from(page.children).forEach((child) => {
+                    if (child.id === 'batchDocumentViewerModal') {
+                        return;
+                    }
+
+                    batchDocumentViewerInertElements.push({
+                        element: child,
+                        hadInert: child.hasAttribute('inert'),
+                        ariaHidden: child.getAttribute('aria-hidden'),
+                    });
+
+                    child.setAttribute('inert', '');
+                    child.setAttribute('aria-hidden', 'true');
+                });
+
+                return;
+            }
+
+            batchDocumentViewerInertElements.forEach(({ element, hadInert, ariaHidden }) => {
+                if (!element) {
+                    return;
+                }
+
+                if (hadInert) {
+                    element.setAttribute('inert', '');
+                } else {
+                    element.removeAttribute('inert');
+                }
+
+                if (ariaHidden === null) {
+                    element.removeAttribute('aria-hidden');
+                } else {
+                    element.setAttribute('aria-hidden', ariaHidden);
+                }
+            });
+
+            batchDocumentViewerInertElements = [];
+        }
+
+        function openBatchDocumentViewerModal(documentUrl, documentTitle = '') {
+            const modal = document.getElementById('batchDocumentViewerModal');
+            const frame = document.getElementById('batchDocumentViewerFrame');
+            const title = document.getElementById('batchDocumentViewerTitle');
+            const subtitle = document.getElementById('batchDocumentViewerSubtitle');
+
+            if (!modal || !frame || !title || !subtitle || !documentUrl) {
+                return;
+            }
+
+            title.textContent = documentTitle || 'View Document';
+            subtitle.textContent = 'Previewing the selected batch document inside the page.';
+            frame.src = documentUrl;
+            modal.style.display = 'flex';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            document.body.classList.add('no-scroll');
+            document.body.classList.add('viewer-modal-open');
+            setBatchDocumentViewerBackgroundState(true);
+        }
+
+        function closeBatchDocumentViewerModal() {
+            const modal = document.getElementById('batchDocumentViewerModal');
+            const frame = document.getElementById('batchDocumentViewerFrame');
+
+            if (frame) {
+                frame.src = 'about:blank';
+            }
+
+            if (modal) {
+                modal.style.display = 'none';
+            }
+
+            document.body.classList.remove('no-scroll');
+            document.body.classList.remove('viewer-modal-open');
+            setBatchDocumentViewerBackgroundState(false);
+        }
+
         window.onclick = function(event) {
             const modal = document.getElementById('remarksModal');
             const logsModal = document.getElementById('logsModal');
+            const actionConfirmModal = document.getElementById('actionConfirmModal');
             if (event.target === modal) {
                 modal.style.display = 'none';
             }
             if (event.target === logsModal) {
                 logsModal.style.display = 'none';
+            }
+            if (event.target === actionConfirmModal) {
+                closeActionConfirmModal();
             }
         }
 
@@ -2363,13 +3079,30 @@
                         const otherIcon = document.getElementById('icon-' + otherId);
                         if (otherIcon) otherIcon.style.transform = 'rotate(0deg)';
                     }
-                });
-            }
+                    });
+                }
 
-            if (!isOpen) {
-                element.style.display = 'block';
-                if (icon) icon.style.transform = 'rotate(180deg)';
-            } else {
+                if (
+                    elementId.startsWith('individual-documents-')
+                    || elementId.startsWith('batch-documents-')
+                ) {
+                    const quarter = elementId.replace('individual-documents-', '').replace('batch-documents-', '');
+                    const siblingId = elementId.startsWith('individual-documents-')
+                        ? `batch-documents-${quarter}`
+                        : `individual-documents-${quarter}`;
+                    const siblingElement = document.getElementById(siblingId);
+                    const siblingIcon = document.getElementById('icon-' + siblingId);
+
+                    if (siblingElement && siblingElement.style.display === 'block') {
+                        siblingElement.style.display = 'none';
+                        if (siblingIcon) siblingIcon.style.transform = 'rotate(0deg)';
+                    }
+                }
+
+                if (!isOpen) {
+                    element.style.display = 'block';
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                } else {
                 element.style.display = 'none';
                 if (icon) icon.style.transform = 'rotate(0deg)';
             }
@@ -2408,7 +3141,7 @@
             });
 
             if (!hasChanges) {
-                alert('No changes to save for this quarter.');
+                showToast('No changes to save for this quarter.', 'info');
                 return;
             }
 
@@ -2418,16 +3151,16 @@
             });
 
             // Show success message
-            alert(`Quarter ${quarter} saved successfully!`);
+            showToast(`Quarter ${quarter} saved successfully!`, 'success');
         }
 
         // Save Remarks via AJAX
         function saveRemarksAjax(uploadType, quarter) {
-            const textareaId = `textarea-${uploadType}-remarks-${quarter}`;
-            const textarea = document.getElementById(textareaId);
+            const textarea = document.getElementById(`textarea-${uploadType}-remarks-${quarter}`)
+                || document.getElementById(`textarea-${uploadType}-notes-${quarter}`);
             
             if (!textarea) {
-                alert('Error: Could not find remarks field.');
+                showToast('Error: Could not find remarks field.', 'error');
                 return;
             }
 
@@ -2451,25 +3184,29 @@
                 throw new Error('Failed to save remarks');
             })
             .then(data => {
-                // Show success message
-                const button = event.target;
-                const originalText = button.innerHTML;
-                button.innerHTML = '<i class="fas fa-check" style="margin-right: 4px;"></i> Saved!';
-                button.style.backgroundColor = '#059669';
-                
-                setTimeout(() => {
-                    button.innerHTML = originalText;
-                }, 2000);
+                showToast('Remarks saved successfully.', 'success');
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error saving remarks. Please try again.');
+                showToast('Error saving remarks. Please try again.', 'error');
             });
         }
 
         // Delete Document
-        function deleteDocument(docType, quarter) {
-            if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+        function deleteDocument(docType, quarter, confirmed = false) {
+            if (!confirmed) {
+                openActionConfirmModal({
+                    title: 'Delete document',
+                    message: 'This document will be permanently removed. Do you want to continue?',
+                    confirmLabel: 'Delete',
+                    confirmColor: '#dc2626',
+                    iconBackground: 'rgba(220, 38, 38, 0.12)',
+                    iconColor: '#dc2626',
+                    iconHtml: '<i class="fas fa-trash-alt"></i>',
+                    onConfirm: function() {
+                        deleteDocument(docType, quarter, true);
+                    }
+                });
                 return;
             }
 
@@ -2485,48 +3222,99 @@
             .then(response => response.json())
             .then(data => {
                 if (data.message) {
-                    alert(data.message);
-                    if (data.message.includes('deleted successfully')) {
-                        location.reload();
+                    showToast(data.message, 'success');
+                    if (data.message.toLowerCase().includes('deleted successfully')) {
+                        setTimeout(() => window.location.reload(), 800);
                     }
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error deleting document. Please try again.');
+                showToast('Error deleting document. Please try again.', 'error');
             });
         }
 
         function deleteProjectConfirm(projectCode) {
             const message = `Are you sure you want to delete this project and ALL its associated data and logs?\n\nProject Code: ${projectCode}\n\nThis action CANNOT be undone.`;
-            if (!confirm(message)) {
-                return;
-            }
+            openActionConfirmModal({
+                title: 'Delete project',
+                message: message,
+                confirmLabel: 'Delete project',
+                confirmColor: '#dc2626',
+                iconBackground: 'rgba(220, 38, 38, 0.12)',
+                iconColor: '#dc2626',
+                iconHtml: '<i class="fas fa-trash-alt"></i>',
+                onConfirm: function() {
+                    const url = `${baseUrl}/${projectCode}`;
 
-            const url = `${baseUrl}/${projectCode}`;
-
-            fetch(url, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    alert(data.message);
-                    if (data.message.includes('deleted successfully')) {
-                        // Redirect to fund-utilization index after successful deletion
-                        window.location.href = '/fund-utilization';
-                    }
-                } else if (data.error) {
-                    alert('Error: ' + data.error);
+                    fetch(url, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        },
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.message) {
+                            showToast(data.message, 'success');
+                            if (data.message.toLowerCase().includes('deleted successfully')) {
+                                setTimeout(() => {
+                                    window.location.href = '/fund-utilization';
+                                }, 800);
+                            }
+                        } else if (data.error) {
+                            showToast('Error: ' + data.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showToast('Error deleting project. Please try again.', 'error');
+                    });
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error deleting project. Please try again.');
+            });
+        }
+
+        function initializeBatchUploadConfirmation() {
+            document.querySelectorAll('form[data-batch-upload-form="1"]').forEach(form => {
+                if (form.dataset.batchUploadSubmitBound !== '1') {
+                    form.dataset.batchUploadSubmitBound = '1';
+                    form.addEventListener('submit', function(event) {
+                        if (form.dataset.batchUploadConfirmed === '1') {
+                            delete form.dataset.batchUploadConfirmed;
+                            return;
+                        }
+
+                        event.preventDefault();
+                        openBatchUploadReminder(function() {
+                            form.dataset.batchUploadConfirmed = '1';
+                            if (typeof form.requestSubmit === 'function') {
+                                form.requestSubmit();
+                            } else {
+                                form.submit();
+                            }
+                        });
+                    });
+                }
+
+                const batchInput = form.querySelector('input[name="batch_document_file[]"], input[name="batch_document_file"]');
+                if (!batchInput || batchInput.disabled || batchInput.dataset.batchUploadInputBound === '1') {
+                    return;
+                }
+
+                batchInput.dataset.batchUploadInputBound = '1';
+                batchInput.addEventListener('click', function(event) {
+                    if (batchInput.dataset.batchUploadPickerConfirmed === '1') {
+                        delete batchInput.dataset.batchUploadPickerConfirmed;
+                        return;
+                    }
+
+                    event.preventDefault();
+                    openBatchUploadReminder(function() {
+                        batchInput.dataset.batchUploadPickerConfirmed = '1';
+                        batchInput.click();
+                    });
+                });
             });
         }
 
@@ -2593,8 +3381,14 @@
         }
 
         document.addEventListener('DOMContentLoaded', initializeUploadStyling);
+        document.addEventListener('DOMContentLoaded', initializeBatchUploadConfirmation);
+        document.addEventListener('DOMContentLoaded', initializeCustomConfirmationBypass);
+        document.addEventListener('DOMContentLoaded', showFlashToasts);
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             initializeUploadStyling();
+            initializeBatchUploadConfirmation();
+            initializeCustomConfirmationBypass();
+            showFlashToasts();
         }
 
         // Show save button and filename when file is selected
@@ -2617,7 +3411,10 @@
             filenameDiv.classList.add('ops-upload-filename');
             
             if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                const fileName = fileInput.files[0].name;
+                const fileNames = Array.from(fileInput.files).map((file) => file.name);
+                const fileName = fileNames.length === 1
+                    ? fileNames[0]
+                    : `${fileNames.length} files selected: ${fileNames.slice(0, 3).join(', ')}${fileNames.length > 3 ? ` + ${fileNames.length - 3} more` : ''}`;
                 // Show the save button
                 saveBtn.style.opacity = '1';
                 saveBtn.style.pointerEvents = 'auto';

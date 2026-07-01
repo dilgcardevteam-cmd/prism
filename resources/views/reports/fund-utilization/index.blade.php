@@ -17,15 +17,17 @@
     @endif
 
     @php
+        $batchUploadOpen = request()->boolean('batch_upload');
         $activeFilters = array_merge([
             'search' => '',
             'program' => [],
-            'fund_source' => [],
             'funding_year' => [],
             'province' => [],
             'city' => [],
+            'barangay' => [],
         ], $filters ?? []);
         $provinceMunicipalities = $filterOptions['provinceMunicipalities'] ?? [];
+        $cityBarangayMap = $filterOptions['cityBarangayMap'] ?? [];
         $selectedProvinceFilters = collect($activeFilters['province'] ?? [])->map(fn ($value) => trim((string) $value))->filter()->values();
         $cityOptions = $selectedProvinceFilters->isNotEmpty()
             ? $selectedProvinceFilters->flatMap(fn ($province) => $provinceMunicipalities[$province] ?? [])
@@ -37,12 +39,57 @@
             ->unique()
             ->sort()
             ->values();
-        $multiFilterKeys = ['program', 'fund_source', 'funding_year', 'province', 'city'];
+        $selectedCityFilters = collect($activeFilters['city'] ?? [])->map(fn ($value) => trim((string) $value))->filter()->values();
+        $barangayOptions = $selectedCityFilters->isNotEmpty()
+            ? $selectedCityFilters->flatMap(fn ($city) => $cityBarangayMap[$city] ?? [])
+            : collect();
+        $barangayOptions = $barangayOptions
+            ->concat(collect($activeFilters['barangay'] ?? []))
+            ->map(fn($barangay) => trim((string) $barangay))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+        $multiFilterKeys = ['program', 'funding_year', 'province', 'city', 'barangay'];
+        $batchUploadProjects = collect($batchUploadProjects ?? [])
+            ->map(function ($report) {
+                return [
+                    'project_code' => trim((string) ($report->project_code ?? '')),
+                    'project_title' => trim((string) ($report->project_title ?? '')),
+                    'province' => trim((string) ($report->province ?? '')),
+                    'city_municipality' => trim((string) ($report->city_municipality ?? ($report->implementing_unit ?? ''))),
+                    'barangay' => trim((string) ($report->barangay ?? '')),
+                    'funding_year' => trim((string) ($report->funding_year ?? '')),
+                    'open_url' => route('fund-utilization.show', $report->project_code),
+                ];
+            })
+            ->filter(fn ($project) => $project['project_code'] !== '')
+            ->values();
+        $defaultFundUtilizationRouteParams = array_filter([
+            'per_page' => $perPage ?? 10,
+            'batch_upload' => $batchUploadOpen ? 1 : null,
+        ], fn ($value) => $value !== null && $value !== '');
+        $canBatchUploadFundUtilization = Auth::check() && in_array(Auth::user()->normalizedRole(), [
+            \App\Models\User::ROLE_LGU,
+            \App\Models\User::ROLE_PROVINCIAL,
+        ], true);
     @endphp
 
-    <form id="fund-utilization-filters" method="GET" action="{{ route('fund-utilization.index') }}" class="dashboard-card project-filter-form collapsed" style="background: #ffffff; padding: 16px 18px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
+    @if($canBatchUploadFundUtilization)
+        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+            <button type="button" class="dashboard-filter-export-btn" onclick="openBatchUploadModal()" style="height: 38px; min-width: 210px; border-radius: 8px; background: linear-gradient(180deg, #003a99 0%, #002C76 100%); box-shadow: 0 12px 24px rgba(0, 44, 118, 0.18);">
+                <i class="fas fa-layer-group" aria-hidden="true"></i>
+                Batch Upload FUR
+            </button>
+        </div>
+    @endif
+
+    <form id="fund-utilization-filters" method="GET" action="{{ route('fund-utilization.index') }}" class="dashboard-card project-filter-form" style="background: #ffffff; padding: 16px 18px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
         <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
-        <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="false" aria-controls="fund-utilization-filter-body">
+        @if($batchUploadOpen)
+            <input type="hidden" name="batch_upload" value="1">
+        @endif
+        <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="true" aria-controls="fund-utilization-filter-body">
             <i class="fas fa-filter" aria-hidden="true" style="font-size: 16px;"></i>
             <span>PROJECT FILTER</span>
             <span class="project-filter-chevron">
@@ -72,22 +119,6 @@
                     <select id="fund_utilization_program" name="program[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Program" aria-hidden="true">
                         @foreach(($filterOptions['programs'] ?? []) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['program'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_fund_source" data-badge-container-id="fund_utilization_fund_source_badges" data-dropdown-toggle-id="fund_utilization_fund_source_dropdown_toggle" data-dropdown-menu-id="fund_utilization_fund_source_dropdown_menu" data-empty-badge-text="All">
-                    <label for="fund_utilization_fund_source_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Fund Source</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div id="fund_utilization_fund_source_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_fund_source_dropdown_menu">
-                            <div id="fund_utilization_fund_source_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
-                        </div>
-                        <div id="fund_utilization_fund_source_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select id="fund_utilization_fund_source" name="fund_source[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Fund Source" aria-hidden="true">
-                        @foreach(($filterOptions['fund_sources'] ?? []) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['fund_source'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -140,8 +171,24 @@
                     </select>
                 </div>
 
+                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_barangay" data-badge-container-id="fund_utilization_barangay_badges" data-dropdown-toggle-id="fund_utilization_barangay_dropdown_toggle" data-dropdown-menu-id="fund_utilization_barangay_dropdown_menu" data-empty-badge-text="All" data-empty-menu-text="Select at least one city/municipality first.">
+                    <label for="fund_utilization_barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div id="fund_utilization_barangay_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_barangay_dropdown_menu">
+                            <div id="fund_utilization_barangay_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                        </div>
+                        <div id="fund_utilization_barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                    </div>
+                    <select id="fund_utilization_barangay" name="barangay[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Barangay" aria-hidden="true">
+                        @foreach($barangayOptions as $barangay)
+                            <option value="{{ $barangay }}" @selected(in_array((string) $barangay, ($activeFilters['barangay'] ?? []), true))>{{ $barangay }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
                 <div class="dashboard-filter-reset" style="display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-                    <a href="{{ route('fund-utilization.index', ['per_page' => $perPage ?? 10]) }}" class="dashboard-filter-reset-link" style="height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px;">
+                    <a href="{{ route('fund-utilization.index', $defaultFundUtilizationRouteParams) }}" class="dashboard-filter-reset-link" style="height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px;">
                         <i class="fas fa-rotate-left" aria-hidden="true"></i>
                         Reset Filter
                     </a>
@@ -161,7 +208,7 @@
     <!-- Reports Card -->
     <div class="report-table-card" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
         <div class="report-table-scroll">
-            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 1460px;">
+            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 1600px;">
             <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px; width: 220px; max-width: 220px;">Project Details</th>
@@ -195,6 +242,7 @@
                             'validation_level_text_color' => '#4b5563',
                             'validation_level_background_color' => '#f3f4f6',
                             'validation_level_border_color' => '#d1d5db',
+                            'date_validated_label' => '—',
                         ];
                     @endphp
                     <tr style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
@@ -267,9 +315,14 @@
                             </div>
                         </td>
                         <td style="padding: 12px; text-align: center;">
-                            <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationListing['approval_status_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationListing['approval_status_background_color'] ?? '#f3f4f6' }}; color: {{ $validationListing['approval_status_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
-                                {{ $validationListing['approval_status_label'] ?? 'Awaiting Upload' }}
-                            </span>
+                            <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 6px; max-width: 220px;">
+                                <span style="display: inline-block; max-width: 220px; padding: 4px 10px; border-radius: 999px; border: 1px solid {{ $validationListing['approval_status_border_color'] ?? '#d1d5db' }}; background-color: {{ $validationListing['approval_status_background_color'] ?? '#f3f4f6' }}; color: {{ $validationListing['approval_status_text_color'] ?? '#374151' }}; font-size: 11px; font-weight: 700; white-space: normal; line-height: 1.25; text-align: center;">
+                                    {{ $validationListing['approval_status_label'] ?? 'Awaiting Upload' }}
+                                </span>
+                                <span style="font-size: 11px; color: #111827; line-height: 1.2; white-space: nowrap;">
+                                    {{ $validationListing['date_validated_label'] ?? '—' }}
+                                </span>
+                            </div>
                         </td>
                         <td style="padding: 12px; text-align: center; color: #111827; font-size: 12px; white-space: nowrap;">
                             {{ $validationListing['date_submitted_label'] ?? '—' }}
@@ -305,6 +358,9 @@
                         Showing {{ $reports->firstItem() ?? 0 }}-{{ $reports->lastItem() ?? 0 }} of {{ $reports->total() }}
                     </div>
                     <form method="GET" action="{{ route('fund-utilization.index') }}" style="display: inline-flex; align-items: center;">
+                        @if($batchUploadOpen)
+                            <input type="hidden" name="batch_upload" value="1">
+                        @endif
                         <input type="hidden" name="search" value="{{ $activeFilters['search'] ?? '' }}">
                         @foreach ($multiFilterKeys as $filterKey)
                             @foreach (($activeFilters[$filterKey] ?? []) as $selectedValue)
@@ -366,8 +422,416 @@
         </div>
     </div>
 
+    <div id="batchUploadModal" class="fur-batch-modal" aria-hidden="true" hidden>
+        <div class="fur-batch-modal-backdrop" aria-hidden="true"></div>
+        <div class="fur-batch-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="batchUploadModalTitle">
+            <div class="fur-batch-modal-header">
+                <div>
+                    <h3 id="batchUploadModalTitle">Batch Upload FUR</h3>
+                    <p>Use project filters to narrow the upload queue before opening each FUR project.</p>
+                </div>
+                <button type="button" class="fur-batch-modal-close" data-batch-upload-close aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="fur-batch-modal-content">
+                <div class="fur-batch-modal-scroll">
+                    <form id="batchUploadFilterForm" method="GET" action="{{ route('fund-utilization.index') }}">
+                        <input type="hidden" name="batch_upload" value="1">
+                        <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
+                        <div class="fur-batch-filter-form">
+                            <button type="button" class="fur-batch-filter-toggle" onclick="toggleBatchUploadFilterPanel(this)" aria-expanded="true" aria-controls="batch-upload-filter-panel">
+                                <span class="fur-batch-filter-toggle-copy">
+                                    <i class="fas fa-filter" aria-hidden="true"></i>
+                                    <span>Batch Project Filters</span>
+                                </span>
+                                <span class="fur-batch-filter-chevron">
+                                    <i class="fas fa-chevron-up"></i>
+                                </span>
+                            </button>
+
+                            <div id="batch-upload-filter-panel" class="fur-batch-filter-panel">
+                                <div class="fur-batch-modal-body">
+                                    <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px 16px; align-items: end;">
+                                        <div>
+                                            <label for="batch-upload-search" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Search</label>
+                                            <div style="position: relative;">
+                                                <i class="fas fa-search" style="position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 13px; pointer-events: none;"></i>
+                                                <input id="batch-upload-search" type="text" name="search" value="{{ $activeFilters['search'] }}" placeholder="Search project code, title, province..." style="width: 100%; height: 34px; padding: 0 12px 0 34px; border: 1px solid #d1d5db; border-radius: 7px; font-size: 12px; background-color: #ffffff; color: #374151; box-sizing: border-box;">
+                                            </div>
+                                        </div>
+
+                                        <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="batch_upload_program" data-badge-container-id="batch_upload_program_badges" data-dropdown-toggle-id="batch_upload_program_dropdown_toggle" data-dropdown-menu-id="batch_upload_program_dropdown_menu" data-empty-badge-text="No program selected.">
+                                            <label for="batch_upload_program_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Program</label>
+                                            <div class="dashboard-stacked-filter-dropdown">
+                                                <div id="batch_upload_program_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="batch_upload_program_dropdown_menu">
+                                                    <div id="batch_upload_program_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                                    <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                                </div>
+                                                <div id="batch_upload_program_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                            </div>
+                                            <select id="batch_upload_program" name="program[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Program" aria-hidden="true">
+                                                @foreach(($filterOptions['programs'] ?? []) as $option)
+                                                    <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['program'] ?? []), true))>{{ $option }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="batch_upload_funding_year" data-badge-container-id="batch_upload_funding_year_badges" data-dropdown-toggle-id="batch_upload_funding_year_dropdown_toggle" data-dropdown-menu-id="batch_upload_funding_year_dropdown_menu" data-empty-badge-text="All">
+                                            <label for="batch_upload_funding_year_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Funding Year</label>
+                                            <div class="dashboard-stacked-filter-dropdown">
+                                                <div id="batch_upload_funding_year_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="batch_upload_funding_year_dropdown_menu">
+                                                    <div id="batch_upload_funding_year_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                                    <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                                </div>
+                                                <div id="batch_upload_funding_year_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                            </div>
+                                            <select id="batch_upload_funding_year" name="funding_year[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Funding Year" aria-hidden="true">
+                                                @foreach(($filterOptions['funding_years'] ?? []) as $option)
+                                                    <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['funding_year'] ?? []), true))>{{ $option }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="batch_upload_province" data-badge-container-id="batch_upload_province_badges" data-dropdown-toggle-id="batch_upload_province_dropdown_toggle" data-dropdown-menu-id="batch_upload_province_dropdown_menu" data-empty-badge-text="All">
+                                            <label for="batch_upload_province_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Province</label>
+                                            <div class="dashboard-stacked-filter-dropdown">
+                                                <div id="batch_upload_province_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="batch_upload_province_dropdown_menu">
+                                                    <div id="batch_upload_province_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                                    <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                                </div>
+                                                <div id="batch_upload_province_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                            </div>
+                                            <select id="batch_upload_province" name="province[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Province" aria-hidden="true">
+                                                @foreach(($filterOptions['provinces'] ?? []) as $option)
+                                                    <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['province'] ?? []), true))>{{ $option }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="batch_upload_city" data-badge-container-id="batch_upload_city_badges" data-dropdown-toggle-id="batch_upload_city_dropdown_toggle" data-dropdown-menu-id="batch_upload_city_dropdown_menu" data-empty-badge-text="All" data-empty-menu-text="Select at least one province first.">
+                                            <label for="batch_upload_city_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
+                                            <div class="dashboard-stacked-filter-dropdown">
+                                                <div id="batch_upload_city_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="batch_upload_city_dropdown_menu">
+                                                    <div id="batch_upload_city_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                                    <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                                </div>
+                                                <div id="batch_upload_city_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                            </div>
+                                            <select id="batch_upload_city" name="city[]" multiple class="dashboard-stacked-filter-source" data-filter-label="City/Municipality" aria-hidden="true">
+                                                @foreach($cityOptions as $city)
+                                                    <option value="{{ $city }}" @selected(in_array((string) $city, ($activeFilters['city'] ?? []), true))>{{ $city }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="batch_upload_barangay" data-badge-container-id="batch_upload_barangay_badges" data-dropdown-toggle-id="batch_upload_barangay_dropdown_toggle" data-dropdown-menu-id="batch_upload_barangay_dropdown_menu" data-empty-badge-text="All" data-empty-menu-text="Select at least one city/municipality first.">
+                                            <label for="batch_upload_barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
+                                            <div class="dashboard-stacked-filter-dropdown">
+                                                <div id="batch_upload_barangay_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="batch_upload_barangay_dropdown_menu">
+                                                    <div id="batch_upload_barangay_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                                    <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                                </div>
+                                                <div id="batch_upload_barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                            </div>
+                                            <select id="batch_upload_barangay" name="barangay[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Barangay" aria-hidden="true">
+                                                @foreach($barangayOptions as $barangay)
+                                                    <option value="{{ $barangay }}" @selected(in_array((string) $barangay, ($activeFilters['barangay'] ?? []), true))>{{ $barangay }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="fur-batch-modal-actions">
+                                        <a href="{{ route('fund-utilization.index', ['batch_upload' => 1, 'per_page' => $perPage ?? 10]) }}" class="fur-batch-modal-reset">
+                                            <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                                            Reset Filters
+                                        </a>
+                                        <button type="submit" class="fur-batch-modal-primary">
+                                            <i class="fas fa-filter" aria-hidden="true"></i>
+                                            Apply Project Filters
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <section class="fur-batch-document-panel" aria-labelledby="batchUploadDocumentTitle">
+                        <div class="fur-batch-document-panel-header">
+                            <div>
+                                <h4 id="batchUploadDocumentTitle">Upload Documents</h4>
+                                <p>Attach the documents that will be used for the selected projects.</p>
+                            </div>
+                            <span class="fur-batch-document-pill">Batch Upload</span>
+                        </div>
+
+                        <div class="fur-batch-document-layout">
+                            <div class="fur-batch-document-main">
+                                <div class="fur-batch-document-dropzone">
+                                    <div class="fur-batch-document-copy">
+                                        <div class="fur-batch-document-icon">
+                                            <i class="fas fa-folder-open" aria-hidden="true"></i>
+                                        </div>
+                                        <div>
+                                            <h5>Choose one or more PDF documents</h5>
+                                            <p>Only PDF files are allowed, with a maximum size of 50 MB per file.</p>
+                                        </div>
+                                    </div>
+
+                                    <label for="batchUploadDocumentFiles" class="fur-batch-document-button">
+                                        <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                        Select Documents
+                                    </label>
+                                    <input id="batchUploadDocumentFiles" type="file" multiple accept="application/pdf,.pdf" class="fur-batch-document-input">
+                                </div>
+                            </div>
+                            <div class="fur-batch-document-file-list" id="batchUploadDocumentList" hidden></div>
+                        </div>
+                        <div class="fur-batch-document-submit-row" id="batchUploadDocumentSubmitRow" hidden>
+                            <button type="button" id="batchUploadDocumentSubmitBtn" class="fur-batch-document-submit-btn">
+                                <i class="fas fa-upload" aria-hidden="true"></i>
+                                Submit Documents
+                            </button>
+                        </div>
+                    </section>
+
+                    <div class="fur-batch-project-list">
+                        <div class="fur-batch-shuttle" data-batch-shuttle>
+                    <input type="hidden" id="batch_upload_selected_project_codes" name="selected_project_codes_json" value="[]">
+
+                    <section class="fur-batch-shuttle-panel">
+                        <div class="fur-batch-shuttle-panel-header">
+                            <div>
+                                <h4>Available Projects</h4>
+                                <p>Filtered results from the current modal filters.</p>
+                            </div>
+                            <span class="fur-batch-shuttle-count" id="batchUploadAvailableCount">0</span>
+                        </div>
+                        <div class="fur-batch-shuttle-table-wrap">
+                            <table class="fur-batch-shuttle-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 44px;">
+                                            <input type="checkbox" id="batchUploadAvailableToggleAll">
+                                        </th>
+                                        <th style="width: 320px;">Project</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batchUploadAvailableBody"></tbody>
+                            </table>
+                            <div class="fur-batch-empty-state" id="batchUploadAvailableEmpty" hidden>
+                                No projects match the selected filters.
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="fur-batch-shuttle-controls">
+                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveSelectedRight" aria-label="Move selected projects to selected list">
+                            <i class="fas fa-angle-right" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveAllRight" aria-label="Move all projects to selected list">
+                            <i class="fas fa-angles-right" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveSelectedLeft" aria-label="Remove selected projects from selected list">
+                            <i class="fas fa-angle-left" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveAllLeft" aria-label="Remove all projects from selected list">
+                            <i class="fas fa-angles-left" aria-hidden="true"></i>
+                        </button>
+                    </div>
+
+                    <section class="fur-batch-shuttle-panel">
+                        <div class="fur-batch-shuttle-panel-header">
+                            <div>
+                                <h4>Selected Projects</h4>
+                                <p>These are the projects moved from the filtered list.</p>
+                            </div>
+                            <span class="fur-batch-shuttle-count" id="batchUploadSelectedCount">0</span>
+                        </div>
+                        <div class="fur-batch-shuttle-table-wrap">
+                            <table class="fur-batch-shuttle-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 44px;">
+                                            <input type="checkbox" id="batchUploadSelectedToggleAll">
+                                        </th>
+                                        <th style="width: 320px;">Project</th>
+                                        <th style="width: 120px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batchUploadSelectedBody"></tbody>
+                            </table>
+                            <div class="fur-batch-empty-state" id="batchUploadSelectedEmpty">
+                                No selected projects yet.
+                            </div>
+                        </div>
+                    </section>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchUploadDocumentChecklistModal" class="fur-batch-checklist-modal" aria-hidden="true" hidden>
+        <div class="fur-batch-checklist-backdrop" data-batch-checklist-close="1" aria-hidden="true"></div>
+        <div class="fur-batch-checklist-dialog" role="dialog" aria-modal="true" aria-labelledby="batchUploadDocumentChecklistTitle">
+            <div class="fur-batch-checklist-header">
+                <div class="fur-batch-checklist-title-wrap">
+                    <div class="fur-batch-checklist-icon">
+                        <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h3 id="batchUploadDocumentChecklistTitle">Batch Upload Reminder</h3>
+                        <p>Please check if the following are available in the document to be uploaded.</p>
+                    </div>
+                </div>
+                <button type="button" class="fur-batch-checklist-close" data-batch-checklist-close="1" aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="fur-batch-checklist-body">
+                <div class="fur-batch-checklist-card">
+                    <div class="fur-batch-checklist-label">Required items</div>
+                    <div class="fur-batch-checklist-copy">
+                        <div class="fur-batch-checklist-strong">Fund Utilization Report</div>
+                        <div class="fur-batch-checklist-strong">Written Notices</div>
+                        <div class="fur-batch-checklist-subtitle">Distribution Recipients:</div>
+                        <ul class="fur-batch-checklist-list">
+                            <li>Secretary of DBM</li>
+                            <li>Secretary of DILG</li>
+                            <li>Speaker of the House</li>
+                            <li>President of the Senate</li>
+                            <li>House Committee on Appropriation</li>
+                            <li>Senate Committee on Finance</li>
+                        </ul>
+                        <div class="fur-batch-checklist-strong">Full Disclosure Policy (FDP)</div>
+                        <div class="fur-batch-checklist-strong">LGU Website / Social Media</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fur-batch-checklist-actions">
+                <button type="button" class="fur-batch-checklist-cancel" data-batch-checklist-close="1">Cancel</button>
+                <button type="button" id="confirmBatchUploadDocumentChecklistBtn" class="fur-batch-checklist-confirm">Confirm and Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchUploadQuarterModal" class="fur-batch-checklist-modal fur-batch-quarter-modal" aria-hidden="true" hidden>
+        <div class="fur-batch-checklist-backdrop" data-batch-quarter-close="1" aria-hidden="true"></div>
+        <div class="fur-batch-checklist-dialog fur-batch-quarter-dialog" role="dialog" aria-modal="true" aria-labelledby="batchUploadQuarterTitle">
+            <div class="fur-batch-checklist-header">
+                <div class="fur-batch-checklist-title-wrap">
+                    <div class="fur-batch-checklist-icon">
+                        <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h3 id="batchUploadQuarterTitle">Select Quarter</h3>
+                        <p>Choose the quarter that will be used for this batch-upload submission.</p>
+                    </div>
+                </div>
+                <button type="button" class="fur-batch-checklist-close" data-batch-quarter-close="1" aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="fur-batch-checklist-body">
+                <div class="fur-batch-checklist-card fur-batch-quarter-card">
+                    <label for="batchUploadQuarterSelect" class="fur-batch-quarter-label">Quarter</label>
+                    <select id="batchUploadQuarterSelect" class="fur-batch-quarter-select">
+                        <option value="">Select Quarter</option>
+                        <option value="Q1">Q1 (January - March)</option>
+                        <option value="Q2">Q2 (April - June)</option>
+                        <option value="Q3">Q3 (July - September)</option>
+                        <option value="Q4">Q4 (October - December)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="fur-batch-checklist-actions">
+                <button type="button" class="fur-batch-checklist-cancel" data-batch-quarter-close="1">Cancel</button>
+                <button type="button" id="confirmBatchUploadQuarterBtn" class="fur-batch-checklist-confirm">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchUploadDocumentPreviewModal" class="fur-batch-checklist-modal fur-batch-preview-modal" aria-hidden="true" hidden>
+        <div class="fur-batch-checklist-backdrop" data-batch-preview-close="1" aria-hidden="true"></div>
+        <div class="fur-batch-checklist-dialog fur-batch-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="batchUploadDocumentPreviewTitle">
+            <div class="fur-batch-checklist-header">
+                <div class="fur-batch-checklist-title-wrap">
+                    <div class="fur-batch-checklist-icon">
+                        <i class="fas fa-file-alt" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h3 id="batchUploadDocumentPreviewTitle">Document Preview</h3>
+                        <p id="batchUploadDocumentPreviewName">Selected document preview</p>
+                    </div>
+                </div>
+                <button type="button" class="fur-batch-checklist-close" data-batch-preview-close="1" aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="fur-batch-preview-body">
+                <div id="batchUploadDocumentPreviewContent" class="fur-batch-preview-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchUploadSubmitConfirmModal" class="fur-batch-checklist-modal fur-batch-submit-modal" aria-hidden="true" hidden>
+        <div class="fur-batch-checklist-backdrop" data-batch-submit-close="1" aria-hidden="true"></div>
+        <div class="fur-batch-checklist-dialog fur-batch-submit-dialog" role="dialog" aria-modal="true" aria-labelledby="batchUploadSubmitConfirmTitle">
+            <div class="fur-batch-checklist-header">
+                <div class="fur-batch-checklist-title-wrap">
+                    <div class="fur-batch-checklist-icon">
+                        <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h3 id="batchUploadSubmitConfirmTitle">Confirm Batch Upload</h3>
+                        <p>Are you sure you want to upload this document to the selected projects for the chosen quarter?</p>
+                    </div>
+                </div>
+                <button type="button" class="fur-batch-checklist-close" data-batch-submit-close="1" aria-label="Close">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="fur-batch-checklist-body">
+                <div class="fur-batch-checklist-card fur-batch-submit-card">
+                    <div class="fur-batch-submit-summary-row">
+                        <span class="fur-batch-submit-summary-label">Quarter</span>
+                        <span id="batchUploadSubmitQuarterValue" class="fur-batch-submit-summary-value">-</span>
+                    </div>
+                    <div class="fur-batch-submit-summary-row">
+                        <span class="fur-batch-submit-summary-label">Document</span>
+                        <span id="batchUploadSubmitDocumentValue" class="fur-batch-submit-summary-value">-</span>
+                    </div>
+                    <div id="batchUploadSubmitDocumentList" class="fur-batch-submit-document-list"></div>
+                    <div class="fur-batch-submit-summary-row">
+                        <span class="fur-batch-submit-summary-label">Selected Projects</span>
+                        <span id="batchUploadSubmitProjectCountValue" class="fur-batch-submit-summary-value">0</span>
+                    </div>
+                    <div id="batchUploadSubmitProjectList" class="fur-batch-submit-project-list"></div>
+                </div>
+            </div>
+
+            <div class="fur-batch-checklist-actions">
+                <button type="button" class="fur-batch-checklist-cancel" data-batch-submit-close="1">Cancel</button>
+                <button type="button" id="confirmBatchUploadSubmitBtn" class="fur-batch-checklist-confirm">Yes, Upload</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let selectedFormat = '';
+        const shouldAutoOpenBatchUploadModal = @json($batchUploadOpen);
+        const BATCH_UPLOAD_BULK_ROUTE = @json(route('fund-utilization.batch-upload-documents'));
+        const BATCH_UPLOAD_CSRF_TOKEN = @json(csrf_token());
 
         function openExportModal(format) {
             selectedFormat = format;
@@ -379,23 +843,1294 @@
             selectedFormat = '';
         }
 
-        const PROJECT_FILTER_STATE_KEY = 'fund-utilization-filter-collapsed';
         const FUND_UTILIZATION_LOCATION_MAP = @json($provinceMunicipalities ?? []);
+        const FUND_UTILIZATION_BARANGAY_MAP = @json($cityBarangayMap ?? []);
+        const BATCH_UPLOAD_SELECTION_STORAGE_KEY = 'fund-utilization-batch-upload-selected-projects';
+        const BATCH_UPLOAD_MODAL_OPEN_STORAGE_KEY = 'fund-utilization-batch-upload-modal-open';
+        const BATCH_UPLOAD_DOCUMENT_DB_NAME = 'fund-utilization-batch-upload';
+        const BATCH_UPLOAD_DOCUMENT_STORE_NAME = 'modal-state';
+        const BATCH_UPLOAD_DOCUMENT_STORE_KEY = 'selected-documents';
+        const BATCH_UPLOAD_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+        const BATCH_UPLOAD_PROJECTS = @json($batchUploadProjects);
+        const batchUploadModalCache = {
+            elements: null,
+            documents: {
+                files: [],
+                objectUrls: new Map(),
+            },
+            submitState: {
+                quarter: '',
+            },
+            previewState: {
+                fileKey: '',
+            },
+            submitRequest: {
+                isSubmitting: false,
+            },
+            documentPersistence: {
+                dbPromise: null,
+                queue: Promise.resolve(),
+            },
+            shuttleController: null,
+            rowMarkup: {
+                available: new Map(),
+                selected: new Map(),
+            },
+            shuttleState: new Map(),
+            rowTemplate: document.createElement('template'),
+        };
+        let pendingBatchUploadDocumentInput = null;
+        let batchUploadShuttleInitialized = false;
 
-        function readProjectFilterCollapsedState() {
+        function readBatchUploadModalOpenState() {
             try {
-                const value = window.localStorage.getItem(PROJECT_FILTER_STATE_KEY);
-                return value === null ? true : value === '1';
+                return window.sessionStorage.getItem(BATCH_UPLOAD_MODAL_OPEN_STORAGE_KEY) === '1';
             } catch (error) {
-                return true;
+                return false;
             }
         }
 
-        function writeProjectFilterCollapsedState(isCollapsed) {
+        function writeBatchUploadModalOpenState(isOpen) {
             try {
-                window.localStorage.setItem(PROJECT_FILTER_STATE_KEY, isCollapsed ? '1' : '0');
+                if (isOpen) {
+                    window.sessionStorage.setItem(BATCH_UPLOAD_MODAL_OPEN_STORAGE_KEY, '1');
+                } else {
+                    window.sessionStorage.removeItem(BATCH_UPLOAD_MODAL_OPEN_STORAGE_KEY);
+                }
+            } catch (error) {
+                // Ignore browser storage failures and keep the modal usable.
+            }
+        }
+
+        function clearBatchUploadSelectedCodes() {
+            try {
+                window.localStorage.removeItem(BATCH_UPLOAD_SELECTION_STORAGE_KEY);
             } catch (error) {
             }
+        }
+
+        function getBatchUploadDocumentPersistenceKey(fileLike) {
+            return [fileLike.name, fileLike.size, fileLike.lastModified, fileLike.type].join('::');
+        }
+
+        function isValidBatchUploadDocumentFile(fileLike) {
+            if (!fileLike || typeof fileLike.name !== 'string') {
+                return false;
+            }
+
+            const fileName = fileLike.name.trim().toLowerCase();
+            const fileType = String(fileLike.type || '').toLowerCase();
+            const isPdfFile = fileName.endsWith('.pdf') || fileType === 'application/pdf';
+
+            return isPdfFile && Number(fileLike.size) > 0 && Number(fileLike.size) <= BATCH_UPLOAD_MAX_FILE_SIZE_BYTES;
+        }
+
+        function getBatchUploadDocumentObjectUrl(file) {
+            const key = getBatchUploadDocumentPersistenceKey(file);
+            if (!batchUploadModalCache.documents.objectUrls.has(key)) {
+                batchUploadModalCache.documents.objectUrls.set(key, URL.createObjectURL(file));
+            }
+
+            return batchUploadModalCache.documents.objectUrls.get(key);
+        }
+
+        function getSelectedBatchUploadProjectCodes() {
+            const selectedCodesInput = document.getElementById('batch_upload_selected_project_codes');
+            if (!selectedCodesInput) {
+                return [];
+            }
+
+            try {
+                const parsedValue = JSON.parse(selectedCodesInput.value || '[]');
+                return Array.isArray(parsedValue)
+                    ? parsedValue.map((value) => String(value || '').trim()).filter(Boolean)
+                    : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function getBatchUploadDocumentDatabase() {
+            if (!('indexedDB' in window)) {
+                return Promise.resolve(null);
+            }
+
+            if (batchUploadModalCache.documentPersistence.dbPromise) {
+                return batchUploadModalCache.documentPersistence.dbPromise;
+            }
+
+            batchUploadModalCache.documentPersistence.dbPromise = new Promise((resolve) => {
+                let settled = false;
+                const finalize = (database) => {
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
+                    resolve(database);
+                };
+                const request = window.indexedDB.open(BATCH_UPLOAD_DOCUMENT_DB_NAME, 1);
+
+                request.onupgradeneeded = () => {
+                    const database = request.result;
+                    if (!database.objectStoreNames.contains(BATCH_UPLOAD_DOCUMENT_STORE_NAME)) {
+                        database.createObjectStore(BATCH_UPLOAD_DOCUMENT_STORE_NAME);
+                    }
+                };
+
+                request.onsuccess = () => finalize(request.result);
+                request.onerror = () => finalize(null);
+                request.onblocked = () => finalize(null);
+            });
+
+            return batchUploadModalCache.documentPersistence.dbPromise;
+        }
+
+        function queueBatchUploadDocumentPersistence(task) {
+            const persistence = batchUploadModalCache.documentPersistence;
+            persistence.queue = persistence.queue
+                .then(() => task())
+                .catch(() => null);
+
+            return persistence.queue;
+        }
+
+        async function readPersistedBatchUploadDocuments() {
+            const database = await getBatchUploadDocumentDatabase();
+            if (!database) {
+                return [];
+            }
+
+            return new Promise((resolve) => {
+                try {
+                    const transaction = database.transaction(BATCH_UPLOAD_DOCUMENT_STORE_NAME, 'readonly');
+                    const store = transaction.objectStore(BATCH_UPLOAD_DOCUMENT_STORE_NAME);
+                    const request = store.get(BATCH_UPLOAD_DOCUMENT_STORE_KEY);
+                    let settled = false;
+                    const finalize = (value) => {
+                        if (settled) {
+                            return;
+                        }
+
+                        settled = true;
+                        resolve(Array.isArray(value) ? value : []);
+                    };
+
+                    request.onsuccess = () => finalize(request.result);
+                    request.onerror = () => finalize([]);
+                    transaction.onabort = () => finalize([]);
+                } catch (error) {
+                    resolve([]);
+                }
+            });
+        }
+
+        async function writePersistedBatchUploadDocuments(records) {
+            const database = await getBatchUploadDocumentDatabase();
+            if (!database) {
+                return;
+            }
+
+            return new Promise((resolve) => {
+                try {
+                    const transaction = database.transaction(BATCH_UPLOAD_DOCUMENT_STORE_NAME, 'readwrite');
+                    const store = transaction.objectStore(BATCH_UPLOAD_DOCUMENT_STORE_NAME);
+                    const request = records.length > 0
+                        ? store.put(records, BATCH_UPLOAD_DOCUMENT_STORE_KEY)
+                        : store.delete(BATCH_UPLOAD_DOCUMENT_STORE_KEY);
+                    let settled = false;
+                    const finalize = () => {
+                        if (settled) {
+                            return;
+                        }
+
+                        settled = true;
+                        resolve();
+                    };
+
+                    request.onsuccess = finalize;
+                    request.onerror = finalize;
+                    transaction.oncomplete = finalize;
+                    transaction.onabort = finalize;
+                } catch (error) {
+                    resolve();
+                }
+            });
+        }
+
+        function persistBatchUploadDocuments(files) {
+            const snapshot = files.map((file) => ({
+                key: getBatchUploadDocumentPersistenceKey(file),
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: file.lastModified,
+                blob: file,
+            }));
+
+            return queueBatchUploadDocumentPersistence(() => writePersistedBatchUploadDocuments(snapshot));
+        }
+
+        async function restorePersistedBatchUploadDocuments() {
+            const storedRecords = await readPersistedBatchUploadDocuments();
+
+            return storedRecords
+                .map((record) => {
+                    if (!record || typeof record.name !== 'string' || !(record.blob instanceof Blob)) {
+                        return null;
+                    }
+
+                    try {
+                        return new File([record.blob], record.name, {
+                            type: record.type || record.blob.type || '',
+                            lastModified: Number(record.lastModified) || Date.now(),
+                        });
+                    } catch (error) {
+                        return null;
+                    }
+                })
+                .filter(Boolean);
+        }
+
+        function getBatchUploadModalElements() {
+            if (batchUploadModalCache.elements) {
+                return batchUploadModalCache.elements;
+            }
+
+            const modal = document.getElementById('batchUploadModal');
+            if (!modal) {
+                return null;
+            }
+
+            batchUploadModalCache.elements = {
+                modal,
+                modalScroll: modal.querySelector('.fur-batch-modal-scroll'),
+                filterForm: modal.querySelector('.fur-batch-filter-form'),
+            };
+
+            return batchUploadModalCache.elements;
+        }
+
+        function openBatchUploadModal() {
+            const modalElements = getBatchUploadModalElements();
+            if (!modalElements) {
+                return;
+            }
+
+            const { modal, modalScroll, filterForm } = modalElements;
+            modal.hidden = false;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('fur-batch-modal-open');
+            writeBatchUploadModalOpenState(true);
+
+            if (modalScroll) {
+                modalScroll.scrollTop = 0;
+            }
+
+            if (!batchUploadShuttleInitialized) {
+                initializeBatchUploadShuttle();
+            }
+
+            if (filterForm) {
+                filterForm.classList.remove('collapsed');
+                setBatchUploadFilterPanelHeight(filterForm);
+            }
+        }
+
+        function closeBatchUploadModal() {
+            const modalElements = getBatchUploadModalElements();
+            if (!modalElements) {
+                return;
+            }
+
+            const { modal } = modalElements;
+            modal.hidden = true;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('fur-batch-modal-open');
+            writeBatchUploadModalOpenState(false);
+        }
+
+        function resetBatchUploadDocumentState() {
+            const batchUploadDocumentFiles = document.getElementById('batchUploadDocumentFiles');
+            const batchUploadDocumentList = document.getElementById('batchUploadDocumentList');
+            const batchUploadDocumentSubmitRow = document.getElementById('batchUploadDocumentSubmitRow');
+            const batchUploadDocumentSubmitBtn = document.getElementById('batchUploadDocumentSubmitBtn');
+            const batchUploadDocumentPanel = batchUploadDocumentFiles?.closest('.fur-batch-document-panel');
+            const batchDocumentState = batchUploadModalCache.documents;
+
+            batchDocumentState.objectUrls.forEach((objectUrl) => {
+                URL.revokeObjectURL(objectUrl);
+            });
+            batchDocumentState.objectUrls.clear();
+            batchDocumentState.files = [];
+
+            if (batchUploadDocumentFiles) {
+                batchUploadDocumentFiles.value = '';
+                delete batchUploadDocumentFiles.dataset.batchChecklistConfirmed;
+
+                if (typeof DataTransfer === 'function') {
+                    const dataTransfer = new DataTransfer();
+                    batchUploadDocumentFiles.files = dataTransfer.files;
+                }
+            }
+
+            if (batchUploadDocumentList) {
+                batchUploadDocumentList.hidden = true;
+                batchUploadDocumentList.innerHTML = '';
+            }
+
+            if (batchUploadDocumentSubmitRow) {
+                batchUploadDocumentSubmitRow.hidden = true;
+            }
+
+            if (batchUploadDocumentSubmitBtn) {
+                batchUploadDocumentSubmitBtn.disabled = true;
+            }
+
+            batchUploadDocumentPanel?.classList.remove('has-files');
+            persistBatchUploadDocuments([]);
+        }
+
+        function resetBatchUploadFilters() {
+            const searchInput = document.getElementById('batch-upload-search');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+
+            ['program', 'funding_year', 'province', 'city', 'barangay'].forEach((suffix) => {
+                const select = document.getElementById(`batch_upload_${suffix}`);
+                if (!select) {
+                    return;
+                }
+
+                Array.from(select.options).forEach((option) => {
+                    option.selected = false;
+                });
+                select.__selectionOrder = [];
+            });
+
+            rebuildStandardCityOptions('batch_upload_province', 'batch_upload_city');
+            rebuildStandardBarangayOptions('batch_upload_city', 'batch_upload_barangay');
+
+            const modalElements = getBatchUploadModalElements();
+            modalElements?.modal.querySelectorAll('[data-stacked-filter]').forEach((stackedFilter) => {
+                if (typeof stackedFilter.__closeDropdown === 'function') {
+                    stackedFilter.__closeDropdown();
+                }
+
+                if (typeof stackedFilter.__refreshFilterUi === 'function') {
+                    stackedFilter.__refreshFilterUi();
+                }
+            });
+
+            if (modalElements?.filterForm) {
+                modalElements.filterForm.classList.remove('collapsed');
+                setBatchUploadFilterPanelHeight(modalElements.filterForm);
+            }
+        }
+
+        function resetBatchUploadModalState() {
+            closeBatchUploadDocumentChecklistModal();
+            closeBatchUploadQuarterModal();
+            closeBatchUploadDocumentPreviewModal();
+            closeBatchUploadSubmitConfirmModal();
+
+            batchUploadModalCache.submitState.quarter = '';
+            const quarterSelect = document.getElementById('batchUploadQuarterSelect');
+            if (quarterSelect) {
+                quarterSelect.value = '';
+            }
+
+            resetBatchUploadFilters();
+            clearBatchUploadSelectedCodes();
+            document.getElementById('batch_upload_selected_project_codes').value = '[]';
+
+            if (batchUploadModalCache.shuttleController && typeof batchUploadModalCache.shuttleController.resetSelections === 'function') {
+                batchUploadModalCache.shuttleController.resetSelections();
+            }
+
+            batchUploadModalCache.shuttleState.clear();
+            resetBatchUploadDocumentState();
+        }
+
+        function resetAndCloseBatchUploadModal() {
+            resetBatchUploadModalState();
+            closeBatchUploadModal();
+        }
+
+        function openBatchUploadDocumentChecklistModal(inputElement) {
+            const modal = document.getElementById('batchUploadDocumentChecklistModal');
+            if (!modal || !inputElement) {
+                return;
+            }
+
+            pendingBatchUploadDocumentInput = inputElement;
+            modal.hidden = false;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeBatchUploadDocumentChecklistModal() {
+            const modal = document.getElementById('batchUploadDocumentChecklistModal');
+            if (!modal) {
+                pendingBatchUploadDocumentInput = null;
+                return;
+            }
+
+            modal.hidden = true;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            pendingBatchUploadDocumentInput = null;
+        }
+
+        function openBatchUploadQuarterModal() {
+            const modal = document.getElementById('batchUploadQuarterModal');
+            const quarterSelect = document.getElementById('batchUploadQuarterSelect');
+            if (!modal || !quarterSelect) {
+                return;
+            }
+
+            quarterSelect.value = batchUploadModalCache.submitState.quarter || '';
+            modal.hidden = false;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeBatchUploadQuarterModal() {
+            const modal = document.getElementById('batchUploadQuarterModal');
+            if (!modal) {
+                return;
+            }
+
+            modal.hidden = true;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function initializeBatchUploadQuarterModal() {
+            document.querySelectorAll('[data-batch-quarter-close="1"]').forEach((element) => {
+                if (element.dataset.batchQuarterCloseBound === '1') {
+                    return;
+                }
+
+                element.dataset.batchQuarterCloseBound = '1';
+                element.addEventListener('click', closeBatchUploadQuarterModal);
+            });
+
+            const confirmButton = document.getElementById('confirmBatchUploadQuarterBtn');
+            const quarterSelect = document.getElementById('batchUploadQuarterSelect');
+            if (confirmButton && quarterSelect && confirmButton.dataset.batchQuarterConfirmBound !== '1') {
+                confirmButton.dataset.batchQuarterConfirmBound = '1';
+                confirmButton.addEventListener('click', () => {
+                    if (!quarterSelect.value) {
+                        quarterSelect.focus();
+                        return;
+                    }
+
+                    batchUploadModalCache.submitState.quarter = quarterSelect.value;
+                    closeBatchUploadQuarterModal();
+                    openBatchUploadSubmitConfirmModal();
+                });
+            }
+        }
+
+        function closeBatchUploadDocumentPreviewModal() {
+            const modal = document.getElementById('batchUploadDocumentPreviewModal');
+            const previewContent = document.getElementById('batchUploadDocumentPreviewContent');
+            const previewName = document.getElementById('batchUploadDocumentPreviewName');
+            if (!modal) {
+                return;
+            }
+
+            modal.hidden = true;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            batchUploadModalCache.previewState.fileKey = '';
+
+            if (previewContent) {
+                previewContent.innerHTML = '';
+            }
+
+            if (previewName) {
+                previewName.textContent = 'Selected document preview';
+            }
+        }
+
+        function openBatchUploadDocumentPreviewModal(file, objectUrl) {
+            const modal = document.getElementById('batchUploadDocumentPreviewModal');
+            const previewContent = document.getElementById('batchUploadDocumentPreviewContent');
+            const previewName = document.getElementById('batchUploadDocumentPreviewName');
+            if (!modal || !previewContent || !file || !objectUrl) {
+                return;
+            }
+
+            const normalizedType = String(file.type || '').toLowerCase();
+            const fileName = String(file.name || 'Selected document');
+            const escapedName = fileName
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+            const escapedUrl = String(objectUrl)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;');
+            let previewMarkup = '';
+
+            if (normalizedType.startsWith('image/')) {
+                previewMarkup = `<img src="${escapedUrl}" alt="${escapedName}" class="fur-batch-preview-image">`;
+            } else if (normalizedType === 'application/pdf') {
+                previewMarkup = `<iframe src="${escapedUrl}" class="fur-batch-preview-frame" title="${escapedName}"></iframe>`;
+            } else if (normalizedType.startsWith('text/')) {
+                previewMarkup = `<iframe src="${escapedUrl}" class="fur-batch-preview-frame" title="${escapedName}"></iframe>`;
+            } else {
+                previewMarkup = `
+                    <div class="fur-batch-preview-empty">
+                        <div class="fur-batch-preview-empty-icon">
+                            <i class="fas fa-file" aria-hidden="true"></i>
+                        </div>
+                        <div class="fur-batch-preview-empty-title">${escapedName}</div>
+                        <div class="fur-batch-preview-empty-copy">Preview is not available for this file type inside the modal.</div>
+                    </div>
+                `;
+            }
+
+            batchUploadModalCache.previewState.fileKey = getBatchUploadDocumentPersistenceKey(file);
+            previewContent.innerHTML = previewMarkup;
+            if (previewName) {
+                previewName.textContent = fileName;
+            }
+
+            modal.hidden = false;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function initializeBatchUploadDocumentPreviewModal() {
+            document.querySelectorAll('[data-batch-preview-close="1"]').forEach((element) => {
+                if (element.dataset.batchPreviewCloseBound === '1') {
+                    return;
+                }
+
+                element.dataset.batchPreviewCloseBound = '1';
+                element.addEventListener('click', closeBatchUploadDocumentPreviewModal);
+            });
+        }
+
+        function closeBatchUploadSubmitConfirmModal() {
+            const modal = document.getElementById('batchUploadSubmitConfirmModal');
+            if (!modal) {
+                return;
+            }
+
+            modal.hidden = true;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function openBatchUploadSubmitConfirmModal() {
+            const modal = document.getElementById('batchUploadSubmitConfirmModal');
+            const quarterValue = document.getElementById('batchUploadSubmitQuarterValue');
+            const documentValue = document.getElementById('batchUploadSubmitDocumentValue');
+            const documentList = document.getElementById('batchUploadSubmitDocumentList');
+            const projectCountValue = document.getElementById('batchUploadSubmitProjectCountValue');
+            const projectList = document.getElementById('batchUploadSubmitProjectList');
+            const selectedProjectCodes = getSelectedBatchUploadProjectCodes();
+            const selectedFiles = batchUploadModalCache.documents.files || [];
+            const selectedQuarter = batchUploadModalCache.submitState.quarter || '';
+            const projectMap = new Map(BATCH_UPLOAD_PROJECTS.map((project) => [project.project_code, project]));
+
+            if (!modal || !quarterValue || !documentValue || !documentList || !projectCountValue || !projectList) {
+                return;
+            }
+
+            quarterValue.textContent = selectedQuarter || '-';
+            documentValue.textContent = selectedFiles.length === 0
+                ? '-'
+                : `${selectedFiles.length} document${selectedFiles.length === 1 ? '' : 's'} selected`;
+            documentList.innerHTML = selectedFiles
+                .map((file) => {
+                    const escapedFileKey = getBatchUploadDocumentPersistenceKey(file)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                    const escapedFileName = String(file.name || 'Selected document')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+
+                    return `
+                        <div class="fur-batch-submit-document-item">
+                            <span class="fur-batch-submit-document-name">${escapedFileName}</span>
+                            <button type="button" class="fur-batch-submit-document-view-btn" data-batch-submit-document-view="${escapedFileKey}">View</button>
+                        </div>
+                    `;
+                })
+                .join('');
+            projectCountValue.textContent = String(selectedProjectCodes.length);
+            projectList.innerHTML = `
+                <div class="fur-batch-submit-project-grid fur-batch-submit-project-grid-head">
+                    <span class="fur-batch-submit-project-head">Project Code</span>
+                    <span class="fur-batch-submit-project-head">Project Title</span>
+                </div>
+                ${selectedProjectCodes.slice(0, 8)
+                .map((projectCode) => {
+                    const project = projectMap.get(projectCode);
+                    const escapedCode = String(projectCode)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                    const escapedTitle = String(project?.project_title || 'Untitled project')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+
+                    return `
+                        <div class="fur-batch-submit-project-grid">
+                            <span class="fur-batch-submit-project-code">${escapedCode}</span>
+                            <span class="fur-batch-submit-project-title">${escapedTitle}</span>
+                        </div>
+                    `;
+                })
+                .join('')}`;
+
+            if (selectedProjectCodes.length > 8) {
+                projectList.insertAdjacentHTML('beforeend', `
+                    <div class="fur-batch-submit-project-grid fur-batch-submit-project-grid-more">
+                        <span class="fur-batch-submit-project-more" style="grid-column: 1 / -1;">+${selectedProjectCodes.length - 8} more</span>
+                    </div>
+                `);
+            }
+
+            modal.hidden = false;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        async function submitBatchUploadDocuments() {
+            if (batchUploadModalCache.submitRequest.isSubmitting) {
+                return;
+            }
+
+            const selectedProjectCodes = getSelectedBatchUploadProjectCodes();
+            const selectedQuarter = batchUploadModalCache.submitState.quarter || '';
+            const selectedFiles = batchUploadModalCache.documents.files || [];
+            const confirmButton = document.getElementById('confirmBatchUploadSubmitBtn');
+            const originalButtonText = confirmButton?.innerHTML || 'Yes, Upload';
+
+            if (!selectedQuarter) {
+                closeBatchUploadSubmitConfirmModal();
+                openBatchUploadQuarterModal();
+                return;
+            }
+
+            if (selectedFiles.length === 0) {
+                alert('Please select at least one PDF document first.');
+                closeBatchUploadSubmitConfirmModal();
+                return;
+            }
+
+            if (selectedFiles.some((file) => !isValidBatchUploadDocumentFile(file))) {
+                alert('Only PDF files up to 50 MB can be submitted for batch upload.');
+                closeBatchUploadSubmitConfirmModal();
+                return;
+            }
+
+            if (selectedProjectCodes.length === 0) {
+                alert('Please select at least one project first.');
+                closeBatchUploadSubmitConfirmModal();
+                return;
+            }
+
+            batchUploadModalCache.submitRequest.isSubmitting = true;
+            if (confirmButton) {
+                confirmButton.disabled = true;
+                confirmButton.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Uploading...';
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('_token', BATCH_UPLOAD_CSRF_TOKEN);
+                formData.append('quarter', selectedQuarter);
+                selectedFiles.forEach((file) => {
+                    formData.append('batch_document_files[]', file);
+                });
+                selectedProjectCodes.forEach((projectCode) => {
+                    formData.append('project_codes[]', projectCode);
+                });
+
+                const response = await fetch(BATCH_UPLOAD_BULK_ROUTE, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: formData,
+                });
+
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(payload?.message || 'Batch upload failed. Please try again.');
+                }
+
+                closeBatchUploadSubmitConfirmModal();
+                resetBatchUploadModalState();
+                await persistBatchUploadDocuments([]);
+                closeBatchUploadModal();
+                alert(payload?.message || 'Batch upload completed successfully.');
+                window.location.reload();
+            } catch (error) {
+                alert(error?.message || 'Batch upload failed. Please try again.');
+            } finally {
+                batchUploadModalCache.submitRequest.isSubmitting = false;
+                if (confirmButton) {
+                    confirmButton.disabled = false;
+                    confirmButton.innerHTML = originalButtonText;
+                }
+            }
+        }
+
+        function initializeBatchUploadSubmitConfirmModal() {
+            document.querySelectorAll('[data-batch-submit-close="1"]').forEach((element) => {
+                if (element.dataset.batchSubmitCloseBound === '1') {
+                    return;
+                }
+
+                element.dataset.batchSubmitCloseBound = '1';
+                element.addEventListener('click', closeBatchUploadSubmitConfirmModal);
+            });
+
+            const confirmButton = document.getElementById('confirmBatchUploadSubmitBtn');
+            if (confirmButton && confirmButton.dataset.batchSubmitConfirmBound !== '1') {
+                confirmButton.dataset.batchSubmitConfirmBound = '1';
+                confirmButton.addEventListener('click', submitBatchUploadDocuments);
+            }
+
+            const documentList = document.getElementById('batchUploadSubmitDocumentList');
+            if (documentList && documentList.dataset.batchSubmitPreviewBound !== '1') {
+                documentList.dataset.batchSubmitPreviewBound = '1';
+                documentList.addEventListener('click', (event) => {
+                    const previewButton = event.target.closest('[data-batch-submit-document-view]');
+                    if (!previewButton) {
+                        return;
+                    }
+
+                    const fileKey = previewButton.dataset.batchSubmitDocumentView || '';
+                    const selectedFile = batchUploadModalCache.documents.files.find((file) => getBatchUploadDocumentPersistenceKey(file) === fileKey);
+                    if (!selectedFile) {
+                        return;
+                    }
+
+                    openBatchUploadDocumentPreviewModal(selectedFile, getBatchUploadDocumentObjectUrl(selectedFile));
+                });
+            }
+        }
+
+        function initializeBatchUploadDocumentChecklist() {
+            const batchUploadDocumentFiles = document.getElementById('batchUploadDocumentFiles');
+            if (batchUploadDocumentFiles && batchUploadDocumentFiles.dataset.batchChecklistBound !== '1') {
+                batchUploadDocumentFiles.dataset.batchChecklistBound = '1';
+                batchUploadDocumentFiles.addEventListener('click', (event) => {
+                    if (batchUploadDocumentFiles.dataset.batchChecklistConfirmed === '1') {
+                        delete batchUploadDocumentFiles.dataset.batchChecklistConfirmed;
+                        return;
+                    }
+
+                    event.preventDefault();
+                    openBatchUploadDocumentChecklistModal(batchUploadDocumentFiles);
+                });
+            }
+
+            document.querySelectorAll('[data-batch-checklist-close="1"]').forEach((element) => {
+                if (element.dataset.batchChecklistCloseBound === '1') {
+                    return;
+                }
+
+                element.dataset.batchChecklistCloseBound = '1';
+                element.addEventListener('click', closeBatchUploadDocumentChecklistModal);
+            });
+
+            const confirmButton = document.getElementById('confirmBatchUploadDocumentChecklistBtn');
+            if (confirmButton && confirmButton.dataset.batchChecklistConfirmBound !== '1') {
+                confirmButton.dataset.batchChecklistConfirmBound = '1';
+                confirmButton.addEventListener('click', () => {
+                    const inputToOpen = pendingBatchUploadDocumentInput;
+                    closeBatchUploadDocumentChecklistModal();
+
+                    if (!inputToOpen) {
+                        return;
+                    }
+
+                    inputToOpen.dataset.batchChecklistConfirmed = '1';
+                    inputToOpen.click();
+                });
+            }
+        }
+
+        function readBatchUploadSelectedCodes() {
+            try {
+                const storedValue = window.localStorage.getItem(BATCH_UPLOAD_SELECTION_STORAGE_KEY);
+                const parsedValue = storedValue ? JSON.parse(storedValue) : [];
+                return Array.isArray(parsedValue)
+                    ? parsedValue.map((value) => String(value || '').trim()).filter(Boolean)
+                    : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function writeBatchUploadSelectedCodes(projectCodes) {
+            try {
+                window.localStorage.setItem(BATCH_UPLOAD_SELECTION_STORAGE_KEY, JSON.stringify(projectCodes));
+            } catch (error) {
+            }
+        }
+
+        function initializeBatchUploadShuttle() {
+            if (batchUploadShuttleInitialized) {
+                return;
+            }
+
+            const availableBody = document.getElementById('batchUploadAvailableBody');
+            const selectedBody = document.getElementById('batchUploadSelectedBody');
+            const availableEmpty = document.getElementById('batchUploadAvailableEmpty');
+            const selectedEmpty = document.getElementById('batchUploadSelectedEmpty');
+            const availableCount = document.getElementById('batchUploadAvailableCount');
+            const selectedCount = document.getElementById('batchUploadSelectedCount');
+            const availableToggleAll = document.getElementById('batchUploadAvailableToggleAll');
+            const selectedToggleAll = document.getElementById('batchUploadSelectedToggleAll');
+            const selectedCodesInput = document.getElementById('batch_upload_selected_project_codes');
+            const batchUploadDocumentSubmitBtn = document.getElementById('batchUploadDocumentSubmitBtn');
+            const shuttleRoot = document.querySelector('[data-batch-shuttle]');
+
+            if (!availableBody || !selectedBody || !availableEmpty || !selectedEmpty || !availableCount || !selectedCount || !availableToggleAll || !selectedToggleAll || !selectedCodesInput || !shuttleRoot || !batchUploadDocumentSubmitBtn) {
+                return;
+            }
+
+            const projectMap = new Map(BATCH_UPLOAD_PROJECTS.map((project) => [project.project_code, project]));
+            const initiallySelectedCodes = readBatchUploadSelectedCodes().filter((projectCode) => projectMap.has(projectCode));
+            const selectedCodes = new Set(initiallySelectedCodes);
+            const availableChecked = new Set();
+            const selectedChecked = new Set();
+
+            const syncHiddenField = () => {
+                const values = Array.from(selectedCodes);
+                selectedCodesInput.value = JSON.stringify(values);
+                writeBatchUploadSelectedCodes(values);
+            };
+
+            const escapeBatchUploadHtml = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            const buildProjectMetaLabel = (project) => {
+                return [project.province || 'No province', project.city_municipality || 'No city/municipality', project.barangay || 'No barangay']
+                    .filter(Boolean)
+                    .join(' / ');
+            };
+
+            const buildProjectCellMarkup = (project) => `
+                <div class="fur-batch-shuttle-project-cell">
+                    <div class="fur-batch-shuttle-field">
+                        <div class="fur-batch-shuttle-label">Project Code</div>
+                        <div class="fur-batch-project-code">${escapeBatchUploadHtml(project.project_code)}</div>
+                    </div>
+                    <div class="fur-batch-shuttle-field">
+                        <div class="fur-batch-shuttle-label">Project Title</div>
+                        <div class="fur-batch-shuttle-title">${escapeBatchUploadHtml(project.project_title || 'Untitled project')}</div>
+                    </div>
+                    <div class="fur-batch-shuttle-field">
+                        <div class="fur-batch-shuttle-label">Location</div>
+                        <div class="fur-batch-shuttle-meta">${escapeBatchUploadHtml(buildProjectMetaLabel(project))}</div>
+                    </div>
+                    <div class="fur-batch-shuttle-field">
+                        <div class="fur-batch-shuttle-label">Funding Year</div>
+                        <div class="fur-batch-shuttle-year">${escapeBatchUploadHtml(project.funding_year || '-')}</div>
+                    </div>
+                </div>
+            `;
+
+            const buildAvailableRowMarkup = (project, isChecked = false) => `
+                <tr data-project-code="${escapeBatchUploadHtml(project.project_code)}">
+                    <td>
+                        <input type="checkbox" class="fur-batch-row-checkbox" data-batch-available-checkbox value="${escapeBatchUploadHtml(project.project_code)}"${isChecked ? ' checked' : ''}>
+                    </td>
+                    <td>${buildProjectCellMarkup(project)}</td>
+                </tr>
+            `;
+
+            const buildSelectedRowMarkup = (project, isChecked = false) => `
+                <tr data-project-code="${escapeBatchUploadHtml(project.project_code)}">
+                    <td>
+                        <input type="checkbox" class="fur-batch-row-checkbox" data-batch-selected-checkbox value="${escapeBatchUploadHtml(project.project_code)}"${isChecked ? ' checked' : ''}>
+                    </td>
+                    <td>${buildProjectCellMarkup(project)}</td>
+                    <td>
+                        <div class="fur-batch-shuttle-field fur-batch-shuttle-field-center">
+                            <div class="fur-batch-shuttle-label">Action</div>
+                            <a href="${escapeBatchUploadHtml(project.open_url)}" class="fur-batch-project-link">
+                                Open
+                                <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+            let availableProjectCount = 0;
+            let selectedProjectCount = 0;
+            const availableRowLookup = new Map();
+            const selectedRowLookup = new Map();
+
+            const createRowElementFromMarkup = (markup) => {
+                batchUploadModalCache.rowTemplate.innerHTML = markup.trim();
+                return batchUploadModalCache.rowTemplate.content.firstElementChild.cloneNode(true);
+            };
+
+            const getCachedRowMarkup = (project, listType, isChecked = false) => {
+                const normalizedListType = listType === 'selected' ? 'selected' : 'available';
+                const cacheKey = `${project.project_code}::${isChecked ? '1' : '0'}`;
+                const rowCache = batchUploadModalCache.rowMarkup[normalizedListType];
+                if (rowCache.has(cacheKey)) {
+                    return rowCache.get(cacheKey);
+                }
+
+                const markup = normalizedListType === 'selected'
+                    ? buildSelectedRowMarkup(project, isChecked)
+                    : buildAvailableRowMarkup(project, isChecked);
+
+                rowCache.set(cacheKey, markup);
+                return markup;
+            };
+
+            const rebuildRowLookups = () => {
+                availableRowLookup.clear();
+                selectedRowLookup.clear();
+
+                Array.from(availableBody.children).forEach((row) => {
+                    if (row.dataset.projectCode) {
+                        availableRowLookup.set(row.dataset.projectCode, row);
+                    }
+                });
+
+                Array.from(selectedBody.children).forEach((row) => {
+                    if (row.dataset.projectCode) {
+                        selectedRowLookup.set(row.dataset.projectCode, row);
+                    }
+                });
+            };
+
+            const syncToggleStates = () => {
+                availableToggleAll.checked = availableProjectCount > 0 && availableChecked.size === availableProjectCount;
+                availableToggleAll.indeterminate = availableChecked.size > 0 && availableChecked.size < availableProjectCount;
+
+                selectedToggleAll.checked = selectedProjectCount > 0 && selectedChecked.size === selectedProjectCount;
+                selectedToggleAll.indeterminate = selectedChecked.size > 0 && selectedChecked.size < selectedProjectCount;
+            };
+
+            const syncShuttleSummary = () => {
+                availableProjectCount = availableBody.childElementCount;
+                selectedProjectCount = selectedBody.childElementCount;
+
+                availableEmpty.hidden = availableProjectCount > 0;
+                selectedEmpty.hidden = selectedProjectCount > 0;
+                availableCount.textContent = String(availableProjectCount);
+                selectedCount.textContent = String(selectedProjectCount);
+                batchUploadDocumentSubmitBtn.disabled = selectedProjectCount === 0;
+
+                syncHiddenField();
+                syncToggleStates();
+            };
+
+            const buildShuttleStateCacheKey = () => {
+                const selectedProjectCodes = [];
+                BATCH_UPLOAD_PROJECTS.forEach((project) => {
+                    if (selectedCodes.has(project.project_code)) {
+                        selectedProjectCodes.push(project.project_code);
+                    }
+                });
+
+                return selectedProjectCodes.length ? selectedProjectCodes.join('|') : '__available__';
+            };
+
+            const restoreCachedShuttleState = (cacheKey) => {
+                const cachedState = batchUploadModalCache.shuttleState.get(cacheKey);
+                if (!cachedState) {
+                    return false;
+                }
+
+                availableBody.innerHTML = cachedState.availableHtml;
+                selectedBody.innerHTML = cachedState.selectedHtml;
+                rebuildRowLookups();
+                syncShuttleSummary();
+                return true;
+            };
+
+            const cacheCurrentShuttleState = (cacheKey) => {
+                if (availableChecked.size > 0 || selectedChecked.size > 0) {
+                    return;
+                }
+
+                batchUploadModalCache.shuttleState.set(cacheKey, {
+                    availableHtml: availableBody.innerHTML,
+                    selectedHtml: selectedBody.innerHTML,
+                });
+            };
+
+            const updateCheckedState = (checkedSet, checkbox) => {
+                if (!checkbox) {
+                    return;
+                }
+
+                if (checkbox.checked) {
+                    checkedSet.add(checkbox.value);
+                } else {
+                    checkedSet.delete(checkbox.value);
+                }
+            };
+
+            const renderShuttle = () => {
+                const cacheKey = buildShuttleStateCacheKey();
+                if (availableChecked.size === 0 && selectedChecked.size === 0 && restoreCachedShuttleState(cacheKey)) {
+                    return;
+                }
+
+                const availableProjects = [];
+                const selectedProjects = [];
+
+                BATCH_UPLOAD_PROJECTS.forEach((project) => {
+                    if (selectedCodes.has(project.project_code)) {
+                        selectedProjects.push(project);
+                    } else {
+                        availableProjects.push(project);
+                    }
+                });
+
+                const availableProjectCodeSet = new Set(availableProjects.map((project) => project.project_code));
+                const selectedProjectCodeSet = new Set(selectedProjects.map((project) => project.project_code));
+
+                availableChecked.forEach((projectCode) => {
+                    if (!availableProjectCodeSet.has(projectCode)) {
+                        availableChecked.delete(projectCode);
+                    }
+                });
+
+                selectedChecked.forEach((projectCode) => {
+                    if (!selectedProjectCodeSet.has(projectCode)) {
+                        selectedChecked.delete(projectCode);
+                    }
+                });
+
+                availableBody.innerHTML = availableProjects
+                    .map((project) => getCachedRowMarkup(project, 'available', availableChecked.has(project.project_code)))
+                    .join('');
+                selectedBody.innerHTML = selectedProjects
+                    .map((project) => getCachedRowMarkup(project, 'selected', selectedChecked.has(project.project_code)))
+                    .join('');
+
+                rebuildRowLookups();
+                syncShuttleSummary();
+                cacheCurrentShuttleState(cacheKey);
+            };
+
+            const moveProjectsBetweenLists = (projectCodes, direction) => {
+                if (!Array.isArray(projectCodes) || projectCodes.length === 0) {
+                    return;
+                }
+
+                const movingToSelected = direction === 'right';
+                const sourceLookup = movingToSelected ? availableRowLookup : selectedRowLookup;
+                const targetLookup = movingToSelected ? selectedRowLookup : availableRowLookup;
+                const sourceBody = movingToSelected ? availableBody : selectedBody;
+                const targetBody = movingToSelected ? selectedBody : availableBody;
+                const sourceCheckedSet = movingToSelected ? availableChecked : selectedChecked;
+                const targetCheckedSet = movingToSelected ? selectedChecked : availableChecked;
+                const fragment = document.createDocumentFragment();
+
+                projectCodes.forEach((projectCode) => {
+                    const normalizedProjectCode = String(projectCode || '').trim();
+                    if (!normalizedProjectCode) {
+                        return;
+                    }
+
+                    const project = projectMap.get(normalizedProjectCode);
+                    const existingRow = sourceLookup.get(normalizedProjectCode);
+                    if (!project || !existingRow) {
+                        return;
+                    }
+
+                    if (movingToSelected) {
+                        selectedCodes.add(normalizedProjectCode);
+                    } else {
+                        selectedCodes.delete(normalizedProjectCode);
+                    }
+
+                    sourceCheckedSet.delete(normalizedProjectCode);
+                    targetCheckedSet.delete(normalizedProjectCode);
+                    sourceLookup.delete(normalizedProjectCode);
+                    existingRow.remove();
+
+                    const nextRow = createRowElementFromMarkup(movingToSelected
+                        ? getCachedRowMarkup(project, 'selected', false)
+                        : getCachedRowMarkup(project, 'available', false));
+
+                    targetLookup.set(normalizedProjectCode, nextRow);
+                    fragment.appendChild(nextRow);
+                });
+
+                if (fragment.childNodes.length > 0) {
+                    targetBody.appendChild(fragment);
+                }
+
+                if (!sourceBody.firstElementChild) {
+                    sourceCheckedSet.clear();
+                }
+
+                syncShuttleSummary();
+            };
+
+            const handleRowToggle = (event, checkedSet, checkboxSelector) => {
+                const row = event.target.closest('tr[data-project-code]');
+                if (!row || event.target.closest('input, button, a, label, select, textarea')) {
+                    return;
+                }
+
+                const checkbox = row.querySelector(checkboxSelector);
+                if (!checkbox) {
+                    return;
+                }
+
+                checkbox.checked = !checkbox.checked;
+                updateCheckedState(checkedSet, checkbox);
+                syncToggleStates();
+            };
+
+            const handleRowTransfer = (event, callback) => {
+                const row = event.target.closest('tr[data-project-code]');
+                if (!row || event.target.closest('input, button, a, label, select, textarea')) {
+                    return;
+                }
+
+                callback(row.dataset.projectCode || '');
+            };
+
+            const moveCheckedRight = () => {
+                moveProjectsBetweenLists(Array.from(availableChecked), 'right');
+            };
+
+            const moveAllRight = () => {
+                BATCH_UPLOAD_PROJECTS.forEach((project) => selectedCodes.add(project.project_code));
+                availableChecked.clear();
+                selectedChecked.clear();
+                renderShuttle();
+            };
+
+            const moveCheckedLeft = () => {
+                moveProjectsBetweenLists(Array.from(selectedChecked), 'left');
+            };
+
+            const moveAllLeft = () => {
+                selectedCodes.clear();
+                availableChecked.clear();
+                selectedChecked.clear();
+                renderShuttle();
+            };
+
+            availableBody.addEventListener('change', (event) => {
+                const checkbox = event.target.closest('[data-batch-available-checkbox]');
+                if (!checkbox) {
+                    return;
+                }
+
+                updateCheckedState(availableChecked, checkbox);
+                syncToggleStates();
+            });
+
+            selectedBody.addEventListener('change', (event) => {
+                const checkbox = event.target.closest('[data-batch-selected-checkbox]');
+                if (!checkbox) {
+                    return;
+                }
+
+                updateCheckedState(selectedChecked, checkbox);
+                syncToggleStates();
+            });
+
+            availableBody.addEventListener('click', (event) => handleRowToggle(event, availableChecked, '[data-batch-available-checkbox]'));
+            selectedBody.addEventListener('click', (event) => handleRowToggle(event, selectedChecked, '[data-batch-selected-checkbox]'));
+
+            availableBody.addEventListener('dblclick', (event) => handleRowTransfer(event, (projectCode) => {
+                if (!projectCode) {
+                    return;
+                }
+
+                moveProjectsBetweenLists([projectCode], 'right');
+            }));
+
+            selectedBody.addEventListener('dblclick', (event) => handleRowTransfer(event, (projectCode) => {
+                if (!projectCode) {
+                    return;
+                }
+
+                moveProjectsBetweenLists([projectCode], 'left');
+            }));
+
+            availableToggleAll.addEventListener('change', (event) => {
+                const shouldCheck = event.target.checked;
+                availableBody.querySelectorAll('[data-batch-available-checkbox]').forEach((checkbox) => {
+                    checkbox.checked = shouldCheck;
+                    if (shouldCheck) {
+                        availableChecked.add(checkbox.value);
+                    } else {
+                        availableChecked.delete(checkbox.value);
+                    }
+                });
+                syncToggleStates();
+            });
+
+            selectedToggleAll.addEventListener('change', (event) => {
+                const shouldCheck = event.target.checked;
+                selectedBody.querySelectorAll('[data-batch-selected-checkbox]').forEach((checkbox) => {
+                    checkbox.checked = shouldCheck;
+                    if (shouldCheck) {
+                        selectedChecked.add(checkbox.value);
+                    } else {
+                        selectedChecked.delete(checkbox.value);
+                    }
+                });
+                syncToggleStates();
+            });
+
+            document.getElementById('batchUploadMoveSelectedRight')?.addEventListener('click', moveCheckedRight);
+            document.getElementById('batchUploadMoveAllRight')?.addEventListener('click', moveAllRight);
+            document.getElementById('batchUploadMoveSelectedLeft')?.addEventListener('click', moveCheckedLeft);
+            document.getElementById('batchUploadMoveAllLeft')?.addEventListener('click', moveAllLeft);
+
+            batchUploadModalCache.shuttleController = {
+                resetSelections: () => {
+                    selectedCodes.clear();
+                    availableChecked.clear();
+                    selectedChecked.clear();
+                    renderShuttle();
+                },
+            };
+
+            shuttleRoot.dataset.batchShuttleReady = '1';
+            batchUploadShuttleInitialized = true;
+            renderShuttle();
         }
 
         function setProjectFilterBodyHeight(form) {
@@ -409,6 +2144,19 @@
             }
 
             body.style.maxHeight = form.classList.contains('collapsed') ? '0px' : `${body.scrollHeight}px`;
+        }
+
+        function setBatchUploadFilterPanelHeight(form) {
+            if (!form) {
+                return;
+            }
+
+            const panel = form.querySelector('.fur-batch-filter-panel');
+            if (!panel) {
+                return;
+            }
+
+            panel.hidden = form.classList.contains('collapsed');
         }
 
         function toggleProjectFilter(button) {
@@ -429,22 +2177,45 @@
             });
 
             const isCollapsed = form.classList.contains('collapsed');
+            const expandedHeight = `${body.scrollHeight}px`;
             if (isCollapsed) {
                 form.classList.remove('collapsed');
-                requestAnimationFrame(() => {
-                    body.style.maxHeight = `${body.scrollHeight}px`;
-                });
+                body.style.maxHeight = '0px';
+                void body.offsetHeight;
+                body.style.maxHeight = expandedHeight;
             } else {
-                body.style.maxHeight = `${body.scrollHeight}px`;
-                requestAnimationFrame(() => {
-                    form.classList.add('collapsed');
-                    body.style.maxHeight = '0px';
-                });
+                body.style.maxHeight = expandedHeight;
+                void body.offsetHeight;
+                form.classList.add('collapsed');
+                body.style.maxHeight = '0px';
             }
 
             const nextCollapsed = !isCollapsed;
             button.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
-            writeProjectFilterCollapsedState(nextCollapsed);
+        }
+
+        function toggleBatchUploadFilterPanel(button) {
+            const form = button.closest('.fur-batch-filter-form');
+            if (!form) {
+                return;
+            }
+
+            const panel = form.querySelector('.fur-batch-filter-panel');
+            if (!panel) {
+                return;
+            }
+
+            form.querySelectorAll('[data-stacked-filter]').forEach((stackedFilter) => {
+                if (typeof stackedFilter.__closeDropdown === 'function') {
+                    stackedFilter.__closeDropdown();
+                }
+            });
+
+            form.classList.toggle('collapsed');
+            setBatchUploadFilterPanelHeight(form);
+
+            const nextCollapsed = form.classList.contains('collapsed');
+            button.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
         }
 
         function initializeStackedFilters() {
@@ -457,6 +2228,7 @@
                 const badgeContainer = document.getElementById(stackedFilter.dataset.badgeContainerId || '');
                 const dropdownToggle = document.getElementById(stackedFilter.dataset.dropdownToggleId || '');
                 const dropdownMenu = document.getElementById(stackedFilter.dataset.dropdownMenuId || '');
+                const isModalStackedFilter = Boolean(stackedFilter.closest('.fur-batch-modal'));
 
                 if (!sourceSelect || !badgeContainer || !dropdownToggle || !dropdownMenu) {
                     return;
@@ -562,7 +2334,40 @@
                     dropdownMenu.style.maxHeight = `${availableHeight}px`;
                 };
 
+                let dropdownPositionFrame = null;
+                let dropdownPositionListenersAttached = false;
+                const requestPositionDropdownMenu = () => {
+                    if (dropdownPositionFrame !== null) {
+                        return;
+                    }
+
+                    dropdownPositionFrame = requestAnimationFrame(() => {
+                        dropdownPositionFrame = null;
+                        positionDropdownMenu();
+                    });
+                };
+                const handleDropdownViewportChange = () => requestPositionDropdownMenu();
+                const attachDropdownPositionListeners = () => {
+                    if (dropdownPositionListenersAttached) {
+                        return;
+                    }
+
+                    dropdownPositionListenersAttached = true;
+                    window.addEventListener('resize', handleDropdownViewportChange);
+                    document.addEventListener('scroll', handleDropdownViewportChange, true);
+                };
+                const detachDropdownPositionListeners = () => {
+                    if (!dropdownPositionListenersAttached) {
+                        return;
+                    }
+
+                    dropdownPositionListenersAttached = false;
+                    window.removeEventListener('resize', handleDropdownViewportChange);
+                    document.removeEventListener('scroll', handleDropdownViewportChange, true);
+                };
+
                 const closeDropdown = () => {
+                    detachDropdownPositionListeners();
                     dropdownMenu.classList.remove('is-open');
                     dropdownToggle.classList.remove('is-open');
                     dropdownToggle.setAttribute('aria-expanded', 'false');
@@ -570,7 +2375,13 @@
                     dropdownMenu.style.top = '';
                     dropdownMenu.style.width = '';
                     dropdownMenu.style.maxHeight = '';
+                    dropdownMenu.style.zIndex = '';
                     searchState.value = '';
+
+                    if (dropdownPositionFrame !== null) {
+                        cancelAnimationFrame(dropdownPositionFrame);
+                        dropdownPositionFrame = null;
+                    }
                 };
 
                 const openDropdown = () => {
@@ -584,7 +2395,9 @@
                     dropdownMenu.classList.add('is-open');
                     dropdownToggle.classList.add('is-open');
                     dropdownToggle.setAttribute('aria-expanded', 'true');
-                    requestAnimationFrame(positionDropdownMenu);
+                    dropdownMenu.style.zIndex = isModalStackedFilter ? '1455' : '';
+                    attachDropdownPositionListeners();
+                    requestPositionDropdownMenu();
                 };
 
                 const renderBadges = () => {
@@ -604,7 +2417,7 @@
                     }
 
                     updateFilterBodyHeight();
-                    requestAnimationFrame(positionDropdownMenu);
+                    requestPositionDropdownMenu();
                 };
 
                 const renderDropdownOptions = ({ preserveSearchFocus = false } = {}) => {
@@ -648,7 +2461,7 @@
                         searchInput.addEventListener('input', (event) => {
                             searchState.value = event.target.value || '';
                             renderDropdownOptions({ preserveSearchFocus: true });
-                            requestAnimationFrame(positionDropdownMenu);
+                            requestPositionDropdownMenu();
                         });
 
                         searchField.appendChild(searchIcon);
@@ -764,9 +2577,6 @@
                         closeDropdown();
                     }
                 });
-
-                window.addEventListener('resize', () => requestAnimationFrame(positionDropdownMenu));
-                document.addEventListener('scroll', () => requestAnimationFrame(positionDropdownMenu), true);
                 sourceSelect.addEventListener('change', () => {
                     syncSelectionOrderFromSelect();
                     refreshDropdown();
@@ -798,6 +2608,104 @@
                         selectElement.__selectionOrder.push(value);
                     }
                 });
+            }
+        }
+
+        function rebuildStandardCityOptions(provinceSelectId, citySelectId) {
+            const provinceSelect = document.getElementById(provinceSelectId);
+            const citySelect = document.getElementById(citySelectId);
+            const cityStackedFilter = citySelect ? citySelect.closest('[data-stacked-filter]') : null;
+
+            if (!provinceSelect || !citySelect) {
+                return;
+            }
+
+            const selectedProvinces = Array.isArray(provinceSelect.__selectionOrder)
+                ? provinceSelect.__selectionOrder.filter((value) => Array.from(provinceSelect.selectedOptions || []).some((option) => option.value.trim() === value))
+                : Array.from(provinceSelect.selectedOptions || []).map((option) => String(option.value || '').trim()).filter(Boolean);
+            const selectedCities = Array.from(citySelect.selectedOptions || [])
+                .map((option) => String(option.value || '').trim())
+                .filter(Boolean);
+            const nextCities = [];
+            const seenCities = new Set();
+
+            selectedProvinces.forEach((province) => {
+                (FUND_UTILIZATION_LOCATION_MAP[province] || []).forEach((city) => {
+                    const normalizedCity = String(city || '').trim();
+                    if (normalizedCity === '') {
+                        return;
+                    }
+
+                    const dedupeKey = normalizedCity.toLowerCase();
+                    if (!seenCities.has(dedupeKey)) {
+                        seenCities.add(dedupeKey);
+                        nextCities.push(normalizedCity);
+                    }
+                });
+            });
+
+            replaceSelectOptions(
+                citySelect,
+                nextCities,
+                selectedCities.filter((value) => nextCities.includes(value))
+            );
+
+            setStackedFilterEmptyMenuText(
+                citySelectId,
+                selectedProvinces.length ? 'No city/municipality options available.' : 'Select at least one province first.'
+            );
+
+            if (cityStackedFilter && typeof cityStackedFilter.__refreshFilterUi === 'function') {
+                cityStackedFilter.__refreshFilterUi();
+            }
+        }
+
+        function rebuildStandardBarangayOptions(citySelectId, barangaySelectId) {
+            const citySelect = document.getElementById(citySelectId);
+            const barangaySelect = document.getElementById(barangaySelectId);
+            const barangayStackedFilter = barangaySelect ? barangaySelect.closest('[data-stacked-filter]') : null;
+
+            if (!citySelect || !barangaySelect) {
+                return;
+            }
+
+            const selectedCities = Array.isArray(citySelect.__selectionOrder)
+                ? citySelect.__selectionOrder.filter((value) => Array.from(citySelect.selectedOptions || []).some((option) => option.value.trim() === value))
+                : Array.from(citySelect.selectedOptions || []).map((option) => String(option.value || '').trim()).filter(Boolean);
+            const selectedBarangays = Array.from(barangaySelect.selectedOptions || [])
+                .map((option) => String(option.value || '').trim())
+                .filter(Boolean);
+            const nextBarangays = [];
+            const seenBarangays = new Set();
+
+            selectedCities.forEach((city) => {
+                (FUND_UTILIZATION_BARANGAY_MAP[city] || []).forEach((barangay) => {
+                    const normalizedBarangay = String(barangay || '').trim();
+                    if (normalizedBarangay === '') {
+                        return;
+                    }
+
+                    const dedupeKey = normalizedBarangay.toLowerCase();
+                    if (!seenBarangays.has(dedupeKey)) {
+                        seenBarangays.add(dedupeKey);
+                        nextBarangays.push(normalizedBarangay);
+                    }
+                });
+            });
+
+            replaceSelectOptions(
+                barangaySelect,
+                nextBarangays,
+                selectedBarangays.filter((value) => nextBarangays.includes(value))
+            );
+
+            setStackedFilterEmptyMenuText(
+                barangaySelectId,
+                selectedCities.length ? 'No barangay options available.' : 'Select at least one city/municipality first.'
+            );
+
+            if (barangayStackedFilter && typeof barangayStackedFilter.__refreshFilterUi === 'function') {
+                barangayStackedFilter.__refreshFilterUi();
             }
         }
 
@@ -857,6 +2765,10 @@
             }
         }
 
+        function rebuildDependentBarangayOptions() {
+            rebuildStandardBarangayOptions('fund_utilization_city', 'fund_utilization_barangay');
+        }
+
         document.getElementById('exportForm').addEventListener('submit', function (event) {
             event.preventDefault();
             const quarter = document.getElementById('quarter').value;
@@ -892,21 +2804,318 @@
 
             const forms = document.querySelectorAll('.project-filter-form');
             forms.forEach((form) => {
-                const collapsed = readProjectFilterCollapsedState();
                 const toggleButton = form.querySelector('.project-filter-toggle');
-                form.classList.toggle('collapsed', collapsed);
+                form.classList.remove('collapsed');
                 if (toggleButton) {
-                    toggleButton.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                    toggleButton.setAttribute('aria-expanded', 'true');
                 }
                 setProjectFilterBodyHeight(form);
             });
 
+            const batchUploadFilterForm = document.querySelector('.fur-batch-filter-form');
+            if (batchUploadFilterForm) {
+                const toggleButton = batchUploadFilterForm.querySelector('.fur-batch-filter-toggle');
+                batchUploadFilterForm.classList.remove('collapsed');
+                if (toggleButton) {
+                    toggleButton.setAttribute('aria-expanded', 'true');
+                }
+                setBatchUploadFilterPanelHeight(batchUploadFilterForm);
+            }
+
             const provinceSelect = document.getElementById('fund_utilization_province');
             if (provinceSelect) {
-                provinceSelect.addEventListener('change', rebuildDependentCityOptions);
+                provinceSelect.addEventListener('change', () => {
+                    rebuildDependentCityOptions();
+                    rebuildDependentBarangayOptions();
+                });
+            }
+
+            const citySelect = document.getElementById('fund_utilization_city');
+            if (citySelect) {
+                citySelect.addEventListener('change', rebuildDependentBarangayOptions);
             }
 
             rebuildDependentCityOptions();
+            rebuildDependentBarangayOptions();
+            rebuildStandardCityOptions('batch_upload_province', 'batch_upload_city');
+            rebuildStandardBarangayOptions('batch_upload_city', 'batch_upload_barangay');
+
+            const batchProvinceSelect = document.getElementById('batch_upload_province');
+            if (batchProvinceSelect) {
+                batchProvinceSelect.addEventListener('change', () => {
+                    rebuildStandardCityOptions('batch_upload_province', 'batch_upload_city');
+                    rebuildStandardBarangayOptions('batch_upload_city', 'batch_upload_barangay');
+                });
+            }
+
+            const batchUploadDocumentFiles = document.getElementById('batchUploadDocumentFiles');
+            const batchUploadDocumentList = document.getElementById('batchUploadDocumentList');
+            const batchUploadDocumentSubmitRow = document.getElementById('batchUploadDocumentSubmitRow');
+            const batchUploadDocumentSubmitBtn = document.getElementById('batchUploadDocumentSubmitBtn');
+            if (batchUploadDocumentFiles && batchUploadDocumentList && batchUploadDocumentSubmitRow && batchUploadDocumentSubmitBtn) {
+                const batchUploadDocumentPanel = batchUploadDocumentFiles.closest('.fur-batch-document-panel');
+                const batchDocumentState = batchUploadModalCache.documents;
+                const batchDocumentKey = (file) => [file.name, file.size, file.lastModified, file.type].join('::');
+                const formatBatchDocumentSize = (bytes) => {
+                    if (!Number.isFinite(bytes) || bytes <= 0) {
+                        return '0 B';
+                    }
+
+                    const units = ['B', 'KB', 'MB', 'GB'];
+                    const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+                    const value = bytes / (1024 ** exponent);
+                    return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+                };
+                const escapeBatchDocumentHtml = (value) => String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+                const syncBatchDocumentInputFiles = () => {
+                    if (typeof DataTransfer !== 'function') {
+                        return;
+                    }
+
+                    const dataTransfer = new DataTransfer();
+                    batchDocumentState.files.forEach((file) => dataTransfer.items.add(file));
+                    batchUploadDocumentFiles.files = dataTransfer.files;
+                };
+                const getBatchDocumentObjectUrl = (file) => getBatchUploadDocumentObjectUrl(file);
+                const revokeBatchDocumentObjectUrl = (fileKey) => {
+                    const objectUrl = batchDocumentState.objectUrls.get(fileKey);
+                    if (!objectUrl) {
+                        return;
+                    }
+
+                    URL.revokeObjectURL(objectUrl);
+                    batchDocumentState.objectUrls.delete(fileKey);
+                };
+                const updateBatchUploadDocumentMeta = () => {
+                    const files = batchDocumentState.files;
+                    if (files.length === 0) {
+                        batchUploadDocumentList.hidden = true;
+                        batchUploadDocumentList.innerHTML = '';
+                        batchUploadDocumentSubmitRow.hidden = true;
+                        batchUploadDocumentPanel?.classList.remove('has-files');
+                        return;
+                    }
+
+                    const previewNames = files.slice(0, 3).map((file) => file.name);
+                    const remainingCount = files.length - previewNames.length;
+                    const selectionSummary = remainingCount > 0
+                        ? `${files.length} files selected: ${previewNames.join(', ')} + ${remainingCount} more`
+                        : `${files.length} file${files.length === 1 ? '' : 's'} selected: ${previewNames.join(', ')}`;
+
+                    batchUploadDocumentList.hidden = false;
+                    batchUploadDocumentSubmitRow.hidden = false;
+                    batchUploadDocumentPanel?.classList.add('has-files');
+                    batchUploadDocumentList.innerHTML = `
+                        <div class="fur-batch-document-file-list-header">
+                            <div>
+                                <div class="fur-batch-document-file-list-title">Selected Documents</div>
+                                <div class="fur-batch-document-file-list-summary">${escapeBatchDocumentHtml(selectionSummary)}</div>
+                            </div>
+                            <button type="button" class="fur-batch-document-clear-btn" data-batch-document-clear-all="1">Clear All</button>
+                        </div>
+                        <div class="fur-batch-document-file-items">
+                            ${files.map((file) => {
+                                const fileKey = batchDocumentKey(file);
+                                const objectUrl = getBatchDocumentObjectUrl(file);
+                                return `
+                                    <div class="fur-batch-document-file-item" data-batch-document-key="${escapeBatchDocumentHtml(fileKey)}">
+                                        <div class="fur-batch-document-file-copy">
+                                            <div class="fur-batch-document-file-name">${escapeBatchDocumentHtml(file.name)}</div>
+                                            <div class="fur-batch-document-file-meta">${escapeBatchDocumentHtml(formatBatchDocumentSize(file.size))}${file.type ? ` • ${escapeBatchDocumentHtml(file.type)}` : ''}</div>
+                                        </div>
+                                        <div class="fur-batch-document-file-actions">
+                                            <button type="button" class="fur-batch-document-view-btn" data-batch-document-view="${escapeBatchDocumentHtml(fileKey)}">View</button>
+                                            <button type="button" class="fur-batch-document-remove-btn" data-batch-document-remove="${escapeBatchDocumentHtml(fileKey)}">Remove</button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                };
+                const removeBatchDocumentFile = (fileKey) => {
+                    batchDocumentState.files = batchDocumentState.files.filter((file) => batchDocumentKey(file) !== fileKey);
+                    if (batchUploadModalCache.previewState.fileKey === fileKey) {
+                        closeBatchUploadDocumentPreviewModal();
+                    }
+                    revokeBatchDocumentObjectUrl(fileKey);
+                    syncBatchDocumentInputFiles();
+                    updateBatchUploadDocumentMeta();
+                    persistBatchUploadDocuments(batchDocumentState.files);
+                };
+                const clearBatchDocumentFiles = () => {
+                    closeBatchUploadDocumentPreviewModal();
+                    Array.from(batchDocumentState.objectUrls.keys()).forEach(revokeBatchDocumentObjectUrl);
+                    batchDocumentState.files = [];
+                    batchUploadDocumentFiles.value = '';
+                    syncBatchDocumentInputFiles();
+                    updateBatchUploadDocumentMeta();
+                    persistBatchUploadDocuments(batchDocumentState.files);
+                };
+
+                batchUploadDocumentFiles.addEventListener('change', () => {
+                    const incomingFiles = Array.from(batchUploadDocumentFiles.files || []);
+                    if (incomingFiles.length === 0) {
+                        return;
+                    }
+
+                    const acceptedFiles = incomingFiles.filter(isValidBatchUploadDocumentFile);
+                    const rejectedFiles = incomingFiles.filter((file) => !isValidBatchUploadDocumentFile(file));
+
+                    if (rejectedFiles.length > 0) {
+                        const rejectedFileNames = rejectedFiles.map((file) => file.name).join(', ');
+                        alert(`Only PDF files up to 50 MB are allowed. Rejected: ${rejectedFileNames}`);
+                    }
+
+                    if (acceptedFiles.length === 0) {
+                        batchUploadDocumentFiles.value = '';
+                        syncBatchDocumentInputFiles();
+                        return;
+                    }
+
+                    const existingKeys = new Set(batchDocumentState.files.map(batchDocumentKey));
+                    acceptedFiles.forEach((file) => {
+                        const fileKey = batchDocumentKey(file);
+                        if (!existingKeys.has(fileKey)) {
+                            existingKeys.add(fileKey);
+                            batchDocumentState.files.push(file);
+                        }
+                    });
+
+                    syncBatchDocumentInputFiles();
+                    updateBatchUploadDocumentMeta();
+                    persistBatchUploadDocuments(batchDocumentState.files);
+                });
+
+                batchUploadDocumentList.addEventListener('click', (event) => {
+                    const clearButton = event.target.closest('[data-batch-document-clear-all="1"]');
+                    if (clearButton) {
+                        clearBatchDocumentFiles();
+                        return;
+                    }
+
+                    const viewButton = event.target.closest('[data-batch-document-view]');
+                    if (viewButton) {
+                        const fileKey = viewButton.dataset.batchDocumentView || '';
+                        const previewFile = batchDocumentState.files.find((file) => batchDocumentKey(file) === fileKey);
+                        if (!previewFile) {
+                            return;
+                        }
+
+                        openBatchUploadDocumentPreviewModal(previewFile, getBatchDocumentObjectUrl(previewFile));
+                        return;
+                    }
+
+                    const removeButton = event.target.closest('[data-batch-document-remove]');
+                    if (removeButton) {
+                        removeBatchDocumentFile(removeButton.dataset.batchDocumentRemove || '');
+                    }
+                });
+
+                batchUploadDocumentSubmitBtn.addEventListener('click', () => {
+                    if (batchDocumentState.files.length === 0 || batchUploadDocumentSubmitBtn.disabled) {
+                        return;
+                    }
+
+                    openBatchUploadQuarterModal();
+                });
+
+                window.addEventListener('beforeunload', () => {
+                    Array.from(batchDocumentState.objectUrls.keys()).forEach(revokeBatchDocumentObjectUrl);
+                });
+
+                restorePersistedBatchUploadDocuments().then((restoredFiles) => {
+                    const validRestoredFiles = restoredFiles.filter(isValidBatchUploadDocumentFile);
+                    if (validRestoredFiles.length !== restoredFiles.length) {
+                        persistBatchUploadDocuments(validRestoredFiles);
+                    }
+
+                    if (!validRestoredFiles.length) {
+                        updateBatchUploadDocumentMeta();
+                        return;
+                    }
+
+                    const restoredKeys = new Set();
+                    batchDocumentState.files = [];
+                    validRestoredFiles.forEach((file) => {
+                        const fileKey = batchDocumentKey(file);
+                        if (!restoredKeys.has(fileKey)) {
+                            restoredKeys.add(fileKey);
+                            batchDocumentState.files.push(file);
+                        }
+                    });
+
+                    syncBatchDocumentInputFiles();
+                    updateBatchUploadDocumentMeta();
+                });
+            }
+
+            const batchCitySelect = document.getElementById('batch_upload_city');
+            if (batchCitySelect) {
+                batchCitySelect.addEventListener('change', () => rebuildStandardBarangayOptions('batch_upload_city', 'batch_upload_barangay'));
+            }
+
+            document.querySelectorAll('[data-batch-upload-close]').forEach((element) => {
+                element.addEventListener('click', resetAndCloseBatchUploadModal);
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    const previewModal = document.getElementById('batchUploadDocumentPreviewModal');
+                    if (previewModal && previewModal.classList.contains('is-open')) {
+                        closeBatchUploadDocumentPreviewModal();
+                        return;
+                    }
+
+                    const submitConfirmModal = document.getElementById('batchUploadSubmitConfirmModal');
+                    if (submitConfirmModal && submitConfirmModal.classList.contains('is-open')) {
+                        closeBatchUploadSubmitConfirmModal();
+                        return;
+                    }
+
+                    const quarterModal = document.getElementById('batchUploadQuarterModal');
+                    if (quarterModal && quarterModal.classList.contains('is-open')) {
+                        closeBatchUploadQuarterModal();
+                        return;
+                    }
+
+                    const checklistModal = document.getElementById('batchUploadDocumentChecklistModal');
+                    if (checklistModal && checklistModal.classList.contains('is-open')) {
+                        closeBatchUploadDocumentChecklistModal();
+                        return;
+                    }
+
+                    closeBatchUploadModal();
+                }
+            });
+
+            if (!shouldAutoOpenBatchUploadModal && BATCH_UPLOAD_PROJECTS.length > 0) {
+                const warmupBatchUploadShuttle = () => {
+                    if (!batchUploadShuttleInitialized) {
+                        initializeBatchUploadShuttle();
+                    }
+                };
+
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(warmupBatchUploadShuttle, { timeout: 1000 });
+                } else {
+                    window.setTimeout(warmupBatchUploadShuttle, 180);
+                }
+            }
+
+            initializeBatchUploadDocumentChecklist();
+            initializeBatchUploadQuarterModal();
+            initializeBatchUploadDocumentPreviewModal();
+            initializeBatchUploadSubmitConfirmModal();
+
+            if (shouldAutoOpenBatchUploadModal || readBatchUploadModalOpenState()) {
+                openBatchUploadModal();
+            }
 
             window.addEventListener('resize', () => {
                 forms.forEach((form) => {
@@ -914,6 +3123,10 @@
                         setProjectFilterBodyHeight(form);
                     }
                 });
+
+                if (batchUploadFilterForm && !batchUploadFilterForm.classList.contains('collapsed')) {
+                    setBatchUploadFilterPanelHeight(batchUploadFilterForm);
+                }
             });
         });
     </script>
@@ -957,17 +3170,18 @@
         }
 
         .project-filter-body {
-            overflow: visible;
+            overflow: hidden;
             opacity: 1;
             transform: translateY(0);
-            transition: max-height 0.25s ease, opacity 0.2s ease, transform 0.2s ease;
+            transition: max-height 0.14s ease-out, opacity 0.12s ease-out, transform 0.12s ease-out;
             max-height: none;
+            will-change: max-height, opacity, transform;
         }
 
         .project-filter-form.collapsed .project-filter-body {
             max-height: 0;
             opacity: 0;
-            transform: translateY(-6px);
+            transform: translateY(-3px);
             pointer-events: none;
         }
 
@@ -1259,9 +3473,1239 @@
             box-shadow: 0 4px 12px rgba(0, 44, 118, 0.2);
         }
 
+        .fur-batch-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1400;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .fur-batch-modal.is-open {
+            display: flex;
+        }
+
+        .fur-batch-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.46);
+        }
+
+        .fur-batch-checklist-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1505;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .fur-batch-checklist-modal.is-open {
+            display: flex;
+        }
+
+        .fur-batch-preview-modal {
+            z-index: 1515;
+        }
+
+        .fur-batch-checklist-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.52);
+        }
+
+        .fur-batch-checklist-dialog {
+            position: relative;
+            z-index: 1;
+            width: min(640px, 100%);
+            background: #ffffff;
+            border-radius: 18px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
+            overflow: hidden;
+        }
+
+        .fur-batch-checklist-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 20px;
+            background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .fur-batch-checklist-title-wrap {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .fur-batch-checklist-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-checklist-header h3 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .fur-batch-checklist-header p {
+            margin: 6px 0 0;
+            color: rgba(255, 255, 255, 0.88);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .fur-batch-checklist-close {
+            width: 38px;
+            height: 38px;
+            border: none;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fur-batch-checklist-body {
+            padding: 22px;
+            background: #fcfdff;
+        }
+
+        .fur-batch-checklist-card {
+            padding: 16px 18px;
+            border: 1px solid #c9d8ef;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+        }
+
+        .fur-batch-checklist-label {
+            color: #002C76;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            letter-spacing: 0.01em;
+        }
+
+        .fur-batch-checklist-copy {
+            color: #334155;
+            font-size: 13px;
+            line-height: 1.72;
+        }
+
+        .fur-batch-checklist-strong {
+            color: #0f172a;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .fur-batch-checklist-subtitle {
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        .fur-batch-checklist-list {
+            margin: 0 0 10px;
+            padding-left: 20px;
+            color: #475569;
+            line-height: 1.72;
+            list-style-type: disc;
+        }
+
+        .fur-batch-checklist-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 0 22px 22px;
+            background: #fcfdff;
+        }
+
+        .fur-batch-checklist-cancel,
+        .fur-batch-checklist-confirm {
+            border: none;
+            border-radius: 10px;
+            padding: 11px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .fur-batch-checklist-cancel {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .fur-batch-checklist-confirm {
+            background: linear-gradient(135deg, #002C76 0%, #003d9e 100%);
+            color: #ffffff;
+        }
+
+        .fur-batch-quarter-dialog {
+            width: min(520px, 100%);
+        }
+
+        .fur-batch-quarter-card {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .fur-batch-quarter-label {
+            color: #002C76;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .fur-batch-quarter-select {
+            width: 100%;
+            height: 44px;
+            border: 1px solid #c9d8ef;
+            border-radius: 10px;
+            padding: 0 14px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .fur-batch-quarter-select:focus {
+            outline: none;
+            border-color: #002C76;
+            box-shadow: 0 0 0 3px rgba(0, 44, 118, 0.12);
+        }
+
+        .fur-batch-preview-dialog {
+            width: min(1080px, 100%);
+            height: min(86vh, 820px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fur-batch-preview-body {
+            flex: 1;
+            min-height: 0;
+            padding: 18px 22px 22px;
+            background: #f8fbff;
+        }
+
+        .fur-batch-preview-content {
+            width: 100%;
+            height: 100%;
+            min-height: 420px;
+            border: 1px solid #dbe4f0;
+            border-radius: 14px;
+            background: #ffffff;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fur-batch-preview-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #ffffff;
+        }
+
+        .fur-batch-preview-image {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            background: #ffffff;
+        }
+
+        .fur-batch-preview-empty {
+            width: min(420px, 100%);
+            padding: 24px;
+            text-align: center;
+            color: #475569;
+        }
+
+        .fur-batch-preview-empty-icon {
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 14px;
+            border-radius: 16px;
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .fur-batch-preview-empty-title {
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-preview-empty-copy {
+            margin-top: 8px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .fur-batch-submit-dialog {
+            width: min(620px, 100%);
+        }
+
+        .fur-batch-submit-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .fur-batch-submit-summary-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dbe4f0;
+        }
+
+        .fur-batch-submit-summary-row:last-of-type {
+            padding-bottom: 0;
+        }
+
+        .fur-batch-submit-summary-label {
+            color: #475569;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .fur-batch-submit-summary-value {
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 700;
+            text-align: right;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-submit-document-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .fur-batch-submit-document-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 9px 12px;
+            border-radius: 12px;
+            background: rgba(0, 44, 118, 0.08);
+            border: 1px solid rgba(0, 44, 118, 0.08);
+        }
+
+        .fur-batch-submit-document-name {
+            color: #0f172a;
+            font-size: 11px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-submit-document-view-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 7px 12px;
+            background: #ffffff;
+            color: #002C76;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            line-height: 1.2;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-submit-project-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .fur-batch-submit-project-grid {
+            display: grid;
+            grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+            gap: 12px;
+            align-items: start;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(0, 44, 118, 0.08);
+            border: 1px solid rgba(0, 44, 118, 0.08);
+        }
+
+        .fur-batch-submit-project-grid-head {
+            background: #eef4ff;
+            border-color: #dbe4f0;
+        }
+
+        .fur-batch-submit-project-grid-more {
+            background: rgba(15, 23, 42, 0.04);
+            border-color: rgba(148, 163, 184, 0.22);
+        }
+
+        .fur-batch-submit-project-head {
+            color: #475569;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .fur-batch-submit-project-code {
+            color: #002C76;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-submit-project-title {
+            color: #0f172a;
+            font-size: 11px;
+            font-weight: 600;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-submit-project-more {
+            color: #475569;
+            font-size: 11px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .fur-batch-modal-dialog {
+            position: relative;
+            z-index: 1;
+            width: min(1380px, 100%);
+            max-height: min(92vh, 900px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            contain: layout paint;
+        }
+
+        .fur-batch-modal-content {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .fur-batch-modal-scroll {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #ffffff;
+            padding-bottom: 24px;
+        }
+
+        .fur-batch-modal-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 24px 24px 18px;
+            border-bottom: 1px solid #e5e7eb;
+            background: linear-gradient(135deg, #eef4ff 0%, #f8fafc 55%, #ffffff 100%);
+        }
+
+        .fur-batch-modal-header h3 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        .fur-batch-modal-header p {
+            margin: 6px 0 0;
+            color: #475569;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .fur-batch-modal-close {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.08);
+            color: #0f172a;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .fur-batch-modal-close:hover {
+            background: rgba(15, 23, 42, 0.14);
+            transform: translateY(-1px);
+        }
+
+        .fur-batch-modal-body {
+            padding: 22px 24px 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .fur-batch-filter-form {
+            margin: 16px 24px 0;
+            border: 1px solid rgba(191, 219, 254, 0.95);
+            border-radius: 18px;
+            overflow: hidden;
+            border-bottom: 1px solid #e5e7eb;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+        }
+
+        .fur-batch-filter-toggle {
+            width: 100%;
+            border: none;
+            background: transparent;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 24px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .fur-batch-filter-toggle-copy {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .fur-batch-filter-chevron {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            transition: transform 0.2s ease;
+        }
+
+        .fur-batch-filter-panel {
+            display: block;
+            contain: layout paint;
+        }
+
+        .fur-batch-filter-form.collapsed .fur-batch-filter-panel {
+            display: none;
+        }
+
+        .fur-batch-filter-form.collapsed .fur-batch-filter-chevron {
+            transform: rotate(180deg);
+        }
+
+        .fur-batch-filter-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .fur-batch-filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .fur-batch-filter-field span {
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .fur-batch-filter-field input,
+        .fur-batch-filter-field select {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 13px;
+            padding: 11px 12px;
+            box-sizing: border-box;
+        }
+
+        .fur-batch-filter-field select {
+            min-height: 142px;
+        }
+
+        .fur-batch-filter-hint {
+            margin-top: 14px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #475569;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .fur-batch-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+
+        .fur-batch-modal-reset,
+        .fur-batch-modal-secondary,
+        .fur-batch-modal-primary {
+            border: none;
+            border-radius: 10px;
+            padding: 11px 16px;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .fur-batch-modal-reset {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        .fur-batch-modal-secondary {
+            background: #64748b;
+            color: #ffffff;
+        }
+
+        .fur-batch-modal-primary {
+            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
+            color: #ffffff;
+            box-shadow: 0 14px 26px rgba(0, 44, 118, 0.2);
+        }
+
+        .fur-batch-project-list {
+            overflow: visible;
+            padding: 22px 24px 26px;
+            background: #f8fbff;
+            contain: layout paint;
+        }
+
+        .fur-batch-shuttle {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr);
+            gap: 22px;
+            align-items: stretch;
+        }
+
+        .fur-batch-shuttle-panel {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(191, 219, 254, 0.95);
+            border-radius: 22px;
+            background: #ffffff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            overflow: hidden;
+            contain: layout paint;
+        }
+
+        .fur-batch-shuttle-panel-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px 20px;
+            border-bottom: 1px solid rgba(219, 228, 240, 0.9);
+            background: #eef4ff;
+        }
+
+        .fur-batch-shuttle-panel-header h4 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 16px;
+            font-weight: 800;
+        }
+
+        .fur-batch-shuttle-panel-header p {
+            margin: 4px 0 0;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .fur-batch-shuttle-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 38px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
+            color: #ffffff;
+            font-size: 12px;
+            font-weight: 800;
+            box-shadow: 0 6px 12px rgba(0, 44, 118, 0.14);
+        }
+
+        .fur-batch-shuttle-table-wrap {
+            position: relative;
+            min-height: 460px;
+            max-height: 560px;
+            overflow: auto;
+            padding: 0 6px 6px;
+            contain: layout paint;
+        }
+
+        .fur-batch-document-panel {
+            margin: 18px 24px 0;
+            padding: 16px;
+            border: 1px solid rgba(0, 44, 118, 0.12);
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+            contain: layout paint;
+        }
+
+        .fur-batch-document-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 14px;
+            align-items: start;
+        }
+
+        .fur-batch-document-panel.has-files .fur-batch-document-layout {
+            grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+            gap: 16px;
+        }
+
+        .fur-batch-document-main {
+            min-width: 0;
+        }
+
+        .fur-batch-document-panel-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .fur-batch-document-panel-header h4 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 800;
+            font-family: inherit;
+        }
+
+        .fur-batch-document-panel-header p {
+            margin: 4px 0 0;
+            color: #475569;
+            font-size: 11px;
+            line-height: 1.45;
+            font-family: inherit;
+        }
+
+        .fur-batch-document-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+            font-size: 10px;
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+
+        .fur-batch-document-dropzone {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 16px;
+            border: 1px dashed rgba(0, 44, 118, 0.22);
+            border-radius: 14px;
+            background: #f8fbff;
+        }
+
+        .fur-batch-document-copy {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .fur-batch-document-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-document-copy h5 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+            font-family: inherit;
+        }
+
+        .fur-batch-document-copy p {
+            margin: 4px 0 0;
+            color: #475569;
+            font-size: 11px;
+            line-height: 1.4;
+            font-family: inherit;
+        }
+
+        .fur-batch-document-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: #002C76;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 800;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow: 0 6px 12px rgba(0, 44, 118, 0.12);
+            font-family: inherit;
+        }
+
+        .fur-batch-document-input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .fur-batch-document-file-list {
+            border: 1px solid #dbe4f0;
+            border-radius: 14px;
+            background: #ffffff;
+            overflow: hidden;
+            align-self: stretch;
+            min-height: 100%;
+        }
+
+        .fur-batch-document-submit-row {
+            margin-top: 14px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .fur-batch-document-submit-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 11px 18px;
+            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 8px 16px rgba(0, 44, 118, 0.16);
+        }
+
+        .fur-batch-document-submit-btn:disabled {
+            background: #94a3b8;
+            color: rgba(255, 255, 255, 0.92);
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.9;
+        }
+
+        .fur-batch-document-file-list-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f8fbff;
+        }
+
+        .fur-batch-document-file-list-title {
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .fur-batch-document-file-list-summary {
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.4;
+            margin-top: 3px;
+        }
+
+        .fur-batch-document-clear-btn {
+            border: none;
+            background: rgba(220, 38, 38, 0.08);
+            color: #b91c1c;
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .fur-batch-document-file-items {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fur-batch-document-file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 14px;
+            border-top: 1px solid #eef2f7;
+        }
+
+        .fur-batch-document-file-item:first-child {
+            border-top: none;
+        }
+
+        .fur-batch-document-file-copy {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .fur-batch-document-file-name {
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-document-file-meta {
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .fur-batch-document-file-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-document-view-btn,
+        .fur-batch-document-remove-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fur-batch-document-view-btn {
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+        }
+
+        .fur-batch-document-remove-btn {
+            background: rgba(220, 38, 38, 0.08);
+            color: #b91c1c;
+        }
+
+        .fur-batch-shuttle-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .fur-batch-shuttle-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            padding: 10px 12px;
+            background: #eef4ff;
+            color: #1e293b;
+            font-size: 11px;
+            font-weight: 800;
+            text-align: left;
+            border-bottom: 1px solid #dbe4f0;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .fur-batch-shuttle-table tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            color: #0f172a;
+            font-size: 11px;
+            vertical-align: top;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .fur-batch-shuttle-table tbody tr:nth-child(odd) td {
+            background: rgba(255, 255, 255, 0.98);
+        }
+
+        .fur-batch-shuttle-table tbody tr:nth-child(even) td {
+            background: rgba(248, 251, 255, 0.98);
+        }
+
+        .fur-batch-shuttle-table tbody tr td:first-child {
+            text-align: center;
+            vertical-align: middle;
+            border-top-left-radius: 14px;
+            border-bottom-left-radius: 14px;
+        }
+
+        .fur-batch-shuttle-table tbody tr td:last-child {
+            border-top-right-radius: 14px;
+            border-bottom-right-radius: 14px;
+        }
+
+        .fur-batch-shuttle-table tbody tr:hover {
+            background: #eaf3ff;
+        }
+
+        .fur-batch-shuttle-table tbody tr:hover td {
+            background: transparent;
+        }
+
+        .fur-batch-shuttle-table tbody tr {
+            cursor: pointer;
+        }
+
+        .fur-batch-row-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #002C76;
+            cursor: pointer;
+        }
+
+        .fur-batch-shuttle-project-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            min-width: 0;
+            border: 1px solid rgba(0, 44, 118, 0.16);
+            border-radius: 14px;
+            overflow: hidden;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 249, 255, 0.98) 100%);
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
+        }
+
+        .fur-batch-shuttle-field {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            padding: 8px 10px;
+        }
+
+        .fur-batch-shuttle-field-center {
+            align-items: center;
+            text-align: center;
+        }
+
+        .fur-batch-shuttle-label {
+            color: #002C76;
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-family: inherit;
+        }
+
+        .fur-batch-project-code {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #dbeafe 0%, #eef4ff 100%);
+            color: #1d4ed8;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+            font-family: inherit;
+        }
+
+        .fur-batch-shuttle-title {
+            margin-top: 0;
+            color: #0f172a;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+            font-family: inherit;
+        }
+
+        .fur-batch-shuttle-meta {
+            color: #475569;
+            font-size: 10px;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+            font-family: inherit;
+        }
+
+        .fur-batch-shuttle-year {
+            color: #0f172a;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.25;
+            font-family: inherit;
+        }
+
+        .fur-batch-project-link {
+            margin: 18px 24px 24px;
+            display: inline-flex;
+            padding: 22px 0 0;
+            gap: 8px;
+            color: #002C76;
+            font-size: 11px;
+            font-weight: 700;
+            text-decoration: none;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(0, 44, 118, 0.08);
+            transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+            font-family: inherit;
+        }
+
+        .fur-batch-project-link:hover {
+            color: #001f59;
+            background: rgba(0, 44, 118, 0.14);
+            transform: translateY(-1px);
+        }
+
+        .fur-batch-shuttle-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .fur-batch-shuttle-btn {
+            width: 58px;
+            height: 58px;
+            border: 1px solid rgba(148, 163, 184, 0.32);
+            border-radius: 18px;
+            background: #ffffff;
+            color: #002C76;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+            transition: background-color 0.08s linear, border-color 0.08s linear, color 0.08s linear;
+        }
+
+        .fur-batch-shuttle-btn:hover {
+            border-color: #002C76;
+            background: #eef4ff;
+            color: #001f59;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+        }
+
+        .fur-batch-empty-state {
+            padding: 28px 22px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 600;
+            margin: 16px;
+        }
+
+        body.fur-batch-modal-open {
+            overflow: hidden;
+        }
+
         @media (max-width: 1100px) {
             .dashboard-filter-grid {
                 grid-template-columns: repeat(2, minmax(200px, 1fr)) !important;
+            }
+
+            .fur-batch-shuttle {
+                grid-template-columns: 1fr;
+            }
+
+            .fur-batch-shuttle-controls {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .fur-batch-document-panel.has-files .fur-batch-document-layout {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -1282,6 +4726,43 @@
             .dashboard-filter-apply-btn,
             .dashboard-filter-export-btn {
                 width: 100%;
+            }
+
+            .fur-batch-modal {
+                padding: 12px;
+            }
+
+            .fur-batch-modal-dialog {
+                max-height: calc(100vh - 24px);
+                border-radius: 16px;
+            }
+
+            .fur-batch-modal-header,
+            .fur-batch-modal-body,
+            .fur-batch-project-list {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .fur-batch-shuttle-table-wrap {
+                min-height: 280px;
+                max-height: 360px;
+            }
+
+            .fur-batch-modal-actions {
+                justify-content: stretch;
+            }
+
+            .fur-batch-modal-reset,
+            .fur-batch-modal-secondary,
+            .fur-batch-modal-primary {
+                width: 100%;
+            }
+
+            .fur-batch-shuttle-btn {
+                width: 48px;
+                height: 48px;
+                border-radius: 14px;
             }
         }
     </style>
