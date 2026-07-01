@@ -183,9 +183,17 @@
                     $isApprovedRo = $fileRecord && $fileRecord->approved_at_dilg_ro;
                     $isPendingRo = $fileRecord && $fileRecord->approved_at_dilg_po && !$fileRecord->approved_at_dilg_ro;
                     $disableUpload = $isMultiUpload ? $isRegionalDilg : ($hasFile || $isRegionalDilg);
+                    $canDeleteReturnedDocument = !$isMultiUpload
+                        && $hasFile
+                        && $isReturned
+                        && !$isRegionalDilg
+                        && $currentUser
+                        && $currentUser->hasCrudPermission('pre_implementation_documents', 'add');
                     $uploadDisabledMessage = $isRegionalDilg && !$hasFile
                         ? 'Regional Office cannot upload files. Choose file is disabled.'
-                        : null;
+                        : ($canDeleteReturnedDocument
+                            ? 'Document was returned. Delete the current file to upload a replacement.'
+                            : null);
 
                     $statusLabel = 'Pending Upload';
                     $statusColor = '#f59e0b';
@@ -426,24 +434,37 @@
                         @endunless
 
                         @if ($hasFile && $fileViewUrl)
-                            <a
-                                id="{{ $filenameId }}"
-                                href="{{ $fileViewUrl }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="pre-impl-upload-filebar pre-impl-upload-filelink is-selected"
-                                data-empty-text="{{ $fileName ?: 'View current file' }}"
-                                data-locked="1"
-                                title="View {{ $fileName ?: 'current file' }}"
-                            >
-                                <span class="pre-impl-upload-fileicon">
-                                    <i class="fas fa-file-pdf"></i>
-                                </span>
-                                <span class="pre-impl-upload-filemeta">
-                                    <span class="pre-impl-upload-fileeyebrow">Uploaded file</span>
-                                    <span class="pre-impl-upload-filename" data-file-name>{{ $fileName ?: 'View current file' }}</span>
-                                </span>
-                            </a>
+                            <div style="display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap;">
+                                <a
+                                    id="{{ $filenameId }}"
+                                    href="{{ $fileViewUrl }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="pre-impl-upload-filebar pre-impl-upload-filelink is-selected"
+                                    data-empty-text="{{ $fileName ?: 'View current file' }}"
+                                    data-locked="1"
+                                    title="View {{ $fileName ?: 'current file' }}"
+                                    style="flex: 1 1 220px;"
+                                >
+                                    <span class="pre-impl-upload-fileicon">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </span>
+                                    <span class="pre-impl-upload-filemeta">
+                                        <span class="pre-impl-upload-fileeyebrow">Uploaded file</span>
+                                        <span class="pre-impl-upload-filename" data-file-name>{{ $fileName ?: 'View current file' }}</span>
+                                    </span>
+                                </a>
+                                @if ($canDeleteReturnedDocument)
+                                    <form method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document so you can upload a replacement?');" style="display: inline-flex; flex: 0 0 auto;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 104px; padding: 0 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 12px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
+                                            <i class="fas fa-trash-alt"></i>
+                                            <span>Delete</span>
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
                         @else
                             <div id="{{ $filenameId }}" class="pre-impl-upload-filebar" data-empty-text="No selected file" hidden>
                                 <span class="pre-impl-upload-fileicon">
@@ -599,6 +620,10 @@
                                         $uploadedAt = $asLocalTime($multiFile->uploaded_at ?? $multiFile->created_at ?? null);
                                         $uploadedBy = $resolveUserName($multiFile->uploaded_by ?? null);
                                         $multiStatus = $multiFile->status ?? 'pending';
+                                        $canDeleteReturnedMultiFile = $multiFile->status === 'returned'
+                                            && !$isRegionalDilg
+                                            && $currentUser
+                                            && $currentUser->hasCrudPermission('pre_implementation_documents', 'add');
                                         $statusMeta = ['label' => 'Pending', 'bg' => '#fef3c7', 'color' => '#92400e'];
                                         if ($multiFile->approved_at_dilg_ro) {
                                             $statusMeta = ['label' => 'Approved', 'bg' => '#d1fae5', 'color' => '#065f46'];
@@ -624,6 +649,16 @@
                                                 <i class="fas fa-eye"></i>
                                                 View
                                             </a>
+                                            @if ($canDeleteReturnedMultiFile)
+                                                <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document so you can upload a replacement?');" style="display: inline-flex; margin-left: 6px;">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
+                                                        <i class="fas fa-trash-alt"></i>
+                                                        Delete
+                                                    </button>
+                                                </form>
+                                            @endif
                                             @if ($isDilg && !($isProvincialDilg && $multiFile->approved_at_dilg_po && !$multiFile->approved_at_dilg_ro) && !($isRegionalDilg && $multiFile->status === 'returned') && !($isRegionalDilg && $multiFile->status === 'approved') && !($isProvincialDilg && $multiFile->status === 'approved'))
                                                 <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'approve')" style="margin-left: 6px; padding: 7px 11px; background-color: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
                                                     Approve

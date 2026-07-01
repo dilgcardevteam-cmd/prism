@@ -2713,6 +2713,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('pre-implementation-documents.document-file');
     Route::post('/pre-implementation-documents/projects/{projectCode}', [App\Http\Controllers\PreImplementationDocumentController::class, 'save'])
         ->name('pre-implementation-documents.save');
+    Route::delete('/pre-implementation-documents/projects/{projectCode}/document/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'deleteDocument'])
+        ->name('pre-implementation-documents.delete');
+    Route::delete('/pre-implementation-documents/projects/{projectCode}/document-file/{fileId}', [App\Http\Controllers\PreImplementationDocumentController::class, 'deleteDocumentFile'])
+        ->name('pre-implementation-documents.delete-file');
     Route::post('/pre-implementation-documents/projects/{projectCode}/upload/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'uploadMultiDocument'])
         ->name('pre-implementation-documents.upload-multi');
     Route::post('/pre-implementation-documents/projects/{projectCode}/validate/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'validateDocument'])
@@ -2741,6 +2745,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('initial-project-documents.document-file');
     Route::post('/initial-project-documents/projects/{projectCode}', [App\Http\Controllers\PreImplementationDocumentController::class, 'save'])
         ->name('initial-project-documents.save');
+    Route::delete('/initial-project-documents/projects/{projectCode}/document/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'deleteDocument'])
+        ->name('initial-project-documents.delete');
+    Route::delete('/initial-project-documents/projects/{projectCode}/document-file/{fileId}', [App\Http\Controllers\PreImplementationDocumentController::class, 'deleteDocumentFile'])
+        ->name('initial-project-documents.delete-file');
     Route::post('/initial-project-documents/projects/{projectCode}/upload/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'uploadMultiDocument'])
         ->name('initial-project-documents.upload-multi');
     Route::post('/initial-project-documents/projects/{projectCode}/validate/{documentType}', [App\Http\Controllers\PreImplementationDocumentController::class, 'validateDocument'])

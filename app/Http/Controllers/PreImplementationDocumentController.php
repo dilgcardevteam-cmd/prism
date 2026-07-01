@@ -22,7 +22,7 @@ class PreImplementationDocumentController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show']);
-        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['save']);
+        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['save', 'deleteDocument', 'deleteDocumentFile']);
         $this->middleware('crud_permission:pre_implementation_documents,update')->only(['validateDocument']);
     }
 
@@ -434,6 +434,136 @@ class PreImplementationDocumentController extends Controller
         return redirect()
             ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
             ->with('success', $this->documentFieldMap()[$documentType] . ' uploaded successfully.');
+    }
+
+    public function deleteDocument(Request $request, string $projectCode, string $documentType)
+    {
+        if ($this->isMultiUploadDocumentType($documentType) || !array_key_exists($documentType, $this->documentFieldMap())) {
+            abort(404);
+        }
+
+        $scopeQuery = $this->scopeQuery($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        if (!$project) {
+            abort(404);
+        }
+
+        $user = Auth::user();
+        if ($user && $user->isDilgUser() && $user->isRegionalOfficeAssignment()) {
+            abort(403);
+        }
+
+        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+            ->where('document_type', $documentType)
+            ->orderByDesc('uploaded_at')
+            ->orderByDesc('created_at')
+            ->firstOrFail();
+
+        if (($fileRecord->status ?? null) !== 'returned') {
+            return redirect()
+                ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+                ->with('error', 'Only returned documents can be deleted from this uploader.');
+        }
+
+        $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
+        $path = $fileRecord->file_path ?: ($document->{$documentType} ?? null);
+        $deletedAt = now();
+
+        DB::transaction(function () use ($document, $documentType, $fileRecord, $path, $deletedAt, $project): void {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+
+            if ($document->exists) {
+                $document->{$documentType} = null;
+                $document->updated_by = Auth::user()->idno ?? null;
+                $document->save();
+            }
+
+            $this->logActivity(
+                $project->project_code,
+                'delete',
+                'Deleted',
+                $fileRecord,
+                'Returned document deleted to allow replacement upload.',
+                $deletedAt
+            );
+
+            $fileRecord->delete();
+        });
+
+        return redirect()
+            ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+            ->with('success', $this->documentFieldMap()[$documentType] . ' deleted successfully. You can now upload a replacement.');
+    }
+
+    public function deleteDocumentFile(Request $request, string $projectCode, int $fileId)
+    {
+        $scopeQuery = $this->scopeQuery($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user(), $this->hasAllProjectsScope($request));
+        if (!$project) {
+            abort(404);
+        }
+
+        $user = Auth::user();
+        if ($user && $user->isDilgUser() && $user->isRegionalOfficeAssignment()) {
+            abort(403);
+        }
+
+        $fileRecord = PreImplementationDocumentFile::where('project_code', $project->project_code)
+            ->where('id', $fileId)
+            ->firstOrFail();
+
+        if (($fileRecord->status ?? null) !== 'returned') {
+            return redirect()
+                ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+                ->with('error', 'Only returned documents can be deleted from the project document menu.');
+        }
+
+        $documentType = (string) $fileRecord->document_type;
+        $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
+        $path = $fileRecord->file_path;
+        $deletedAt = now();
+
+        DB::transaction(function () use ($document, $documentType, $fileRecord, $path, $deletedAt, $project): void {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+
+            if (
+                $document->exists
+                && $this->isMultiUploadDocumentType($documentType)
+                && (string) ($document->{$documentType} ?? '') === (string) $path
+            ) {
+                $replacementPath = PreImplementationDocumentFile::where('project_code', $project->project_code)
+                    ->where('document_type', $documentType)
+                    ->where('id', '!=', $fileRecord->id)
+                    ->orderByDesc('uploaded_at')
+                    ->orderByDesc('created_at')
+                    ->value('file_path');
+
+                $document->{$documentType} = $replacementPath ?: null;
+                $document->updated_by = Auth::user()->idno ?? null;
+                $document->save();
+            }
+
+            $this->logActivity(
+                $project->project_code,
+                'delete',
+                'Deleted',
+                $fileRecord,
+                'Returned document deleted from the project document menu to allow replacement upload.',
+                $deletedAt
+            );
+
+            $fileRecord->delete();
+        });
+
+        return redirect()
+            ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+            ->with('success', $this->formatDocumentLabel($documentType) . ' deleted successfully. You can now upload a replacement.');
     }
 
     private function notifyUploadInterventionRecipients(object $project, array $documentTypes, array $routeConfig, array $scopeQuery = []): void
@@ -1261,6 +1391,8 @@ class PreImplementationDocumentController extends Controller
                 'document' => 'initial-project-documents.document',
                 'document_file' => 'initial-project-documents.document-file',
                 'save' => 'initial-project-documents.save',
+                'delete' => 'initial-project-documents.delete',
+                'delete_file' => 'initial-project-documents.delete-file',
                 'validate' => 'initial-project-documents.validate',
                 'validate_file' => 'initial-project-documents.validate-file',
                 'upload_multi' => 'initial-project-documents.upload-multi',
@@ -1273,6 +1405,8 @@ class PreImplementationDocumentController extends Controller
             'document' => 'pre-implementation-documents.document',
             'document_file' => 'pre-implementation-documents.document-file',
             'save' => 'pre-implementation-documents.save',
+            'delete' => 'pre-implementation-documents.delete',
+            'delete_file' => 'pre-implementation-documents.delete-file',
             'validate' => 'pre-implementation-documents.validate',
             'validate_file' => 'pre-implementation-documents.validate-file',
             'upload_multi' => 'pre-implementation-documents.upload-multi',
