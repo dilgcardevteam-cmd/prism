@@ -463,7 +463,7 @@ class PreImplementationDocumentController extends Controller
         if (($fileRecord->status ?? null) !== 'returned') {
             return redirect()
                 ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
-                ->with('error', 'Only returned documents can be deleted from this uploader.');
+                ->with('error', 'Only returned documents can be deleted from project documents.');
         }
 
         $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
@@ -486,7 +486,7 @@ class PreImplementationDocumentController extends Controller
                 'delete',
                 'Deleted',
                 $fileRecord,
-                'Returned document deleted to allow replacement upload.',
+                'Returned document deleted so a replacement can be uploaded and resubmitted.',
                 $deletedAt
             );
 
@@ -495,7 +495,7 @@ class PreImplementationDocumentController extends Controller
 
         return redirect()
             ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
-            ->with('success', $this->documentFieldMap()[$documentType] . ' deleted successfully. You can now upload a replacement.');
+            ->with('success', $this->documentFieldMap()[$documentType] . ' deleted successfully. You can upload and submit a replacement document.');
     }
 
     public function deleteDocumentFile(Request $request, string $projectCode, int $fileId)
@@ -519,12 +519,12 @@ class PreImplementationDocumentController extends Controller
         if (($fileRecord->status ?? null) !== 'returned') {
             return redirect()
                 ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
-                ->with('error', 'Only returned documents can be deleted from the project document menu.');
+                ->with('error', 'Only returned documents can be deleted from project documents.');
         }
 
         $documentType = (string) $fileRecord->document_type;
-        $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
         $path = $fileRecord->file_path;
+        $document = PreImplementationDocument::firstOrNew(['project_code' => $project->project_code]);
         $deletedAt = now();
 
         DB::transaction(function () use ($document, $documentType, $fileRecord, $path, $deletedAt, $project): void {
@@ -532,11 +532,7 @@ class PreImplementationDocumentController extends Controller
                 Storage::disk('public')->delete($path);
             }
 
-            if (
-                $document->exists
-                && $this->isMultiUploadDocumentType($documentType)
-                && (string) ($document->{$documentType} ?? '') === (string) $path
-            ) {
+            if ($document->exists && (string) ($document->{$documentType} ?? '') === (string) $path) {
                 $replacementPath = PreImplementationDocumentFile::where('project_code', $project->project_code)
                     ->where('document_type', $documentType)
                     ->where('id', '!=', $fileRecord->id)
@@ -554,7 +550,7 @@ class PreImplementationDocumentController extends Controller
                 'delete',
                 'Deleted',
                 $fileRecord,
-                'Returned document deleted from the project document menu to allow replacement upload.',
+                'Returned document deleted so a replacement can be uploaded and resubmitted.',
                 $deletedAt
             );
 
@@ -563,7 +559,7 @@ class PreImplementationDocumentController extends Controller
 
         return redirect()
             ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
-            ->with('success', $this->formatDocumentLabel($documentType) . ' deleted successfully. You can now upload a replacement.');
+            ->with('success', $this->formatDocumentLabel($documentType) . ' deleted successfully. You can upload and submit a replacement document.');
     }
 
     private function notifyUploadInterventionRecipients(object $project, array $documentTypes, array $routeConfig, array $scopeQuery = []): void

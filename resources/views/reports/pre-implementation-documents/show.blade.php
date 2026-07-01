@@ -192,7 +192,7 @@
                     $uploadDisabledMessage = $isRegionalDilg && !$hasFile
                         ? 'Regional Office cannot upload files. Choose file is disabled.'
                         : ($canDeleteReturnedDocument
-                            ? 'Document was returned. Delete the current file to upload a replacement.'
+                            ? 'Document was returned. Delete the current file, then upload and submit a replacement.'
                             : null);
 
                     $statusLabel = 'Pending Upload';
@@ -416,7 +416,6 @@
                             required
                             @disabled($disableUpload)
                             class="pre-impl-upload-input"
-                            data-max-size-kb="15360"
                             data-pre-impl-upload-input
                             data-button-id="{{ $buttonId }}"
                             data-filename-id="{{ $filenameId }}"
@@ -455,7 +454,7 @@
                                     </span>
                                 </a>
                                 @if ($canDeleteReturnedDocument)
-                                    <form method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document so you can upload a replacement?');" style="display: inline-flex; flex: 0 0 auto;">
+                                    <form method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document? You can upload and resubmit a replacement after this.');" style="display: inline-flex; flex: 0 0 auto;">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 104px; padding: 0 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 12px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
@@ -589,7 +588,7 @@
                             @if (!$isRegionalDilg)
                                 <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                                     @csrf
-                                    <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;" data-max-size-kb="15360">
+                                    <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;">
                                     <button type="submit" style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18);">
                                         Upload {{ $isPhotoMultiUpload ? 'Photo' : 'Document' }}
                                     </button>
@@ -650,7 +649,7 @@
                                                 View
                                             </a>
                                             @if ($canDeleteReturnedMultiFile)
-                                                <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document so you can upload a replacement?');" style="display: inline-flex; margin-left: 6px;">
+                                                <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document? You can upload and resubmit a replacement after this.');" style="display: inline-flex; margin-left: 6px;">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
