@@ -2,8 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\FundUtilizationApprovalActionRequest;
+use App\Http\Requests\FundUtilizationBatchDocumentBulkUploadRequest;
+use App\Http\Requests\FundUtilizationBatchDocumentUploadRequest;
+use App\Http\Requests\FundUtilizationFdpUploadRequest;
+use App\Http\Requests\FundUtilizationMovUploadRequest;
+use App\Http\Requests\FundUtilizationPostingLinkRequest;
+use App\Http\Requests\FundUtilizationWrittenNoticeUploadRequest;
+use App\Models\ApprovalLog;
 use App\Models\FundUtilizationReport;
+use App\Models\FundUtilizationApprovalWorkflow;
 use App\Models\LocallyFundedProject;
+use App\Models\FURBatchDocument;
 use App\Models\FURMovUpload;
 use App\Models\FURWrittenNotice;
 use App\Models\FURFDP;
@@ -12,11 +22,13 @@ use App\Support\LguReportorialDeadlineResolver;
 use App\Support\InputSanitizer;
 use App\Support\NotificationUrl;
 use App\Models\User;
+use App\Services\FundUtilizationWorkflowService;
 use App\Services\SecureTimestampService;
 use Illuminate\Http\Request;
 use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -24,11 +36,13 @@ use Illuminate\Support\Carbon;
 
 class FundUtilizationReportController extends Controller
 {
+    private array $fundUtilizationUploaderLevelCache = [];
+
     public function __construct()
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:fund_utilization_reports,view')->only(['index', 'edit', 'show', 'viewDocument']);
-        $this->middleware('crud_permission:fund_utilization_reports,add')->only(['create', 'store', 'uploadMOV', 'uploadWrittenNotice', 'uploadFDP']);
+        $this->middleware('crud_permission:fund_utilization_reports,add')->only(['create', 'store', 'uploadMOV', 'uploadBatchDocument', 'uploadBatchDocumentsBulk', 'uploadWrittenNotice', 'uploadFDP']);
         $this->middleware('crud_permission:fund_utilization_reports,update')->only(['update', 'approveUpload']);
         $this->middleware('crud_permission:fund_utilization_reports,delete')->only(['deleteDocument']);
     }
@@ -200,30 +214,33 @@ class FundUtilizationReportController extends Controller
         $fundingYears = $filters['funding_year'] ?? [];
         $provinces = $filters['province'] ?? [];
         $cities = $filters['city'] ?? [];
+        $barangays = $filters['barangay'] ?? [];
 
         if (!in_array('search', $exclude, true) && $search !== '') {
             $keyword = '%' . strtolower($search) . '%';
 
-            $furQuery->where(function ($query) use ($keyword, $expressions) {
-                $query->whereRaw('LOWER(tbfur.project_code) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(tbfur.project_title) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(tbfur.implementing_unit) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(tbfur.province) LIKE ?', [$keyword])
-                    ->orWhereRaw("LOWER({$expressions['fur_city']}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$expressions['fur_program']}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$expressions['fur_fund_source']}) LIKE ?", [$keyword]);
-            });
+                $furQuery->where(function ($query) use ($keyword, $expressions) {
+                    $query->whereRaw('LOWER(tbfur.project_code) LIKE ?', [$keyword])
+                        ->orWhereRaw('LOWER(tbfur.project_title) LIKE ?', [$keyword])
+                        ->orWhereRaw('LOWER(tbfur.implementing_unit) LIKE ?', [$keyword])
+                        ->orWhereRaw('LOWER(tbfur.province) LIKE ?', [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['fur_city']}) LIKE ?", [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['fur_barangay']}) LIKE ?", [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['fur_program']}) LIKE ?", [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['fur_fund_source']}) LIKE ?", [$keyword]);
+                });
 
-            $lfpQuery->where(function ($query) use ($keyword, $expressions) {
-                $query->whereRaw('LOWER(locally_funded_projects.subaybayan_project_code) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(locally_funded_projects.project_name) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(locally_funded_projects.implementing_unit) LIKE ?', [$keyword])
-                    ->orWhereRaw('LOWER(locally_funded_projects.province) LIKE ?', [$keyword])
-                    ->orWhereRaw("LOWER({$expressions['lfp_city']}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$expressions['lfp_program']}) LIKE ?", [$keyword])
-                    ->orWhereRaw("LOWER({$expressions['lfp_fund_source']}) LIKE ?", [$keyword]);
-            });
-        }
+                $lfpQuery->where(function ($query) use ($keyword, $expressions) {
+                    $query->whereRaw('LOWER(locally_funded_projects.subaybayan_project_code) LIKE ?', [$keyword])
+                        ->orWhereRaw('LOWER(locally_funded_projects.project_name) LIKE ?', [$keyword])
+                        ->orWhereRaw('LOWER(locally_funded_projects.implementing_unit) LIKE ?', [$keyword])
+                        ->orWhereRaw('LOWER(locally_funded_projects.province) LIKE ?', [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['lfp_city']}) LIKE ?", [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['lfp_barangay']}) LIKE ?", [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['lfp_program']}) LIKE ?", [$keyword])
+                        ->orWhereRaw("LOWER({$expressions['lfp_fund_source']}) LIKE ?", [$keyword]);
+                });
+            }
 
         if (!in_array('program', $exclude, true) && !empty($programs)) {
             $furQuery->whereIn(DB::raw("LOWER({$expressions['fur_program']})"), $programs);
@@ -248,6 +265,20 @@ class FundUtilizationReportController extends Controller
         if (!in_array('city', $exclude, true) && !empty($cities)) {
             $furQuery->whereIn(DB::raw("LOWER({$expressions['fur_city']})"), $cities);
             $lfpQuery->whereIn(DB::raw("LOWER({$expressions['lfp_city']})"), $cities);
+        }
+
+        if (!in_array('barangay', $exclude, true) && !empty($barangays)) {
+            $furQuery->where(function ($query) use ($barangays, $expressions) {
+                foreach ($barangays as $barangay) {
+                    $query->orWhereRaw("LOWER({$expressions['fur_barangay']}) LIKE ?", ['%' . $barangay . '%']);
+                }
+            });
+
+            $lfpQuery->where(function ($query) use ($barangays, $expressions) {
+                foreach ($barangays as $barangay) {
+                    $query->orWhereRaw("LOWER({$expressions['lfp_barangay']}) LIKE ?", ['%' . $barangay . '%']);
+                }
+            });
         }
     }
 
@@ -367,6 +398,85 @@ class FundUtilizationReportController extends Controller
         return $report;
     }
 
+    private function fundUtilizationWorkflowSubmissionKey(string $documentType, string $quarter): string
+    {
+        return $documentType . '::' . $quarter;
+    }
+
+    private function resolveFundUtilizationWorkflowMap(string $projectCode): array
+    {
+        return FundUtilizationApprovalWorkflow::query()
+            ->where('project_code', $projectCode)
+            ->with('uploader')
+            ->get()
+            ->keyBy(fn (FundUtilizationApprovalWorkflow $workflow) => $this->fundUtilizationWorkflowSubmissionKey($workflow->document_type, $workflow->quarter))
+            ->all();
+    }
+
+    private function normalizeBatchDocumentFilePaths($value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $value = $decoded;
+            } elseif (trim($value) !== '') {
+                $value = [$value];
+            } else {
+                $value = [];
+            }
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->map(fn ($path) => trim((string) $path))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function getBatchDocumentFilePaths($record): array
+    {
+        if (!$record) {
+            return [];
+        }
+
+        $paths = $this->normalizeBatchDocumentFilePaths($record->batch_document_files_json ?? null);
+        if (!empty($paths)) {
+            return $paths;
+        }
+
+        $singlePath = trim((string) ($record->batch_document_file_path ?? ''));
+        return $singlePath !== '' ? [$singlePath] : [];
+    }
+
+    private function buildBatchDocumentStoragePayload(array $paths): array
+    {
+        $normalizedPaths = $this->normalizeBatchDocumentFilePaths($paths);
+
+        return [
+            'batch_document_file_path' => $normalizedPaths[0] ?? null,
+            'batch_document_files_json' => !empty($normalizedPaths) ? $normalizedPaths : null,
+        ];
+    }
+
+    private function buildBatchDocumentStoredFileName($file): string
+    {
+        $originalName = trim((string) $file->getClientOriginalName());
+        $originalName = basename($originalName);
+
+        if ($originalName !== '') {
+            return $originalName;
+        }
+
+        $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->extension() ?: 'pdf'));
+
+        return 'document.' . $extension;
+    }
+
     private function fundUtilizationDeadlineReportingYear(): int
     {
         // Fund utilization timeliness tracking follows the LGU reportorial
@@ -420,44 +530,338 @@ class FundUtilizationReportController extends Controller
         return $provinceLower === 'regional office' || $officeLower === 'regional office';
     }
 
+    private function canUploadFundUtilizationDocuments(?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return in_array($user->normalizedRole(), [
+            User::ROLE_LGU,
+            User::ROLE_PROVINCIAL,
+        ], true);
+    }
+
+    private function isFundUtilizationProvincialValidator(?User $user): bool
+    {
+        return $user?->normalizedRole() === User::ROLE_PROVINCIAL;
+    }
+
+    private function isFundUtilizationRegionalValidator(?User $user): bool
+    {
+        return (bool) ($user && ($user->normalizedRole() === User::ROLE_REGIONAL || $user->isRegionalOfficeAssignment()));
+    }
+
+    private function resolveFundUtilizationUploaderLevel(?User $user): ?string
+    {
+        if (!$user) {
+            return null;
+        }
+
+        if ($user->normalizedRole() === User::ROLE_PROVINCIAL) {
+            return 'provincial';
+        }
+
+        if ($user->normalizedRole() === User::ROLE_LGU) {
+            return 'lgu';
+        }
+
+        if ($user->normalizedAgency() === 'lgu') {
+            return 'lgu';
+        }
+
+        if ($user->isDilgUser() && !$this->isRegionalDilgUser($user)) {
+            return 'provincial';
+        }
+
+        return null;
+    }
+
+    private function resolveFundUtilizationUploaderLevelById($userId): ?string
+    {
+        $normalizedUserId = trim((string) $userId);
+        if ($normalizedUserId === '') {
+            return null;
+        }
+
+        if (array_key_exists($normalizedUserId, $this->fundUtilizationUploaderLevelCache)) {
+            return $this->fundUtilizationUploaderLevelCache[$normalizedUserId];
+        }
+
+        $uploader = User::query()
+            ->select(['idno', 'role', 'agency', 'province', 'office'])
+            ->where('idno', $normalizedUserId)
+            ->first();
+
+        return $this->fundUtilizationUploaderLevelCache[$normalizedUserId] = $this->resolveFundUtilizationUploaderLevel($uploader);
+    }
+
+    private function resolveFundUtilizationUploaderLevelFromRecord($record, ?string $encoderField = null): ?string
+    {
+        if (!$record) {
+            return null;
+        }
+
+        $uploaderId = null;
+        if ($encoderField && isset($record->{$encoderField})) {
+            $uploaderId = $record->{$encoderField};
+        }
+
+        if (($uploaderId === null || trim((string) $uploaderId) === '') && isset($record->encoder_id)) {
+            $uploaderId = $record->encoder_id;
+        }
+
+        return $this->resolveFundUtilizationUploaderLevelById($uploaderId);
+    }
+
+    private function resolveFundUtilizationRequiredValidatorLevel(?string $uploaderLevel): string
+    {
+        return $uploaderLevel === 'provincial' ? 'regional' : 'provincial';
+    }
+
+    private function resolveFundUtilizationCurrentValidatorLevel(
+        ?string $uploaderLevel,
+        ?string $status,
+        $poApprovedAt,
+        $roApprovedAt
+    ): string {
+        if ($uploaderLevel === 'provincial') {
+            // Provincial uploads are only validated by the DILG Regional Office.
+            return 'regional';
+        }
+
+        $normalizedStatus = strtolower(trim((string) $status));
+        $hasPoApproval = !empty($poApprovedAt);
+        $hasRoApproval = !empty($roApprovedAt);
+
+        // LGU uploads are validated by Provincial Office first.
+        // After PO approval, the upload remains in pending state and moves to Regional validation.
+        if ($normalizedStatus === 'pending' && $hasPoApproval && !$hasRoApproval) {
+            return 'regional';
+        }
+
+        return 'provincial';
+    }
+
+    private function resolveFundUtilizationReturnRecipients(?string $uploaderLevel, string $validatorLevel): array
+    {
+        if ($uploaderLevel === 'provincial') {
+            return $validatorLevel === 'regional'
+                ? ['DILG Provincial Office User']
+                : [];
+        }
+
+        if ($validatorLevel === 'provincial') {
+            return ['LGU User'];
+        }
+
+        return ['DILG Provincial Office User', 'LGU User'];
+    }
+
+    private function resolveFundUtilizationApprovalTimestampFields(?string $statusField = 'status'): array
+    {
+        $normalizedStatusField = trim((string) $statusField);
+        if ($normalizedStatusField === '' || $normalizedStatusField === 'status') {
+            return ['approved_at_dilg_po', 'approved_at_dilg_ro'];
+        }
+
+        $prefix = preg_replace('/_status$/', '', $normalizedStatusField);
+        if (!is_string($prefix) || trim($prefix) === '') {
+            return ['approved_at_dilg_po', 'approved_at_dilg_ro'];
+        }
+
+        return [
+            $prefix . '_approved_at_dilg_po',
+            $prefix . '_approved_at_dilg_ro',
+        ];
+    }
+
+    private function canDeleteFundUtilizationDocument(
+        ?User $actor,
+        $record,
+        string $projectCode,
+        string $documentType,
+        string $quarter,
+        ?string $statusField = 'status',
+        ?string $encoderField = null
+    ): bool
+    {
+        if (!$actor || !$record) {
+            return false;
+        }
+
+        $uploaderId = $encoderField ? ($record->{$encoderField} ?? null) : null;
+        if ($uploaderId === null || trim((string) $uploaderId) === '') {
+            $uploaderId = $record->encoder_id ?? null;
+        }
+
+        $normalizedUploaderId = trim((string) $uploaderId);
+        if ($normalizedUploaderId === '') {
+            return false;
+        }
+
+        $status = strtolower(trim((string) ($statusField ? ($record->{$statusField} ?? '') : '')));
+        $uploaderLevel = $this->resolveFundUtilizationUploaderLevelFromRecord($record, $encoderField);
+        [$poTimestampField, $roTimestampField] = $this->resolveFundUtilizationApprovalTimestampFields($statusField);
+        $poApprovedAt = $record->{$poTimestampField} ?? null;
+        $roApprovedAt = $record->{$roTimestampField} ?? null;
+        $workflowMap = $this->resolveFundUtilizationWorkflowMap($projectCode);
+        $workflow = $workflowMap[$this->fundUtilizationWorkflowSubmissionKey($documentType, $quarter)] ?? null;
+        $workflowStatus = trim((string) ($workflow->status ?? ''));
+
+        $requiredValidator = $this->resolveFundUtilizationCurrentValidatorLevel(
+            $uploaderLevel,
+            $status,
+            $poApprovedAt,
+            $roApprovedAt
+        );
+
+        if ($workflow) {
+            $requiredValidator = ((int) ($workflow->current_approval_level ?? 1)) >= 2
+                ? 'regional'
+                : 'provincial';
+        }
+
+        $isReturned = $workflow
+            ? str_starts_with($workflowStatus, 'Returned by ')
+            : $status === 'returned';
+        $isApproved = $workflow
+            ? $workflowStatus === 'Approved'
+            : $status === 'approved';
+        $isPendingValidation = $workflow
+            ? str_starts_with($workflowStatus, 'Pending Level ')
+            : $status === 'pending';
+        $shouldHideLguDeleteUntilProvincialReturn = $uploaderLevel === 'lgu'
+            && $requiredValidator === 'provincial'
+            && !$isReturned;
+
+        $actorIsUploader = $normalizedUploaderId === trim((string) $actor->idno);
+
+        if ($actorIsUploader) {
+            return !$isApproved
+                && !$isPendingValidation
+                && !$shouldHideLguDeleteUntilProvincialReturn;
+        }
+
+        if (!$isReturned || $isApproved || $isPendingValidation) {
+            return false;
+        }
+
+        $uploader = User::query()
+            ->select(['idno', 'role', 'agency', 'province', 'office'])
+            ->where('idno', $normalizedUploaderId)
+            ->first();
+
+        if (!$uploader) {
+            return false;
+        }
+
+        if ($actor->normalizedRole() !== $uploader->normalizedRole()) {
+            return false;
+        }
+
+        if ($uploader->normalizedRole() === User::ROLE_LGU) {
+            $actorProvince = $actor->normalizedProvince();
+            $uploaderProvince = $uploader->normalizedProvince();
+            $actorOffice = $actor->normalizedOfficeComparable();
+            $uploaderOffice = $uploader->normalizedOfficeComparable();
+
+            return $actorProvince !== ''
+                && $uploaderProvince !== ''
+                && $actorProvince === $uploaderProvince
+                && $actorOffice !== ''
+                && $uploaderOffice !== ''
+                && $actorOffice === $uploaderOffice;
+        }
+
+        if ($uploader->normalizedRole() === User::ROLE_PROVINCIAL) {
+            $actorProvince = $actor->normalizedProvince();
+            $uploaderProvince = $uploader->normalizedProvince();
+
+            return $actorProvince !== ''
+                && $uploaderProvince !== ''
+                && $actorProvince === $uploaderProvince;
+        }
+
+        return false;
+    }
+
+    private function fundUtilizationValidatorLabel(string $validatorLevel): string
+    {
+        return $validatorLevel === 'regional'
+            ? 'DILG Regional Office'
+            : 'DILG Provincial Office';
+    }
+
+    private function buildFundUtilizationProvincialUploaderExistsExpression(string $encoderColumn): string
+    {
+        $provincialRole = strtolower(User::ROLE_PROVINCIAL);
+
+        return "EXISTS (SELECT 1 FROM tbusers uploader WHERE uploader.idno = {$encoderColumn} AND LOWER(TRIM(COALESCE(uploader.role, ''))) = '{$provincialRole}')";
+    }
+
     private function buildFundUtilizationPoPendingExistsExpression(string $projectCodeColumn): string
     {
+        $movProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('mu.mov_encoder_id');
+        $batchProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('bd.batch_document_encoder_id');
+        $dbmProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.dbm_encoder_id');
+        $dilgProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.dilg_encoder_id');
+        $speakerProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.speaker_encoder_id');
+        $presidentProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.president_encoder_id');
+        $houseProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.house_encoder_id');
+        $senateProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.senate_encoder_id');
+        $fdpProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('fdp.fdp_encoder_id');
+        $postingProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('fdp.posting_encoder_id');
+
         $writtenNoticeConditions = implode(' OR ', [
-            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND wn.dbm_approved_at_dilg_po IS NULL)",
-            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND wn.dilg_approved_at_dilg_po IS NULL)",
-            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND wn.speaker_approved_at_dilg_po IS NULL)",
-            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND wn.president_approved_at_dilg_po IS NULL)",
-            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND wn.house_approved_at_dilg_po IS NULL)",
-            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND wn.senate_approved_at_dilg_po IS NULL)",
+            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND NOT {$dbmProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND NOT {$dilgProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND NOT {$speakerProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND NOT {$presidentProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND NOT {$houseProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND NOT {$senateProvincialUploaderExpression})",
         ]);
 
         return '('
-            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND mu.approved_at_dilg_po IS NULL)"
+            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND NOT {$movProvincialUploaderExpression})"
+            . " OR EXISTS (SELECT 1 FROM tbfur_batch_documents bd WHERE bd.project_code = {$projectCodeColumn} AND TRIM(COALESCE(bd.batch_document_file_path, '')) <> '' AND LOWER(COALESCE(bd.status, '')) = 'pending' AND NOT {$batchProvincialUploaderExpression})"
             . " OR EXISTS (SELECT 1 FROM tbfur_written_notice wn WHERE wn.project_code = {$projectCodeColumn} AND ({$writtenNoticeConditions}))"
             . " OR EXISTS (SELECT 1 FROM tbfur_fdp fdp WHERE fdp.project_code = {$projectCodeColumn} AND ("
-                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND fdp.approved_at_dilg_po IS NULL)"
-                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND fdp.posting_approved_at_dilg_po IS NULL)"
+                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND NOT {$fdpProvincialUploaderExpression})"
+                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND NOT {$postingProvincialUploaderExpression})"
             . '))'
         . ')';
     }
 
     private function buildFundUtilizationRoPendingExistsExpression(string $projectCodeColumn): string
     {
+        $movProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('mu.mov_encoder_id');
+        $batchProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('bd.batch_document_encoder_id');
+        $dbmProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.dbm_encoder_id');
+        $dilgProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.dilg_encoder_id');
+        $speakerProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.speaker_encoder_id');
+        $presidentProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.president_encoder_id');
+        $houseProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.house_encoder_id');
+        $senateProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('wn.senate_encoder_id');
+        $fdpProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('fdp.fdp_encoder_id');
+        $postingProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('fdp.posting_encoder_id');
+
         $writtenNoticeConditions = implode(' OR ', [
-            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND wn.dbm_approved_at_dilg_po IS NOT NULL AND wn.dbm_approved_at_dilg_ro IS NULL)",
-            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND wn.dilg_approved_at_dilg_po IS NOT NULL AND wn.dilg_approved_at_dilg_ro IS NULL)",
-            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND wn.speaker_approved_at_dilg_po IS NOT NULL AND wn.speaker_approved_at_dilg_ro IS NULL)",
-            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND wn.president_approved_at_dilg_po IS NOT NULL AND wn.president_approved_at_dilg_ro IS NULL)",
-            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND wn.house_approved_at_dilg_po IS NOT NULL AND wn.house_approved_at_dilg_ro IS NULL)",
-            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND wn.senate_approved_at_dilg_po IS NOT NULL AND wn.senate_approved_at_dilg_ro IS NULL)",
+            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND {$dbmProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND {$dilgProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND {$speakerProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND {$presidentProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND {$houseProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND {$senateProvincialUploaderExpression})",
         ]);
 
         return '('
-            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND mu.approved_at_dilg_po IS NOT NULL AND mu.approved_at_dilg_ro IS NULL)"
+            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND {$movProvincialUploaderExpression})"
+            . " OR EXISTS (SELECT 1 FROM tbfur_batch_documents bd WHERE bd.project_code = {$projectCodeColumn} AND TRIM(COALESCE(bd.batch_document_file_path, '')) <> '' AND LOWER(COALESCE(bd.status, '')) = 'pending' AND {$batchProvincialUploaderExpression})"
             . " OR EXISTS (SELECT 1 FROM tbfur_written_notice wn WHERE wn.project_code = {$projectCodeColumn} AND ({$writtenNoticeConditions}))"
             . " OR EXISTS (SELECT 1 FROM tbfur_fdp fdp WHERE fdp.project_code = {$projectCodeColumn} AND ("
-                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND fdp.approved_at_dilg_po IS NOT NULL AND fdp.approved_at_dilg_ro IS NULL)"
-                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND fdp.posting_approved_at_dilg_po IS NOT NULL AND fdp.posting_approved_at_dilg_ro IS NULL)"
+                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND {$fdpProvincialUploaderExpression})"
+                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND {$postingProvincialUploaderExpression})"
             . '))'
         . ')';
     }
@@ -467,11 +871,11 @@ class FundUtilizationReportController extends Controller
         $poPendingExpression = $this->buildFundUtilizationPoPendingExistsExpression($projectCodeColumn);
         $roPendingExpression = $this->buildFundUtilizationRoPendingExistsExpression($projectCodeColumn);
 
-        if ($this->isRegionalDilgUser($user)) {
+        if ($this->isFundUtilizationRegionalValidator($user)) {
             return "CASE WHEN {$roPendingExpression} THEN 0 WHEN {$poPendingExpression} THEN 1 ELSE 2 END";
         }
 
-        if ($this->isProvincialDilgUser($user)) {
+        if ($this->isFundUtilizationProvincialValidator($user)) {
             return "CASE WHEN {$poPendingExpression} THEN 0 WHEN {$roPendingExpression} THEN 1 ELSE 2 END";
         }
 
@@ -491,16 +895,22 @@ class FundUtilizationReportController extends Controller
             $perPage = 10;
         }
 
-        $reports = $reportsQuery
-            ->orderBy('validation_priority')
-            ->orderByRaw("CASE WHEN project_status IS NULL OR TRIM(project_status) = '' THEN 1 ELSE 0 END")
-            ->orderBy('project_status')
-            ->orderByRaw('CAST(funding_year AS UNSIGNED) DESC')
-            ->orderByRaw("CASE WHEN city_municipality IS NULL OR TRIM(city_municipality) = '' THEN 1 ELSE 0 END")
-            ->orderBy('city_municipality')
-            ->orderByRaw("CASE WHEN province IS NULL OR TRIM(province) = '' THEN 1 ELSE 0 END")
-            ->orderBy('province')
-            ->orderBy('project_code')
+        $applyListingOrder = function ($query) {
+            return $query
+                ->orderBy('validation_priority')
+                ->orderByRaw("CASE WHEN project_status IS NULL OR TRIM(project_status) = '' THEN 1 ELSE 0 END")
+                ->orderBy('project_status')
+                ->orderByRaw('CAST(funding_year AS UNSIGNED) DESC')
+                ->orderByRaw("CASE WHEN city_municipality IS NULL OR TRIM(city_municipality) = '' THEN 1 ELSE 0 END")
+                ->orderBy('city_municipality')
+                ->orderByRaw("CASE WHEN province IS NULL OR TRIM(province) = '' THEN 1 ELSE 0 END")
+                ->orderBy('province')
+                ->orderBy('project_code');
+        };
+
+        $batchUploadProjects = $applyListingOrder(clone $reportsQuery)->get();
+
+        $reports = $applyListingOrder($reportsQuery)
             ->paginate($perPage)
             ->withQueryString();
 
@@ -514,11 +924,18 @@ class FundUtilizationReportController extends Controller
             ->values();
 
         $movUploadsByKey = collect();
+        $batchDocumentsByKey = collect();
         $writtenNoticesByKey = collect();
         $fdpDocumentsByKey = collect();
 
         if ($projectCodes->isNotEmpty()) {
             $movUploadsByKey = FURMovUpload::query()
+                ->whereIn('project_code', $projectCodes)
+                ->whereIn('quarter', $quarters)
+                ->get()
+                ->keyBy(fn($row) => $row->project_code . '|' . strtoupper((string) $row->quarter));
+
+            $batchDocumentsByKey = FURBatchDocument::query()
                 ->whereIn('project_code', $projectCodes)
                 ->whereIn('quarter', $quarters)
                 ->get()
@@ -537,19 +954,21 @@ class FundUtilizationReportController extends Controller
                 ->keyBy(fn($row) => $row->project_code . '|' . strtoupper((string) $row->quarter));
         }
 
-        $reports->setCollection($reportsCollection->map(function ($report) use ($quarters, $movUploadsByKey, $writtenNoticesByKey, $fdpDocumentsByKey) {
+        $reports->setCollection($reportsCollection->map(function ($report) use ($quarters, $movUploadsByKey, $batchDocumentsByKey, $writtenNoticesByKey, $fdpDocumentsByKey) {
             $projectCode = trim((string) ($report->project_code ?? ''));
             $quarterDocuments = [];
 
             foreach ($quarters as $quarter) {
                 $key = $projectCode . '|' . $quarter;
                 $movUpload = $movUploadsByKey->get($key);
+                $batchDocument = $batchDocumentsByKey->get($key);
                 $writtenNotice = $writtenNoticesByKey->get($key);
                 $fdpDocument = $fdpDocumentsByKey->get($key);
 
-                $report->{'quarter_' . strtolower($quarter) . '_percentage'} = $this->calculateAccomplishmentPercentage($movUpload, $writtenNotice, $fdpDocument);
+                $report->{'quarter_' . strtolower($quarter) . '_percentage'} = $this->calculateAccomplishmentPercentage($movUpload, $writtenNotice, $fdpDocument, $batchDocument);
                 $quarterDocuments[$quarter] = [
                     'mov' => $movUpload,
+                    'batch_document' => $batchDocument,
                     'written_notice' => $writtenNotice,
                     'fdp' => $fdpDocument,
                 ];
@@ -561,7 +980,7 @@ class FundUtilizationReportController extends Controller
             return $report;
         }));
 
-        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage'));
+        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects'));
     }
 
     /**
@@ -589,7 +1008,7 @@ class FundUtilizationReportController extends Controller
         }
 
         $reports = $reportsQuery
-            ->with(['movUploads', 'writtenNotices', 'fdpDocuments'])
+            ->with(['movUploads', 'batchDocuments', 'writtenNotices', 'fdpDocuments'])
             ->orderByRaw("CASE WHEN project_status IS NULL OR TRIM(project_status) = '' THEN 1 ELSE 0 END")
             ->orderBy('project_status')
             ->orderByRaw('CAST(funding_year AS UNSIGNED) DESC')
@@ -618,6 +1037,10 @@ class FundUtilizationReportController extends Controller
             'Project Status',
             'Project Title',
             'Upload file for Fund Utilization Report (MOV on PDF Format)',
+            'Date Uploaded',
+            'Date Valdiated by DILG Provincial Office',
+            'Date Valdiated by DILG Regional Office',
+            'Upload file for Batch Documents (MOV on PDF Format)',
             'Date Uploaded',
             'Date Valdiated by DILG Provincial Office',
             'Date Valdiated by DILG Regional Office',
@@ -661,6 +1084,7 @@ class FundUtilizationReportController extends Controller
             $quarter = $selectedQuarter ?: 'Q1'; // Default to Q1 if no quarter selected, but since filtered, it should have data
 
             $movUpload = $report->movUploads()->where('quarter', $quarter)->first();
+            $batchDocument = $report->batchDocuments()->where('quarter', $quarter)->first();
             $writtenNotice = $report->writtenNotices()->where('quarter', $quarter)->first();
             $fdpDocument = $report->fdpDocuments()->where('quarter', $quarter)->first();
 
@@ -679,6 +1103,10 @@ class FundUtilizationReportController extends Controller
                 $movUpload && $movUpload->mov_uploaded_at ? $movUpload->mov_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $movUpload && $movUpload->approved_at_dilg_po ? $movUpload->approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $movUpload && $movUpload->approved_at_dilg_ro ? $movUpload->approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
+                $this->formatExportLink($batchDocument ? $batchDocument->batch_document_file_path : null, $useHtmlLinks),
+                $batchDocument && $batchDocument->batch_document_uploaded_at ? $batchDocument->batch_document_uploaded_at->format('Y-m-d H:i:s') : '-',
+                $batchDocument && $batchDocument->approved_at_dilg_po ? $batchDocument->approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
+                $batchDocument && $batchDocument->approved_at_dilg_ro ? $batchDocument->approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
                 $this->formatExportLink($writtenNotice ? $writtenNotice->secretary_dbm_path : null, $useHtmlLinks),
                 $writtenNotice && $writtenNotice->dbm_uploaded_at ? $writtenNotice->dbm_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->dbm_approved_at_dilg_po ? $writtenNotice->dbm_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
@@ -728,13 +1156,17 @@ class FundUtilizationReportController extends Controller
     {
         $search = trim((string) $request->query('search', ''));
         $programs = $this->normalizeFilterValues($request->query('program', []), true);
-        $fundSources = $this->normalizeFilterValues($request->query('fund_source', []), true);
         $fundingYears = $this->normalizeFilterValues($request->query('funding_year', []));
         $provinces = $this->normalizeFilterValues($request->query('province', []), true);
         $cities = $this->normalizeFilterValues($request->query('city', []), true);
+        $barangays = $this->normalizeFilterValues($request->query('barangay', []), true);
 
         if (empty($provinces)) {
             $cities = [];
+        }
+
+        if (empty($cities)) {
+            $barangays = [];
         }
 
         $user = Auth::user();
@@ -754,6 +1186,8 @@ class FundUtilizationReportController extends Controller
         $lfpProvinceExpression = "TRIM(COALESCE(locally_funded_projects.province, spp.province, ''))";
         $furCityExpression = "TRIM(COALESCE(locally_funded_projects.city_municipality, spp.city_municipality, ''))";
         $lfpCityExpression = "TRIM(COALESCE(locally_funded_projects.city_municipality, spp.city_municipality, ''))";
+        $furBarangayExpression = "TRIM(COALESCE(tbfur.barangay, locally_funded_projects.barangay, ''))";
+        $lfpBarangayExpression = "TRIM(COALESCE(locally_funded_projects.barangay, ''))";
 
         // Build query for Fund Utilization Reports
         $furQuery = FundUtilizationReport::query()
@@ -780,9 +1214,11 @@ class FundUtilizationReportController extends Controller
             ]);
 
         // Build query for Locally Funded Projects
-        $lfpQuery = LocallyFundedProject::query()
+        $lfpBaseQuery = LocallyFundedProject::query()
             ->leftJoin('tbfur', 'tbfur.project_code', '=', 'locally_funded_projects.subaybayan_project_code')
-            ->leftJoin('subay_project_profiles as spp', 'spp.project_code', '=', 'locally_funded_projects.subaybayan_project_code')
+            ->leftJoin('subay_project_profiles as spp', 'spp.project_code', '=', 'locally_funded_projects.subaybayan_project_code');
+
+        $lfpQuery = (clone $lfpBaseQuery)
             ->whereNull('tbfur.project_code')
             ->select([
                 'locally_funded_projects.subaybayan_project_code as project_code',
@@ -803,6 +1239,7 @@ class FundUtilizationReportController extends Controller
                 'locally_funded_projects.user_id',
                 DB::raw("{$lfpValidationPriorityExpression} as validation_priority"),
             ]);
+        $lfpFundingYearQuery = clone $lfpBaseQuery;
 
         $this->applyNonSglgifSourceScope(
             $furQuery,
@@ -814,6 +1251,11 @@ class FundUtilizationReportController extends Controller
             'COALESCE(locally_funded_projects.fund_source, spp.program)',
             'locally_funded_projects.subaybayan_project_code'
         );
+        $this->applyNonSglgifSourceScope(
+            $lfpFundingYearQuery,
+            'COALESCE(locally_funded_projects.fund_source, spp.program)',
+            'locally_funded_projects.subaybayan_project_code'
+        );
 
         // Apply user scoping
         if ($isLguScopedUser) {
@@ -821,6 +1263,7 @@ class FundUtilizationReportController extends Controller
                 if ($userProvinceLower !== '') {
                     $furQuery->whereRaw('LOWER(tbfur.province) = ?', [$userProvinceLower]);
                     $lfpQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
+                    $lfpFundingYearQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
                 }
 
                 $officeNeedle = $userOfficeComparableLower !== '' ? $userOfficeComparableLower : $userOfficeLower;
@@ -864,35 +1307,54 @@ class FundUtilizationReportController extends Controller
                             ->orWhereRaw("{$lfpCityComparableExpression} = ?", [$officeNeedle]);
                     }
                 });
+                $lfpFundingYearQuery->where(function ($subQuery) use (
+                    $userOfficeLower,
+                    $officeNeedle,
+                    $lfpOfficeComparableExpression,
+                    $lfpCityComparableExpression
+                ) {
+                    $subQuery->whereRaw('LOWER(locally_funded_projects.office) = ?', [$userOfficeLower])
+                        ->orWhereRaw('LOWER(locally_funded_projects.city_municipality) = ?', [$userOfficeLower]);
+
+                    if ($officeNeedle !== '') {
+                        $subQuery->orWhereRaw("{$lfpOfficeComparableExpression} = ?", [$officeNeedle])
+                            ->orWhereRaw("{$lfpCityComparableExpression} = ?", [$officeNeedle]);
+                    }
+                });
             } elseif ($userProvinceLower !== '') {
                 $furQuery->whereRaw('LOWER(tbfur.province) = ?', [$userProvinceLower]);
                 $lfpQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
+                $lfpFundingYearQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
             }
         } elseif ($isDilgUser && $userProvinceLower !== '' && $userProvinceLower !== 'regional office') {
             $furQuery->whereRaw('LOWER(tbfur.province) = ?', [$userProvinceLower]);
             $lfpQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
+            $lfpFundingYearQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
         }
 
         $normalizedFilters = [
             'search' => $search,
             'program' => $programs,
-            'fund_source' => $fundSources,
+            'fund_source' => [],
             'funding_year' => $fundingYears,
             'province' => $provinces,
             'city' => $cities,
+            'barangay' => $barangays,
         ];
 
         $activeFilters = [
             'program' => $this->normalizeFilterValues($request->query('program', [])),
-            'fund_source' => $this->normalizeFilterValues($request->query('fund_source', [])),
+            'fund_source' => [],
             'funding_year' => $this->normalizeFilterValues($request->query('funding_year', [])),
             'province' => $this->normalizeFilterValues($request->query('province', [])),
             'city' => $this->normalizeFilterValues($request->query('city', [])),
+            'barangay' => $this->normalizeFilterValues($request->query('barangay', [])),
         ];
 
         $filterOptions = $this->buildFundUtilizationFilterOptions(
             clone $furQuery,
             clone $lfpQuery,
+            clone $lfpFundingYearQuery,
             [
                 'fur_program' => $furProgramExpression,
                 'lfp_program' => $lfpProgramExpression,
@@ -902,6 +1364,8 @@ class FundUtilizationReportController extends Controller
                 'lfp_province' => $lfpProvinceExpression,
                 'fur_city' => $furCityExpression,
                 'lfp_city' => $lfpCityExpression,
+                'fur_barangay' => $furBarangayExpression,
+                'lfp_barangay' => $lfpBarangayExpression,
             ],
             $normalizedFilters,
             $activeFilters
@@ -920,6 +1384,8 @@ class FundUtilizationReportController extends Controller
                 'lfp_province' => $lfpProvinceExpression,
                 'fur_city' => $furCityExpression,
                 'lfp_city' => $lfpCityExpression,
+                'fur_barangay' => $furBarangayExpression,
+                'lfp_barangay' => $lfpBarangayExpression,
             ]
         );
 
@@ -933,12 +1399,13 @@ class FundUtilizationReportController extends Controller
             'funding_year' => $activeFilters['funding_year'],
             'province' => $activeFilters['province'],
             'city' => $activeFilters['city'],
+            'barangay' => $activeFilters['barangay'],
         ];
 
         return [$reportsQuery, $filters, $filterOptions];
     }
 
-    private function buildFundUtilizationFilterOptions($furQuery, $lfpQuery, array $expressions, array $filters = [], array $activeFilters = []): array
+    private function buildFundUtilizationFilterOptions($furQuery, $lfpQuery, $lfpFundingYearQuery, array $expressions, array $filters = [], array $activeFilters = []): array
     {
         [$programFurQuery, $programLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['program']);
         $programs = $programFurQuery
@@ -981,16 +1448,19 @@ class FundUtilizationReportController extends Controller
             ->sort()
             ->values();
 
-        [$fundingYearFurQuery, $fundingYearLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['funding_year']);
+        $fundingYearFurQuery = clone $furQuery;
+        $fundingYearLfpQuery = clone $lfpFundingYearQuery;
+        $this->applyFundUtilizationFiltersToQueries($fundingYearFurQuery, $fundingYearLfpQuery, $filters, $expressions, ['funding_year']);
+
         $fundingYears = $fundingYearFurQuery
-            ->select('tbfur.funding_year')
-            ->whereNotNull('tbfur.funding_year')
+            ->selectRaw("TRIM(COALESCE(spp.funding_year, tbfur.funding_year, locally_funded_projects.funding_year, '')) as funding_year")
+            ->whereRaw("TRIM(COALESCE(spp.funding_year, tbfur.funding_year, locally_funded_projects.funding_year, '')) <> ''")
             ->distinct()
             ->pluck('funding_year')
             ->concat(
                 $fundingYearLfpQuery
-                    ->select('locally_funded_projects.funding_year')
-                    ->whereNotNull('locally_funded_projects.funding_year')
+                    ->selectRaw("TRIM(COALESCE(locally_funded_projects.funding_year, '')) as funding_year")
+                    ->whereRaw("TRIM(COALESCE(locally_funded_projects.funding_year, '')) <> ''")
                     ->distinct()
                     ->pluck('funding_year')
             )
@@ -1001,10 +1471,11 @@ class FundUtilizationReportController extends Controller
             ->sortByDesc(fn ($value) => (int) $value)
             ->values();
 
-        [$locationFurQuery, $locationLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['province', 'city']);
+        [$locationFurQuery, $locationLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['province', 'city', 'barangay']);
         $locations = $locationFurQuery
             ->selectRaw($expressions['fur_province'] . ' as province')
             ->selectRaw($expressions['fur_city'] . ' as city_municipality')
+            ->selectRaw($expressions['fur_barangay'] . ' as barangay')
             ->whereRaw($expressions['fur_province'] . " <> ''")
             ->distinct()
             ->get()
@@ -1012,6 +1483,7 @@ class FundUtilizationReportController extends Controller
                 $locationLfpQuery
                     ->selectRaw($expressions['lfp_province'] . ' as province')
                     ->selectRaw($expressions['lfp_city'] . ' as city_municipality')
+                    ->selectRaw($expressions['lfp_barangay'] . ' as barangay')
                     ->whereRaw($expressions['lfp_province'] . " <> ''")
                     ->distinct()
                     ->get()
@@ -1020,10 +1492,11 @@ class FundUtilizationReportController extends Controller
                 return [
                     'province' => trim((string) ($row->province ?? '')),
                     'city_municipality' => trim((string) ($row->city_municipality ?? '')),
+                    'barangay' => trim((string) ($row->barangay ?? '')),
                 ];
             })
             ->filter(fn ($row) => $row['province'] !== '')
-            ->unique(fn ($row) => $row['province'] . '|' . $row['city_municipality'])
+            ->unique(fn ($row) => $row['province'] . '|' . $row['city_municipality'] . '|' . $row['barangay'])
             ->values();
 
         $provinces = $locations
@@ -1054,12 +1527,40 @@ class FundUtilizationReportController extends Controller
             ? $configuredProvinceMunicipalities
             : $fallbackProvinceMunicipalities;
 
+        $cityBarangayMap = $locations
+            ->filter(fn ($row) => $row['city_municipality'] !== '' && $row['barangay'] !== '')
+            ->groupBy('city_municipality')
+            ->map(function ($rows) {
+                return $rows->pluck('barangay')
+                    ->flatMap(fn ($value) => preg_split('/\r\n|\r|\n|,/u', (string) $value) ?: [])
+                    ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->values()
+                    ->all();
+            })
+            ->toArray();
+
+        $selectedBarangays = ProjectLocationFilterHelper::selectedMappedValues(
+            $activeFilters['city'] ?? [],
+            $cityBarangayMap
+        )
+            ->concat(collect($activeFilters['barangay'] ?? []))
+            ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
         return [
             'programs' => $programs,
             'fund_sources' => $fundSources,
             'funding_years' => $fundingYears,
             'provinces' => $provinces,
+            'barangays' => $selectedBarangays,
             'provinceMunicipalities' => $provinceMunicipalities,
+            'cityBarangayMap' => $cityBarangayMap,
         ];
     }
 
@@ -1085,25 +1586,102 @@ class FundUtilizationReportController extends Controller
         return implode('; ', $parts);
     }
 
-    private function hasFundUtilizationPendingPo(?string $path, ?string $status, $poApprovedAt): bool
+    private function hasFundUtilizationPendingPo(
+        ?string $path,
+        ?string $status,
+        ?string $uploaderLevel,
+        $poApprovedAt = null,
+        $roApprovedAt = null
+    ): bool
     {
+        $currentValidator = $this->resolveFundUtilizationCurrentValidatorLevel(
+            $uploaderLevel,
+            $status,
+            $poApprovedAt,
+            $roApprovedAt
+        );
+
         return trim((string) $path) !== ''
             && strtolower(trim((string) $status)) === 'pending'
-            && empty($poApprovedAt);
+            && $currentValidator === 'provincial';
     }
 
-    private function hasFundUtilizationPendingRo(?string $path, ?string $status, $poApprovedAt, $roApprovedAt): bool
+    private function hasFundUtilizationPendingRo(
+        ?string $path,
+        ?string $status,
+        ?string $uploaderLevel,
+        $poApprovedAt = null,
+        $roApprovedAt = null
+    ): bool
     {
+        $currentValidator = $this->resolveFundUtilizationCurrentValidatorLevel(
+            $uploaderLevel,
+            $status,
+            $poApprovedAt,
+            $roApprovedAt
+        );
+
         return trim((string) $path) !== ''
             && strtolower(trim((string) $status)) === 'pending'
-            && !empty($poApprovedAt)
-            && empty($roApprovedAt);
+            && $currentValidator === 'regional';
     }
 
     private function hasFundUtilizationReturned(?string $path, ?string $status): bool
     {
         return trim((string) $path) !== ''
             && strtolower(trim((string) $status)) === 'returned';
+    }
+
+    private function hasFundUtilizationApproved(?string $path, ?string $status): bool
+    {
+        return trim((string) $path) !== ''
+            && strtolower(trim((string) $status)) === 'approved';
+    }
+
+    private function resolveFundUtilizationValidatorLevelForDisplay(array $document): string
+    {
+        $status = strtolower(trim((string) ($document['status'] ?? '')));
+        if ($status === 'returned') {
+            return 'lgu';
+        }
+
+        $roApprovedAt = $document['approved_at_dilg_ro'] ?? null;
+        if (!empty($roApprovedAt)) {
+            return 'regional';
+        }
+
+        $poApprovedAt = $document['approved_at_dilg_po'] ?? null;
+        if (!empty($poApprovedAt)) {
+            return 'provincial';
+        }
+
+        return $this->resolveFundUtilizationCurrentValidatorLevel(
+            $document['uploader_level'] ?? null,
+            $document['status'] ?? null,
+            $poApprovedAt,
+            $roApprovedAt
+        );
+    }
+
+    private function resolveFundUtilizationValidatedAtLabel(array $document): string
+    {
+        $status = strtolower(trim((string) ($document['status'] ?? '')));
+        if ($status === 'returned') {
+            $validatedAt = $document['approved_at'] ?? null;
+        } else {
+            $validatorLevel = $this->resolveFundUtilizationValidatorLevelForDisplay($document);
+            $validatedAt = $validatorLevel === 'regional'
+                ? ($document['approved_at_dilg_ro'] ?? null)
+                : ($validatorLevel === 'provincial' ? ($document['approved_at_dilg_po'] ?? null) : null);
+        }
+
+        if (empty($validatedAt)) {
+            return '—';
+        }
+
+        return Carbon::parse($validatedAt)
+            ->setTimezone(config('app.timezone'))
+            ->format('M d, Y h:i A');
     }
 
     private function summarizeFundUtilizationListing(array $quarterDocuments): array
@@ -1118,12 +1696,14 @@ class FundUtilizationReportController extends Controller
             'validation_level_text_color' => '#4b5563',
             'validation_level_background_color' => '#f3f4f6',
             'validation_level_border_color' => '#d1d5db',
+            'date_validated_label' => '—',
         ];
 
         $documents = collect();
 
         foreach ($quarterDocuments as $quarter => $documentGroup) {
             $movUpload = $documentGroup['mov'] ?? null;
+            $batchDocument = $documentGroup['batch_document'] ?? null;
             $writtenNotice = $documentGroup['written_notice'] ?? null;
             $fdpDocument = $documentGroup['fdp'] ?? null;
 
@@ -1132,19 +1712,34 @@ class FundUtilizationReportController extends Controller
                     'path' => $movUpload->mov_file_path,
                     'status' => $movUpload->status ?? null,
                     'uploaded_at' => $movUpload->mov_uploaded_at ?? null,
+                    'approved_at' => $movUpload->approved_at ?? null,
+                    'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($movUpload, 'mov_encoder_id'),
                     'approved_at_dilg_po' => $movUpload->approved_at_dilg_po ?? null,
                     'approved_at_dilg_ro' => $movUpload->approved_at_dilg_ro ?? null,
                 ]);
             }
 
+            $batchDocumentPaths = $this->getBatchDocumentFilePaths($batchDocument);
+            if ($batchDocument && !empty($batchDocumentPaths)) {
+                $documents->push([
+                    'path' => $batchDocumentPaths[0],
+                    'status' => $batchDocument->status ?? null,
+                    'uploaded_at' => $batchDocument->batch_document_uploaded_at ?? null,
+                    'approved_at' => $batchDocument->approved_at ?? null,
+                    'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($batchDocument, 'batch_document_encoder_id'),
+                    'approved_at_dilg_po' => $batchDocument->approved_at_dilg_po ?? null,
+                    'approved_at_dilg_ro' => $batchDocument->approved_at_dilg_ro ?? null,
+                ]);
+            }
+
             if ($writtenNotice) {
                 foreach ([
-                    ['path' => $writtenNotice->secretary_dbm_path ?? null, 'status' => $writtenNotice->dbm_status ?? null, 'uploaded_at' => $writtenNotice->dbm_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->dbm_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dbm_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->secretary_dilg_path ?? null, 'status' => $writtenNotice->dilg_status ?? null, 'uploaded_at' => $writtenNotice->dilg_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->dilg_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dilg_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->speaker_house_path ?? null, 'status' => $writtenNotice->speaker_status ?? null, 'uploaded_at' => $writtenNotice->speaker_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->speaker_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->speaker_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->president_senate_path ?? null, 'status' => $writtenNotice->president_status ?? null, 'uploaded_at' => $writtenNotice->president_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->president_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->president_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->house_committee_path ?? null, 'status' => $writtenNotice->house_status ?? null, 'uploaded_at' => $writtenNotice->house_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->house_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->house_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->senate_committee_path ?? null, 'status' => $writtenNotice->senate_status ?? null, 'uploaded_at' => $writtenNotice->senate_uploaded_at ?? null, 'approved_at_dilg_po' => $writtenNotice->senate_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->senate_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->secretary_dbm_path ?? null, 'status' => $writtenNotice->dbm_status ?? null, 'uploaded_at' => $writtenNotice->dbm_uploaded_at ?? null, 'approved_at' => $writtenNotice->dbm_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dbm_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dbm_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dbm_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->secretary_dilg_path ?? null, 'status' => $writtenNotice->dilg_status ?? null, 'uploaded_at' => $writtenNotice->dilg_uploaded_at ?? null, 'approved_at' => $writtenNotice->dilg_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dilg_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dilg_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dilg_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->speaker_house_path ?? null, 'status' => $writtenNotice->speaker_status ?? null, 'uploaded_at' => $writtenNotice->speaker_uploaded_at ?? null, 'approved_at' => $writtenNotice->speaker_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'speaker_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->speaker_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->speaker_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->president_senate_path ?? null, 'status' => $writtenNotice->president_status ?? null, 'uploaded_at' => $writtenNotice->president_uploaded_at ?? null, 'approved_at' => $writtenNotice->president_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'president_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->president_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->president_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->house_committee_path ?? null, 'status' => $writtenNotice->house_status ?? null, 'uploaded_at' => $writtenNotice->house_uploaded_at ?? null, 'approved_at' => $writtenNotice->house_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'house_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->house_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->house_approved_at_dilg_ro ?? null],
+                    ['path' => $writtenNotice->senate_committee_path ?? null, 'status' => $writtenNotice->senate_status ?? null, 'uploaded_at' => $writtenNotice->senate_uploaded_at ?? null, 'approved_at' => $writtenNotice->senate_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'senate_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->senate_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->senate_approved_at_dilg_ro ?? null],
                 ] as $writtenNoticeDocument) {
                     if (trim((string) ($writtenNoticeDocument['path'] ?? '')) === '') {
                         continue;
@@ -1159,6 +1754,8 @@ class FundUtilizationReportController extends Controller
                     'path' => $fdpDocument->fdp_file_path,
                     'status' => $fdpDocument->fdp_status ?? null,
                     'uploaded_at' => $fdpDocument->fdp_uploaded_at ?? null,
+                    'approved_at' => $fdpDocument->fdp_approved_at ?? null,
+                    'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($fdpDocument, 'fdp_encoder_id'),
                     'approved_at_dilg_po' => $fdpDocument->approved_at_dilg_po ?? null,
                     'approved_at_dilg_ro' => $fdpDocument->approved_at_dilg_ro ?? null,
                 ]);
@@ -1169,6 +1766,8 @@ class FundUtilizationReportController extends Controller
                     'path' => $fdpDocument->posting_link,
                     'status' => $fdpDocument->posting_status ?? null,
                     'uploaded_at' => $fdpDocument->posting_uploaded_at ?? null,
+                    'approved_at' => $fdpDocument->posting_approved_at ?? null,
+                    'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($fdpDocument, 'posting_encoder_id'),
                     'approved_at_dilg_po' => $fdpDocument->posting_approved_at_dilg_po ?? null,
                     'approved_at_dilg_ro' => $fdpDocument->posting_approved_at_dilg_ro ?? null,
                 ]);
@@ -1205,12 +1804,11 @@ class FundUtilizationReportController extends Controller
             $summary['approval_status_text_color'] = '#b91c1c';
             $summary['approval_status_background_color'] = '#fef2f2';
             $summary['approval_status_border_color'] = '#fca5a5';
-            $summary['validation_level_label'] = !empty($selectedDocument['approved_at_dilg_po'])
-                ? 'Returned at DILG Regional Office'
-                : 'Returned at DILG Provincial Office';
+            $summary['validation_level_label'] = 'Returned to LGU';
             $summary['validation_level_text_color'] = '#b91c1c';
             $summary['validation_level_background_color'] = '#fef2f2';
             $summary['validation_level_border_color'] = '#fca5a5';
+            $summary['date_validated_label'] = $this->resolveFundUtilizationValidatedAtLabel($selectedDocument);
 
             return $summary;
         }
@@ -1218,6 +1816,7 @@ class FundUtilizationReportController extends Controller
         if ($this->hasFundUtilizationPendingRo(
             $selectedDocument['path'] ?? null,
             $selectedDocument['status'] ?? null,
+            $selectedDocument['uploader_level'] ?? null,
             $selectedDocument['approved_at_dilg_po'] ?? null,
             $selectedDocument['approved_at_dilg_ro'] ?? null
         )) {
@@ -1229,6 +1828,7 @@ class FundUtilizationReportController extends Controller
             $summary['validation_level_text_color'] = '#1d4ed8';
             $summary['validation_level_background_color'] = '#dbeafe';
             $summary['validation_level_border_color'] = '#60a5fa';
+            $summary['date_validated_label'] = $this->resolveFundUtilizationValidatedAtLabel($selectedDocument);
 
             return $summary;
         }
@@ -1236,7 +1836,9 @@ class FundUtilizationReportController extends Controller
         if ($this->hasFundUtilizationPendingPo(
             $selectedDocument['path'] ?? null,
             $selectedDocument['status'] ?? null,
-            $selectedDocument['approved_at_dilg_po'] ?? null
+            $selectedDocument['uploader_level'] ?? null,
+            $selectedDocument['approved_at_dilg_po'] ?? null,
+            $selectedDocument['approved_at_dilg_ro'] ?? null
         )) {
             $summary['approval_status_label'] = 'For DILG Provincial Office Validation';
             $summary['approval_status_text_color'] = '#1d4ed8';
@@ -1246,19 +1848,22 @@ class FundUtilizationReportController extends Controller
             $summary['validation_level_text_color'] = '#1d4ed8';
             $summary['validation_level_background_color'] = '#eff6ff';
             $summary['validation_level_border_color'] = '#93c5fd';
+            $summary['date_validated_label'] = $this->resolveFundUtilizationValidatedAtLabel($selectedDocument);
 
             return $summary;
         }
 
-        if (!empty($selectedDocument['approved_at_dilg_ro'])) {
+        if ($this->hasFundUtilizationApproved($selectedDocument['path'] ?? null, $selectedDocument['status'] ?? null)) {
+            $validatorLevel = $this->resolveFundUtilizationValidatorLevelForDisplay($selectedDocument);
             $summary['approval_status_label'] = 'Approved';
             $summary['approval_status_text_color'] = '#047857';
             $summary['approval_status_background_color'] = '#ecfdf5';
             $summary['approval_status_border_color'] = '#6ee7b7';
-            $summary['validation_level_label'] = 'Completed';
+            $summary['validation_level_label'] = $this->fundUtilizationValidatorLabel($validatorLevel);
             $summary['validation_level_text_color'] = '#047857';
             $summary['validation_level_background_color'] = '#ecfdf5';
             $summary['validation_level_border_color'] = '#6ee7b7';
+            $summary['date_validated_label'] = $this->resolveFundUtilizationValidatedAtLabel($selectedDocument);
         }
 
         return $summary;
@@ -1266,11 +1871,23 @@ class FundUtilizationReportController extends Controller
 
     private function resolveFundUtilizationListingPriority(array $document): int
     {
-        if ($this->hasFundUtilizationPendingPo($document['path'] ?? null, $document['status'] ?? null, $document['approved_at_dilg_po'] ?? null)) {
+        if ($this->hasFundUtilizationPendingPo(
+            $document['path'] ?? null,
+            $document['status'] ?? null,
+            $document['uploader_level'] ?? null,
+            $document['approved_at_dilg_po'] ?? null,
+            $document['approved_at_dilg_ro'] ?? null
+        )) {
             return 0;
         }
 
-        if ($this->hasFundUtilizationPendingRo($document['path'] ?? null, $document['status'] ?? null, $document['approved_at_dilg_po'] ?? null, $document['approved_at_dilg_ro'] ?? null)) {
+        if ($this->hasFundUtilizationPendingRo(
+            $document['path'] ?? null,
+            $document['status'] ?? null,
+            $document['uploader_level'] ?? null,
+            $document['approved_at_dilg_po'] ?? null,
+            $document['approved_at_dilg_ro'] ?? null
+        )) {
             return 0;
         }
 
@@ -1291,6 +1908,7 @@ class FundUtilizationReportController extends Controller
             'po_count' => 0,
             'ro_count' => 0,
             'returned_count' => 0,
+            'approved_count' => 0,
             'uploaded_count' => 0,
             'pending_total' => 0,
             'label' => 'No Upload',
@@ -1303,18 +1921,38 @@ class FundUtilizationReportController extends Controller
 
         foreach ($quarterDocuments as $documents) {
             $movUpload = $documents['mov'] ?? null;
+            $batchDocument = $documents['batch_document'] ?? null;
             $writtenNotice = $documents['written_notice'] ?? null;
             $fdpDocument = $documents['fdp'] ?? null;
 
             if ($movUpload && trim((string) ($movUpload->mov_file_path ?? '')) !== '') {
                 $summary['uploaded_count']++;
+                $uploaderLevel = $this->resolveFundUtilizationUploaderLevelFromRecord($movUpload, 'mov_encoder_id');
 
-                if ($this->hasFundUtilizationPendingPo($movUpload->mov_file_path, $movUpload->status ?? null, $movUpload->approved_at_dilg_po ?? null)) {
+                if ($this->hasFundUtilizationPendingPo($movUpload->mov_file_path, $movUpload->status ?? null, $uploaderLevel, $movUpload->approved_at_dilg_po ?? null, $movUpload->approved_at_dilg_ro ?? null)) {
                     $summary['po_count']++;
-                } elseif ($this->hasFundUtilizationPendingRo($movUpload->mov_file_path, $movUpload->status ?? null, $movUpload->approved_at_dilg_po ?? null, $movUpload->approved_at_dilg_ro ?? null)) {
+                } elseif ($this->hasFundUtilizationPendingRo($movUpload->mov_file_path, $movUpload->status ?? null, $uploaderLevel, $movUpload->approved_at_dilg_po ?? null, $movUpload->approved_at_dilg_ro ?? null)) {
                     $summary['ro_count']++;
                 } elseif ($this->hasFundUtilizationReturned($movUpload->mov_file_path, $movUpload->status ?? null)) {
                     $summary['returned_count']++;
+                } elseif ($this->hasFundUtilizationApproved($movUpload->mov_file_path, $movUpload->status ?? null)) {
+                    $summary['approved_count']++;
+                }
+            }
+
+            $batchDocumentPaths = $this->getBatchDocumentFilePaths($batchDocument);
+            if ($batchDocument && !empty($batchDocumentPaths)) {
+                $summary['uploaded_count']++;
+                $uploaderLevel = $this->resolveFundUtilizationUploaderLevelFromRecord($batchDocument, 'batch_document_encoder_id');
+
+                if ($this->hasFundUtilizationPendingPo($batchDocumentPaths[0], $batchDocument->status ?? null, $uploaderLevel, $batchDocument->approved_at_dilg_po ?? null, $batchDocument->approved_at_dilg_ro ?? null)) {
+                    $summary['po_count']++;
+                } elseif ($this->hasFundUtilizationPendingRo($batchDocumentPaths[0], $batchDocument->status ?? null, $uploaderLevel, $batchDocument->approved_at_dilg_po ?? null, $batchDocument->approved_at_dilg_ro ?? null)) {
+                    $summary['ro_count']++;
+                } elseif ($this->hasFundUtilizationReturned($batchDocumentPaths[0], $batchDocument->status ?? null)) {
+                    $summary['returned_count']++;
+                } elseif ($this->hasFundUtilizationApproved($batchDocumentPaths[0], $batchDocument->status ?? null)) {
+                    $summary['approved_count']++;
                 }
             }
 
@@ -1325,36 +1963,42 @@ class FundUtilizationReportController extends Controller
                         'status' => $writtenNotice->dbm_status ?? null,
                         'po_timestamp' => $writtenNotice->dbm_approved_at_dilg_po ?? null,
                         'ro_timestamp' => $writtenNotice->dbm_approved_at_dilg_ro ?? null,
+                        'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dbm_encoder_id'),
                     ],
                     [
                         'path' => $writtenNotice->secretary_dilg_path ?? null,
                         'status' => $writtenNotice->dilg_status ?? null,
                         'po_timestamp' => $writtenNotice->dilg_approved_at_dilg_po ?? null,
                         'ro_timestamp' => $writtenNotice->dilg_approved_at_dilg_ro ?? null,
+                        'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dilg_encoder_id'),
                     ],
                     [
                         'path' => $writtenNotice->speaker_house_path ?? null,
                         'status' => $writtenNotice->speaker_status ?? null,
                         'po_timestamp' => $writtenNotice->speaker_approved_at_dilg_po ?? null,
                         'ro_timestamp' => $writtenNotice->speaker_approved_at_dilg_ro ?? null,
+                        'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'speaker_encoder_id'),
                     ],
                     [
                         'path' => $writtenNotice->president_senate_path ?? null,
                         'status' => $writtenNotice->president_status ?? null,
                         'po_timestamp' => $writtenNotice->president_approved_at_dilg_po ?? null,
                         'ro_timestamp' => $writtenNotice->president_approved_at_dilg_ro ?? null,
+                        'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'president_encoder_id'),
                     ],
                     [
                         'path' => $writtenNotice->house_committee_path ?? null,
                         'status' => $writtenNotice->house_status ?? null,
                         'po_timestamp' => $writtenNotice->house_approved_at_dilg_po ?? null,
                         'ro_timestamp' => $writtenNotice->house_approved_at_dilg_ro ?? null,
+                        'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'house_encoder_id'),
                     ],
                     [
                         'path' => $writtenNotice->senate_committee_path ?? null,
                         'status' => $writtenNotice->senate_status ?? null,
                         'po_timestamp' => $writtenNotice->senate_approved_at_dilg_po ?? null,
                         'ro_timestamp' => $writtenNotice->senate_approved_at_dilg_ro ?? null,
+                        'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'senate_encoder_id'),
                     ],
                 ];
 
@@ -1365,37 +2009,45 @@ class FundUtilizationReportController extends Controller
 
                     $summary['uploaded_count']++;
 
-                    if ($this->hasFundUtilizationPendingPo($document['path'], $document['status'] ?? null, $document['po_timestamp'] ?? null)) {
+                    if ($this->hasFundUtilizationPendingPo($document['path'], $document['status'] ?? null, $document['uploader_level'] ?? null, $document['po_timestamp'] ?? null, $document['ro_timestamp'] ?? null)) {
                         $summary['po_count']++;
-                    } elseif ($this->hasFundUtilizationPendingRo($document['path'], $document['status'] ?? null, $document['po_timestamp'] ?? null, $document['ro_timestamp'] ?? null)) {
+                    } elseif ($this->hasFundUtilizationPendingRo($document['path'], $document['status'] ?? null, $document['uploader_level'] ?? null, $document['po_timestamp'] ?? null, $document['ro_timestamp'] ?? null)) {
                         $summary['ro_count']++;
                     } elseif ($this->hasFundUtilizationReturned($document['path'], $document['status'] ?? null)) {
                         $summary['returned_count']++;
+                    } elseif ($this->hasFundUtilizationApproved($document['path'], $document['status'] ?? null)) {
+                        $summary['approved_count']++;
                     }
                 }
             }
 
             if ($fdpDocument && trim((string) ($fdpDocument->fdp_file_path ?? '')) !== '') {
                 $summary['uploaded_count']++;
+                $uploaderLevel = $this->resolveFundUtilizationUploaderLevelFromRecord($fdpDocument, 'fdp_encoder_id');
 
-                if ($this->hasFundUtilizationPendingPo($fdpDocument->fdp_file_path, $fdpDocument->fdp_status ?? null, $fdpDocument->approved_at_dilg_po ?? null)) {
+                if ($this->hasFundUtilizationPendingPo($fdpDocument->fdp_file_path, $fdpDocument->fdp_status ?? null, $uploaderLevel, $fdpDocument->approved_at_dilg_po ?? null, $fdpDocument->approved_at_dilg_ro ?? null)) {
                     $summary['po_count']++;
-                } elseif ($this->hasFundUtilizationPendingRo($fdpDocument->fdp_file_path, $fdpDocument->fdp_status ?? null, $fdpDocument->approved_at_dilg_po ?? null, $fdpDocument->approved_at_dilg_ro ?? null)) {
+                } elseif ($this->hasFundUtilizationPendingRo($fdpDocument->fdp_file_path, $fdpDocument->fdp_status ?? null, $uploaderLevel, $fdpDocument->approved_at_dilg_po ?? null, $fdpDocument->approved_at_dilg_ro ?? null)) {
                     $summary['ro_count']++;
                 } elseif ($this->hasFundUtilizationReturned($fdpDocument->fdp_file_path, $fdpDocument->fdp_status ?? null)) {
                     $summary['returned_count']++;
+                } elseif ($this->hasFundUtilizationApproved($fdpDocument->fdp_file_path, $fdpDocument->fdp_status ?? null)) {
+                    $summary['approved_count']++;
                 }
             }
 
             if ($fdpDocument && trim((string) ($fdpDocument->posting_link ?? '')) !== '') {
                 $summary['uploaded_count']++;
+                $uploaderLevel = $this->resolveFundUtilizationUploaderLevelFromRecord($fdpDocument, 'posting_encoder_id');
 
-                if ($this->hasFundUtilizationPendingPo($fdpDocument->posting_link, $fdpDocument->posting_status ?? null, $fdpDocument->posting_approved_at_dilg_po ?? null)) {
+                if ($this->hasFundUtilizationPendingPo($fdpDocument->posting_link, $fdpDocument->posting_status ?? null, $uploaderLevel, $fdpDocument->posting_approved_at_dilg_po ?? null, $fdpDocument->posting_approved_at_dilg_ro ?? null)) {
                     $summary['po_count']++;
-                } elseif ($this->hasFundUtilizationPendingRo($fdpDocument->posting_link, $fdpDocument->posting_status ?? null, $fdpDocument->posting_approved_at_dilg_po ?? null, $fdpDocument->posting_approved_at_dilg_ro ?? null)) {
+                } elseif ($this->hasFundUtilizationPendingRo($fdpDocument->posting_link, $fdpDocument->posting_status ?? null, $uploaderLevel, $fdpDocument->posting_approved_at_dilg_po ?? null, $fdpDocument->posting_approved_at_dilg_ro ?? null)) {
                     $summary['ro_count']++;
                 } elseif ($this->hasFundUtilizationReturned($fdpDocument->posting_link, $fdpDocument->posting_status ?? null)) {
                     $summary['returned_count']++;
+                } elseif ($this->hasFundUtilizationApproved($fdpDocument->posting_link, $fdpDocument->posting_status ?? null)) {
+                    $summary['approved_count']++;
                 }
             }
         }
@@ -1438,13 +2090,24 @@ class FundUtilizationReportController extends Controller
             return $summary;
         }
 
-        if ($summary['uploaded_count'] > 0) {
-            $summary['label'] = 'No Pending';
-            $summary['detail'] = 'Validation queue is clear';
+        if ($summary['approved_count'] > 0) {
+            $summary['label'] = 'Validated';
+            $summary['detail'] = $summary['approved_count'] . ' approved item' . ($summary['approved_count'] === 1 ? '' : 's');
             $summary['icon'] = 'fa-check-circle';
             $summary['text_color'] = '#047857';
             $summary['background_color'] = '#ecfdf5';
             $summary['border_color'] = '#6ee7b7';
+
+            return $summary;
+        }
+
+        if ($summary['uploaded_count'] > 0) {
+            $summary['label'] = 'Uploaded';
+            $summary['detail'] = 'Awaiting validation updates';
+            $summary['icon'] = 'fa-file-upload';
+            $summary['text_color'] = '#1d4ed8';
+            $summary['background_color'] = '#eff6ff';
+            $summary['border_color'] = '#93c5fd';
         }
 
         return $summary;
@@ -1786,6 +2449,7 @@ class FundUtilizationReportController extends Controller
         );
         
         $movUploads = [];
+        $batchDocuments = [];
         $writtenNotices = [];
         $fdpDocuments = [];
         $adminRemarks = [];
@@ -1795,30 +2459,35 @@ class FundUtilizationReportController extends Controller
             if ($report->is_lfp ?? false) {
                 // For LFP projects, retrieve FUR data by subaybayan_project_code + quarter
                 $movUploads[$quarter] = FURMovUpload::where('project_code', $projectCode)->where('quarter', $quarter)->first();
+                $batchDocuments[$quarter] = FURBatchDocument::where('project_code', $projectCode)->where('quarter', $quarter)->first();
                 $writtenNotices[$quarter] = FURWrittenNotice::where('project_code', $projectCode)->where('quarter', $quarter)->first();
                 $fdpDocuments[$quarter] = FURFDP::where('project_code', $projectCode)->where('quarter', $quarter)->first();
                 $adminRemarks[$quarter] = FURAdminRemark::where('project_code', $projectCode)->where('quarter', $quarter)->first();
             } else {
                 $movUploads[$quarter] = $report->movUploads()->where('quarter', $quarter)->first();
+                $batchDocuments[$quarter] = $report->batchDocuments()->where('quarter', $quarter)->first();
                 $writtenNotices[$quarter] = $report->writtenNotices()->where('quarter', $quarter)->first();
                 $fdpDocuments[$quarter] = $report->fdpDocuments()->where('quarter', $quarter)->first();
                 $adminRemarks[$quarter] = $report->adminRemarks()->where('quarter', $quarter)->first();
             }
             
             // Calculate accomplishment percentage for this quarter
-            $accomplishmentPercentages[$quarter] = $this->calculateAccomplishmentPercentage($movUploads[$quarter], $writtenNotices[$quarter], $fdpDocuments[$quarter]);
+            $accomplishmentPercentages[$quarter] = $this->calculateAccomplishmentPercentage($movUploads[$quarter], $writtenNotices[$quarter], $fdpDocuments[$quarter], $batchDocuments[$quarter]);
         }
 
         $activityLogs = $this->getFundUtilizationLogs($projectCode);
+        $submissionWorkflows = $this->resolveFundUtilizationWorkflowMap($report->project_code);
 
         return view('reports.fund-utilization.show', compact(
             'report',
             'quarters',
             'movUploads',
+            'batchDocuments',
             'writtenNotices',
             'fdpDocuments',
             'adminRemarks',
             'activityLogs',
+            'submissionWorkflows',
             'accomplishmentPercentages',
             'deadlineReportingYear',
             'configuredQuarterDeadlines'
@@ -1830,13 +2499,22 @@ class FundUtilizationReportController extends Controller
      * Based on number of documents APPROVED out of total required documents
      * Only counts documents that have been approved (status = 'approved')
      */
-    private function calculateAccomplishmentPercentage($movUpload, $writtenNotice, $fdpDocument)
+    private function calculateAccomplishmentPercentage($movUpload, $writtenNotice, $fdpDocument, $batchDocument = null)
     {
-        $totalDocuments = 9; // MOV + 6 Written Notices (DBM, DILG, Speaker, President, House, Senate) + FDP + LGU Website = 9
+        if ($batchDocument && !empty($batchDocument->approved_at_dilg_ro)) {
+            return 100;
+        }
+
+        $totalDocuments = 10; // MOV + Batch Documents + 6 Written Notices + FDP + LGU Website = 10
         $approvedDocuments = 0;
 
         // Check MOV - must have approved status
         if ($movUpload && $movUpload->status === 'approved') {
+            $approvedDocuments++;
+        }
+
+        // Check Batch Documents - must have approved status
+        if ($batchDocument && $batchDocument->status === 'approved') {
             $approvedDocuments++;
         }
 
@@ -1875,16 +2553,15 @@ class FundUtilizationReportController extends Controller
     /**
      * Upload MOV file
      */
-    public function uploadMOV(Request $request, $projectCode)
+    public function uploadMOV(FundUtilizationMovUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
     {
-        $request->validate([
-            'quarter' => 'required|in:Q1,Q2,Q3,Q4',
-            'mov_file' => 'required|mimes:pdf|max:10240',
-        ]);
-
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
-        $autoElevateToRegional = $this->isProvincialDilgUser($user);
+        if (!$this->canUploadFundUtilizationDocuments($user)) {
+            return back()->withErrors([
+                'mov_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
+            ]);
+        }
 
         if ($request->hasFile('mov_file')) {
             $existingRecord = FURMovUpload::where('project_code', $projectCode)
@@ -1894,58 +2571,45 @@ class FundUtilizationReportController extends Controller
             $file = $request->file('mov_file');
             $path = $file->store('fur/mov/' . $projectCode, 'public');
 
-            // Get secure, tamper-proof timestamp from PAGASA server
-            // User cannot change this by modifying their computer's clock
-            $secureTimestamp = SecureTimestampService::getUploadTimestamp();
-            
-            $updates = [
-                'mov_file_path' => $path, 
-                'updated_at' => $secureTimestamp, 
-                'encoder_id' => auth()->id(),
-                'mov_uploaded_at' => $secureTimestamp,
-                'mov_encoder_id' => auth()->id(),
-                // Reset status/approval when a returned file is resubmitted
-                'status' => 'pending',
-                'approved_by' => null,
-                'approved_at' => null,
-                'approved_at_dilg_po' => null,
-                'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => null,
-                'approved_by_dilg_ro' => null,
-                'approval_remarks' => null,
-            ];
+            try {
+                $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService) {
+                    $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
-            if ($autoElevateToRegional) {
-                $updates['approved_by'] = auth()->id();
-                $updates['approved_at'] = $secureTimestamp;
-                $updates['approved_at_dilg_po'] = $secureTimestamp;
-                $updates['approved_at_dilg_ro'] = null;
-                $updates['approved_by_dilg_po'] = auth()->id();
-                $updates['approved_by_dilg_ro'] = null;
-            }
-            
-            // Add created_at with secure timestamp only for new records
-            if (!$existingRecord) {
-                $updates['created_at'] = $secureTimestamp;
-            }
-            
-            FURMovUpload::updateOrCreate(
-                ['project_code' => $projectCode, 'quarter' => $request->quarter],
-                $updates
-            );
+                    $updates = [
+                        'mov_file_path' => $path,
+                        'updated_at' => $secureTimestamp,
+                        'encoder_id' => auth()->id(),
+                        'mov_uploaded_at' => $secureTimestamp,
+                        'mov_encoder_id' => auth()->id(),
+                        'status' => 'pending',
+                    ];
 
-            if ($oldFilePath && $oldFilePath !== $path && Storage::disk('public')->exists($oldFilePath)) {
+                    if (!$existingRecord) {
+                        $updates['created_at'] = $secureTimestamp;
+                    }
+
+                    $record = FURMovUpload::updateOrCreate(
+                        ['project_code' => $projectCode, 'quarter' => $request->quarter],
+                        $updates
+                    );
+
+                    $workflowService->submitOrResubmit($report, $request->quarter, 'mov', $record, $user);
+                    SecureTimestampService::logUploadTimestamp('mov', $projectCode, $request->quarter, $secureTimestamp);
+
+                    return $record;
+                });
+            } catch (\Throwable $exception) {
+                if ($path && Storage::disk('public')->exists($path)) {
+                    Storage::disk('public')->delete($path);
+                }
+
+                return back()->withErrors([
+                    'mov_file' => $exception->getMessage(),
+                ]);
+            }
+
+            if ($oldFilePath && $oldFilePath !== $record->mov_file_path && Storage::disk('public')->exists($oldFilePath)) {
                 Storage::disk('public')->delete($oldFilePath);
-            }
-
-            // Log the upload for audit trail
-            SecureTimestampService::logUploadTimestamp('mov', $projectCode, $request->quarter, $secureTimestamp);
-
-            if ($autoElevateToRegional) {
-                $this->notifyDilgRegionalUsers($report, 'mov', $request->quarter);
-            } else {
-                // Notify DILG users in the same province when an LGU submits.
-                $this->notifyDilgProvinceUsers($report, 'mov', $request->quarter);
             }
         }
 
@@ -1953,23 +2617,202 @@ class FundUtilizationReportController extends Controller
     }
 
     /**
+     * Upload Batch Documents file
+     */
+    public function uploadBatchDocument(FundUtilizationBatchDocumentUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
+    {
+        if (!$this->canUploadFundUtilizationDocuments(Auth::user())) {
+            return back()->withErrors([
+                'batch_document_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
+            ]);
+        }
+
+        $files = array_values(array_filter((array) $request->file('batch_document_file', [])));
+        if (!empty($files)) {
+            $result = ['newFilePaths' => []];
+            try {
+                $result = $this->storeBatchDocumentsForProject(
+                    $projectCode,
+                    $request->quarter,
+                    $files,
+                    Auth::user(),
+                    $workflowService
+                );
+
+                foreach (array_unique($result['oldFilePaths'] ?? []) as $oldFilePath) {
+                    if ($oldFilePath && !in_array($oldFilePath, $result['newFilePaths'] ?? [], true) && Storage::disk('public')->exists($oldFilePath)) {
+                        Storage::disk('public')->delete($oldFilePath);
+                    }
+                }
+            } catch (\Throwable $exception) {
+                foreach (array_unique($result['newFilePaths'] ?? []) as $newFilePath) {
+                    if ($newFilePath && Storage::disk('public')->exists($newFilePath)) {
+                        Storage::disk('public')->delete($newFilePath);
+                    }
+                }
+
+                throw $exception;
+            }
+        }
+
+        return back()->with('success', 'Batch Documents files uploaded successfully.');
+    }
+
+    public function uploadBatchDocumentsBulk(FundUtilizationBatchDocumentBulkUploadRequest $request, FundUtilizationWorkflowService $workflowService)
+    {
+        $validated = $request->validated();
+
+        $projectCodes = collect($validated['project_codes'] ?? [])
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($projectCodes->isEmpty()) {
+            $message = 'Please select at least one project for batch upload.';
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->withErrors(['project_codes' => $message]);
+        }
+
+        $uploadedFiles = array_values(array_filter((array) $request->file('batch_document_files', [])));
+        $user = Auth::user();
+        if (!$this->canUploadFundUtilizationDocuments($user)) {
+            $message = 'Only LGU User and DILG Provincial Office users can upload documents.';
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 403)
+                : back()->withErrors(['batch_upload' => $message]);
+        }
+        $newFilePaths = [];
+        $oldFilePaths = [];
+        $processedCount = 0;
+
+        try {
+            foreach ($projectCodes as $projectCode) {
+                $result = $this->storeBatchDocumentsForProject(
+                    $projectCode,
+                    $validated['quarter'],
+                    $uploadedFiles,
+                    $user,
+                    $workflowService
+                );
+
+                $processedCount++;
+                $newFilePaths = array_merge($newFilePaths, $result['newFilePaths'] ?? []);
+                $oldFilePaths = array_merge($oldFilePaths, $result['oldFilePaths'] ?? []);
+            }
+        } catch (\Throwable $exception) {
+            foreach (array_unique($newFilePaths) as $path) {
+                if ($path && Storage::disk('public')->exists($path)) {
+                    Storage::disk('public')->delete($path);
+                }
+            }
+
+            Log::error('Fund utilization batch upload bulk failed.', [
+                'quarter' => $validated['quarter'] ?? null,
+                'project_codes' => $projectCodes->all(),
+                'user_id' => auth()->id(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            $message = 'Batch upload failed. Please try again.';
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 500)
+                : back()->withErrors(['batch_upload' => $message]);
+        }
+
+        foreach (array_unique($oldFilePaths) as $path) {
+            if ($path && !in_array($path, $newFilePaths, true) && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+
+        $message = $processedCount === 1
+            ? 'Batch document uploaded successfully for 1 project.'
+            : "Batch document uploaded successfully for {$processedCount} projects.";
+
+        return $request->expectsJson()
+            ? response()->json(['message' => $message, 'processed_count' => $processedCount])
+            : back()->with('success', $message);
+    }
+
+    private function storeBatchDocumentsForProject(string $projectCode, string $quarter, array $files, $user, FundUtilizationWorkflowService $workflowService): array
+    {
+        $report = $this->getReportOrLfpProject($projectCode);
+        $existingRecord = FURBatchDocument::where('project_code', $projectCode)
+            ->where('quarter', $quarter)
+            ->first();
+        $oldFilePaths = $this->getBatchDocumentFilePaths($existingRecord);
+        $newFilePaths = [];
+        $storageDirectory = 'fur/batch-documents/' . $projectCode;
+
+        foreach ($files as $file) {
+            if (!$file) {
+                continue;
+            }
+
+            $fileName = $this->buildBatchDocumentStoredFileName($file);
+            $storedFileName = $fileName;
+            $pathInfo = pathinfo($fileName);
+            $fileBaseName = $pathInfo['filename'] ?? 'document';
+            $fileExtension = $pathInfo['extension'] ?? '';
+            $sequence = 1;
+
+            while (Storage::disk('public')->exists($storageDirectory . '/' . $storedFileName)) {
+                $suffix = '-' . $sequence;
+                $storedFileName = $fileBaseName . $suffix . ($fileExtension !== '' ? '.' . $fileExtension : '');
+                $sequence++;
+            }
+
+            $newFilePaths[] = $file->storeAs($storageDirectory, $storedFileName, 'public');
+        }
+
+        $record = DB::transaction(function () use ($existingRecord, $projectCode, $quarter, $newFilePaths, $report, $user, $workflowService) {
+            $secureTimestamp = SecureTimestampService::getUploadTimestamp();
+
+            $updates = [
+                'updated_at' => $secureTimestamp,
+                'encoder_id' => auth()->id(),
+                'batch_document_uploaded_at' => $secureTimestamp,
+                'batch_document_encoder_id' => auth()->id(),
+                'status' => 'pending',
+            ];
+
+            if (!$existingRecord) {
+                $updates['created_at'] = $secureTimestamp;
+            }
+
+            $updates = array_merge($updates, $this->buildBatchDocumentStoragePayload($newFilePaths));
+
+            $record = FURBatchDocument::updateOrCreate(
+                ['project_code' => $projectCode, 'quarter' => $quarter],
+                $updates
+            );
+
+            $workflowService->submitOrResubmit($report, $quarter, 'batch-document', $record, $user);
+            SecureTimestampService::logUploadTimestamp('batch-document', $projectCode, $quarter, $secureTimestamp);
+
+            return $record;
+        });
+
+        return [
+            'oldFilePaths' => $oldFilePaths,
+            'newFilePaths' => $this->getBatchDocumentFilePaths($record),
+        ];
+    }
+
+    /**
      * Upload Written Notice files
      */
-    public function uploadWrittenNotice(Request $request, $projectCode)
+    public function uploadWrittenNotice(FundUtilizationWrittenNoticeUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
     {
-        $request->validate([
-            'quarter' => 'required|in:Q1,Q2,Q3,Q4',
-            'secretary_dbm' => 'nullable|mimes:pdf,jpg,jpeg,png|max:5120',
-            'secretary_dilg' => 'nullable|mimes:pdf,jpg,jpeg,png|max:5120',
-            'speaker_house' => 'nullable|mimes:pdf,jpg,jpeg,png|max:5120',
-            'president_senate' => 'nullable|mimes:pdf,jpg,jpeg,png|max:5120',
-            'house_committee' => 'nullable|mimes:pdf,jpg,jpeg,png|max:5120',
-            'senate_committee' => 'nullable|mimes:pdf,jpg,jpeg,png|max:5120',
-        ]);
-
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
-        $autoElevateToRegional = $this->isProvincialDilgUser($user);
+        if (!$this->canUploadFundUtilizationDocuments($user)) {
+            return back()->withErrors([
+                'written_notice' => 'Only LGU User and DILG Provincial Office users can upload documents.',
+            ]);
+        }
         $data = ['project_code' => $projectCode, 'quarter' => $request->quarter];
         $updates = [];
 
@@ -1979,10 +2822,13 @@ class FundUtilizationReportController extends Controller
             ->where('quarter', $request->quarter)
             ->first();
         $replacedPaths = [];
+        $newPaths = [];
+        $uploadedDocumentTypes = [];
 
         // Map request fields to database fields and individual upload timestamp fields
         $fields = [
             'secretary_dbm' => [
+                'workflow_type' => 'written-notice-dbm',
                 'path' => 'secretary_dbm_path',
                 'uploaded_at' => 'dbm_uploaded_at',
                 'encoder_id' => 'dbm_encoder_id',
@@ -1994,6 +2840,7 @@ class FundUtilizationReportController extends Controller
                 'remarks' => 'dbm_remarks',
             ],
             'secretary_dilg' => [
+                'workflow_type' => 'written-notice-dilg',
                 'path' => 'secretary_dilg_path',
                 'uploaded_at' => 'dilg_uploaded_at',
                 'encoder_id' => 'dilg_encoder_id',
@@ -2005,6 +2852,7 @@ class FundUtilizationReportController extends Controller
                 'remarks' => 'dilg_remarks',
             ],
             'speaker_house' => [
+                'workflow_type' => 'written-notice-speaker',
                 'path' => 'speaker_house_path',
                 'uploaded_at' => 'speaker_uploaded_at',
                 'encoder_id' => 'speaker_encoder_id',
@@ -2016,6 +2864,7 @@ class FundUtilizationReportController extends Controller
                 'remarks' => 'speaker_remarks',
             ],
             'president_senate' => [
+                'workflow_type' => 'written-notice-president',
                 'path' => 'president_senate_path',
                 'uploaded_at' => 'president_uploaded_at',
                 'encoder_id' => 'president_encoder_id',
@@ -2027,6 +2876,7 @@ class FundUtilizationReportController extends Controller
                 'remarks' => 'president_remarks',
             ],
             'house_committee' => [
+                'workflow_type' => 'written-notice-house',
                 'path' => 'house_committee_path',
                 'uploaded_at' => 'house_uploaded_at',
                 'encoder_id' => 'house_encoder_id',
@@ -2038,6 +2888,7 @@ class FundUtilizationReportController extends Controller
                 'remarks' => 'house_remarks',
             ],
             'senate_committee' => [
+                'workflow_type' => 'written-notice-senate',
                 'path' => 'senate_committee_path',
                 'uploaded_at' => 'senate_uploaded_at',
                 'encoder_id' => 'senate_encoder_id',
@@ -2057,62 +2908,48 @@ class FundUtilizationReportController extends Controller
                 $path = $file->store('fur/written-notice/' . $projectCode, 'public');
                 $updates[$fieldConfig['path']] = $path;
                 $replacedPaths[] = ['old' => $oldPath, 'new' => $path];
+                $newPaths[] = $path;
+                $uploadedDocumentTypes[] = $fieldConfig['workflow_type'];
                 // Set individual upload timestamp for this specific document
                 $updates[$fieldConfig['uploaded_at']] = $secureTimestamp;
                 $updates[$fieldConfig['encoder_id']] = auth()->id();
-                // Reset status/approval when a returned file is resubmitted
+                // Reset workflow state when a returned file is resubmitted, but retain history.
                 $updates[$fieldConfig['status']] = 'pending';
-                $updates[$fieldConfig['approved_by']] = null;
-                $updates[$fieldConfig['approved_at']] = null;
-                if (!empty($fieldConfig['approved_at_dilg_po'])) {
-                    $updates[$fieldConfig['approved_at_dilg_po']] = null;
-                }
-                if (!empty($fieldConfig['approved_at_dilg_ro'])) {
-                    $updates[$fieldConfig['approved_at_dilg_ro']] = null;
-                }
-                $updates[$fieldConfig['remarks']] = null;
-                // Also clear shared approval state so the UI fully resets
+                // Also reset the shared workflow state without erasing history.
                 $updates['status'] = 'pending';
-                $updates['approved_by'] = null;
-                $updates['approved_at'] = null;
-                $updates['approved_at_dilg_po'] = null;
-                $updates['approved_at_dilg_ro'] = null;
-                $updates['approval_remarks'] = null;
-                $updates['user_remarks'] = null;
 
-                if ($autoElevateToRegional) {
-                    $updates[$fieldConfig['approved_by']] = auth()->id();
-                    $updates[$fieldConfig['approved_at']] = $secureTimestamp;
-                    if (!empty($fieldConfig['approved_at_dilg_po'])) {
-                        $updates[$fieldConfig['approved_at_dilg_po']] = $secureTimestamp;
-                    }
-                    if (!empty($fieldConfig['approved_at_dilg_ro'])) {
-                        $updates[$fieldConfig['approved_at_dilg_ro']] = null;
-                    }
-                    $updates[$fieldConfig['approved_by'] . '_dilg_po'] = auth()->id();
-                    $updates[$fieldConfig['approved_by'] . '_dilg_ro'] = null;
-                }
-                
                 // Log the upload for audit trail
                 $shortFieldName = str_replace('secretary_', '', $requestField);
                 SecureTimestampService::logUploadTimestamp('written-notice-' . $shortFieldName, $projectCode, $request->quarter, $secureTimestamp);
-
-                if ($autoElevateToRegional) {
-                    $this->notifyDilgRegionalUsers($report, 'written-notice-' . $shortFieldName, $request->quarter);
-                } else {
-                    // Notify DILG users in the same province when an LGU submits.
-                    $this->notifyDilgProvinceUsers($report, 'written-notice-' . $shortFieldName, $request->quarter);
-                }
             }
         }
 
         if (!empty($updates)) {
-            // Add created_at with secure timestamp only for new records
-            if (!$existingRecord) {
-                $updates['created_at'] = $secureTimestamp;
+            try {
+                $record = DB::transaction(function () use ($existingRecord, $data, $updates, $secureTimestamp, $report, $request, $uploadedDocumentTypes, $user, $workflowService) {
+                    if (!$existingRecord) {
+                        $updates['created_at'] = $secureTimestamp;
+                    }
+
+                    $record = FURWrittenNotice::updateOrCreate($data, $updates);
+
+                    foreach (array_unique($uploadedDocumentTypes) as $documentType) {
+                        $workflowService->submitOrResubmit($report, $request->quarter, $documentType, $record, $user);
+                    }
+
+                    return $record;
+                });
+            } catch (\Throwable $exception) {
+                foreach (array_unique($newPaths) as $newPath) {
+                    if ($newPath && Storage::disk('public')->exists($newPath)) {
+                        Storage::disk('public')->delete($newPath);
+                    }
+                }
+
+                return back()->withErrors([
+                    'written_notice' => $exception->getMessage(),
+                ]);
             }
-            
-            FURWrittenNotice::updateOrCreate($data, $updates);
 
             foreach ($replacedPaths as $replacedPath) {
                 $oldPath = $replacedPath['old'] ?? null;
@@ -2130,16 +2967,15 @@ class FundUtilizationReportController extends Controller
     /**
      * Upload FDP file
      */
-    public function uploadFDP(Request $request, $projectCode)
+    public function uploadFDP(FundUtilizationFdpUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
     {
-        $request->validate([
-            'quarter' => 'required|in:Q1,Q2,Q3,Q4',
-            'fdp_file' => 'required|mimes:pdf,jpg,jpeg,png|max:10240',
-        ]);
-
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
-        $autoElevateToRegional = $this->isProvincialDilgUser($user);
+        if (!$this->canUploadFundUtilizationDocuments($user)) {
+            return back()->withErrors([
+                'fdp_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
+            ]);
+        }
 
         if ($request->hasFile('fdp_file')) {
             $existingRecord = FURFDP::where('project_code', $projectCode)
@@ -2149,63 +2985,46 @@ class FundUtilizationReportController extends Controller
             $file = $request->file('fdp_file');
             $path = $file->store('fur/fdp/' . $projectCode, 'public');
 
-            // Get secure, tamper-proof timestamp from PAGASA server
-            $secureTimestamp = SecureTimestampService::getUploadTimestamp();
-            
-            $updates = [
-                'fdp_file_path' => $path, 
-                'updated_at' => $secureTimestamp, 
-                'encoder_id' => auth()->id(),
-                'fdp_uploaded_at' => $secureTimestamp,
-                'fdp_encoder_id' => auth()->id(),
-                // Reset status/approval when a returned file is resubmitted
-                'fdp_status' => 'pending',
-                'fdp_approved_by' => null,
-                'fdp_approved_at' => null,
-                'fdp_remarks' => null,
-                // Clear shared approval state as well
-                'status' => 'pending',
-                'approved_by' => null,
-                'approved_at' => null,
-                'approved_at_dilg_po' => null,
-                'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => null,
-                'approved_by_dilg_ro' => null,
-                'approval_remarks' => null,
-                'user_remarks' => null,
-            ];
+            try {
+                $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService) {
+                    $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
-            if ($autoElevateToRegional) {
-                $updates['fdp_approved_by'] = auth()->id();
-                $updates['fdp_approved_at'] = $secureTimestamp;
-                $updates['approved_at_dilg_po'] = $secureTimestamp;
-                $updates['approved_at_dilg_ro'] = null;
-                $updates['approved_by_dilg_po'] = auth()->id();
-                $updates['approved_by_dilg_ro'] = null;
-            }
-            
-            // Add created_at with secure timestamp only for new records
-            if (!$existingRecord) {
-                $updates['created_at'] = $secureTimestamp;
-            }
-            
-            FURFDP::updateOrCreate(
-                ['project_code' => $projectCode, 'quarter' => $request->quarter],
-                $updates
-            );
+                    $updates = [
+                        'fdp_file_path' => $path,
+                        'updated_at' => $secureTimestamp,
+                        'encoder_id' => auth()->id(),
+                        'fdp_uploaded_at' => $secureTimestamp,
+                        'fdp_encoder_id' => auth()->id(),
+                        'fdp_status' => 'pending',
+                        'status' => 'pending',
+                    ];
 
-            if ($oldFilePath && $oldFilePath !== $path && Storage::disk('public')->exists($oldFilePath)) {
+                    if (!$existingRecord) {
+                        $updates['created_at'] = $secureTimestamp;
+                    }
+
+                    $record = FURFDP::updateOrCreate(
+                        ['project_code' => $projectCode, 'quarter' => $request->quarter],
+                        $updates
+                    );
+
+                    $workflowService->submitOrResubmit($report, $request->quarter, 'fdp', $record, $user);
+                    SecureTimestampService::logUploadTimestamp('fdp', $projectCode, $request->quarter, $secureTimestamp);
+
+                    return $record;
+                });
+            } catch (\Throwable $exception) {
+                if ($path && Storage::disk('public')->exists($path)) {
+                    Storage::disk('public')->delete($path);
+                }
+
+                return back()->withErrors([
+                    'fdp_file' => $exception->getMessage(),
+                ]);
+            }
+
+            if ($oldFilePath && $oldFilePath !== $record->fdp_file_path && Storage::disk('public')->exists($oldFilePath)) {
                 Storage::disk('public')->delete($oldFilePath);
-            }
-
-            // Log the upload for audit trail
-            SecureTimestampService::logUploadTimestamp('fdp', $projectCode, $request->quarter, $secureTimestamp);
-
-            if ($autoElevateToRegional) {
-                $this->notifyDilgRegionalUsers($report, 'fdp', $request->quarter);
-            } else {
-                // Notify DILG users in the same province when an LGU submits.
-                $this->notifyDilgProvinceUsers($report, 'fdp', $request->quarter);
             }
         }
 
@@ -2215,16 +3034,17 @@ class FundUtilizationReportController extends Controller
     /**
      * Save LGU posting link (website/social media).
      */
-    public function savePostingLink(Request $request, $projectCode)
+    public function savePostingLink(FundUtilizationPostingLinkRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
     {
-        $validated = $request->validate([
-            'quarter' => 'required|in:Q1,Q2,Q3,Q4',
-            'posting_link' => 'required|string|max:2048',
-        ]);
+        $validated = $request->validated();
 
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
-        $autoElevateToRegional = $this->isProvincialDilgUser($user);
+        if (!$this->canUploadFundUtilizationDocuments($user)) {
+            return back()
+                ->withInput()
+                ->withErrors(['posting_link' => 'Only LGU User and DILG Provincial Office users can upload documents.']);
+        }
 
         $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
@@ -2235,34 +3055,25 @@ class FundUtilizationReportController extends Controller
                 ->withErrors(['posting_link' => 'Please enter a valid http or https URL.']);
         }
 
-        $updates = [
-            'posting_link' => $postingLink,
-            'posting_uploaded_at' => $secureTimestamp,
-            'posting_encoder_id' => auth()->id(),
-            // Reset posting-link approval state on resubmit/edit
-            'posting_status' => 'pending',
-            'posting_approved_by' => null,
-            'posting_approved_at' => null,
-            'posting_approved_at_dilg_po' => null,
-            'posting_approved_at_dilg_ro' => null,
-            'posting_approved_by_dilg_po' => null,
-            'posting_approved_by_dilg_ro' => null,
-            'posting_remarks' => null,
-        ];
+        try {
+            DB::transaction(function () use ($projectCode, $validated, $secureTimestamp, $postingLink, $report, $user, $workflowService) {
+                $record = FURFDP::updateOrCreate(
+                    ['project_code' => $projectCode, 'quarter' => $validated['quarter']],
+                    [
+                        'posting_link' => $postingLink,
+                        'posting_uploaded_at' => $secureTimestamp,
+                        'posting_encoder_id' => auth()->id(),
+                        'posting_status' => 'pending',
+                    ]
+                );
 
-        if ($autoElevateToRegional) {
-            $updates['posting_approved_by'] = auth()->id();
-            $updates['posting_approved_at'] = $secureTimestamp;
-            $updates['posting_approved_at_dilg_po'] = $secureTimestamp;
-            $updates['posting_approved_at_dilg_ro'] = null;
-            $updates['posting_approved_by_dilg_po'] = auth()->id();
-            $updates['posting_approved_by_dilg_ro'] = null;
+                $workflowService->submitOrResubmit($report, $validated['quarter'], 'posting-link', $record, $user);
+            });
+        } catch (\Throwable $exception) {
+            return back()
+                ->withInput()
+                ->withErrors(['posting_link' => $exception->getMessage()]);
         }
-
-        FURFDP::updateOrCreate(
-            ['project_code' => $projectCode, 'quarter' => $validated['quarter']],
-            $updates
-        );
 
         Log::channel('upload_timestamps')->info('Document uploaded', [
             'document_type' => 'posting-link',
@@ -2275,314 +3086,97 @@ class FundUtilizationReportController extends Controller
             'user_id' => auth()->id(),
         ]);
 
-        if ($autoElevateToRegional) {
-            $this->notifyDilgRegionalUsers($report, 'posting-link', $validated['quarter']);
-        } else {
-            $this->notifyDilgProvinceUsers($report, 'posting-link', $validated['quarter']);
-        }
-
         return back()->with('success', 'LGU posting link saved successfully.');
     }
 
     /**
      * Approve or return upload with remarks
      */
-    public function approveUpload(Request $request, $projectCode, $uploadType, $quarter)
+    public function approveUpload(FundUtilizationApprovalActionRequest $request, $projectCode, $uploadType, $quarter, FundUtilizationWorkflowService $workflowService)
     {
-        $validated = $request->validate([
-            'action' => 'required|in:approve,return',
-            'remarks' => 'required_if:action,return|nullable|string|max:1000',
-        ]);
-
         $user = Auth::user();
-        $isDilgUser = $user && $user->agency === 'DILG';
-        $isRegionalOffice = $isDilgUser
-            && strtolower(trim((string) ($user->province ?? ''))) === 'regional office';
-        $isProvincialOffice = $isDilgUser && !$isRegionalOffice;
-
+        $validated = $request->validated();
         $action = $validated['action'];
         $remarks = $this->sanitizeReportRemarks($validated['remarks'] ?? null);
+        $report = $this->getReportOrLfpProject($projectCode);
 
         if ($action === 'return' && $remarks === null) {
             return back()
                 ->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
-        // Map uploadType to individual status field names
-        $statusFieldMap = [
-            'written-notice-dbm' => 'dbm_status',
-            'written-notice-dilg' => 'dilg_status',
-            'written-notice-speaker' => 'speaker_status',
-            'written-notice-president' => 'president_status',
-            'written-notice-house' => 'house_status',
-            'written-notice-senate' => 'senate_status',
-            'fdp' => 'fdp_status',
-            'posting-link' => 'posting_status',
+        $documentLabelMap = [
+            'mov' => 'MOV file',
+            'batch-document' => 'Batch Documents file',
+            'written-notice-dbm' => 'DBM document',
+            'written-notice-dilg' => 'DILG document',
+            'written-notice-speaker' => 'Speaker document',
+            'written-notice-president' => 'President document',
+            'written-notice-house' => 'House document',
+            'written-notice-senate' => 'Senate document',
+            'fdp' => 'FDP document',
+            'posting-link' => 'Posting link',
         ];
+        $documentLabel = $documentLabelMap[$uploadType] ?? 'Document';
 
-        // Map uploadType to individual approval timestamp field names
-        $timestampFieldMap = [
-            'written-notice-dbm' => 'dbm_approved_at',
-            'written-notice-dilg' => 'dilg_approved_at',
-            'written-notice-speaker' => 'speaker_approved_at',
-            'written-notice-president' => 'president_approved_at',
-            'written-notice-house' => 'house_approved_at',
-            'written-notice-senate' => 'senate_approved_at',
-            'fdp' => 'fdp_approved_at',
-            'posting-link' => 'posting_approved_at',
-        ];
+        $recordQuery = match ($uploadType) {
+            'mov' => FURMovUpload::query(),
+            'batch-document' => FURBatchDocument::query(),
+            'written-notice-dbm',
+            'written-notice-dilg',
+            'written-notice-speaker',
+            'written-notice-president',
+            'written-notice-house',
+            'written-notice-senate' => FURWrittenNotice::query(),
+            'fdp',
+            'posting-link' => FURFDP::query(),
+            default => null,
+        };
 
-        // Map uploadType to individual approver field names
-        $approverFieldMap = [
-            'written-notice-dbm' => 'dbm_approved_by',
-            'written-notice-dilg' => 'dilg_approved_by',
-            'written-notice-speaker' => 'speaker_approved_by',
-            'written-notice-president' => 'president_approved_by',
-            'written-notice-house' => 'house_approved_by',
-            'written-notice-senate' => 'senate_approved_by',
-            'fdp' => 'fdp_approved_by',
-            'posting-link' => 'posting_approved_by',
-        ];
+        if ($recordQuery === null) {
+            abort(404);
+        }
 
-        // Map uploadType to remarks field names
-        $remarksFieldMap = [
-            'written-notice-dbm' => 'dbm_remarks',
-            'written-notice-dilg' => 'dilg_remarks',
-            'written-notice-speaker' => 'speaker_remarks',
-            'written-notice-president' => 'president_remarks',
-            'written-notice-house' => 'house_remarks',
-            'written-notice-senate' => 'senate_remarks',
-            'fdp' => 'fdp_remarks',
-            'posting-link' => 'posting_remarks',
-        ];
+        $record = $recordQuery
+            ->where('project_code', $projectCode)
+            ->where('quarter', $quarter)
+            ->first();
 
-        // Map uploadType to individual DILG PO/RO validation timestamp fields
-        $poTimestampFieldMap = [
-            'written-notice-dbm' => 'dbm_approved_at_dilg_po',
-            'written-notice-dilg' => 'dilg_approved_at_dilg_po',
-            'written-notice-speaker' => 'speaker_approved_at_dilg_po',
-            'written-notice-president' => 'president_approved_at_dilg_po',
-            'written-notice-house' => 'house_approved_at_dilg_po',
-            'written-notice-senate' => 'senate_approved_at_dilg_po',
-        ];
+        if (!$record) {
+            return back()->withErrors([
+                'document' => 'The selected document record was not found.',
+            ]);
+        }
 
-        $roTimestampFieldMap = [
-            'written-notice-dbm' => 'dbm_approved_at_dilg_ro',
-            'written-notice-dilg' => 'dilg_approved_at_dilg_ro',
-            'written-notice-speaker' => 'speaker_approved_at_dilg_ro',
-            'written-notice-president' => 'president_approved_at_dilg_ro',
-            'written-notice-house' => 'house_approved_at_dilg_ro',
-            'written-notice-senate' => 'senate_approved_at_dilg_ro',
-        ];
+        $workflow = $workflowService->workflowFor($report->project_code, $quarter, $uploadType);
+        if (!$workflow) {
+            return back()->withErrors([
+                'document' => 'No workflow record exists yet for this submission. Resubmit the document first.',
+            ]);
+        }
 
-        $statusField = $statusFieldMap[$uploadType] ?? 'status';
-        $timestampField = $timestampFieldMap[$uploadType] ?? 'approved_at';
-        $approverField = $approverFieldMap[$uploadType] ?? 'approved_by';
-        $remarksField = $remarksFieldMap[$uploadType] ?? 'approval_remarks';
+        if (!Gate::forUser($user)->allows('fund-utilization.validateWorkflow', $workflow)) {
+            return back()->withErrors([
+                'document' => 'Only the currently assigned validator can perform this action.',
+            ]);
+        }
 
-        $now = pagasa_time();
-        $isWrittenNoticeDocument = str_starts_with($uploadType, 'written-notice-');
-        $poTimestampField = $isWrittenNoticeDocument ? ($poTimestampFieldMap[$uploadType] ?? null) : null;
-        $roTimestampField = $isWrittenNoticeDocument ? ($roTimestampFieldMap[$uploadType] ?? null) : null;
+        try {
+            $updatedWorkflow = $action === 'approve'
+                ? $workflowService->approve($report, $quarter, $uploadType, $record, $user)
+                : $workflowService->returnForRevision($report, $quarter, $uploadType, $record, $user, (string) $remarks);
+        } catch (\Throwable $exception) {
+            return back()->withErrors([
+                'document' => $exception->getMessage(),
+            ]);
+        }
 
-        // Provincial DILG approvals should be elevated to the Regional Office.
-        // That means we mark the provincial validation timestamp but keep the
-        // document in a pending state until the RO validates it.
-        if ($action === 'approve' && $isProvincialOffice) {
-            // For written notices, use individual approval timestamps so
-            // approving one document does not elevate all documents.
-            if ($isWrittenNoticeDocument) {
-                $data = [
-                    $statusField => 'pending',
-                    $approverField => Auth::id(),
-                    $timestampField => $now,
-                    $remarksField => null,
-                ];
-                if ($poTimestampField) {
-                    $data[$poTimestampField] = $now;
-                }
-                if ($roTimestampField) {
-                    $data[$roTimestampField] = null;
-                }
-                // Set separate PO approver field
-                $data[$approverField . '_dilg_po'] = Auth::id();
-            } else {
-                $data = [
-                    $statusField => 'pending',
-                    $approverField => Auth::id(),
-                    $timestampField => $now,
-                    $remarksField => null,
-                    'approved_at_dilg_po' => $now,
-                    'approved_at_dilg_ro' => null,
-                    'approved_by_dilg_po' => Auth::id(),
-                ];
-            }
+        if ($action === 'approve') {
+            $message = $updatedWorkflow->status === 'Approved'
+                ? $documentLabel . ' approved successfully.'
+                : $documentLabel . ' approved and forwarded to the next validation level.';
         } else {
-            // Determine the approval status
-            $status = $action === 'approve' ? 'approved' : 'returned';
-
-            $data = [
-                $statusField => $status,
-                $approverField => Auth::id(),
-            ];
-
-            // Always set the approval timestamp when approving or returning
-            $data[$timestampField] = $now;
-
-            if ($action === 'approve') {
-                $data[$remarksField] = null;
-            } elseif ($action === 'return' && $remarks !== null) {
-                $data[$remarksField] = $remarks;
-                $data['user_remarks'] = $remarks; // Save return remarks in user_remarks so they persist in notes
-            }
-
-            // Regional Office approvals should mark the RO validation timestamp.
-            if ($action === 'approve' && $isRegionalOffice) {
-                if ($isWrittenNoticeDocument) {
-                    if ($roTimestampField) {
-                        $data[$roTimestampField] = $now;
-                    }
-                    // Preserve any existing PO validation timestamp.
-                    if ($poTimestampField) {
-                        $data[$poTimestampField] = DB::raw($poTimestampField);
-                    }
-                    // Set separate RO approver field
-                    $data[$approverField . '_dilg_ro'] = Auth::id();
-                } else {
-                    $data['approved_at_dilg_ro'] = $now;
-                    // Preserve any existing provincial validation if present.
-                    if (!isset($data['approved_at_dilg_po'])) {
-                        $data['approved_at_dilg_po'] = DB::raw('approved_at_dilg_po');
-                    }
-                    // Set separate RO approver field
-                    $data['approved_by_dilg_ro'] = Auth::id();
-                }
-            }
-        }
-
-        switch ($uploadType) {
-            case 'mov':
-                FURMovUpload::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'MOV file validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'MOV file approved.' : 'MOV file returned.';
-                }
-                break;
-            case 'written-notice':
-                FURWrittenNotice::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'Written Notice files validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'Written Notice files approved.' : 'Written Notice files returned.';
-                }
-                break;
-            case 'written-notice-dbm':
-                FURWrittenNotice::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'DBM document validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'DBM Document approved.' : 'DBM Document returned.';
-                }
-                break;
-            case 'written-notice-dilg':
-                FURWrittenNotice::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'DILG document validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'DILG Document approved.' : 'DILG Document returned.';
-                }
-                break;
-            case 'written-notice-speaker':
-                FURWrittenNotice::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'Speaker document validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'Speaker Document approved.' : 'Speaker Document returned.';
-                }
-                break;
-            case 'written-notice-president':
-                FURWrittenNotice::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'President document validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'President Document approved.' : 'President Document returned.';
-                }
-                break;
-            case 'written-notice-house':
-                FURWrittenNotice::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'House document validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'House Document approved.' : 'House Document returned.';
-                }
-                break;
-            case 'written-notice-senate':
-                FURWrittenNotice::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'Senate document validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'Senate Document approved.' : 'Senate Document returned.';
-                }
-                break;
-            case 'fdp':
-                FURFDP::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'FDP document validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'FDP document approved.' : 'FDP document returned.';
-                }
-                break;
-            case 'posting-link':
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $data['posting_status'] = 'pending';
-                    $data['posting_approved_at_dilg_po'] = $now;
-                    $data['posting_approved_at_dilg_ro'] = null;
-                }
-                if ($action === 'approve' && $isRegionalOffice) {
-                    $data['posting_approved_at_dilg_ro'] = $now;
-                    // Preserve any existing provincial validation timestamp.
-                    $data['posting_approved_at_dilg_po'] = DB::raw('posting_approved_at_dilg_po');
-                }
-                FURFDP::where('project_code', $projectCode)
-                    ->where('quarter', $quarter)
-                    ->update($data);
-                if ($action === 'approve' && $isProvincialOffice) {
-                    $message = 'Posting link validated by DILG Provincial Office and elevated for DILG Regional validation.';
-                } else {
-                    $message = $action === 'approve' ? 'Posting link approved.' : 'Posting link returned.';
-                }
-                break;
-        }
-
-        // Notify DILG Regional Office users when a provincial DILG user validates.
-        if ($action === 'approve' && $isProvincialOffice) {
-            $report = $this->getReportOrLfpProject($projectCode);
-            $this->notifyDilgRegionalUsers($report, $uploadType, $quarter);
-        }
-
-        // Notify LGU users when DILG Regional Office approves.
-        if ($action === 'approve' && $isRegionalOffice) {
-            $report = $this->getReportOrLfpProject($projectCode);
-            $this->notifyLguUsersAfterRegionalApproval($report, $uploadType, $quarter);
+            $message = $documentLabel . ' returned for revision.';
         }
 
         Log::channel('upload_timestamps')->info('Document action', [
@@ -2615,6 +3209,12 @@ class FundUtilizationReportController extends Controller
         switch ($uploadType) {
             case 'mov':
                 FURMovUpload::updateOrCreate(
+                    ['project_code' => $projectCode, 'quarter' => $quarter],
+                    ['user_remarks' => $remarks]
+                );
+                break;
+            case 'batch-document':
+                FURBatchDocument::updateOrCreate(
                     ['project_code' => $projectCode, 'quarter' => $quarter],
                     ['user_remarks' => $remarks]
                 );
@@ -2701,6 +3301,7 @@ class FundUtilizationReportController extends Controller
         
         $docTypeMap = [
             'mov' => ['table' => 'tbfur_mov_uploads', 'column' => 'mov_file_path'],
+            'batch-document' => ['table' => 'tbfur_batch_documents', 'column' => 'batch_document_file_path'],
             'written-notice-dbm' => ['table' => 'tbfur_written_notice', 'column' => 'secretary_dbm_path'],
             'written-notice-dilg' => ['table' => 'tbfur_written_notice', 'column' => 'secretary_dilg_path'],
             'written-notice-speaker' => ['table' => 'tbfur_written_notice', 'column' => 'speaker_house_path'],
@@ -2724,11 +3325,23 @@ class FundUtilizationReportController extends Controller
             ->where('quarter', $quarter)
             ->first();
 
-        if (!$upload || !$upload->$column) {
-            abort(404, 'Document not found');
-        }
+        if ($docType === 'batch-document') {
+            $filePaths = $this->getBatchDocumentFilePaths($upload);
+            $fileIndex = max(0, (int) request()->query('file', 0));
+            $selectedFilePath = $filePaths[$fileIndex] ?? null;
 
-        $filePath = storage_path('app/public/' . $upload->$column);
+            if (!$upload || !$selectedFilePath) {
+                abort(404, 'Document not found');
+            }
+
+            $filePath = storage_path('app/public/' . $selectedFilePath);
+        } else {
+            if (!$upload || !$upload->$column) {
+                abort(404, 'Document not found');
+            }
+
+            $filePath = storage_path('app/public/' . $upload->$column);
+        }
 
         if (!file_exists($filePath)) {
             abort(404, 'File not found on disk');
@@ -2756,15 +3369,16 @@ class FundUtilizationReportController extends Controller
     public function deleteDocument($projectCode, $docType, $quarter)
     {
         $docTypeMap = [
-            'mov' => ['table' => 'tbfur_mov_uploads', 'column' => 'mov_file_path', 'filePath' => 'mov_file_path', 'has_file' => true],
-            'written-notice-dbm' => ['table' => 'tbfur_written_notice', 'column' => 'secretary_dbm_path', 'filePath' => 'secretary_dbm_path', 'has_file' => true],
-            'written-notice-dilg' => ['table' => 'tbfur_written_notice', 'column' => 'secretary_dilg_path', 'filePath' => 'secretary_dilg_path', 'has_file' => true],
-            'written-notice-speaker' => ['table' => 'tbfur_written_notice', 'column' => 'speaker_house_path', 'filePath' => 'speaker_house_path', 'has_file' => true],
-            'written-notice-president' => ['table' => 'tbfur_written_notice', 'column' => 'president_senate_path', 'filePath' => 'president_senate_path', 'has_file' => true],
-            'written-notice-house' => ['table' => 'tbfur_written_notice', 'column' => 'house_committee_path', 'filePath' => 'house_committee_path', 'has_file' => true],
-            'written-notice-senate' => ['table' => 'tbfur_written_notice', 'column' => 'senate_committee_path', 'filePath' => 'senate_committee_path', 'has_file' => true],
-            'fdp' => ['table' => 'tbfur_fdp', 'column' => 'fdp_file_path', 'filePath' => 'fdp_file_path', 'has_file' => true],
-            'posting-link' => ['table' => 'tbfur_fdp', 'column' => 'posting_link', 'filePath' => null, 'has_file' => false],
+            'mov' => ['table' => 'tbfur_mov_uploads', 'column' => 'mov_file_path', 'filePath' => 'mov_file_path', 'has_file' => true, 'statusField' => 'status', 'encoderField' => 'mov_encoder_id'],
+            'batch-document' => ['table' => 'tbfur_batch_documents', 'column' => 'batch_document_file_path', 'filePath' => 'batch_document_file_path', 'has_file' => true, 'statusField' => 'status', 'encoderField' => 'batch_document_encoder_id'],
+            'written-notice-dbm' => ['table' => 'tbfur_written_notice', 'column' => 'secretary_dbm_path', 'filePath' => 'secretary_dbm_path', 'has_file' => true, 'statusField' => 'dbm_status', 'encoderField' => 'dbm_encoder_id'],
+            'written-notice-dilg' => ['table' => 'tbfur_written_notice', 'column' => 'secretary_dilg_path', 'filePath' => 'secretary_dilg_path', 'has_file' => true, 'statusField' => 'dilg_status', 'encoderField' => 'dilg_encoder_id'],
+            'written-notice-speaker' => ['table' => 'tbfur_written_notice', 'column' => 'speaker_house_path', 'filePath' => 'speaker_house_path', 'has_file' => true, 'statusField' => 'speaker_status', 'encoderField' => 'speaker_encoder_id'],
+            'written-notice-president' => ['table' => 'tbfur_written_notice', 'column' => 'president_senate_path', 'filePath' => 'president_senate_path', 'has_file' => true, 'statusField' => 'president_status', 'encoderField' => 'president_encoder_id'],
+            'written-notice-house' => ['table' => 'tbfur_written_notice', 'column' => 'house_committee_path', 'filePath' => 'house_committee_path', 'has_file' => true, 'statusField' => 'house_status', 'encoderField' => 'house_encoder_id'],
+            'written-notice-senate' => ['table' => 'tbfur_written_notice', 'column' => 'senate_committee_path', 'filePath' => 'senate_committee_path', 'has_file' => true, 'statusField' => 'senate_status', 'encoderField' => 'senate_encoder_id'],
+            'fdp' => ['table' => 'tbfur_fdp', 'column' => 'fdp_file_path', 'filePath' => 'fdp_file_path', 'has_file' => true, 'statusField' => 'fdp_status', 'encoderField' => 'fdp_encoder_id'],
+            'posting-link' => ['table' => 'tbfur_fdp', 'column' => 'posting_link', 'filePath' => null, 'has_file' => false, 'statusField' => 'posting_status', 'encoderField' => 'posting_encoder_id'],
         ];
 
         if (!isset($docTypeMap[$docType])) {
@@ -2775,6 +3389,8 @@ class FundUtilizationReportController extends Controller
         $table = $config['table'];
         $column = $config['column'];
         $hasFile = $config['has_file'];
+        $statusField = $config['statusField'] ?? 'status';
+        $encoderField = $config['encoderField'] ?? null;
 
         // Get the file path from database
         $upload = \DB::table($table)
@@ -2782,13 +3398,32 @@ class FundUtilizationReportController extends Controller
             ->where('quarter', $quarter)
             ->first();
 
-        if (!$upload || !$upload->$column) {
+        $batchDocumentPaths = [];
+        if ($docType === 'batch-document') {
+            $batchDocumentPaths = $this->getBatchDocumentFilePaths($upload);
+            if (!$upload || empty($batchDocumentPaths)) {
+                return response()->json(['message' => 'Document not found'], 404);
+            }
+        } elseif (!$upload || !$upload->$column) {
             return response()->json(['message' => 'Document not found'], 404);
         }
 
-        $storagePath = $upload->$column;
-        if ($hasFile && $storagePath && Storage::disk('public')->exists($storagePath)) {
-            Storage::disk('public')->delete($storagePath);
+        if (!$this->canDeleteFundUtilizationDocument(auth()->user(), $upload, $projectCode, $docType, $quarter, $statusField, $encoderField)) {
+            return response()->json(['message' => 'You are not allowed to delete this document.'], 403);
+        }
+
+        $storagePath = null;
+        if ($docType === 'batch-document') {
+            foreach ($batchDocumentPaths as $storagePath) {
+                if ($storagePath && Storage::disk('public')->exists($storagePath)) {
+                    Storage::disk('public')->delete($storagePath);
+                }
+            }
+        } else {
+            $storagePath = $upload->$column;
+            if ($hasFile && $storagePath && Storage::disk('public')->exists($storagePath)) {
+                Storage::disk('public')->delete($storagePath);
+            }
         }
 
         // Clear the path from database and reset related approval/remarks state
@@ -2798,14 +3433,18 @@ class FundUtilizationReportController extends Controller
             case 'mov':
                 $updateData = array_merge($updateData, [
                     'status' => 'pending',
-                    'approved_by' => null,
-                    'approved_at' => null,
-                    'approved_at_dilg_po' => null,
-                    'approved_at_dilg_ro' => null,
-                    'approval_remarks' => null,
-                    'user_remarks' => null,
                     'mov_uploaded_at' => null,
                     'mov_encoder_id' => null,
+                    'encoder_id' => null,
+                    'updated_at' => null,
+                ]);
+                break;
+            case 'batch-document':
+                $updateData = array_merge($updateData, [
+                    'batch_document_files_json' => null,
+                    'status' => 'pending',
+                    'batch_document_uploaded_at' => null,
+                    'batch_document_encoder_id' => null,
                     'encoder_id' => null,
                     'updated_at' => null,
                 ]);
@@ -2813,11 +3452,6 @@ class FundUtilizationReportController extends Controller
             case 'written-notice-dbm':
                 $updateData = array_merge($updateData, [
                     'dbm_status' => 'pending',
-                    'dbm_approved_by' => null,
-                    'dbm_approved_at' => null,
-                    'dbm_approved_at_dilg_po' => null,
-                    'dbm_approved_at_dilg_ro' => null,
-                    'dbm_remarks' => null,
                     'dbm_uploaded_at' => null,
                     'dbm_encoder_id' => null,
                 ]);
@@ -2825,11 +3459,6 @@ class FundUtilizationReportController extends Controller
             case 'written-notice-dilg':
                 $updateData = array_merge($updateData, [
                     'dilg_status' => 'pending',
-                    'dilg_approved_by' => null,
-                    'dilg_approved_at' => null,
-                    'dilg_approved_at_dilg_po' => null,
-                    'dilg_approved_at_dilg_ro' => null,
-                    'dilg_remarks' => null,
                     'dilg_uploaded_at' => null,
                     'dilg_encoder_id' => null,
                 ]);
@@ -2837,11 +3466,6 @@ class FundUtilizationReportController extends Controller
             case 'written-notice-speaker':
                 $updateData = array_merge($updateData, [
                     'speaker_status' => 'pending',
-                    'speaker_approved_by' => null,
-                    'speaker_approved_at' => null,
-                    'speaker_approved_at_dilg_po' => null,
-                    'speaker_approved_at_dilg_ro' => null,
-                    'speaker_remarks' => null,
                     'speaker_uploaded_at' => null,
                     'speaker_encoder_id' => null,
                 ]);
@@ -2849,11 +3473,6 @@ class FundUtilizationReportController extends Controller
             case 'written-notice-president':
                 $updateData = array_merge($updateData, [
                     'president_status' => 'pending',
-                    'president_approved_by' => null,
-                    'president_approved_at' => null,
-                    'president_approved_at_dilg_po' => null,
-                    'president_approved_at_dilg_ro' => null,
-                    'president_remarks' => null,
                     'president_uploaded_at' => null,
                     'president_encoder_id' => null,
                 ]);
@@ -2861,11 +3480,6 @@ class FundUtilizationReportController extends Controller
             case 'written-notice-house':
                 $updateData = array_merge($updateData, [
                     'house_status' => 'pending',
-                    'house_approved_by' => null,
-                    'house_approved_at' => null,
-                    'house_approved_at_dilg_po' => null,
-                    'house_approved_at_dilg_ro' => null,
-                    'house_remarks' => null,
                     'house_uploaded_at' => null,
                     'house_encoder_id' => null,
                 ]);
@@ -2873,11 +3487,6 @@ class FundUtilizationReportController extends Controller
             case 'written-notice-senate':
                 $updateData = array_merge($updateData, [
                     'senate_status' => 'pending',
-                    'senate_approved_by' => null,
-                    'senate_approved_at' => null,
-                    'senate_approved_at_dilg_po' => null,
-                    'senate_approved_at_dilg_ro' => null,
-                    'senate_remarks' => null,
                     'senate_uploaded_at' => null,
                     'senate_encoder_id' => null,
                 ]);
@@ -2885,18 +3494,9 @@ class FundUtilizationReportController extends Controller
             case 'fdp':
                 $updateData = array_merge($updateData, [
                     'fdp_status' => 'pending',
-                    'fdp_approved_by' => null,
-                    'fdp_approved_at' => null,
-                    'fdp_remarks' => null,
                     'fdp_uploaded_at' => null,
                     'fdp_encoder_id' => null,
                     'status' => 'pending',
-                    'approved_by' => null,
-                    'approved_at' => null,
-                    'approved_at_dilg_po' => null,
-                    'approved_at_dilg_ro' => null,
-                    'approval_remarks' => null,
-                    'user_remarks' => null,
                     'encoder_id' => null,
                     'updated_at' => null,
                 ]);
@@ -2904,28 +3504,16 @@ class FundUtilizationReportController extends Controller
             case 'posting-link':
                 $updateData = array_merge($updateData, [
                     'posting_status' => 'pending',
-                    'posting_approved_by' => null,
-                    'posting_approved_at' => null,
-                    'posting_approved_at_dilg_po' => null,
-                    'posting_approved_at_dilg_ro' => null,
-                    'posting_remarks' => null,
                     'posting_uploaded_at' => null,
                     'posting_encoder_id' => null,
-                    'user_remarks' => null,
                 ]);
                 break;
         }
 
         if (strpos($docType, 'written-notice-') === 0) {
-            // Clear shared written-notice approval/remarks to avoid stale banners.
+            // Reset the shared written-notice workflow state without erasing history.
             $updateData = array_merge($updateData, [
                 'status' => 'pending',
-                'approved_by' => null,
-                'approved_at' => null,
-                'approved_at_dilg_po' => null,
-                'approved_at_dilg_ro' => null,
-                'approval_remarks' => null,
-                'user_remarks' => null,
                 'encoder_id' => null,
                 'updated_at' => null,
             ]);
@@ -2936,7 +3524,14 @@ class FundUtilizationReportController extends Controller
             ->where('quarter', $quarter)
             ->update($updateData);
 
-        // Delete audit trail history for this document
+        $deletedDocumentLabel = $docType === 'batch-document'
+            ? collect($batchDocumentPaths)
+                ->map(fn ($path) => basename((string) $path))
+                ->filter()
+                ->implode(', ')
+            : basename((string) $storagePath);
+
+        // Preserve document deletion as part of the audit trail.
         \Log::channel('upload_timestamps')->info('Document deleted', [
             'document_type' => $docType,
             'project_code' => $projectCode,
@@ -2945,7 +3540,8 @@ class FundUtilizationReportController extends Controller
             'deleted_at' => pagasa_time()->format('Y-m-d H:i:s'),
             'deleted_by' => auth()->id(),
             'user_id' => auth()->id(),
-            'storage_path' => $storagePath
+            'storage_path' => $docType === 'batch-document' ? $batchDocumentPaths : $storagePath,
+            'remarks' => $deletedDocumentLabel !== '' ? 'Deleted: ' . $deletedDocumentLabel : 'Document deleted',
         ]);
 
         return response()->json(['message' => 'Document deleted successfully'], 200);
@@ -2986,6 +3582,23 @@ class FundUtilizationReportController extends Controller
                     $entries[] = $parsed;
                 }
             }
+        }
+
+        $workflowLogs = ApprovalLog::query()
+            ->where('project_code', $projectCode)
+            ->orderByDesc('created_at')
+            ->get();
+
+        foreach ($workflowLogs as $workflowLog) {
+            $entries[] = [
+                'timestamp' => $workflowLog->created_at?->copy()->setTimezone(config('app.timezone')) ?? now(),
+                'message' => 'Workflow ' . $workflowLog->action,
+                'action' => strtolower($workflowLog->action),
+                'document_type' => $workflowLog->document_type,
+                'quarter' => $workflowLog->quarter,
+                'user_id' => $workflowLog->approver_id ?: $workflowLog->uploader_id,
+                'remarks' => $workflowLog->remarks,
+            ];
         }
 
         if (empty($entries)) {
@@ -3342,6 +3955,15 @@ class FundUtilizationReportController extends Controller
         foreach ($movUploads as $mov) {
             if ($mov->mov_file_path && Storage::exists($mov->mov_file_path)) {
                 Storage::delete($mov->mov_file_path);
+            }
+        }
+
+        $batchDocuments = FURBatchDocument::where('project_code', $projectCode)->get();
+        foreach ($batchDocuments as $batchDocument) {
+            foreach ($this->getBatchDocumentFilePaths($batchDocument) as $storagePath) {
+                if ($storagePath && Storage::exists($storagePath)) {
+                    Storage::delete($storagePath);
+                }
             }
         }
 

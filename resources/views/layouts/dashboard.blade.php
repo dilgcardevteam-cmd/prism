@@ -4745,5 +4745,7 @@
             });
         })();
     </script>
+
+    @include('partials.global-error-confirm')
 </body>
 </html>

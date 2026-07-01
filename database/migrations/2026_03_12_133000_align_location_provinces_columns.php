@@ -27,7 +27,7 @@ return new class extends Migration
             }
         });
 
-        if (Schema::hasTable('location_regions')) {
+        if (Schema::hasTable('location_regions') && DB::connection()->getDriverName() !== 'sqlite') {
             DB::statement("
                 UPDATE location_provinces p
                 LEFT JOIN location_regions r

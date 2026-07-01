@@ -2,11 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\FundUtilizationApprovalWorkflow;
 use App\Models\LocallyFundedProject;
 use App\Models\Ticket;
+use App\Models\User;
 use App\Models\ActivityLog;
 use App\Observers\LocallyFundedProjectObserver;
 use App\Services\ActivityLogService;
+use App\Services\FundUtilizationWorkflowService;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\Registered;
@@ -179,5 +182,13 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Gate::define('ticketing.manageAdmin', fn ($user) => $user->isSuperAdmin());
+
+        Gate::define('fund-utilization.validateWorkflow', function ($user, FundUtilizationApprovalWorkflow $workflow): bool {
+            if (!$user instanceof User) {
+                return false;
+            }
+            
+            return app(FundUtilizationWorkflowService::class)->canActorValidate($workflow, $user);
+        });
     }
 }

@@ -2664,11 +2664,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/create', [App\Http\Controllers\FundUtilizationReportController::class, 'create'])->name('fund-utilization.create');
         Route::get('/get-municipalities/{province}', [App\Http\Controllers\FundUtilizationReportController::class, 'getMunicipalities'])->name('fund-utilization.get-municipalities');
         Route::post('/', [App\Http\Controllers\FundUtilizationReportController::class, 'store'])->name('fund-utilization.store');
+        Route::post('/batch-upload-documents', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadBatchDocumentsBulk'])->name('fund-utilization.batch-upload-documents');
         Route::get('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'show'])->name('fund-utilization.show');
         Route::get('/{projectCode}/edit', [App\Http\Controllers\FundUtilizationReportController::class, 'edit'])->name('fund-utilization.edit');
         Route::put('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'update'])->name('fund-utilization.update');
         Route::delete('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'deleteProject'])->name('fund-utilization.delete-project');
         Route::post('/{projectCode}/upload-mov', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadMOV'])->name('fund-utilization.upload-mov');
+        Route::post('/{projectCode}/upload-batch-document', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadBatchDocument'])->name('fund-utilization.upload-batch-document');
         Route::post('/{projectCode}/upload-written-notice', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadWrittenNotice'])->name('fund-utilization.upload-written-notice');
         Route::post('/{projectCode}/upload-fdp', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadFDP'])->name('fund-utilization.upload-fdp');
         Route::post('/{projectCode}/save-posting-link', [App\Http\Controllers\FundUtilizationReportController::class, 'savePostingLink'])->name('fund-utilization.save-posting-link');

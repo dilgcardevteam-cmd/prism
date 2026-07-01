@@ -40,6 +40,11 @@ class FundUtilizationReport extends Model
         return $this->hasMany(FURFDP::class, 'project_code', 'project_code');
     }
 
+    public function batchDocuments()
+    {
+        return $this->hasMany(FURBatchDocument::class, 'project_code', 'project_code');
+    }
+
     public function adminRemarks()
     {
         return $this->hasMany(FURAdminRemark::class, 'project_code', 'project_code');
