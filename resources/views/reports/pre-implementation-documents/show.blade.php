@@ -454,7 +454,7 @@
                                     </span>
                                 </a>
                                 @if ($canDeleteReturnedDocument)
-                                    <form method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document? You can upload and resubmit a replacement after this.');" style="display: inline-flex; flex: 0 0 auto;">
+                                    <form method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; flex: 0 0 auto;">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 104px; padding: 0 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 12px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
@@ -649,7 +649,7 @@
                                                 View
                                             </a>
                                             @if ($canDeleteReturnedMultiFile)
-                                                <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" onsubmit="return confirm('Delete this returned document? You can upload and resubmit a replacement after this.');" style="display: inline-flex; margin-left: 6px;">
+                                                <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; margin-left: 6px;">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
