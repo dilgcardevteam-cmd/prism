@@ -291,12 +291,20 @@
                 return text.includes('delete') ? defaultMessages.delete : defaultMessages.save;
             }
 
+            function resolveAssociatedForm(target) {
+                if (!target) return null;
+                if ('form' in target && target.form instanceof HTMLFormElement) {
+                    return target.form;
+                }
+                return target.closest ? target.closest('form') : null;
+            }
+
             normalizeInlineConfirmHandlers();
 
             document.addEventListener('click', function(e) {
                 const target = e.target.closest('button, input[type="submit"], input[type="button"], a');
                 if (!target) return;
-                const form = target.closest('form');
+                const form = resolveAssociatedForm(target);
 
                 if (target.dataset && target.dataset.confirmed === 'true') {
                     delete target.dataset.confirmed;

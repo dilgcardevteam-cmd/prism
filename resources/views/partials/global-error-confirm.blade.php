@@ -524,13 +524,25 @@
             return defaultMessages.save;
         }
 
+        function resolveAssociatedForm(target) {
+            if (!target) {
+                return null;
+            }
+
+            if ('form' in target && target.form instanceof HTMLFormElement) {
+                return target.form;
+            }
+
+            return target.closest ? target.closest('form') : null;
+        }
+
         function runConfirmedAction(target) {
             if (!target) {
                 return;
             }
 
             const tag = target.tagName ? target.tagName.toLowerCase() : '';
-            const form = target.closest ? target.closest('form') : null;
+            const form = resolveAssociatedForm(target);
 
             if (tag === 'a') {
                 const href = target.getAttribute('href');
