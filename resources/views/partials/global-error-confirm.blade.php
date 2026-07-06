@@ -324,6 +324,20 @@
         }
 
         function showConfirm(message, options) {
+            if (typeof window.openConfirmationModal === 'function') {
+                return new Promise(function(resolve) {
+                    window.openConfirmationModal(
+                        normalizeMessage(message),
+                        function() {
+                            resolve(true);
+                        },
+                        function() {
+                            resolve(false);
+                        }
+                    );
+                });
+            }
+
             if (!confirmBackdrop) {
                 return Promise.resolve(window.confirm(normalizeMessage(message)));
             }
@@ -544,72 +558,74 @@
             }
         }
 
-        document.addEventListener('click', function(event) {
-            const target = event.target && event.target.closest
-                ? event.target.closest('button, input[type="submit"], input[type="button"], a')
-                : null;
+        if (typeof window.openConfirmationModal !== 'function') {
+            document.addEventListener('click', function(event) {
+                const target = event.target && event.target.closest
+                    ? event.target.closest('button, input[type="submit"], input[type="button"], a')
+                    : null;
 
-            if (!target) {
-                return;
-            }
-
-            if (target.dataset && target.dataset.appConfirmed === 'true') {
-                delete target.dataset.appConfirmed;
-                return;
-            }
-
-            if (!needsAutoConfirm(target)) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-
-            showConfirm(resolveMessage(target)).then(function(confirmed) {
-                if (!confirmed) {
+                if (!target) {
                     return;
                 }
 
-                if (target.dataset) {
-                    target.dataset.appConfirmed = 'true';
-                }
-                runConfirmedAction(target);
-            });
-        }, true);
-
-        document.addEventListener('submit', function(event) {
-            const form = event.target;
-            const submitter = event.submitter || null;
-
-            if (submitter && submitter.dataset && submitter.dataset.appConfirmed === 'true') {
-                delete submitter.dataset.appConfirmed;
-                return;
-            }
-
-            const candidate = submitter || (form && form.querySelector ? form.querySelector('button[type="submit"], input[type="submit"]') : null);
-            if (!needsAutoConfirm(candidate)) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-
-            showConfirm(resolveMessage(candidate)).then(function(confirmed) {
-                if (!confirmed) {
+                if (target.dataset && target.dataset.appConfirmed === 'true') {
+                    delete target.dataset.appConfirmed;
                     return;
                 }
 
-                if (submitter && submitter.dataset) {
-                    submitter.dataset.appConfirmed = 'true';
+                if (!needsAutoConfirm(target)) {
+                    return;
                 }
 
-                if (submitter && typeof form.requestSubmit === 'function') {
-                    form.requestSubmit(submitter);
-                } else {
-                    form.submit();
+                event.preventDefault();
+                event.stopPropagation();
+
+                showConfirm(resolveMessage(target)).then(function(confirmed) {
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    if (target.dataset) {
+                        target.dataset.appConfirmed = 'true';
+                    }
+                    runConfirmedAction(target);
+                });
+            }, true);
+
+            document.addEventListener('submit', function(event) {
+                const form = event.target;
+                const submitter = event.submitter || null;
+
+                if (submitter && submitter.dataset && submitter.dataset.appConfirmed === 'true') {
+                    delete submitter.dataset.appConfirmed;
+                    return;
                 }
-            });
-        }, true);
+
+                const candidate = submitter || (form && form.querySelector ? form.querySelector('button[type="submit"], input[type="submit"]') : null);
+                if (!needsAutoConfirm(candidate)) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                showConfirm(resolveMessage(candidate)).then(function(confirmed) {
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    if (submitter && submitter.dataset) {
+                        submitter.dataset.appConfirmed = 'true';
+                    }
+
+                    if (submitter && typeof form.requestSubmit === 'function') {
+                        form.requestSubmit(submitter);
+                    } else {
+                        form.submit();
+                    }
+                });
+            }, true);
+        }
 
     })();
 </script>
