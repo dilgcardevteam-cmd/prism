@@ -291,30 +291,12 @@
                 return text.includes('delete') ? defaultMessages.delete : defaultMessages.save;
             }
 
-            function resolveAssociatedForm(el) {
-                if (!el) return null;
-                if (el.form instanceof HTMLFormElement) return el.form;
-                const explicitFormId = (el.getAttribute && el.getAttribute('form') ? el.getAttribute('form') : '').trim();
-                if (explicitFormId !== '') {
-                    const explicitForm = document.getElementById(explicitFormId);
-                    if (explicitForm instanceof HTMLFormElement) {
-                        return explicitForm;
-                    }
+            function resolveAssociatedForm(target) {
+                if (!target) return null;
+                if ('form' in target && target.form instanceof HTMLFormElement) {
+                    return target.form;
                 }
-                return el.closest ? el.closest('form') : null;
-            }
-
-            function submitFormSafely(form, submitter) {
-                if (!(form instanceof HTMLFormElement)) return;
-                if (submitter && typeof form.requestSubmit === 'function' && submitter.form === form) {
-                    form.requestSubmit(submitter);
-                    return;
-                }
-                if (typeof form.requestSubmit === 'function') {
-                    form.requestSubmit();
-                    return;
-                }
-                form.submit();
+                return target.closest ? target.closest('form') : null;
             }
 
             normalizeInlineConfirmHandlers();
@@ -344,7 +326,11 @@
 
                     if (form && (isSubmitButton || isSubmitInput)) {
                         window.withNativeConfirmBypass(function() {
-                            submitFormSafely(form, target);
+                            if (typeof form.requestSubmit === 'function') {
+                                form.requestSubmit(target);
+                            } else {
+                                form.submit();
+                            }
                         });
                         return;
                     }
@@ -390,7 +376,11 @@
                 window.openConfirmationModal(message, function() {
                     submitter.dataset.confirmed = 'true';
                     window.withNativeConfirmBypass(function() {
-                        submitFormSafely(form, submitter);
+                        if (typeof form.requestSubmit === 'function') {
+                            form.requestSubmit(submitter);
+                        } else {
+                            form.submit();
+                        }
                     });
                 });
             }, true);

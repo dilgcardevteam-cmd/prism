@@ -218,6 +218,7 @@
                     $buttonId = 'pre-impl-doc-btn-' . $field;
                     $filenameId = 'pre-impl-doc-file-' . $field;
                     $pickerId = 'pre-impl-doc-picker-' . $field;
+                    $deleteFormId = 'pre-impl-delete-form-' . $field;
 
                     $uploadedTime = $asLocalTime($fileRecord->uploaded_at ?? $fileRecord->created_at ?? $fileRecord->updated_at ?? null);
                     $uploaderName = $resolveUserName($fileRecord->uploaded_by ?? null);
@@ -386,6 +387,12 @@
                         </div>
                     </div>
                 @else
+                @if ($canDeleteReturnedDocument)
+                    <form id="{{ $deleteFormId }}" method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: none;">
+                        @csrf
+                        @method('DELETE')
+                    </form>
+                @endif
                 <form method="POST" action="{{ route($routeConfig['save'], array_merge(['projectCode' => $project->project_code], $scopeQuery)) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
                     @csrf
 
@@ -433,7 +440,7 @@
                         @endunless
 
                         @if ($hasFile && $fileViewUrl)
-                            <div style="display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap;">
+                            <div style="display: grid; gap: 10px;">
                                 <a
                                     id="{{ $filenameId }}"
                                     href="{{ $fileViewUrl }}"
@@ -443,7 +450,7 @@
                                     data-empty-text="{{ $fileName ?: 'View current file' }}"
                                     data-locked="1"
                                     title="View {{ $fileName ?: 'current file' }}"
-                                    style="flex: 1 1 220px;"
+                                    style="width: 100%;"
                                 >
                                     <span class="pre-impl-upload-fileicon">
                                         <i class="fas fa-file-pdf"></i>
@@ -454,14 +461,10 @@
                                     </span>
                                 </a>
                                 @if ($canDeleteReturnedDocument)
-                                    <form method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; flex: 0 0 auto;">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 104px; padding: 0 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 12px; cursor: pointer; font-size: 11px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
-                                            <i class="fas fa-trash-alt"></i>
-                                            <span>Delete</span>
-                                        </button>
-                                    </form>
+                                    <button type="submit" form="{{ $deleteFormId }}" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
+                                        <i class="fas fa-trash-alt"></i>
+                                        <span>Delete</span>
+                                    </button>
                                 @endif
                             </div>
                         @else
