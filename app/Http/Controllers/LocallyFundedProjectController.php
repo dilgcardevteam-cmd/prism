@@ -7,6 +7,7 @@ use App\Models\DeadlineConfiguration;
 use App\Models\LocallyFundedProject;
 use App\Services\InterventionNotificationService;
 use App\Support\InputSanitizer;
+use App\Support\ProjectLocationFilterHelper;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -1797,7 +1798,10 @@ class LocallyFundedProjectController extends Controller
         if ($user->isLguScopedUser()) {
             if ($office !== '') {
                 if ($province !== '') {
-                    $query->whereRaw('LOWER(TRIM(COALESCE(' . $provinceColumnExpression . ', ""))) = ?', [$provinceLower]);
+                    $query->whereRaw(
+                        $this->comparableLocationSql($provinceColumnExpression) . ' = ?',
+                        [ProjectLocationFilterHelper::normalizeComparableLocationLabel($user->province)]
+                    );
                 }
 
                 $this->applyOfficeScopeToLocationQuery($query, $cityColumnExpression, $officeLower, $officeComparableLower);
@@ -1805,7 +1809,10 @@ class LocallyFundedProjectController extends Controller
             }
 
             if ($province !== '') {
-                $query->whereRaw('LOWER(TRIM(COALESCE(' . $provinceColumnExpression . ', ""))) = ?', [$provinceLower]);
+                $query->whereRaw(
+                    $this->comparableLocationSql($provinceColumnExpression) . ' = ?',
+                    [ProjectLocationFilterHelper::normalizeComparableLocationLabel($user->province)]
+                );
             }
 
             return;
@@ -1813,7 +1820,10 @@ class LocallyFundedProjectController extends Controller
 
         if ($user->isProvincialUser()) {
             if ($province !== '') {
-                $query->whereRaw('LOWER(TRIM(COALESCE(' . $provinceColumnExpression . ', ""))) = ?', [$provinceLower]);
+                $query->whereRaw(
+                    $this->comparableLocationSql($provinceColumnExpression) . ' = ?',
+                    [ProjectLocationFilterHelper::normalizeComparableLocationLabel($user->province)]
+                );
             } elseif ($region !== '') {
                 $query->whereRaw('LOWER(TRIM(COALESCE(' . $regionColumnExpression . ', ""))) = ?', [$regionLower]);
             }
@@ -1838,7 +1848,10 @@ class LocallyFundedProjectController extends Controller
         }
 
         if ($province !== '') {
-            $query->whereRaw('LOWER(TRIM(COALESCE(' . $provinceColumnExpression . ', ""))) = ?', [$provinceLower]);
+            $query->whereRaw(
+                $this->comparableLocationSql($provinceColumnExpression) . ' = ?',
+                [ProjectLocationFilterHelper::normalizeComparableLocationLabel($user->province)]
+            );
         } elseif ($region !== '') {
             $query->whereRaw('LOWER(TRIM(COALESCE(' . $regionColumnExpression . ', ""))) = ?', [$regionLower]);
         }
@@ -1858,6 +1871,8 @@ class LocallyFundedProjectController extends Controller
         $recordRegionLower = Str::lower(trim((string) $region));
         $recordCity = trim((string) $city);
         $recordOffice = trim((string) $office);
+        $recordProvinceComparable = ProjectLocationFilterHelper::normalizeComparableLocationLabel($province);
+        $userProvinceComparable = ProjectLocationFilterHelper::normalizeComparableLocationLabel($user->province);
 
         if ($user->isLguScopedUser()) {
             $assignedProvince = $user->normalizedProvince();
@@ -1874,7 +1889,8 @@ class LocallyFundedProjectController extends Controller
 
         if ($user->isProvincialUser()) {
             if ($user->normalizedProvince() !== '') {
-                return $recordProvinceLower === $user->normalizedProvince();
+                return $recordProvinceComparable !== ''
+                    && $recordProvinceComparable === $userProvinceComparable;
             }
 
             if ($user->normalizedRegion() !== '') {

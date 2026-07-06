@@ -116,7 +116,7 @@
             position: fixed;
             top: 50%;
             left: 50%;
-            width: min(1180px, calc(100vw - 32px));
+            width: min(1380px, calc(100vw - 32px));
             max-height: min(90vh, 960px);
             transform: translate(-50%, -50%);
             border-radius: 16px;
@@ -1083,6 +1083,8 @@
         $userProvince = trim((string) (Auth::user()->province ?? ''));
         $isLguAgencyUser = $userAgency === 'LGU';
         $canUpdateLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'update');
+        $canUpdatePhysicalForProvincialUser = $canUpdateLocallyFundedProject
+            || (Auth::user()->isDilgUser() && Auth::user()->isProvincialUser());
         $canDeleteLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'delete');
         $canEditProjectProfile = $userAgency === 'DILG'
             && $userProvince === 'Regional Office'
@@ -1879,7 +1881,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid #00267C; padding-bottom: 10px;">
                 <h3 class="lfp-physical-section-title" style="color: #00267C; font-size: clamp(14px, 4vw, 18px); font-weight: 700; margin: 0;">Physical Accomplishment</h3>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    @if($canUpdateLocallyFundedProject)
+                    @if($canUpdatePhysicalForProvincialUser)
                         <a href="#" class="lfp-inline-edit-trigger" data-toggle="inline-edit" data-target="editPhysicalForm" data-physical-toggle="true"><i class="fas fa-edit" aria-hidden="true"></i>Update</a>
                     @endif
                 </div>
