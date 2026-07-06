@@ -355,30 +355,16 @@ Route::get('/api/mobile/notifications', function (Request $request) {
         ], 403);
     }
 
-    $notifications = DB::table('tbnotifications')
+    $notifications = \App\Support\NotificationCenter::presentMany(DB::table('tbnotifications')
         ->where('user_id', $userId)
         ->orderByDesc('created_at')
         ->orderByDesc('id')
         ->limit(50)
-        ->get()
-        ->map(function ($notification) {
-            return [
-                'id' => $notification->id,
-                'message' => $notification->message,
-                'url' => $notification->url,
-                'document_type' => $notification->document_type,
-                'quarter' => $notification->quarter,
-                'sender_name' => $notification->sender_name ?? null,
-                'sender_user_id' => $notification->sender_user_id ?? null,
-                'read_at' => $notification->read_at,
-                'is_read' => !is_null($notification->read_at),
-                'created_at' => $notification->created_at,
-                'updated_at' => $notification->updated_at,
-            ];
-        });
+        ->get());
 
     return response()->json([
-        'notifications' => $notifications,
+        'notifications' => $notifications->values(),
+        'queues' => \App\Support\NotificationCenter::summarizeQueues($notifications),
         'unread_count' => $notifications->where('is_read', false)->count(),
         'total_count' => $notifications->count(),
     ]);
