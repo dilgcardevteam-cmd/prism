@@ -3064,7 +3064,66 @@
 
         document.getElementById('remarksForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            this.submit();
+
+            if (this.dataset.submitting === '1') {
+                return;
+            }
+
+            this.dataset.submitting = '1';
+
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
+
+            const formData = new FormData(this);
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData,
+            })
+            .then(async (response) => {
+                if (!response.ok) {
+                    let errorMessage = 'Failed to submit approval action.';
+
+                    try {
+                        const payload = await response.json();
+                        if (payload && typeof payload.message === 'string' && payload.message.trim() !== '') {
+                            errorMessage = payload.message;
+                        } else if (payload && typeof payload.error === 'string' && payload.error.trim() !== '') {
+                            errorMessage = payload.error;
+                        }
+                    } catch (error) {
+                        try {
+                            const text = await response.text();
+                            if (text.trim() !== '') {
+                                errorMessage = text;
+                            }
+                        } catch (readError) {
+                            // Keep the default error message.
+                        }
+                    }
+
+                    throw new Error(errorMessage);
+                }
+
+                window.location.reload();
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                showToast(error.message || 'Error submitting approval action. Please try again.', 'error');
+            })
+            .finally(() => {
+                this.dataset.submitting = '0';
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                }
+            });
         });
 
         // Toggle Accordion Function
