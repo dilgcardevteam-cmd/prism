@@ -58,7 +58,9 @@ class FundUtilizationWorkflowService
                 $workflow->quarter = $quarter;
                 $workflow->document_type = $documentType;
                 $workflow->uploader_id = $uploader->getKey();
-                $workflow->uploader_role = $uploader->normalizedRole();
+                $workflow->uploader_role = $uploader->isProvincialDilgAssignment()
+                    ? User::ROLE_PROVINCIAL
+                    : $uploader->normalizedRole();
                 $workflow->revision_number = 1;
             } else {
                 $workflow->revision_number = ($workflow->revision_number ?? 1) + 1;
@@ -76,7 +78,7 @@ class FundUtilizationWorkflowService
             $workflow->completed_at = null;
             $workflow->last_approved_level = 0;
             $workflow->save();
-            $this->syncRecordAfterSubmission($record, $documentType);
+            $this->syncRecordAfterSubmission($record, $documentType, $uploader, $targetLevel);
 
             $this->logWorkflowAction(
                 workflow: $workflow,
@@ -240,7 +242,7 @@ class FundUtilizationWorkflowService
             $isLguUploader = $uploaderRole === User::ROLE_LGU;
             $isProvincialUploader = $uploaderRole === User::ROLE_PROVINCIAL;
             $isRegionalActor = $actorRole === User::ROLE_REGIONAL || $actor->isRegionalOfficeAssignment();
-            $isProvincialActor = $actorRole === User::ROLE_PROVINCIAL;
+            $isProvincialActor = $actor->isProvincialDilgAssignment();
 
             if ($isLguUploader && $currentLevel === 2 && $isRegionalActor) {
                 $provincialOfficer = $this->resolveValidatorForLevel($report, $workflow->uploader, 1);
@@ -453,7 +455,7 @@ class FundUtilizationWorkflowService
 
     protected function entryLevelForUploader(FundUtilizationApprovalWorkflow $workflow, User $uploader): int
     {
-        if ($workflow->uploader_role === User::ROLE_PROVINCIAL || $uploader->normalizedRole() === User::ROLE_PROVINCIAL) {
+        if ($workflow->uploader_role === User::ROLE_PROVINCIAL || $uploader->isProvincialDilgAssignment()) {
             return 2;
         }
 
@@ -544,7 +546,7 @@ class FundUtilizationWorkflowService
         ]);
     }
 
-    protected function syncRecordAfterSubmission(Model $record, string $documentType): void
+    protected function syncRecordAfterSubmission(Model $record, string $documentType, User $uploader, int $targetLevel): void
     {
         $fieldMap = $this->documentFieldMap($documentType);
         if ($fieldMap === []) {
@@ -553,7 +555,19 @@ class FundUtilizationWorkflowService
 
         $statusField = $fieldMap['status'] ?? null;
         if ($statusField) {
-            $record->setAttribute($statusField, 'pending');
+            $record->setAttribute($statusField, $targetLevel >= 2 ? 'pending_ro' : 'pending');
+        }
+
+        if ($targetLevel >= 2) {
+            $approvedAtField = $fieldMap['po_approved_at'] ?? null;
+            if ($approvedAtField) {
+                $record->setAttribute($approvedAtField, now());
+            }
+
+            $approvedByField = $fieldMap['po_approved_by'] ?? null;
+            if ($approvedByField) {
+                $record->setAttribute($approvedByField, $uploader->getKey());
+            }
         }
 
         $remarksField = $fieldMap['remarks'] ?? null;
@@ -580,7 +594,7 @@ class FundUtilizationWorkflowService
 
         if ($approvalLevel === 1) {
             $this->fillRecordAttributes($record, [
-                $fieldMap['status'] ?? null => 'pending',
+                $fieldMap['status'] ?? null => 'pending_ro',
                 $fieldMap['po_approved_at'] ?? null => $approvedAt,
                 $fieldMap['po_approved_by'] ?? null => $actor->getKey(),
             ]);

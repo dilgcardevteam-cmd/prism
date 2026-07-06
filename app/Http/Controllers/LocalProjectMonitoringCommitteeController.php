@@ -540,7 +540,19 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         return User::query()
             ->where('status', 'active')
-            ->where('role', User::ROLE_PROVINCIAL)
+            ->where(function ($query) {
+                $query->where('role', User::ROLE_PROVINCIAL)
+                    ->orWhere(function ($fallback) {
+                        $fallback->whereRaw('UPPER(TRIM(COALESCE(agency, ""))) = ?', ['DILG'])
+                            ->whereRaw('LOWER(TRIM(COALESCE(role, ""))) NOT IN (?, ?, ?)', [
+                                strtolower(User::ROLE_REGIONAL),
+                                'lgu',
+                                'mlgoo',
+                            ])
+                            ->whereRaw('LOWER(TRIM(COALESCE(province, ""))) <> ?', ['regional office'])
+                            ->whereRaw('TRIM(COALESCE(province, "")) <> ""');
+                    });
+            })
             ->whereRaw('LOWER(TRIM(COALESCE(province, ""))) = ?', [$normalizedProvince])
             ->pluck('idno');
     }
@@ -1100,9 +1112,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $path = $file->store('lpmc/' . $officeSlug, 'public');
         $uploadedAt = now();
         $user = auth()->user();
-        $isMountainProvinceDilgUploader = $user
-            && strtoupper(trim((string) $user->agency)) === 'DILG'
-            && strtolower(trim((string) $user->province)) === 'mountain province';
+        $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
 
         $document = LpmcDocument::updateOrCreate(
             [
@@ -1116,11 +1126,11 @@ class LocalProjectMonitoringCommitteeController extends Controller
                 'file_path' => $path,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
-                'status' => $isMountainProvinceDilgUploader ? 'pending_ro' : 'pending',
-                'approved_at' => $isMountainProvinceDilgUploader ? $uploadedAt : null,
-                'approved_at_dilg_po' => $isMountainProvinceDilgUploader ? $uploadedAt : null,
+                'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
+                'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
+                'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
                 'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => $isMountainProvinceDilgUploader ? ($user->idno ?? auth()->id()) : null,
+                'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
                 'approved_by_dilg_ro' => null,
                 'approval_remarks' => null,
                 'user_remarks' => null,
@@ -1132,7 +1142,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
         }
 
         $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
-        if ($isMountainProvinceDilgUploader) {
+        if ($isProvincialDilgUploader) {
             $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $uploadedAt);
         }
 

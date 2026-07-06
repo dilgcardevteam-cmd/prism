@@ -692,9 +692,7 @@ class SwaAnnexFReportController extends Controller
         $officeSlug = Str::slug($officeName, '_');
         $path = $file->store('swa-annex-f/' . $officeSlug, 'public');
         $uploadedAt = now();
-        $isMountainProvinceDilgUploader = $user
-            && strtoupper(trim((string) $user->agency)) === 'DILG'
-            && strtolower(trim((string) $user->province)) === 'mountain province';
+        $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
 
         SwaAnnexFDocument::updateOrCreate(
             [
@@ -708,11 +706,11 @@ class SwaAnnexFReportController extends Controller
                 'file_path' => $path,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
-                'status' => $isMountainProvinceDilgUploader ? 'pending_ro' : 'pending',
-                'approved_at' => $isMountainProvinceDilgUploader ? $uploadedAt : null,
-                'approved_at_dilg_po' => $isMountainProvinceDilgUploader ? $uploadedAt : null,
+                'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
+                'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
+                'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
                 'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => $isMountainProvinceDilgUploader ? ($user->idno ?? auth()->id()) : null,
+                'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
                 'approved_by_dilg_ro' => null,
                 'approval_remarks' => null,
                 'user_remarks' => null,
