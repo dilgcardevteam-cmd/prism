@@ -3702,6 +3702,22 @@ $url = route('locally-funded-project.show', $project, false);
                 'locally_funded_physical_updates.slippage_ro_updated_at',
                 'locally_funded_physical_updates.risk_aging_updated_at',
                 'locally_funded_physical_updates.nc_letters_updated_at',
+                'locally_funded_physical_updates.status_project_fou_remarks',
+                'locally_funded_physical_updates.status_project_ro_remarks',
+                'locally_funded_physical_updates.accomplishment_pct_remarks',
+                'locally_funded_physical_updates.accomplishment_pct_ro_remarks',
+                'locally_funded_physical_updates.slippage_remarks',
+                'locally_funded_physical_updates.slippage_ro_remarks',
+                'locally_funded_physical_updates.risk_aging_remarks',
+                'locally_funded_physical_updates.nc_letters_remarks',
+                'locally_funded_physical_updates.status_project_fou_remarks_updated_at',
+                'locally_funded_physical_updates.status_project_ro_remarks_updated_at',
+                'locally_funded_physical_updates.accomplishment_pct_remarks_updated_at',
+                'locally_funded_physical_updates.accomplishment_pct_ro_remarks_updated_at',
+                'locally_funded_physical_updates.slippage_remarks_updated_at',
+                'locally_funded_physical_updates.slippage_ro_remarks_updated_at',
+                'locally_funded_physical_updates.risk_aging_remarks_updated_at',
+                'locally_funded_physical_updates.nc_letters_remarks_updated_at',
                 'locally_funded_physical_updates.status_project_fou_updated_by',
                 'locally_funded_physical_updates.status_project_ro_updated_by',
                 'locally_funded_physical_updates.accomplishment_pct_updated_by',
@@ -3709,7 +3725,15 @@ $url = route('locally-funded-project.show', $project, false);
                 'locally_funded_physical_updates.slippage_updated_by',
                 'locally_funded_physical_updates.slippage_ro_updated_by',
                 'locally_funded_physical_updates.risk_aging_updated_by',
-                'locally_funded_physical_updates.nc_letters_updated_by'
+                'locally_funded_physical_updates.nc_letters_updated_by',
+                'locally_funded_physical_updates.status_project_fou_remarks_updated_by',
+                'locally_funded_physical_updates.status_project_ro_remarks_updated_by',
+                'locally_funded_physical_updates.accomplishment_pct_remarks_updated_by',
+                'locally_funded_physical_updates.accomplishment_pct_ro_remarks_updated_by',
+                'locally_funded_physical_updates.slippage_remarks_updated_by',
+                'locally_funded_physical_updates.slippage_ro_remarks_updated_by',
+                'locally_funded_physical_updates.risk_aging_remarks_updated_by',
+                'locally_funded_physical_updates.nc_letters_remarks_updated_by'
             )
             ->get();
 
@@ -3729,6 +3753,14 @@ $url = route('locally-funded-project.show', $project, false);
                 $row->slippage_ro_updated_by,
                 $row->risk_aging_updated_by,
                 $row->nc_letters_updated_by,
+                $row->status_project_fou_remarks_updated_by,
+                $row->status_project_ro_remarks_updated_by,
+                $row->accomplishment_pct_remarks_updated_by,
+                $row->accomplishment_pct_ro_remarks_updated_by,
+                $row->slippage_remarks_updated_by,
+                $row->slippage_ro_remarks_updated_by,
+                $row->risk_aging_remarks_updated_by,
+                $row->nc_letters_remarks_updated_by,
             ];
         })->filter()->unique()->values();
 
@@ -3758,6 +3790,14 @@ $url = route('locally-funded-project.show', $project, false);
             'slippage_ro' => null,
             'risk_aging' => null,
             'nc_letters' => null,
+            'status_project_fou_remarks' => null,
+            'status_project_ro_remarks' => null,
+            'accomplishment_pct_remarks' => null,
+            'accomplishment_pct_ro_remarks' => null,
+            'slippage_remarks' => null,
+            'slippage_ro_remarks' => null,
+            'risk_aging_remarks' => null,
+            'nc_letters_remarks' => null,
             'status_project_fou_updated_at' => null,
             'status_project_ro_updated_at' => null,
             'accomplishment_pct_updated_at' => null,
@@ -3766,6 +3806,14 @@ $url = route('locally-funded-project.show', $project, false);
             'slippage_ro_updated_at' => null,
             'risk_aging_updated_at' => null,
             'nc_letters_updated_at' => null,
+            'status_project_fou_remarks_updated_at' => null,
+            'status_project_ro_remarks_updated_at' => null,
+            'accomplishment_pct_remarks_updated_at' => null,
+            'accomplishment_pct_ro_remarks_updated_at' => null,
+            'slippage_remarks_updated_at' => null,
+            'slippage_ro_remarks_updated_at' => null,
+            'risk_aging_remarks_updated_at' => null,
+            'nc_letters_remarks_updated_at' => null,
             'status_project_fou_updated_by' => null,
             'status_project_ro_updated_by' => null,
             'accomplishment_pct_updated_by' => null,
@@ -3774,6 +3822,14 @@ $url = route('locally-funded-project.show', $project, false);
             'slippage_ro_updated_by' => null,
             'risk_aging_updated_by' => null,
             'nc_letters_updated_by' => null,
+            'status_project_fou_remarks_updated_by' => null,
+            'status_project_ro_remarks_updated_by' => null,
+            'accomplishment_pct_remarks_updated_by' => null,
+            'accomplishment_pct_ro_remarks_updated_by' => null,
+            'slippage_remarks_updated_by' => null,
+            'slippage_ro_remarks_updated_by' => null,
+            'risk_aging_remarks_updated_by' => null,
+            'nc_letters_remarks_updated_by' => null,
             'status_project_fou_updated_by_name' => null,
             'status_project_ro_updated_by_name' => null,
             'accomplishment_pct_updated_by_name' => null,
@@ -3782,6 +3838,14 @@ $url = route('locally-funded-project.show', $project, false);
             'slippage_ro_updated_by_name' => null,
             'risk_aging_updated_by_name' => null,
             'nc_letters_updated_by_name' => null,
+            'status_project_fou_remarks_updated_by_name' => null,
+            'status_project_ro_remarks_updated_by_name' => null,
+            'accomplishment_pct_remarks_updated_by_name' => null,
+            'accomplishment_pct_ro_remarks_updated_by_name' => null,
+            'slippage_remarks_updated_by_name' => null,
+            'slippage_ro_remarks_updated_by_name' => null,
+            'risk_aging_remarks_updated_by_name' => null,
+            'nc_letters_remarks_updated_by_name' => null,
         ];
 
         $mapPhysicalUpdateRow = function ($row) use ($physicalRowDefaults, $usersById) {
@@ -3796,6 +3860,14 @@ $url = route('locally-funded-project.show', $project, false);
                 'slippage_ro' => $row->slippage_ro,
                 'risk_aging' => $row->risk_aging,
                 'nc_letters' => $row->nc_letters,
+                'status_project_fou_remarks' => $row->status_project_fou_remarks ?? null,
+                'status_project_ro_remarks' => $row->status_project_ro_remarks ?? null,
+                'accomplishment_pct_remarks' => $row->accomplishment_pct_remarks ?? null,
+                'accomplishment_pct_ro_remarks' => $row->accomplishment_pct_ro_remarks ?? null,
+                'slippage_remarks' => $row->slippage_remarks ?? null,
+                'slippage_ro_remarks' => $row->slippage_ro_remarks ?? null,
+                'risk_aging_remarks' => $row->risk_aging_remarks ?? null,
+                'nc_letters_remarks' => $row->nc_letters_remarks ?? null,
                 'status_project_fou_updated_at' => $row->status_project_fou_updated_at,
                 'status_project_ro_updated_at' => $row->status_project_ro_updated_at,
                 'accomplishment_pct_updated_at' => $row->accomplishment_pct_updated_at,
@@ -3804,6 +3876,14 @@ $url = route('locally-funded-project.show', $project, false);
                 'slippage_ro_updated_at' => $row->slippage_ro_updated_at,
                 'risk_aging_updated_at' => $row->risk_aging_updated_at,
                 'nc_letters_updated_at' => $row->nc_letters_updated_at,
+                'status_project_fou_remarks_updated_at' => $row->status_project_fou_remarks_updated_at ?? null,
+                'status_project_ro_remarks_updated_at' => $row->status_project_ro_remarks_updated_at ?? null,
+                'accomplishment_pct_remarks_updated_at' => $row->accomplishment_pct_remarks_updated_at ?? null,
+                'accomplishment_pct_ro_remarks_updated_at' => $row->accomplishment_pct_ro_remarks_updated_at ?? null,
+                'slippage_remarks_updated_at' => $row->slippage_remarks_updated_at ?? null,
+                'slippage_ro_remarks_updated_at' => $row->slippage_ro_remarks_updated_at ?? null,
+                'risk_aging_remarks_updated_at' => $row->risk_aging_remarks_updated_at ?? null,
+                'nc_letters_remarks_updated_at' => $row->nc_letters_remarks_updated_at ?? null,
                 'status_project_fou_updated_by' => $row->status_project_fou_updated_by,
                 'status_project_ro_updated_by' => $row->status_project_ro_updated_by,
                 'accomplishment_pct_updated_by' => $row->accomplishment_pct_updated_by,
@@ -3812,6 +3892,14 @@ $url = route('locally-funded-project.show', $project, false);
                 'slippage_ro_updated_by' => $row->slippage_ro_updated_by,
                 'risk_aging_updated_by' => $row->risk_aging_updated_by,
                 'nc_letters_updated_by' => $row->nc_letters_updated_by,
+                'status_project_fou_remarks_updated_by' => $row->status_project_fou_remarks_updated_by ?? null,
+                'status_project_ro_remarks_updated_by' => $row->status_project_ro_remarks_updated_by ?? null,
+                'accomplishment_pct_remarks_updated_by' => $row->accomplishment_pct_remarks_updated_by ?? null,
+                'accomplishment_pct_ro_remarks_updated_by' => $row->accomplishment_pct_ro_remarks_updated_by ?? null,
+                'slippage_remarks_updated_by' => $row->slippage_remarks_updated_by ?? null,
+                'slippage_ro_remarks_updated_by' => $row->slippage_ro_remarks_updated_by ?? null,
+                'risk_aging_remarks_updated_by' => $row->risk_aging_remarks_updated_by ?? null,
+                'nc_letters_remarks_updated_by' => $row->nc_letters_remarks_updated_by ?? null,
                 'status_project_fou_updated_by_name' => $row->status_project_fou_updated_by && $usersById->has($row->status_project_fou_updated_by)
                     ? trim($usersById[$row->status_project_fou_updated_by]->fname . ' ' . $usersById[$row->status_project_fou_updated_by]->lname)
                     : null,
@@ -3835,6 +3923,30 @@ $url = route('locally-funded-project.show', $project, false);
                     : null,
                 'nc_letters_updated_by_name' => $row->nc_letters_updated_by && $usersById->has($row->nc_letters_updated_by)
                     ? trim($usersById[$row->nc_letters_updated_by]->fname . ' ' . $usersById[$row->nc_letters_updated_by]->lname)
+                    : null,
+                'status_project_fou_remarks_updated_by_name' => $row->status_project_fou_remarks_updated_by && $usersById->has($row->status_project_fou_remarks_updated_by)
+                    ? trim($usersById[$row->status_project_fou_remarks_updated_by]->fname . ' ' . $usersById[$row->status_project_fou_remarks_updated_by]->lname)
+                    : null,
+                'status_project_ro_remarks_updated_by_name' => $row->status_project_ro_remarks_updated_by && $usersById->has($row->status_project_ro_remarks_updated_by)
+                    ? trim($usersById[$row->status_project_ro_remarks_updated_by]->fname . ' ' . $usersById[$row->status_project_ro_remarks_updated_by]->lname)
+                    : null,
+                'accomplishment_pct_remarks_updated_by_name' => $row->accomplishment_pct_remarks_updated_by && $usersById->has($row->accomplishment_pct_remarks_updated_by)
+                    ? trim($usersById[$row->accomplishment_pct_remarks_updated_by]->fname . ' ' . $usersById[$row->accomplishment_pct_remarks_updated_by]->lname)
+                    : null,
+                'accomplishment_pct_ro_remarks_updated_by_name' => $row->accomplishment_pct_ro_remarks_updated_by && $usersById->has($row->accomplishment_pct_ro_remarks_updated_by)
+                    ? trim($usersById[$row->accomplishment_pct_ro_remarks_updated_by]->fname . ' ' . $usersById[$row->accomplishment_pct_ro_remarks_updated_by]->lname)
+                    : null,
+                'slippage_remarks_updated_by_name' => $row->slippage_remarks_updated_by && $usersById->has($row->slippage_remarks_updated_by)
+                    ? trim($usersById[$row->slippage_remarks_updated_by]->fname . ' ' . $usersById[$row->slippage_remarks_updated_by]->lname)
+                    : null,
+                'slippage_ro_remarks_updated_by_name' => $row->slippage_ro_remarks_updated_by && $usersById->has($row->slippage_ro_remarks_updated_by)
+                    ? trim($usersById[$row->slippage_ro_remarks_updated_by]->fname . ' ' . $usersById[$row->slippage_ro_remarks_updated_by]->lname)
+                    : null,
+                'risk_aging_remarks_updated_by_name' => $row->risk_aging_remarks_updated_by && $usersById->has($row->risk_aging_remarks_updated_by)
+                    ? trim($usersById[$row->risk_aging_remarks_updated_by]->fname . ' ' . $usersById[$row->risk_aging_remarks_updated_by]->lname)
+                    : null,
+                'nc_letters_remarks_updated_by_name' => $row->nc_letters_remarks_updated_by && $usersById->has($row->nc_letters_remarks_updated_by)
+                    ? trim($usersById[$row->nc_letters_remarks_updated_by]->fname . ' ' . $usersById[$row->nc_letters_remarks_updated_by]->lname)
                     : null,
             ]);
         };
@@ -4659,14 +4771,26 @@ $url = route('locally-funded-project.show', $project, false);
                 'risk_aging' => 'Risk/Aging',
                 'nc_letters' => 'NC Letters',
             ];
+            $remarkRulesByField = [];
+            $physicalRemarkLabels = [];
+            foreach ($physicalFieldLabels as $field => $label) {
+                $remarkField = $field . '_remarks';
+                $remarkRulesByField[$remarkField] = 'nullable|string|max:1000';
+                $physicalRemarkLabels[$remarkField] = $label . ' Remarks';
+            }
             $requestData = $request->all();
             $provincialEditablePhysicalFields = [
                 'status_project_fou',
                 'accomplishment_pct',
                 'slippage',
             ];
+            $provincialEditablePhysicalRemarkFields = array_map(
+                static fn ($field) => $field . '_remarks',
+                $provincialEditablePhysicalFields
+            );
             $restrictedPhysicalRequestKeys = array_merge(
                 array_diff(array_keys($rulesByField), $provincialEditablePhysicalFields),
+                array_diff(array_keys($remarkRulesByField), $provincialEditablePhysicalRemarkFields),
                 ['actual_date_completion', 'physical_remarks']
             );
 
@@ -4826,6 +4950,75 @@ $url = route('locally-funded-project.show', $project, false);
                     $notifications[] = [
                         'label' => $physicalFieldLabels[$field] ?? $field,
                         'status_sensitive' => in_array($field, ['status_project_fou', 'status_project_ro'], true),
+                    ];
+                }
+            }
+
+            foreach ($remarkRulesByField as $field => $rule) {
+                if (isset($processedFields[$field]) || !array_key_exists($field, $requestData)) {
+                    continue;
+                }
+
+                $validated = \Illuminate\Support\Facades\Validator::make($requestData, [
+                    $field => 'sometimes|array',
+                    $field . '.*' => $rule,
+                ])->validate();
+
+                $valuesByMonth = $validated[$field] ?? [];
+                if (!is_array($valuesByMonth) || empty($valuesByMonth)) {
+                    continue;
+                }
+
+                $fieldUpdated = false;
+
+                foreach ($valuesByMonth as $submittedMonth => $rawValue) {
+                    $validatedMonth = \Illuminate\Support\Facades\Validator::make(
+                        ['month' => $submittedMonth],
+                        ['month' => 'required|integer|min:1|max:12']
+                    )->validate();
+
+                    $month = (int) $validatedMonth['month'];
+                    $value = $this->sanitizeLocallyFundedRemark($rawValue);
+                    $storedValue = $value === '' ? null : $value;
+                    $data = [$field => $storedValue];
+                    $data[$field . '_updated_at'] = $now;
+                    $data[$field . '_updated_by'] = Auth::id();
+
+                    \Illuminate\Support\Facades\DB::table('locally_funded_physical_updates')->updateOrInsert(
+                        [
+                            'project_id' => $project->id,
+                            'year' => $now->year,
+                            'month' => $month,
+                        ],
+                        array_merge($data, [
+                            'updated_by' => Auth::id(),
+                            'updated_at' => $now,
+                            'created_at' => $now,
+                        ])
+                    );
+
+                    $details = 'Month: ' . $month;
+                    if ($storedValue !== null && $storedValue !== '') {
+                        $details .= ' • ' . Str::limit($storedValue, 120);
+                    }
+
+                    $this->logLocallyFundedActivity(
+                        $project,
+                        'update',
+                        'Physical',
+                        $physicalRemarkLabels[$field] ?? $field,
+                        $details,
+                        $now,
+                        Auth::id()
+                    );
+
+                    $fieldUpdated = true;
+                }
+
+                if ($fieldUpdated) {
+                    $notifications[] = [
+                        'label' => $physicalRemarkLabels[$field] ?? $field,
+                        'status_sensitive' => false,
                     ];
                 }
             }

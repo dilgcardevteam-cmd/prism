@@ -555,7 +555,7 @@ class FundUtilizationWorkflowService
 
         $statusField = $fieldMap['status'] ?? null;
         if ($statusField) {
-            $record->setAttribute($statusField, $targetLevel >= 2 ? 'pending_ro' : 'pending');
+            $record->setAttribute($statusField, 'pending');
         }
 
         if ($targetLevel >= 2) {
@@ -594,7 +594,7 @@ class FundUtilizationWorkflowService
 
         if ($approvalLevel === 1) {
             $this->fillRecordAttributes($record, [
-                $fieldMap['status'] ?? null => 'pending_ro',
+                $fieldMap['status'] ?? null => 'pending',
                 $fieldMap['po_approved_at'] ?? null => $approvedAt,
                 $fieldMap['po_approved_by'] ?? null => $actor->getKey(),
             ]);

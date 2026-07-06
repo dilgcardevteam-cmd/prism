@@ -688,6 +688,10 @@
             gap: 16px;
         }
 
+        .lfp-physical-modal-grid > * {
+            min-width: 0;
+        }
+
         .lfp-financial-view-stack {
             display: grid;
             gap: 18px;
@@ -829,10 +833,64 @@
                 -webkit-overflow-scrolling: touch;
             }
 
+            #editPhysicalFormWrapper .lfp-physical-row,
             #editPhysicalFormWrapper div[style*="grid-template-columns: 120px 1fr 180px 140px"] {
-                min-width: 640px;
-                grid-template-columns: 110px minmax(220px, 1fr) 170px 130px !important;
-                gap: 8px !important;
+                min-width: 760px;
+                grid-template-columns: 110px minmax(280px, 1fr) 170px 130px !important;
+                gap: 10px !important;
+                align-items: start !important;
+            }
+
+            #editPhysicalFormWrapper .lfp-physical-row--header {
+                font-weight: 700;
+                color: #334155;
+                font-size: 11px;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+
+            #editPhysicalFormWrapper .lfp-physical-row > div {
+                min-width: 0;
+                overflow-wrap: anywhere;
+                white-space: normal;
+            }
+
+            #editPhysicalFormWrapper .lfp-physical-field-cell {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                min-width: 0;
+            }
+
+            #editPhysicalFormWrapper .lfp-physical-remark-label {
+                color: #475569;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                text-transform: uppercase;
+            }
+
+            #editPhysicalFormWrapper .lfp-physical-remark-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px 12px;
+                font-size: 11px;
+                color: #64748b;
+                line-height: 1.5;
+            }
+
+            #editPhysicalFormWrapper .lfp-physical-remark-meta strong {
+                color: #334155;
+            }
+
+            #editPhysicalFormWrapper .lfp-physical-field-cell textarea {
+                min-height: 74px;
+                overflow-wrap: anywhere;
+                white-space: pre-wrap;
+            }
+
+            #editPhysicalFormWrapper div[style*="grid-template-columns: 120px 1fr 180px 140px"] {
+                min-width: 760px;
             }
 
             #editPhysicalFormWrapper input[type="date"],
@@ -949,6 +1007,13 @@
                 min-height: 0;
                 overflow: hidden;
                 z-index: 1300;
+            }
+
+            #editPhysicalFormWrapper.is-visible {
+                left: 50%;
+                right: auto;
+                width: min(1380px, calc(100vw - 32px));
+                transform: translateX(-50%);
             }
 
             .lfp-mobile-canvas .lfp-inline-modal-header {
@@ -2018,7 +2083,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2028,7 +2093,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2038,9 +2103,14 @@
                                             ? \Illuminate\Support\Carbon::parse($row['status_project_fou_updated_at'])->format('M d, Y h:i A')
                                             : '-';
                                         $updatedBy = $row['status_project_fou_updated_by_name'] ?? '-';
+                                        $remarkValue = old('status_project_fou_remarks.' . $monthNumber, $row['status_project_fou_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['status_project_fou_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['status_project_fou_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['status_project_fou_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <select name="status_project_fou[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled
                                                 style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
                                             <option value="">-- Select --</option>
@@ -2051,6 +2121,13 @@
                                                 <option value="{{ $option['value'] }}" {{ $value === $option['value'] ? 'selected' : '' }}>{{ $option['label'] }}</option>
                                             @endforeach
                                         </select>
+                                        <label class="lfp-physical-remark-label" for="status_project_fou_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="status_project_fou_remarks_{{ $monthNumber }}" name="status_project_fou_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
@@ -2065,7 +2142,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2075,7 +2152,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2085,9 +2162,14 @@
                                             ? \Illuminate\Support\Carbon::parse($row['status_project_ro_updated_at'])->format('M d, Y h:i A')
                                             : '-';
                                         $updatedBy = $row['status_project_ro_updated_by_name'] ?? '-';
+                                        $remarkValue = old('status_project_ro_remarks.' . $monthNumber, $row['status_project_ro_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['status_project_ro_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['status_project_ro_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['status_project_ro_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <select name="status_project_ro[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }}
                                                 style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
                                             <option value="">-- Select --</option>
@@ -2098,6 +2180,13 @@
                                                 <option value="{{ $option['value'] }}" {{ $value === $option['value'] ? 'selected' : '' }}>{{ $option['label'] }}</option>
                                             @endforeach
                                         </select>
+                                        <label class="lfp-physical-remark-label" for="status_project_ro_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="status_project_ro_remarks_{{ $monthNumber }}" name="status_project_ro_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }}
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
@@ -2113,7 +2202,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2123,7 +2212,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2133,10 +2222,22 @@
                                             ? \Illuminate\Support\Carbon::parse($row['accomplishment_pct_updated_at'])->format('M d, Y h:i A')
                                             : '-';
                                         $updatedBy = $row['accomplishment_pct_updated_by_name'] ?? '-';
+                                        $remarkValue = old('accomplishment_pct_remarks.' . $monthNumber, $row['accomplishment_pct_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['accomplishment_pct_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['accomplishment_pct_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['accomplishment_pct_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <input type="number" step="0.01" min="0" max="100" name="accomplishment_pct[{{ $monthNumber }}]" value="{{ $value }}" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
+                                        <label class="lfp-physical-remark-label" for="accomplishment_pct_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="accomplishment_pct_remarks_{{ $monthNumber }}" name="accomplishment_pct_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
@@ -2151,7 +2252,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2161,7 +2262,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2171,10 +2272,22 @@
                                             ? \Illuminate\Support\Carbon::parse($row['accomplishment_pct_ro_updated_at'])->format('M d, Y h:i A')
                                             : '-';
                                         $updatedBy = $row['accomplishment_pct_ro_updated_by_name'] ?? '-';
+                                        $remarkValue = old('accomplishment_pct_ro_remarks.' . $monthNumber, $row['accomplishment_pct_ro_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['accomplishment_pct_ro_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['accomplishment_pct_ro_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['accomplishment_pct_ro_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <input type="number" step="0.01" min="0" max="100" name="accomplishment_pct_ro[{{ $monthNumber }}]" value="{{ $value }}" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }} style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
+                                        <label class="lfp-physical-remark-label" for="accomplishment_pct_ro_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="accomplishment_pct_ro_remarks_{{ $monthNumber }}" name="accomplishment_pct_ro_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }}
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
@@ -2190,7 +2303,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2200,7 +2313,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2210,10 +2323,22 @@
                                             ? \Illuminate\Support\Carbon::parse($row['slippage_updated_at'])->format('M d, Y h:i A')
                                             : '-';
                                         $updatedBy = $row['slippage_updated_by_name'] ?? '-';
+                                        $remarkValue = old('slippage_remarks.' . $monthNumber, $row['slippage_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['slippage_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['slippage_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['slippage_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <input type="number" step="0.01" min="0" max="100" name="slippage[{{ $monthNumber }}]" value="{{ $value }}" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
+                                        <label class="lfp-physical-remark-label" for="slippage_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="slippage_remarks_{{ $monthNumber }}" name="slippage_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
@@ -2228,7 +2353,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2238,7 +2363,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2248,10 +2373,22 @@
                                             ? \Illuminate\Support\Carbon::parse($row['slippage_ro_updated_at'])->format('M d, Y h:i A')
                                             : '-';
                                         $updatedBy = $row['slippage_ro_updated_by_name'] ?? '-';
+                                        $remarkValue = old('slippage_ro_remarks.' . $monthNumber, $row['slippage_ro_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['slippage_ro_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['slippage_ro_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['slippage_ro_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <input type="number" step="0.01" min="0" max="100" name="slippage_ro[{{ $monthNumber }}]" value="{{ $value }}" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }} style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
+                                        <label class="lfp-physical-remark-label" for="slippage_ro_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="slippage_ro_remarks_{{ $monthNumber }}" name="slippage_ro_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }}
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
@@ -2289,7 +2426,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2299,7 +2436,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2309,9 +2446,14 @@
                                             ? \Illuminate\Support\Carbon::parse($row['risk_aging_updated_at'])->format('M d, Y h:i A')
                                             : '-';
                                         $updatedBy = $row['risk_aging_updated_by_name'] ?? '-';
+                                        $remarkValue = old('risk_aging_remarks.' . $monthNumber, $row['risk_aging_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['risk_aging_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['risk_aging_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['risk_aging_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <select name="risk_aging[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }}
                                                 style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
                                             <option value="">-- Select --</option>
@@ -2325,6 +2467,13 @@
                                             <option value="Moderate Risk" {{ $value === 'Moderate Risk' ? 'selected' : '' }}>Moderate Risk</option>
                                             <option value="High Risk" {{ $value === 'High Risk' ? 'selected' : '' }}>High Risk</option>
                                         </select>
+                                        <label class="lfp-physical-remark-label" for="risk_aging_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="risk_aging_remarks_{{ $monthNumber }}" name="risk_aging_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" {{ !(Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office') ? 'disabled' : '' }}
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
@@ -2340,7 +2489,7 @@
                     <details class="monthly-details" style="margin-top: 8px;">
                         <summary class="monthly-summary" style="cursor: pointer; color: #1d4ed8; background-color: #e0e7ff; border: 1px solid #c7d2fe; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View monthly Status</summary>
                         <div style="margin-top: 10px;">
-                            <div style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
+                            <div class="lfp-physical-row lfp-physical-row--header" style="display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px; font-weight: 600; color: #374151; font-size: 12px; text-transform: uppercase;">
                                 <div>Month</div>
                                 <div>Status</div>
                                 <div>Date & Time</div>
@@ -2350,7 +2499,7 @@
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="section" value="physical">
-                                <div style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
+                                <div class="lfp-physical-row" style="margin-top: 6px; color: #6b7280; display: grid; grid-template-columns: 120px 1fr 180px 140px; gap: 8px;">
                                     @php
                                         $monthNumber = (int) $currentMonth;
                                         $monthName = $months[$monthNumber] ?? now()->format('F');
@@ -2374,9 +2523,14 @@
                                         ];
                                         $bgColor = $ncColors[$value] ?? '#f3f4f6';
                                         $textColor = $ncTextColors[$value] ?? '#374151';
+                                        $remarkValue = old('nc_letters_remarks.' . $monthNumber, $row['nc_letters_remarks'] ?? '');
+                                        $remarkUpdatedAt = $row && $row['nc_letters_remarks_updated_at']
+                                            ? \Illuminate\Support\Carbon::parse($row['nc_letters_remarks_updated_at'])->format('M d, Y h:i A')
+                                            : '-';
+                                        $remarkUpdatedBy = $row['nc_letters_remarks_updated_by_name'] ?? '-';
                                     @endphp
                                     <div>{{ $monthName }}</div>
-                                    <div>
+                                    <div class="lfp-physical-field-cell">
                                         <select name="nc_letters[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" disabled
                                                 style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: {{ $bgColor }}; color: {{ $textColor }};">
                                             <option value="">-- Select --</option>
@@ -2385,6 +2539,13 @@
                                             <option value="NC No. 3" {{ $value === 'NC No. 3' ? 'selected' : '' }}>NC No. 3</option>
                                             <option value="No" {{ $value === 'No' ? 'selected' : '' }}>No</option>
                                         </select>
+                                        <label class="lfp-physical-remark-label" for="nc_letters_remarks_{{ $monthNumber }}">Remarks</label>
+                                        <textarea id="nc_letters_remarks_{{ $monthNumber }}" name="nc_letters_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" disabled
+                                                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
+                                        <div class="lfp-physical-remark-meta">
+                                            <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
+                                            <span><strong>Remark By:</strong> {{ $remarkUpdatedBy }}</span>
+                                        </div>
                                     </div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #f3f4f6; color: #374151; font-size: 11px; font-weight: 600;">{{ $updatedAt }}</span></div>
                                     <div><span style="display: inline-block; padding: 3px 8px; border-radius: 999px; border: 1px solid #e5e7eb; background-color: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;">{{ $updatedBy }}</span></div>
