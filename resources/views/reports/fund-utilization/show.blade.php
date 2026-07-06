@@ -189,14 +189,12 @@
     @php
         $currentUser = Auth::user();
         $userLookupCache = [];
-        $isProvincialValidator = $currentUser && $currentUser->normalizedRole() === \App\Models\User::ROLE_PROVINCIAL;
+        $isProvincialValidator = $currentUser && $currentUser->isProvincialDilgAssignment();
         $isRegionalValidator = $currentUser && ($currentUser->normalizedRole() === \App\Models\User::ROLE_REGIONAL || $currentUser->isRegionalOfficeAssignment());
         $isWorkflowValidator = $isProvincialValidator || $isRegionalValidator;
         $isLguWorkflowUser = $currentUser && $currentUser->isLguScopedUser();
-        $canUploadFundUtilizationDocuments = $currentUser && in_array($currentUser->normalizedRole(), [
-            \App\Models\User::ROLE_LGU,
-            \App\Models\User::ROLE_PROVINCIAL,
-        ], true);
+        $canUploadFundUtilizationDocuments = $currentUser
+            && ($currentUser->isLguScopedUser() || $currentUser->isProvincialDilgAssignment());
         $isProvincialDilgViewer = $isProvincialValidator;
         $resolveUserById = function ($userId) use (&$userLookupCache) {
             $normalizedUserId = trim((string) $userId);
@@ -225,11 +223,11 @@
                 return null;
             }
 
-            if ($uploader->normalizedRole() === \App\Models\User::ROLE_PROVINCIAL) {
+            if ($uploader->isProvincialDilgAssignment()) {
                 return 'provincial';
             }
 
-            if ($uploader->normalizedRole() === \App\Models\User::ROLE_LGU || $uploader->normalizedAgency() === 'lgu') {
+            if ($uploader->isLguScopedUser() || $uploader->normalizedAgency() === 'lgu') {
                 return 'lgu';
             }
 
@@ -359,18 +357,26 @@
             }
 
             $uploader = $resolveUserById($normalizedUploaderId);
-            if (!$uploader || $currentUser->normalizedRole() !== $uploader->normalizedRole()) {
+            if (!$uploader) {
                 return false;
             }
 
-            if ($uploader->normalizedRole() === \App\Models\User::ROLE_LGU) {
+            if ($uploader->isLguScopedUser()) {
+                if (!$currentUser->isLguScopedUser()) {
+                    return false;
+                }
+
                 return $currentUser->normalizedProvince() !== ''
                     && $currentUser->normalizedProvince() === $uploader->normalizedProvince()
                     && $currentUser->normalizedOfficeComparable() !== ''
                     && $currentUser->normalizedOfficeComparable() === $uploader->normalizedOfficeComparable();
             }
 
-            if ($uploader->normalizedRole() === \App\Models\User::ROLE_PROVINCIAL) {
+            if ($uploader->isProvincialDilgAssignment()) {
+                if (!$currentUser->isProvincialDilgAssignment()) {
+                    return false;
+                }
+
                 return $currentUser->normalizedProvince() !== ''
                     && $currentUser->normalizedProvince() === $uploader->normalizedProvince();
             }

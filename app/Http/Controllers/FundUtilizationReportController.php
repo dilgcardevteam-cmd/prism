@@ -536,15 +536,12 @@ class FundUtilizationReportController extends Controller
             return false;
         }
 
-        return in_array($user->normalizedRole(), [
-            User::ROLE_LGU,
-            User::ROLE_PROVINCIAL,
-        ], true);
+        return $user->isLguScopedUser() || $user->isProvincialDilgAssignment();
     }
 
     private function isFundUtilizationProvincialValidator(?User $user): bool
     {
-        return $user?->normalizedRole() === User::ROLE_PROVINCIAL;
+        return (bool) ($user && $user->isProvincialDilgAssignment());
     }
 
     private function isFundUtilizationRegionalValidator(?User $user): bool
@@ -558,7 +555,7 @@ class FundUtilizationReportController extends Controller
             return null;
         }
 
-        if ($user->normalizedRole() === User::ROLE_PROVINCIAL) {
+        if ($user->isProvincialDilgAssignment()) {
             return 'provincial';
         }
 
@@ -756,11 +753,11 @@ class FundUtilizationReportController extends Controller
             return false;
         }
 
-        if ($actor->normalizedRole() !== $uploader->normalizedRole()) {
-            return false;
-        }
-
         if ($uploader->normalizedRole() === User::ROLE_LGU) {
+            if (!$actor->isLguScopedUser()) {
+                return false;
+            }
+
             $actorProvince = $actor->normalizedProvince();
             $uploaderProvince = $uploader->normalizedProvince();
             $actorOffice = $actor->normalizedOfficeComparable();
@@ -774,7 +771,11 @@ class FundUtilizationReportController extends Controller
                 && $actorOffice === $uploaderOffice;
         }
 
-        if ($uploader->normalizedRole() === User::ROLE_PROVINCIAL) {
+        if ($uploader->isProvincialDilgAssignment()) {
+            if (!$actor->isProvincialDilgAssignment()) {
+                return false;
+            }
+
             $actorProvince = $actor->normalizedProvince();
             $uploaderProvince = $uploader->normalizedProvince();
 
@@ -795,9 +796,9 @@ class FundUtilizationReportController extends Controller
 
     private function buildFundUtilizationProvincialUploaderExistsExpression(string $encoderColumn): string
     {
-        $provincialRole = strtolower(User::ROLE_PROVINCIAL);
+        $regionalRole = strtolower(User::ROLE_REGIONAL);
 
-        return "EXISTS (SELECT 1 FROM tbusers uploader WHERE uploader.idno = {$encoderColumn} AND LOWER(TRIM(COALESCE(uploader.role, ''))) = '{$provincialRole}')";
+        return "EXISTS (SELECT 1 FROM tbusers uploader WHERE uploader.idno = {$encoderColumn} AND UPPER(TRIM(COALESCE(uploader.agency, ''))) = 'DILG' AND LOWER(TRIM(COALESCE(uploader.province, ''))) <> 'regional office' AND LOWER(TRIM(COALESCE(uploader.role, ''))) NOT IN ('{$regionalRole}', 'lgu', 'mlgoo') AND TRIM(COALESCE(uploader.province, '')) <> '')";
     }
 
     private function buildFundUtilizationPoPendingExistsExpression(string $projectCodeColumn): string

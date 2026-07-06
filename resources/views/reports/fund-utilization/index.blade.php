@@ -69,10 +69,8 @@
             'per_page' => $perPage ?? 10,
             'batch_upload' => $batchUploadOpen ? 1 : null,
         ], fn ($value) => $value !== null && $value !== '');
-        $canBatchUploadFundUtilization = Auth::check() && in_array(Auth::user()->normalizedRole(), [
-            \App\Models\User::ROLE_LGU,
-            \App\Models\User::ROLE_PROVINCIAL,
-        ], true);
+        $canBatchUploadFundUtilization = Auth::check()
+            && (Auth::user()->isLguScopedUser() || Auth::user()->isProvincialDilgAssignment());
     @endphp
 
     @if($canBatchUploadFundUtilization)

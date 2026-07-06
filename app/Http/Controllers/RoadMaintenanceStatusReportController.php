@@ -987,9 +987,7 @@ class RoadMaintenanceStatusReportController extends Controller
         $path = $file->store('road-maintenance-status/' . $officeSlug, 'public');
         $uploadedAt = now();
         $user = auth()->user();
-        $isMountainProvinceDilgUploader = $user
-            && strtoupper(trim((string) $user->agency)) === 'DILG'
-            && strtolower(trim((string) $user->province)) === 'mountain province';
+        $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
 
         $document = RoadMaintenanceStatusDocument::updateOrCreate(
             [
@@ -1003,11 +1001,11 @@ class RoadMaintenanceStatusReportController extends Controller
                 'file_path' => $path,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
-                'status' => $isMountainProvinceDilgUploader ? 'pending_ro' : 'pending',
-                'approved_at' => $isMountainProvinceDilgUploader ? $uploadedAt : null,
-                'approved_at_dilg_po' => $isMountainProvinceDilgUploader ? $uploadedAt : null,
+                'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
+                'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
+                'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
                 'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => $isMountainProvinceDilgUploader ? ($user->idno ?? auth()->id()) : null,
+                'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
                 'approved_by_dilg_ro' => null,
                 'approval_remarks' => null,
                 'user_remarks' => null,
@@ -1019,7 +1017,7 @@ class RoadMaintenanceStatusReportController extends Controller
         }
 
         $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
-        if ($isMountainProvinceDilgUploader) {
+        if ($isProvincialDilgUploader) {
             $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $uploadedAt);
         }
 

@@ -21,7 +21,7 @@ class FundUtilizationWorkflowRoutingService
             return null;
         }
 
-        $chainKey = $uploader->normalizedRole() === User::ROLE_PROVINCIAL ? 'provincial' : 'lgu';
+        $chainKey = $uploader->isProvincialDilgAssignment() ? 'provincial' : 'lgu';
 
         $levelConfig = collect(config('fund_utilization_workflow.uploader_chains.' . $chainKey, []))
             ->firstWhere('level', $level);
@@ -53,7 +53,7 @@ class FundUtilizationWorkflowRoutingService
         if ($requiredRole === User::ROLE_PROVINCIAL) {
             return $actor->isActive()
                 && $actor->isDilgUser()
-                && $actor->matchesRoleAlias('provincial');
+                && $actor->isProvincialDilgAssignment();
         }
 
         if ($requiredRole === User::ROLE_REGIONAL) {
@@ -98,9 +98,14 @@ class FundUtilizationWorkflowRoutingService
                 $builder->whereRaw('LOWER(TRIM(COALESCE(role, ""))) = ?', [User::ROLE_PROVINCIAL])
                     ->orWhere(function ($fallback) {
                         $fallback->whereRaw('UPPER(TRIM(COALESCE(agency, ""))) = ?', ['DILG'])
-                            ->whereRaw('LOWER(TRIM(COALESCE(role, ""))) <> ?', [User::ROLE_REGIONAL])
+                            ->whereRaw('LOWER(TRIM(COALESCE(role, ""))) NOT IN (?, ?, ?)', [
+                                User::ROLE_REGIONAL,
+                                'lgu',
+                                'mlgoo',
+                            ])
                             ->whereRaw('LOWER(TRIM(COALESCE(province, ""))) <> ?', ['regional office'])
-                            ->whereRaw('LOWER(TRIM(COALESCE(office, ""))) NOT LIKE ?', ['%regional office%']);
+                            ->whereRaw('LOWER(TRIM(COALESCE(office, ""))) NOT LIKE ?', ['%regional office%'])
+                            ->whereRaw('TRIM(COALESCE(province, "")) <> ""');
                     });
             });
 

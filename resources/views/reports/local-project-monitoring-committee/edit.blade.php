@@ -149,9 +149,9 @@
                     $uploadedTime = $uploadedInfo['time'];
                     $uploaderName = $uploadedInfo['name'];
                     $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
-                    $isDilgMountainUploader = $uploaderUser
-                        && strtoupper(trim((string) ($uploaderUser->agency ?? ''))) === 'DILG'
-                        && strtolower(trim((string) ($uploaderUser->province ?? ''))) === 'mountain province';
+                    $isProvincialDilgUploader = $uploaderUser && method_exists($uploaderUser, 'isProvincialDilgAssignment')
+                        ? $uploaderUser->isProvincialDilgAssignment()
+                        : false;
                     $returnedAt = null;
                     $returnedByName = 'Unknown';
                     $returnedByLevel = null;
@@ -204,7 +204,7 @@
                             $isUploadedAndPoValidatedBySameUser = $doc
                                 && $uploadedTime
                                 && $poValidatedAt
-                                && $isDilgMountainUploader
+                                && $isProvincialDilgUploader
                                 && !empty($doc->uploaded_by)
                                 && !empty($doc->approved_by_dilg_po)
                                 && (string) $doc->uploaded_by === (string) $doc->approved_by_dilg_po
@@ -454,9 +454,9 @@
                                     $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredQuarterDeadline);
                                     $uploaderName = $uploadedInfo['name'];
                                     $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
-                                    $isDilgMountainUploader = $uploaderUser
-                                        && strtoupper(trim((string) ($uploaderUser->agency ?? ''))) === 'DILG'
-                                        && strtolower(trim((string) ($uploaderUser->province ?? ''))) === 'mountain province';
+                                    $isProvincialDilgUploader = $uploaderUser && method_exists($uploaderUser, 'isProvincialDilgAssignment')
+                                        ? $uploaderUser->isProvincialDilgAssignment()
+                                        : false;
                                     $returnedAt = null;
                                     $returnedByName = 'Unknown';
                                     $returnedByLevel = null;
@@ -516,7 +516,7 @@
                                             $isUploadedAndPoValidatedBySameUser = $doc
                                                 && $uploadedTime
                                                 && $poValidatedAt
-                                                && $isDilgMountainUploader
+                                                && $isProvincialDilgUploader
                                                 && !empty($doc->uploaded_by)
                                                 && !empty($doc->approved_by_dilg_po)
                                                 && (string) $doc->uploaded_by === (string) $doc->approved_by_dilg_po

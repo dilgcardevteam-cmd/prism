@@ -356,6 +356,23 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->normalizedRole() === self::ROLE_PROVINCIAL;
     }
 
+    public function isProvincialDilgAssignment(): bool
+    {
+        if (!$this->isDilgUser()) {
+            return false;
+        }
+
+        if ($this->isRegionalOfficeAssignment()) {
+            return false;
+        }
+
+        if (in_array($this->normalizedRole(), [self::ROLE_LGU, self::ROLE_MLGOO], true)) {
+            return false;
+        }
+
+        return $this->normalizedProvince() !== '';
+    }
+
     public function isMlgooUser(): bool
     {
         return $this->normalizedRole() === self::ROLE_MLGOO;
