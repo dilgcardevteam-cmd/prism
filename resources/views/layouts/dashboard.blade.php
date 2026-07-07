@@ -472,15 +472,62 @@
             border-bottom: 1px solid #e5e7eb;
             background: #f8fafc;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
             gap: 8px;
+        }
+
+        .notification-menu-header-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
         }
 
         .notification-menu-title {
             font-size: 13px;
             font-weight: 700;
             color: #002C76;
+        }
+
+        .notification-menu-stats {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 11px;
+            color: #475569;
+        }
+
+        .notification-menu-stat {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid #dbe4f0;
+            background: #ffffff;
+            font-weight: 700;
+        }
+
+        button.notification-menu-stat {
+            cursor: pointer;
+            transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        button.notification-menu-stat:hover {
+            transform: translateY(-1px);
+            border-color: #93c5fd;
+        }
+
+        .notification-menu-stat.read {
+            color: #475569;
+        }
+
+        .notification-menu-stat.unread {
+            color: #1d4ed8;
+            border-color: #bfdbfe;
+            background: #eff6ff;
         }
 
         .notification-clear-btn {
@@ -707,6 +754,79 @@
             max-height: calc(min(78vh, 860px) - 92px);
             overflow-y: auto;
             padding: 10px;
+        }
+
+        .notification-list-modal__toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .notification-view-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .notification-view-switcher__label {
+            font-size: 12px;
+            font-weight: 800;
+            color: #334155;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .notification-view-switcher__buttons {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .notification-view-switcher__button {
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #334155;
+            min-height: 36px;
+            border-radius: 999px;
+            padding: 0 14px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .notification-view-switcher__button:hover {
+            border-color: #93c5fd;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .notification-view-switcher__button.is-active {
+            border-color: #1d4ed8;
+            background: #1d4ed8;
+            color: #ffffff;
+            box-shadow: 0 10px 18px rgba(29, 78, 216, 0.16);
+        }
+
+        .notification-view-switcher__button-count {
+            min-width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            padding: 0 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.18);
+            font-size: 11px;
+            line-height: 1;
         }
 
         .notification-filter-panel {
@@ -1017,6 +1137,16 @@
             border-color: #93c5fd;
         }
 
+        .notification-list-modal__item.is-read {
+            border-color: #e2e8f0;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .notification-list-modal__item.is-read:hover {
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+            border-color: #cbd5e1;
+        }
+
         .notification-list-modal__item-row {
             display: flex;
             align-items: flex-start;
@@ -1091,6 +1221,12 @@
             color: #64748b;
         }
 
+        .notification-module-badge.read-state {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            color: #475569;
+        }
+
         .notification-list-modal__item-message {
             font-size: 14px;
             line-height: 1.5;
@@ -1129,6 +1265,20 @@
         }
 
         @media (max-width: 640px) {
+            .notification-list-modal__toolbar {
+                align-items: stretch;
+            }
+
+            .notification-view-switcher {
+                width: 100%;
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .notification-view-switcher__buttons {
+                width: 100%;
+            }
+
             .notification-filter-grid {
                 grid-template-columns: 1fr;
             }
@@ -2980,18 +3130,27 @@
                         ->where('user_id', Auth::id())
                         ->whereNull('read_at');
                     $unreadNotifications = (clone $unreadNotificationQuery)->count();
+                    $allNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
+                        ->where('user_id', Auth::id())
+                        ->orderByDesc('created_at')
+                        ->get(['id', 'message', 'url', 'document_type', 'quarter', 'sender_name', 'sender_user_id', 'created_at', 'updated_at', 'read_at']);
+                    $allNotifications = \App\Support\NotificationCenter::presentMany($allNotificationRows);
                     $allUnreadNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
                         ->where('user_id', Auth::id())
                         ->whereNull('read_at')
                         ->orderByDesc('created_at')
                         ->get(['id', 'message', 'url', 'document_type', 'quarter', 'sender_name', 'sender_user_id', 'created_at', 'updated_at', 'read_at']);
                     $allUnreadNotifications = \App\Support\NotificationCenter::presentMany($allUnreadNotificationRows);
-                    $notificationSections = \App\Support\NotificationCenter::groupByInboxSections($allUnreadNotifications);
-                    $notificationQueueSummaries = \App\Support\NotificationCenter::summarizeQueues($allUnreadNotifications);
+                    $notificationSections = \App\Support\NotificationCenter::groupByInboxSections($allNotifications);
+                    $notificationQueueSummaries = \App\Support\NotificationCenter::summarizeQueues($allNotifications);
+                    $readNotificationCount = $allNotifications->where('is_read', true)->count();
+                    $allNotificationCount = $allNotifications->count();
+                    $notificationDefaultView = $unreadNotifications > 0 ? 'unread' : ($readNotificationCount > 0 ? 'all' : 'unread');
                     $recentNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
                         ->where('user_id', Auth::id())
+                        ->whereNull('read_at')
                         ->orderByDesc('created_at')
-                        ->limit(12)
+                        ->limit(5)
                         ->get(['id', 'message', 'url', 'document_type', 'quarter', 'sender_name', 'sender_user_id', 'created_at', 'updated_at', 'read_at']);
                     $recentNotifications = \App\Support\NotificationCenter::presentMany($recentNotificationRows);
 
@@ -3046,20 +3205,24 @@
                     </button>
                     <div class="notification-menu" id="notificationMenu">
                         <div class="notification-menu-header">
-                            <span class="notification-menu-title">Notifications</span>
+                            <div class="notification-menu-header-copy">
+                                <span class="notification-menu-title">Notifications</span>
+                                <div class="notification-menu-stats">
+                                    <button type="button" class="notification-menu-stat unread" data-open-notifications-view="unread">Unread: {{ number_format($unreadNotifications) }}</button>
+                                    <button type="button" class="notification-menu-stat read" data-open-notifications-view="read">Read: {{ number_format($readNotificationCount) }}</button>
+                                </div>
+                            </div>
                         </div>
                         @if($recentNotifications->isEmpty())
-                            <div class="notification-menu-empty">No notifications yet.</div>
+                            <div class="notification-menu-empty">No unread notifications.</div>
                         @else
                             @foreach($recentNotifications as $notificationItem)
                                 <a
                                     href="{{ route('notifications.read', ['id' => $notificationItem['id']]) }}"
-                                    class="notification-menu-item {{ is_null($notificationItem['read_at']) ? 'unread' : '' }}"
+                                    class="notification-menu-item unread"
                                 >
                                     <div class="notification-menu-message-row">
-                                        @if(is_null($notificationItem['read_at']))
-                                            <span class="notification-unread-dot" aria-label="Unread notification"></span>
-                                        @endif
+                                        <span class="notification-unread-dot" aria-label="Unread notification"></span>
                                         <div style="min-width: 0;">
                                             <div class="notification-menu-message">{{ $notificationItem['message'] }}</div>
                                             <div class="notification-menu-meta">
@@ -3078,7 +3241,7 @@
                         @endif
                         <div class="notification-menu-footer">
                             <div class="notification-menu-footer-actions">
-                                @if($recentNotifications->isNotEmpty())
+                                @if($readNotificationCount > 0)
                                     <form method="POST" action="{{ route('notifications.clear') }}" class="notification-menu-action-form">
                                         @csrf
                                         <button type="submit" class="notification-menu-clear-action">
@@ -3199,29 +3362,48 @@
             <div class="notification-list-modal__header">
                 <div>
                     <h3 id="notificationsListModalTitle" class="notification-list-modal__title">Notification Center</h3>
-                    <p class="notification-list-modal__subtitle">Unread items are grouped by queue and module so provincial approval, regional approval, and returned submissions are easier to identify.</p>
+                    <p class="notification-list-modal__subtitle">Notifications are grouped by queue and module so provincial approval, regional approval, returned submissions, and completed reads are easier to identify.</p>
                 </div>
                 <button type="button" class="notification-list-modal__close" id="closeNotificationsModalBtn" aria-label="Close notifications">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="notification-list-modal__body">
-                @if($allUnreadNotifications->isEmpty())
+                @if($allNotifications->isEmpty())
                     <div class="notification-list-modal__empty">
                         <i class="fas fa-bell-slash"></i>
-                        <span>No unread notifications.</span>
+                        <span>No notifications yet.</span>
                     </div>
                 @else
+                    <div class="notification-list-modal__toolbar">
+                        <div class="notification-view-switcher" aria-label="Notification visibility">
+                            <span class="notification-view-switcher__label">View</span>
+                            <div class="notification-view-switcher__buttons" role="group" aria-label="Read status filter">
+                                <button type="button" class="notification-view-switcher__button {{ $notificationDefaultView === 'unread' ? 'is-active' : '' }}" id="notificationsUnreadViewBtn" data-view-state="unread">
+                                    <span>Unread</span>
+                                    <span class="notification-view-switcher__button-count">{{ number_format($unreadNotifications) }}</span>
+                                </button>
+                                <button type="button" class="notification-view-switcher__button {{ $notificationDefaultView === 'read' ? 'is-active' : '' }}" id="notificationsReadViewBtn" data-view-state="read">
+                                    <span>Read</span>
+                                    <span class="notification-view-switcher__button-count">{{ number_format($readNotificationCount) }}</span>
+                                </button>
+                                <button type="button" class="notification-view-switcher__button {{ $notificationDefaultView === 'all' ? 'is-active' : '' }}" id="notificationsAllViewBtn" data-view-state="all">
+                                    <span>All</span>
+                                    <span class="notification-view-switcher__button-count">{{ number_format($allNotificationCount) }}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     @if(!empty($notificationQueueSummaries))
                         <div class="notification-summary-grid">
                             @foreach($notificationQueueSummaries as $notificationQueueSummary)
-                                <div class="notification-summary-card {{ $notificationQueueSummary['tone'] }}">
+                                <div class="notification-summary-card {{ $notificationQueueSummary['tone'] }}" data-notification-summary-card data-queue-key="{{ $notificationQueueSummary['key'] }}">
                                     <span class="notification-summary-card__icon">
                                         <i class="fas {{ $notificationQueueSummary['icon'] }}"></i>
                                     </span>
                                     <div class="notification-summary-card__copy">
                                         <strong>{{ $notificationQueueSummary['label'] }}</strong>
-                                        <span>{{ number_format($notificationQueueSummary['count']) }} unread</span>
+                                        <span data-notification-summary-count>{{ number_format($notificationQueueSummary['count']) }} items</span>
                                     </div>
                                 </div>
                             @endforeach
@@ -3293,19 +3475,19 @@
                                             <p class="notification-list-modal__section-description">{{ $notificationSection['description'] }}</p>
                                         </div>
                                     </div>
-                                    <span class="notification-list-modal__section-count">{{ number_format($notificationSection['count']) }}</span>
+                                    <span class="notification-list-modal__section-count" data-notification-section-count>{{ number_format($notificationSection['count']) }}</span>
                                 </div>
                                 @foreach($notificationSection['modules'] as $notificationModule)
                                     <div class="notification-list-modal__module" data-notification-module="{{ $notificationModule['module_key'] }}">
                                         <div class="notification-list-modal__module-header">
                                             <span class="notification-list-modal__module-title">{{ $notificationModule['module_label'] }}</span>
-                                            <span class="notification-list-modal__module-count">{{ number_format($notificationModule['count']) }}</span>
+                                            <span class="notification-list-modal__module-count" data-notification-module-count>{{ number_format($notificationModule['count']) }}</span>
                                         </div>
                                         <div class="notification-list-modal__module-items">
                                             @foreach($notificationModule['items'] as $notificationItem)
                                                 <a
                                                     href="{{ route('notifications.read', ['id' => $notificationItem['id']]) }}"
-                                                    class="notification-list-modal__item"
+                                                    class="notification-list-modal__item {{ $notificationItem['is_read'] ? 'is-read' : 'is-unread' }}"
                                                     data-project-code="{{ $notificationItem['project_code'] }}"
                                                     data-province="{{ $notificationItem['province'] }}"
                                                     data-city-municipality="{{ $notificationItem['city_municipality'] }}"
@@ -3314,15 +3496,21 @@
                                                     data-module-label="{{ $notificationItem['module_label'] }}"
                                                     data-queue-key="{{ $notificationItem['queue_key'] }}"
                                                     data-queue-label="{{ $notificationItem['queue_label'] }}"
+                                                    data-read-state="{{ $notificationItem['is_read'] ? 'read' : 'unread' }}"
                                                 >
                                                     <div class="notification-list-modal__item-row">
-                                                        <span class="notification-unread-dot" aria-hidden="true"></span>
+                                                        @if(!$notificationItem['is_read'])
+                                                            <span class="notification-unread-dot" aria-hidden="true"></span>
+                                                        @endif
                                                         <div class="notification-list-modal__item-copy">
                                                             <div class="notification-list-modal__item-badges">
                                                                 <span class="notification-status-badge {{ $notificationItem['queue_tone'] }}">
                                                                     {{ $notificationItem['queue_short_label'] }}
                                                                 </span>
                                                                 <span class="notification-module-badge">{{ $notificationItem['module_label'] }}</span>
+                                                                <span class="notification-module-badge read-state">
+                                                                    {{ $notificationItem['is_read'] ? 'Read' : 'Unread' }}
+                                                                </span>
                                                                 @if(!empty($notificationItem['quarter']))
                                                                     <span class="notification-module-badge subtle">{{ $notificationItem['quarter'] }}</span>
                                                                 @endif
@@ -3345,7 +3533,7 @@
                         @endforeach
                     </div>
                     <div class="notification-list-modal__empty-filter" id="notificationsFilteredEmptyState">
-                        No unread notifications match the selected filters.
+                        No notifications match the selected filters.
                     </div>
                 @endif
             </div>
@@ -3712,7 +3900,7 @@
             body.style.overflow = '';
         }
 
-        function openNotificationsListModal() {
+        function openNotificationsListModal(preferredViewState = null) {
             if (!notificationsListModal) {
                 return;
             }
@@ -3729,6 +3917,13 @@
             body.style.overflow = 'hidden';
 
             initializeNotificationFilters();
+
+            if (preferredViewState && ['unread', 'read', 'all'].includes(preferredViewState)) {
+                const preferredViewButton = notificationsListModal.querySelector(`[data-view-state="${preferredViewState}"]`);
+                if (preferredViewButton instanceof HTMLElement) {
+                    preferredViewButton.click();
+                }
+            }
         }
 
         function parseNotificationMetadata(message) {
@@ -3815,6 +4010,13 @@
             const applyButton = document.getElementById('notificationsApplyFilterBtn');
             const resetButton = document.getElementById('notificationsResetFilterBtn');
             const filteredEmptyState = document.getElementById('notificationsFilteredEmptyState');
+            const unreadViewButton = document.getElementById('notificationsUnreadViewBtn');
+            const readViewButton = document.getElementById('notificationsReadViewBtn');
+            const allViewButton = document.getElementById('notificationsAllViewBtn');
+            const viewButtons = [unreadViewButton, readViewButton, allViewButton].filter(Boolean);
+            const summaryCards = Array.from(document.querySelectorAll('[data-notification-summary-card]'));
+            const numberFormatter = new Intl.NumberFormat();
+            let activeReadState = viewButtons.find((button) => button.classList.contains('is-active'))?.dataset.viewState || 'unread';
 
             if (!projectCodeInput || !provinceSelect || !citySelect || !barangaySelect || !moduleSelect || !queueSelect || !applyButton || !resetButton) {
                 return;
@@ -3832,6 +4034,7 @@
                     moduleLabel: String(item.dataset.moduleLabel || '').trim(),
                     queueKey: String(item.dataset.queueKey || '').trim(),
                     queueLabel: String(item.dataset.queueLabel || '').trim(),
+                    readState: String(item.dataset.readState || 'unread').trim().toLowerCase() === 'read' ? 'read' : 'unread',
                 };
 
                 item.dataset.projectCode = metadata.projectCode;
@@ -3842,6 +4045,7 @@
                 item.dataset.moduleLabel = metadata.moduleLabel;
                 item.dataset.queueKey = metadata.queueKey;
                 item.dataset.queueLabel = metadata.queueLabel;
+                item.dataset.readState = metadata.readState;
 
                 return metadata;
             });
@@ -3924,6 +4128,34 @@
                 setNotificationSelectOptions(queueSelect, itemMetadata.map((metadata) => metadata.queueLabel), 'All');
             };
 
+            const setActiveReadState = (nextReadState) => {
+                activeReadState = ['unread', 'read', 'all'].includes(nextReadState) ? nextReadState : 'unread';
+                viewButtons.forEach((button) => {
+                    button.classList.toggle('is-active', button.dataset.viewState === activeReadState);
+                });
+            };
+
+            const updateFilteredEmptyStateMessage = (visibleCount) => {
+                if (!filteredEmptyState) {
+                    return;
+                }
+
+                if (visibleCount > 0) {
+                    filteredEmptyState.style.display = 'none';
+                    return;
+                }
+
+                if (activeReadState === 'read') {
+                    filteredEmptyState.textContent = 'No read notifications match the selected filters.';
+                } else if (activeReadState === 'unread') {
+                    filteredEmptyState.textContent = 'No unread notifications match the selected filters.';
+                } else {
+                    filteredEmptyState.textContent = 'No notifications match the selected filters.';
+                }
+
+                filteredEmptyState.style.display = 'block';
+            };
+
             const applyNotificationFilters = () => {
                 const projectCodeNeedle = String(projectCodeInput.value || '').trim().toLowerCase();
                 const selectedProvince = String(provinceSelect.value || '').trim();
@@ -3933,6 +4165,7 @@
                 const selectedQueue = String(queueSelect.value || '').trim();
 
                 let visibleCount = 0;
+                const queueCounts = new Map();
 
                 notificationItems.forEach((item) => {
                     const itemProjectCode = String(item.dataset.projectCode || '');
@@ -3941,6 +4174,8 @@
                     const itemBarangay = String(item.dataset.barangay || '');
                     const itemModule = String(item.dataset.moduleLabel || '');
                     const itemQueue = String(item.dataset.queueLabel || '');
+                    const itemQueueKey = String(item.dataset.queueKey || '');
+                    const itemReadState = String(item.dataset.readState || 'unread');
 
                     const matchesProjectCode = !projectCodeNeedle
                         || itemProjectCode.toLowerCase().includes(projectCodeNeedle);
@@ -3949,27 +4184,59 @@
                     const matchesBarangay = !selectedBarangay || itemBarangay === selectedBarangay;
                     const matchesModule = !selectedModule || itemModule === selectedModule;
                     const matchesQueue = !selectedQueue || itemQueue === selectedQueue;
+                    const matchesReadState = activeReadState === 'all' || itemReadState === activeReadState;
 
-                    const isVisible = matchesProjectCode && matchesProvince && matchesCity && matchesBarangay && matchesModule && matchesQueue;
+                    const isVisible = matchesProjectCode
+                        && matchesProvince
+                        && matchesCity
+                        && matchesBarangay
+                        && matchesModule
+                        && matchesQueue
+                        && matchesReadState;
                     item.style.display = isVisible ? '' : 'none';
                     if (isVisible) {
                         visibleCount += 1;
+                        queueCounts.set(itemQueueKey, (queueCounts.get(itemQueueKey) || 0) + 1);
                     }
                 });
 
                 document.querySelectorAll('.notification-list-modal__module').forEach((moduleElement) => {
-                    const visibleItems = moduleElement.querySelectorAll('.notification-list-modal__item:not([style*="display: none"])').length;
+                    const visibleItems = Array.from(moduleElement.querySelectorAll('.notification-list-modal__item'))
+                        .filter((item) => item.style.display !== 'none')
+                        .length;
+                    const moduleCountElement = moduleElement.querySelector('[data-notification-module-count]');
+                    if (moduleCountElement) {
+                        moduleCountElement.textContent = numberFormatter.format(visibleItems);
+                    }
                     moduleElement.style.display = visibleItems > 0 ? '' : 'none';
                 });
 
                 document.querySelectorAll('.notification-list-modal__section').forEach((sectionElement) => {
-                    const visibleModules = sectionElement.querySelectorAll('.notification-list-modal__module:not([style*="display: none"])').length;
-                    sectionElement.style.display = visibleModules > 0 ? '' : 'none';
+                    const visibleModules = Array.from(sectionElement.querySelectorAll('.notification-list-modal__module'))
+                        .filter((moduleElement) => moduleElement.style.display !== 'none');
+                    const visibleItems = visibleModules.reduce((total, moduleElement) => {
+                        return total + Array.from(moduleElement.querySelectorAll('.notification-list-modal__item'))
+                            .filter((item) => item.style.display !== 'none')
+                            .length;
+                    }, 0);
+                    const sectionCountElement = sectionElement.querySelector('[data-notification-section-count]');
+                    if (sectionCountElement) {
+                        sectionCountElement.textContent = numberFormatter.format(visibleItems);
+                    }
+                    sectionElement.style.display = visibleModules.length > 0 ? '' : 'none';
                 });
 
-                if (filteredEmptyState) {
-                    filteredEmptyState.style.display = visibleCount === 0 ? 'block' : 'none';
-                }
+                summaryCards.forEach((summaryCard) => {
+                    const queueKey = String(summaryCard.dataset.queueKey || '');
+                    const queueCount = queueCounts.get(queueKey) || 0;
+                    const summaryCountElement = summaryCard.querySelector('[data-notification-summary-count]');
+                    if (summaryCountElement) {
+                        summaryCountElement.textContent = `${numberFormatter.format(queueCount)} ${queueCount === 1 ? 'item' : 'items'}`;
+                    }
+                    summaryCard.style.display = queueCount > 0 ? '' : 'none';
+                });
+
+                updateFilteredEmptyStateMessage(visibleCount);
             };
 
             const provinceValues = configuredProvinces.length > 0
@@ -3981,6 +4248,7 @@
             refreshBarangayOptions();
             refreshModuleOptions();
             refreshQueueOptions();
+            setActiveReadState(activeReadState);
             applyNotificationFilters();
 
             if (projectCodeInput.dataset.notificationFilterBound !== '1') {
@@ -4055,6 +4323,18 @@
                     applyNotificationFilters();
                 });
             }
+
+            viewButtons.forEach((button) => {
+                if (button.dataset.notificationFilterBound === '1') {
+                    return;
+                }
+
+                button.dataset.notificationFilterBound = '1';
+                button.addEventListener('click', function () {
+                    setActiveReadState(String(button.dataset.viewState || 'unread'));
+                    applyNotificationFilters();
+                });
+            });
         }
 
         // Toggle submenu function
@@ -4150,6 +4430,14 @@
                 openNotificationsListModal();
             });
         }
+
+        document.querySelectorAll('[data-open-notifications-view]').forEach((triggerButton) => {
+            triggerButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                openNotificationsListModal(String(triggerButton.dataset.openNotificationsView || 'unread'));
+            });
+        });
 
         if (closeNotificationsModalBtn) {
             closeNotificationsModalBtn.addEventListener('click', function () {

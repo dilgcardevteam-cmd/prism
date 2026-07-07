@@ -501,6 +501,59 @@ Route::middleware(['auth'])->group(function () {
             ->update(['read_at' => now(), 'updated_at' => now()]);
 
         $notificationUrl = \App\Support\NotificationUrl::normalizeForRedirect($notification->url);
+        $documentType = trim((string) ($notification->document_type ?? ''));
+        $quarter = trim((string) ($notification->quarter ?? ''));
+
+        $notificationPath = is_string($notificationUrl)
+            ? parse_url($notificationUrl, PHP_URL_PATH)
+            : null;
+        $notificationSegments = is_string($notificationPath)
+            ? array_values(array_filter(explode('/', trim($notificationPath, '/')), static fn ($segment) => $segment !== ''))
+            : [];
+
+        $fundUtilizationActionDocumentMap = [
+            'upload-mov' => 'mov',
+            'upload-batch-document' => 'batch-document',
+            'upload-written-notice' => 'written-notice',
+            'upload-fdp' => 'fdp',
+            'save-posting-link' => 'posting-link',
+            'approve' => $documentType !== '' ? $documentType : null,
+            'save-remarks' => $documentType !== '' ? $documentType : null,
+            'delete-document' => $documentType !== '' ? $documentType : null,
+        ];
+
+        if (
+            count($notificationSegments) >= 3
+            && ($notificationSegments[0] ?? null) === 'fund-utilization'
+            && array_key_exists((string) ($notificationSegments[2] ?? ''), $fundUtilizationActionDocumentMap)
+        ) {
+            $redirectParameters = ['projectCode' => urldecode((string) $notificationSegments[1])];
+            $actionSegment = (string) ($notificationSegments[2] ?? '');
+
+            if (in_array($actionSegment, ['approve', 'save-remarks', 'delete-document'], true) && $documentType === '' && !empty($notificationSegments[3] ?? null)) {
+                $documentType = urldecode((string) $notificationSegments[3]);
+            }
+
+            if ($quarter !== '') {
+                $redirectParameters['quarter'] = $quarter;
+            } elseif (in_array($actionSegment, ['approve', 'save-remarks', 'delete-document'], true) && !empty($notificationSegments[4] ?? null)) {
+                $redirectParameters['quarter'] = urldecode((string) $notificationSegments[4]);
+            }
+
+            $redirectDocumentType = $documentType !== ''
+                ? $documentType
+                : ($fundUtilizationActionDocumentMap[$actionSegment] ?? null);
+
+            if ($redirectDocumentType !== null && $redirectDocumentType !== '') {
+                if ($redirectDocumentType === 'written-notice') {
+                    $redirectDocumentType = 'written-notice-dbm';
+                }
+
+                $redirectParameters['document'] = $redirectDocumentType;
+            }
+
+            return redirect()->route('fund-utilization.show', $redirectParameters);
+        }
 
         return redirect($notificationUrl ?: route('fund-utilization.index'));
     })->name('notifications.read');
@@ -2667,22 +2720,83 @@ Route::middleware(['auth'])->group(function () {
 
     // Fund Utilization Report routes
     Route::prefix('fund-utilization')->group(function () {
+        $redirectLegacyFundUtilizationAction = function (Request $request, string $projectCode, string $defaultDocument) {
+            $quarter = trim((string) $request->query('quarter', ''));
+            $document = trim((string) $request->query('document', ''));
+            $refererQuery = [];
+            $referer = trim((string) $request->headers->get('referer', ''));
+
+            if ($referer !== '') {
+                $refererQueryString = parse_url($referer, PHP_URL_QUERY);
+                if (is_string($refererQueryString) && $refererQueryString !== '') {
+                    parse_str($refererQueryString, $refererQuery);
+                }
+            }
+
+            if ($quarter === '') {
+                $quarter = trim((string) ($refererQuery['quarter'] ?? ''));
+            }
+
+            if ($document === '') {
+                $document = trim((string) ($refererQuery['document'] ?? ''));
+            }
+
+            if ($document === '') {
+                $document = $defaultDocument;
+            }
+
+            $redirectParameters = ['projectCode' => $projectCode];
+
+            if ($quarter !== '') {
+                $redirectParameters['quarter'] = $quarter;
+            }
+
+            if ($document !== '') {
+                $redirectParameters['document'] = $document;
+            }
+
+            return redirect()->route('fund-utilization.show', $redirectParameters);
+        };
+
         Route::get('/', [App\Http\Controllers\FundUtilizationReportController::class, 'index'])->name('fund-utilization.index');
         Route::get('/export', [App\Http\Controllers\FundUtilizationReportController::class, 'export'])->name('fund-utilization.export');
         Route::get('/create', [App\Http\Controllers\FundUtilizationReportController::class, 'create'])->name('fund-utilization.create');
         Route::get('/get-municipalities/{province}', [App\Http\Controllers\FundUtilizationReportController::class, 'getMunicipalities'])->name('fund-utilization.get-municipalities');
         Route::post('/', [App\Http\Controllers\FundUtilizationReportController::class, 'store'])->name('fund-utilization.store');
+        Route::get('/batch-upload-documents', function (Request $request) {
+            $redirectParameters = ['batch_upload' => 1];
+
+            $perPage = trim((string) $request->query('per_page', ''));
+            if ($perPage !== '') {
+                $redirectParameters['per_page'] = $perPage;
+            }
+
+            return redirect()->route('fund-utilization.index', $redirectParameters);
+        })->name('fund-utilization.batch-upload-documents.get');
         Route::post('/batch-upload-documents', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadBatchDocumentsBulk'])->name('fund-utilization.batch-upload-documents');
         Route::get('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'show'])->name('fund-utilization.show');
         Route::get('/{projectCode}/edit', [App\Http\Controllers\FundUtilizationReportController::class, 'edit'])->name('fund-utilization.edit');
         Route::put('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'update'])->name('fund-utilization.update');
         Route::delete('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'deleteProject'])->name('fund-utilization.delete-project');
+        Route::get('/{projectCode}/upload-mov', fn (Request $request, string $projectCode) => $redirectLegacyFundUtilizationAction($request, $projectCode, 'mov'))->name('fund-utilization.upload-mov.get');
+        Route::get('/{projectCode}/upload-batch-document', fn (Request $request, string $projectCode) => $redirectLegacyFundUtilizationAction($request, $projectCode, 'batch-document'))->name('fund-utilization.upload-batch-document.get');
+        Route::get('/{projectCode}/upload-written-notice', fn (Request $request, string $projectCode) => $redirectLegacyFundUtilizationAction($request, $projectCode, 'written-notice-dbm'))->name('fund-utilization.upload-written-notice.get');
+        Route::get('/{projectCode}/upload-fdp', fn (Request $request, string $projectCode) => $redirectLegacyFundUtilizationAction($request, $projectCode, 'fdp'))->name('fund-utilization.upload-fdp.get');
+        Route::get('/{projectCode}/save-posting-link', fn (Request $request, string $projectCode) => $redirectLegacyFundUtilizationAction($request, $projectCode, 'posting-link'))->name('fund-utilization.save-posting-link.get');
         Route::post('/{projectCode}/upload-mov', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadMOV'])->name('fund-utilization.upload-mov');
         Route::post('/{projectCode}/upload-batch-document', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadBatchDocument'])->name('fund-utilization.upload-batch-document');
         Route::post('/{projectCode}/upload-written-notice', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadWrittenNotice'])->name('fund-utilization.upload-written-notice');
         Route::post('/{projectCode}/upload-fdp', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadFDP'])->name('fund-utilization.upload-fdp');
         Route::post('/{projectCode}/save-posting-link', [App\Http\Controllers\FundUtilizationReportController::class, 'savePostingLink'])->name('fund-utilization.save-posting-link');
         Route::post('/{projectCode}/add-remark', [App\Http\Controllers\FundUtilizationReportController::class, 'addRemark'])->name('fund-utilization.add-remark');
+        Route::get('/{projectCode}/approve/{uploadType}/{quarter}', function (string $projectCode, string $uploadType, string $quarter) {
+            return redirect()
+                ->route('fund-utilization.show', [
+                    'projectCode' => $projectCode,
+                    'quarter' => $quarter,
+                    'document' => $uploadType,
+                ]);
+        })->name('fund-utilization.approve-upload.get');
         Route::post('/{projectCode}/approve/{uploadType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'approveUpload'])->name('fund-utilization.approve-upload');
         Route::post('/{projectCode}/save-remarks/{uploadType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'saveUserRemarks'])->name('fund-utilization.save-remarks');
         Route::get('/{projectCode}/view-document/{docType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'viewDocument'])->name('fund-utilization.view-document');

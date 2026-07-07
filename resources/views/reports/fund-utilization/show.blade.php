@@ -3487,32 +3487,12 @@
                 renderSelectedFileName(filenameDiv, fileName);
                 filenameDiv.style.display = 'block';
                 filenameDiv.classList.add('has-file');
-                
-                // Add click handler to submit the form
-                saveBtn.onclick = function(e) {
-                    e.preventDefault();
-                    const formId = saveBtn.getAttribute('form');
-                    if (formId) {
-                        const form = document.getElementById(formId);
-                        if (form) {
-                            form.submit();
-                        } else {
-                            console.error(`Form with ID ${formId} not found`);
-                        }
-                    } else {
-                        // Fallback: find parent form
-                        const form = saveBtn.closest('form');
-                        if (form) {
-                            form.submit();
-                        } else {
-                            console.error('No form found for button');
-                        }
-                    }
-                };
+                saveBtn.onclick = null;
             } else {
                 // Hide the save button if no new file selected
                 saveBtn.style.opacity = '0';
                 saveBtn.style.pointerEvents = 'none';
+                saveBtn.onclick = null;
                 // Keep filename div visible if there's already uploaded content (from Blade)
                 // Only hide if it's empty
                 if (!filenameDiv.textContent.trim()) {

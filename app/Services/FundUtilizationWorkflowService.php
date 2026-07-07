@@ -509,12 +509,29 @@ class FundUtilizationWorkflowService
 
         Notification::send($user, new FundUtilizationWorkflowNotification(
             $message,
-            url()->current(),
+            $this->workflowNotificationUrl($report, $quarter, $documentType),
             $documentType,
             $quarter,
             (int) $actor->getKey(),
             trim($actor->fullName())
         ));
+    }
+
+    protected function workflowNotificationUrl(FundUtilizationReport $report, string $quarter, string $documentType): string
+    {
+        $parameters = ['projectCode' => $report->project_code];
+
+        $normalizedQuarter = trim((string) $quarter);
+        if ($normalizedQuarter !== '') {
+            $parameters['quarter'] = $normalizedQuarter;
+        }
+
+        $normalizedDocumentType = trim((string) $documentType);
+        if ($normalizedDocumentType !== '') {
+            $parameters['document'] = $normalizedDocumentType;
+        }
+
+        return route('fund-utilization.show', $parameters, false);
     }
 
     protected function logWorkflowAction(
