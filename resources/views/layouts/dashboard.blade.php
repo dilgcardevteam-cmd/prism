@@ -3188,6 +3188,18 @@
                         ->where('user_id', Auth::id())
                         ->whereNull('read_at');
                     $unreadNotifications = (clone $unreadNotificationQuery)->count();
+                    $notificationBadgeCount = $unreadNotifications;
+                    $notificationCounterResetAt = \Illuminate\Support\Facades\Cache::get('notifications.bell-counter-reset.' . Auth::id());
+                    if (!empty($notificationCounterResetAt)) {
+                        try {
+                            $notificationCounterResetAt = \Illuminate\Support\Carbon::parse($notificationCounterResetAt);
+                            $notificationBadgeCount = (clone $unreadNotificationQuery)
+                                ->where('created_at', '>', $notificationCounterResetAt)
+                                ->count();
+                        } catch (\Throwable $exception) {
+                            $notificationBadgeCount = $unreadNotifications;
+                        }
+                    }
                     $allNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
                         ->where('user_id', Auth::id())
                         ->orderByDesc('created_at')
@@ -3261,8 +3273,8 @@
                         aria-controls="notificationMenu"
                     >
                         <i class="fas fa-bell"></i>
-                        @if($unreadNotifications > 0)
-                            <span class="notification-badge">{{ $unreadNotifications }}</span>
+                        @if($notificationBadgeCount > 0)
+                            <span class="notification-badge" id="notificationUnreadBadge">{{ $notificationBadgeCount }}</span>
                         @endif
                     </button>
                     <div class="notification-menu" id="notificationMenu">
@@ -3270,8 +3282,8 @@
                             <div class="notification-menu-header-copy">
                                 <span class="notification-menu-title">Notifications</span>
                                 <div class="notification-menu-stats">
-                                    <button type="button" class="notification-menu-stat unread" data-open-notifications-view="unread">Unread: {{ number_format($unreadNotifications) }}</button>
-                                    <button type="button" class="notification-menu-stat read" data-open-notifications-view="read">Read: {{ number_format($readNotificationCount) }}</button>
+                                    <button type="button" class="notification-menu-stat unread" data-open-notifications-view="unread" id="notificationMenuUnreadStat">Unread: {{ number_format($unreadNotifications) }}</button>
+                                    <button type="button" class="notification-menu-stat read" data-open-notifications-view="read" id="notificationMenuReadStat">Read: {{ number_format($readNotificationCount) }}</button>
                                 </div>
                             </div>
                         </div>
@@ -3772,6 +3784,8 @@
         const openNotificationsModalBtn = document.getElementById('openNotificationsModalBtn');
         const notificationsListModal = document.getElementById('notificationsListModal');
         const closeNotificationsModalBtn = document.getElementById('closeNotificationsModalBtn');
+        const notificationUnreadBadge = document.getElementById('notificationUnreadBadge');
+        const notificationResetCounterUrl = @json(route('notifications.reset-counter'));
         const messageBell = document.getElementById('messageBell');
         const messageMenu = document.getElementById('messageMenu');
         const NOTIFICATION_LOCATION_CONFIG = {
@@ -4015,6 +4029,39 @@
                 if (preferredViewButton instanceof HTMLElement) {
                     preferredViewButton.click();
                 }
+            }
+        }
+
+        function resetNotificationBadgeUi() {
+            if (notificationUnreadBadge) {
+                notificationUnreadBadge.remove();
+            }
+        }
+
+        async function resetCurrentUserNotificationCounter() {
+            if (!notificationResetCounterUrl || !notificationUnreadBadge) {
+                return;
+            }
+
+            try {
+                const response = await fetch(notificationResetCounterUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({}),
+                });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                resetNotificationBadgeUi();
+            } catch (error) {
+                console.error('Failed to reset notification counter.', error);
             }
         }
 
@@ -4606,9 +4653,13 @@
             notificationBell.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                const isOpening = !notificationMenu.classList.contains('show');
                 closeNotificationsListModal();
                 notificationMenu.classList.toggle('show');
                 this.setAttribute('aria-expanded', notificationMenu.classList.contains('show') ? 'true' : 'false');
+                if (isOpening) {
+                    resetCurrentUserNotificationCounter();
+                }
                 if (profileMenu) {
                     profileMenu.classList.remove('show');
                 }

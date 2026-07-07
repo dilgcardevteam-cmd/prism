@@ -558,6 +558,17 @@ Route::middleware(['auth'])->group(function () {
         return redirect($notificationUrl ?: route('fund-utilization.index'));
     })->name('notifications.read');
 
+    Route::post('/notifications/reset-counter', function () {
+        $userId = \Illuminate\Support\Facades\Auth::id();
+        if ($userId) {
+            \Illuminate\Support\Facades\Cache::forever('notifications.bell-counter-reset.' . $userId, now()->toIso8601String());
+        }
+
+        return response()->json([
+            'success' => true,
+        ]);
+    })->name('notifications.reset-counter');
+
     Route::post('/notifications/clear', function () {
         \Illuminate\Support\Facades\DB::table('tbnotifications')
             ->where('user_id', \Illuminate\Support\Facades\Auth::id())

@@ -446,10 +446,12 @@ class FundUtilizationWorkflowService
 
     public function workflowFor(string $projectCode, string $quarter, string $documentType): ?FundUtilizationApprovalWorkflow
     {
+        $normalizedType = str_replace('_', '-', strtolower(trim((string) $documentType)));
+
         return FundUtilizationApprovalWorkflow::query()
             ->where('project_code', $projectCode)
             ->where('quarter', $quarter)
-            ->where('document_type', $documentType)
+            ->whereRaw("LOWER(REPLACE(TRIM(document_type), '_', '-')) = ?", [$normalizedType])
             ->first();
     }
 

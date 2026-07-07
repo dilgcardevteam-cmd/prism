@@ -2326,50 +2326,15 @@
 
         .modal-buttons button {
             flex: 1;
-            padding: 10px;
-
             border: none;
-
-                    const form = formId
-                        ? document.getElementById(formId)
-                        : saveBtn.closest('form');
-
-                    if (!form) {
-                        console.error(formId ? `Form with ID ${formId} not found` : 'No form found for button');
-                        return;
-                    }
-
-                    if (buttonId.startsWith('batch-document-save-btn-')) {
-                        const quarter = buttonId.replace('batch-document-save-btn-', '');
-                        openActionConfirmModal({
-                            title: `Submit batch documents for ${quarter}?`,
-                            message: 'This will submit the selected batch document files for validation. Do you want to continue?',
-                            confirmLabel: 'Submit',
-                            confirmBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
-                            headerBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
-                            headerBorderColor: 'rgba(255,255,255,0.12)',
-                            titleColor: '#ffffff',
-                            closeColor: 'rgba(255,255,255,0.85)',
-                            iconBackground: 'rgba(255,255,255,0.15)',
-                            iconColor: '#ffffff',
-                            iconHtml: '<i class="fas fa-upload"></i>',
-                            maxWidth: '620px',
-                            onConfirm: function() {
-                                form.dataset.batchUploadConfirmed = '1';
-                                if (typeof form.requestSubmit === 'function') {
-                                    form.requestSubmit();
-                                } else {
-                                    form.submit();
-                                }
-                            }
-                        });
-                        return;
-                    }
-
-                    form.submit();
+            border-radius: 8px;
+            display: inline-flex;
             justify-content: center;
             align-items: center;
-            padding: 24px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
             box-sizing: border-box;
         }
 
@@ -2698,7 +2663,6 @@
         let currentAction = '';
         let batchDocumentViewerInertElements = [];
         let actionConfirmCallback = null;
-        let flashToastsShown = false;
         const projectCode = '{{ $report->project_code }}';
         const baseUrl = '{{ url("/fund-utilization") }}';
 
@@ -2713,6 +2677,11 @@
         }
 
         function showToast(message, type = 'success', duration = 3800) {
+            if (window.AppUI && typeof window.AppUI.toast === 'function') {
+                window.AppUI.toast(message, type, duration);
+                return;
+            }
+
             const toastContainer = document.getElementById('toastContainer');
             if (!toastContainer) {
                 return;
@@ -2881,7 +2850,7 @@
             remarksField.value = '';
 
             // Construct the form action URL directly
-            form.action = `${baseUrl}/${projectCode}/approve/${uploadType}/${quarter}`;
+            form.setAttribute('action', `${baseUrl}/${projectCode}/approve/${uploadType}/${quarter}`);
             form.style.display = 'block';
 
             // Create hidden input for action
@@ -2994,30 +2963,6 @@
                 maxWidth: '640px',
                 onConfirm: onConfirm,
             });
-        }
-
-        function showFlashToasts() {
-            if (flashToastsShown) {
-                return;
-            }
-
-            flashToastsShown = true;
-
-            const successMessage = @json(session('success'));
-            const errorMessage = @json(session('error'));
-            const validationErrorMessage = @json($errors->any() ? $errors->first() : null);
-
-            if (successMessage) {
-                showToast(successMessage, 'success');
-            }
-
-            if (errorMessage) {
-                showToast(errorMessage, 'error');
-            }
-
-            if (validationErrorMessage && validationErrorMessage !== errorMessage) {
-                showToast(validationErrorMessage, 'error');
-            }
         }
 
         function initializeCustomConfirmationBypass() {
@@ -3151,37 +3096,42 @@
             const formData = new FormData(this);
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-            fetch(this.action, {
+            const requestUrl = this.getAttribute('action') || this.action;
+
+            fetch(requestUrl, {
                 method: 'POST',
                 headers: {
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: formData,
             })
             .then(async (response) => {
+                let payload = null;
+
+                try {
+                    payload = await response.json();
+                } catch (error) {
+                    payload = null;
+                }
+
                 if (!response.ok) {
                     let errorMessage = 'Failed to submit approval action.';
 
-                    try {
-                        const payload = await response.json();
-                        if (payload && typeof payload.message === 'string' && payload.message.trim() !== '') {
-                            errorMessage = payload.message;
-                        } else if (payload && typeof payload.error === 'string' && payload.error.trim() !== '') {
-                            errorMessage = payload.error;
-                        }
-                    } catch (error) {
-                        try {
-                            const text = await response.text();
-                            if (text.trim() !== '') {
-                                errorMessage = text;
-                            }
-                        } catch (readError) {
-                            // Keep the default error message.
-                        }
+                    if (payload && typeof payload.message === 'string' && payload.message.trim() !== '') {
+                        errorMessage = payload.message;
+                    } else if (payload && typeof payload.error === 'string' && payload.error.trim() !== '') {
+                        errorMessage = payload.error;
                     }
 
                     throw new Error(errorMessage);
+                }
+
+                if (payload && typeof payload.message === 'string' && payload.message.trim() !== '') {
+                    showToast(payload.message, 'success');
+                    setTimeout(() => window.location.reload(), 600);
+                    return;
                 }
 
                 window.location.reload();
@@ -3520,12 +3470,10 @@
         document.addEventListener('DOMContentLoaded', initializeUploadStyling);
         document.addEventListener('DOMContentLoaded', initializeBatchUploadConfirmation);
         document.addEventListener('DOMContentLoaded', initializeCustomConfirmationBypass);
-        document.addEventListener('DOMContentLoaded', showFlashToasts);
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             initializeUploadStyling();
             initializeBatchUploadConfirmation();
             initializeCustomConfirmationBypass();
-            showFlashToasts();
         }
 
         // Show save button and filename when file is selected

@@ -3100,10 +3100,30 @@ class FundUtilizationReportController extends Controller
         $action = $validated['action'];
         $remarks = $this->sanitizeReportRemarks($validated['remarks'] ?? null);
         $report = $this->getReportOrLfpProject($projectCode);
+        $expectsJson = $request->expectsJson() || $request->ajax();
+        $errorResponse = static function (string $message, int $status = 422) use ($expectsJson) {
+            if ($expectsJson) {
+                return response()->json([
+                    'message' => $message,
+                ], $status);
+            }
+
+            return back()->withErrors([
+                'document' => $message,
+            ]);
+        };
 
         if ($action === 'return' && $remarks === null) {
-            return back()
-                ->withErrors(['remarks' => 'Return remarks must contain plain text.']);
+            if ($expectsJson) {
+                return response()->json([
+                    'message' => 'Return remarks must contain plain text.',
+                    'errors' => [
+                        'remarks' => ['Return remarks must contain plain text.'],
+                    ],
+                ], 422);
+            }
+
+            return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
         $documentLabelMap = [
@@ -3144,22 +3164,27 @@ class FundUtilizationReportController extends Controller
             ->first();
 
         if (!$record) {
-            return back()->withErrors([
-                'document' => 'The selected document record was not found.',
-            ]);
+            return $errorResponse('The selected document record was not found.', 404);
         }
 
         $workflow = $workflowService->workflowFor($report->project_code, $quarter, $uploadType);
         if (!$workflow) {
-            return back()->withErrors([
-                'document' => 'No workflow record exists yet for this submission. Resubmit the document first.',
-            ]);
+            try {
+                \Log::channel('upload_timestamps')->warning('Approve/return attempted but workflow missing', [
+                    'project_code' => $report->project_code,
+                    'quarter' => $quarter,
+                    'upload_type' => $uploadType,
+                    'user_id' => optional(Auth::user())->getKey(),
+                ]);
+            } catch (\Throwable $e) {
+                // Ignore logging failures
+            }
+
+            return $errorResponse('No workflow record exists yet for this submission. Resubmit the document first.');
         }
 
         if (!Gate::forUser($user)->allows('fund-utilization.validateWorkflow', $workflow)) {
-            return back()->withErrors([
-                'document' => 'Only the currently assigned validator can perform this action.',
-            ]);
+            return $errorResponse('Only the currently assigned validator can perform this action.', 403);
         }
 
         try {
@@ -3167,9 +3192,7 @@ class FundUtilizationReportController extends Controller
                 ? $workflowService->approve($report, $quarter, $uploadType, $record, $user)
                 : $workflowService->returnForRevision($report, $quarter, $uploadType, $record, $user, (string) $remarks);
         } catch (\Throwable $exception) {
-            return back()->withErrors([
-                'document' => $exception->getMessage(),
-            ]);
+            return $errorResponse($exception->getMessage());
         }
 
         if ($action === 'approve') {
@@ -3192,6 +3215,14 @@ class FundUtilizationReportController extends Controller
             'user_agent' => request()->userAgent(),
             'user_id' => auth()->id(),
         ]);
+
+        if ($expectsJson) {
+            return response()->json([
+                'message' => $message,
+                'status' => $updatedWorkflow->status,
+                'action' => $action,
+            ]);
+        }
 
         return back()->with('success', $message);
     }
