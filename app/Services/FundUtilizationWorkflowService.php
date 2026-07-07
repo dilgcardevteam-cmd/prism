@@ -509,14 +509,33 @@ class FundUtilizationWorkflowService
             return;
         }
 
-        Notification::send($user, new FundUtilizationWorkflowNotification(
-            $message,
-            $this->workflowNotificationUrl($report, $quarter, $documentType),
-            $documentType,
-            $quarter,
-            (int) $actor->getKey(),
-            trim($actor->fullName())
-        ));
+        try {
+            \Log::channel('upload_timestamps')->info('Sending workflow notification', [
+                'to_user_id' => $user->getKey(),
+                'to_user_username' => $user->username ?? null,
+                'project_code' => $report->project_code,
+                'quarter' => $quarter,
+                'document_type' => $documentType,
+                'message' => $message,
+                'actor_user_id' => $actor->getKey(),
+            ]);
+
+            Notification::send($user, new FundUtilizationWorkflowNotification(
+                $message,
+                $this->workflowNotificationUrl($report, $quarter, $documentType),
+                $documentType,
+                $quarter,
+                (int) $actor->getKey(),
+                trim($actor->fullName())
+            ));
+        } catch (\Throwable $e) {
+            \Log::channel('upload_timestamps')->warning('Failed to send workflow notification', [
+                'error' => $e->getMessage(),
+                'to_user_id' => $user->getKey(),
+                'project_code' => $report->project_code,
+                'document_type' => $documentType,
+            ]);
+        }
     }
 
     protected function workflowNotificationUrl(FundUtilizationReport $report, string $quarter, string $documentType): string
