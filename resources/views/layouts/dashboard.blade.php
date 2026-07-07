@@ -3145,6 +3145,10 @@
                     $notificationQueueSummaries = \App\Support\NotificationCenter::summarizeQueues($allNotifications);
                     $readNotificationCount = $allNotifications->where('is_read', true)->count();
                     $allNotificationCount = $allNotifications->count();
+                    $notificationApprovalCount = $allNotifications->filter(function (array $notificationItem) {
+                        return in_array($notificationItem['queue_key'] ?? '', ['pending_provincial', 'pending_regional'], true);
+                    })->count();
+                    $notificationReturnedCount = $allNotifications->where('queue_key', 'returned')->count();
                     $notificationDefaultView = $unreadNotifications > 0 ? 'unread' : ($readNotificationCount > 0 ? 'all' : 'unread');
                     $recentNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
                         ->where('user_id', Auth::id())
@@ -3394,21 +3398,6 @@
                             </div>
                         </div>
                     </div>
-                    @if(!empty($notificationQueueSummaries))
-                        <div class="notification-summary-grid">
-                            @foreach($notificationQueueSummaries as $notificationQueueSummary)
-                                <div class="notification-summary-card {{ $notificationQueueSummary['tone'] }}" data-notification-summary-card data-queue-key="{{ $notificationQueueSummary['key'] }}">
-                                    <span class="notification-summary-card__icon">
-                                        <i class="fas {{ $notificationQueueSummary['icon'] }}"></i>
-                                    </span>
-                                    <div class="notification-summary-card__copy">
-                                        <strong>{{ $notificationQueueSummary['label'] }}</strong>
-                                        <span data-notification-summary-count>{{ number_format($notificationQueueSummary['count']) }} items</span>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
                     <div class="notification-filter-panel" id="notificationsFilterPanel">
                         <div class="notification-filter-grid">
                             <div class="notification-filter-group">
@@ -3460,6 +3449,44 @@
                                 <i class="fas fa-check" aria-hidden="true"></i>
                                 Apply Filter
                             </button>
+                        </div>
+                    </div>
+                    <div class="notification-summary-grid">
+                        <div class="notification-summary-card info" data-notification-summary-card data-summary-kind="read-state" data-summary-value="unread">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-envelope"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>Unread</strong>
+                                <span data-notification-summary-count>{{ number_format($unreadNotifications) }} items</span>
+                            </div>
+                        </div>
+                        <div class="notification-summary-card neutral" data-notification-summary-card data-summary-kind="read-state" data-summary-value="read">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-envelope-open"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>Read</strong>
+                                <span data-notification-summary-count>{{ number_format($readNotificationCount) }} items</span>
+                            </div>
+                        </div>
+                        <div class="notification-summary-card warning" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="approval">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-clipboard-check"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>For Your Approval</strong>
+                                <span data-notification-summary-count>{{ number_format($notificationApprovalCount) }} items</span>
+                            </div>
+                        </div>
+                        <div class="notification-summary-card danger" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="returned">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-rotate-left"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>Returned to You</strong>
+                                <span data-notification-summary-count>{{ number_format($notificationReturnedCount) }} items</span>
+                            </div>
                         </div>
                     </div>
                     <div class="notification-list-modal__items">
@@ -4166,6 +4193,11 @@
 
                 let visibleCount = 0;
                 const queueCounts = new Map();
+                const filteredQueueCounts = new Map();
+                const readStateCounts = new Map([
+                    ['read', 0],
+                    ['unread', 0],
+                ]);
 
                 notificationItems.forEach((item) => {
                     const itemProjectCode = String(item.dataset.projectCode || '');
@@ -4184,15 +4216,20 @@
                     const matchesBarangay = !selectedBarangay || itemBarangay === selectedBarangay;
                     const matchesModule = !selectedModule || itemModule === selectedModule;
                     const matchesQueue = !selectedQueue || itemQueue === selectedQueue;
-                    const matchesReadState = activeReadState === 'all' || itemReadState === activeReadState;
-
-                    const isVisible = matchesProjectCode
+                    const matchesBaseFilters = matchesProjectCode
                         && matchesProvince
                         && matchesCity
                         && matchesBarangay
                         && matchesModule
-                        && matchesQueue
-                        && matchesReadState;
+                        && matchesQueue;
+                    const matchesReadState = activeReadState === 'all' || itemReadState === activeReadState;
+
+                    if (matchesBaseFilters) {
+                        filteredQueueCounts.set(itemQueueKey, (filteredQueueCounts.get(itemQueueKey) || 0) + 1);
+                        readStateCounts.set(itemReadState, (readStateCounts.get(itemReadState) || 0) + 1);
+                    }
+
+                    const isVisible = matchesBaseFilters && matchesReadState;
                     item.style.display = isVisible ? '' : 'none';
                     if (isVisible) {
                         visibleCount += 1;
@@ -4227,13 +4264,27 @@
                 });
 
                 summaryCards.forEach((summaryCard) => {
-                    const queueKey = String(summaryCard.dataset.queueKey || '');
-                    const queueCount = queueCounts.get(queueKey) || 0;
+                    const summaryKind = String(summaryCard.dataset.summaryKind || '');
+                    const summaryValue = String(summaryCard.dataset.summaryValue || '');
                     const summaryCountElement = summaryCard.querySelector('[data-notification-summary-count]');
-                    if (summaryCountElement) {
-                        summaryCountElement.textContent = `${numberFormatter.format(queueCount)} ${queueCount === 1 ? 'item' : 'items'}`;
+                    let summaryCount = 0;
+
+                    if (summaryKind === 'read-state') {
+                        summaryCount = readStateCounts.get(summaryValue) || 0;
+                    } else if (summaryKind === 'queue-group') {
+                        if (summaryValue === 'approval') {
+                            summaryCount = (filteredQueueCounts.get('pending_provincial') || 0)
+                                + (filteredQueueCounts.get('pending_regional') || 0);
+                        } else if (summaryValue === 'returned') {
+                            summaryCount = filteredQueueCounts.get('returned') || 0;
+                        }
+                    } else {
+                        summaryCount = queueCounts.get(summaryValue) || 0;
                     }
-                    summaryCard.style.display = queueCount > 0 ? '' : 'none';
+
+                    if (summaryCountElement) {
+                        summaryCountElement.textContent = `${numberFormatter.format(summaryCount)} ${summaryCount === 1 ? 'item' : 'items'}`;
+                    }
                 });
 
                 updateFilteredEmptyStateMessage(visibleCount);

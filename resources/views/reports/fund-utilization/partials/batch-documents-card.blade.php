@@ -146,7 +146,7 @@
                     : 'Documents are already attached. Delete the current file to upload a new one.'))
                 : '';
         @endphp
-        <form action="{{ route('fund-utilization.upload-batch-document', $report->project_code) }}" method="POST" enctype="multipart/form-data" data-batch-upload-form="1" style="margin-bottom: 8px;">
+        <form action="{{ route('fund-utilization.upload-batch-document', $report->project_code) }}" method="POST" enctype="multipart/form-data" data-batch-upload-form="1" data-confirm-skip="true" style="margin-bottom: 8px;">
             @csrf
             <input type="hidden" name="quarter" value="{{ $quarter }}">
             <div style="position: relative; padding: 16px 18px; border: 1px solid #dbe4f0; border-radius: 14px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; {{ $isBatchDocumentUploadDisabled ? 'opacity: 0.7;' : '' }}">

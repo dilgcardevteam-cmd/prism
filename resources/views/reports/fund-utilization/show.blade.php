@@ -2327,23 +2327,46 @@
         .modal-buttons button {
             flex: 1;
             padding: 10px;
+
             border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-        }
 
-        .document-viewer-frame {
-            width: 100%;
-            height: min(78vh, 780px);
-            border: 0;
-            display: block;
-            background: #fff;
-        }
+                    const form = formId
+                        ? document.getElementById(formId)
+                        : saveBtn.closest('form');
 
-        #batchDocumentViewerModal {
-            display: none;
+                    if (!form) {
+                        console.error(formId ? `Form with ID ${formId} not found` : 'No form found for button');
+                        return;
+                    }
+
+                    if (buttonId.startsWith('batch-document-save-btn-')) {
+                        const quarter = buttonId.replace('batch-document-save-btn-', '');
+                        openActionConfirmModal({
+                            title: `Submit batch documents for ${quarter}?`,
+                            message: 'This will submit the selected batch document files for validation. Do you want to continue?',
+                            confirmLabel: 'Submit',
+                            confirmBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
+                            headerBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
+                            headerBorderColor: 'rgba(255,255,255,0.12)',
+                            titleColor: '#ffffff',
+                            closeColor: 'rgba(255,255,255,0.85)',
+                            iconBackground: 'rgba(255,255,255,0.15)',
+                            iconColor: '#ffffff',
+                            iconHtml: '<i class="fas fa-upload"></i>',
+                            maxWidth: '620px',
+                            onConfirm: function() {
+                                form.dataset.batchUploadConfirmed = '1';
+                                if (typeof form.requestSubmit === 'function') {
+                                    form.requestSubmit();
+                                } else {
+                                    form.submit();
+                                }
+                            }
+                        });
+                        return;
+                    }
+
+                    form.submit();
             justify-content: center;
             align-items: center;
             padding: 24px;
@@ -2906,6 +2929,55 @@
             `;
         }
 
+        function openBatchUploadSubmitConfirmation(form, onConfirm) {
+            if (!form) {
+                return;
+            }
+
+            const quarter = String(form.querySelector('input[name="quarter"]')?.value || '').trim() || 'Selected quarter';
+            const selectedFiles = Array.from(form.querySelector('input[name="batch_document_file[]"], input[name="batch_document_file"]')?.files || []);
+            const fileCount = selectedFiles.length;
+            const fileLabel = fileCount === 1 ? '1 document' : `${fileCount} documents`;
+
+            openActionConfirmModal({
+                title: 'Confirm Batch Document Submission',
+                messageHtml: `
+                    <div style="display: grid; gap: 14px;">
+                        <div style="color: #475569; font-size: 13px; line-height: 1.7;">
+                            You are about to submit <strong style="color: #0f172a;">${fileLabel}</strong> for <strong style="color: #0f172a;">${quarter}</strong>.
+                        </div>
+                        <div style="padding: 16px 18px; border: 1px solid #c9d8ef; border-radius: 12px; background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.75); color: #334155; font-size: 13px; line-height: 1.72;">
+                            <div style="color: #002C76; font-size: 13px; font-weight: 700; margin-bottom: 10px; letter-spacing: 0.01em;">Required items</div>
+                            <div style="font-weight: 700; color: #0f172a; margin-bottom: 6px;">Fund Utilization Report</div>
+                            <div style="font-weight: 700; color: #0f172a; margin-bottom: 4px;">Written Notices</div>
+                            <div style="color: #475569; margin-bottom: 4px;">Distribution Recipients:</div>
+                            <ul style="margin: 0 0 10px 0; padding-left: 20px; color: #475569; line-height: 1.72; list-style-type: disc;">
+                                <li>Secretary of DBM</li>
+                                <li>Secretary of DILG</li>
+                                <li>Speaker of the House</li>
+                                <li>President of the Senate</li>
+                                <li>House Committee on Appropriation</li>
+                                <li>Senate Committee on Finance</li>
+                            </ul>
+                            <div style="font-weight: 700; color: #0f172a; margin-bottom: 6px;">Full Disclosure Policy (FDP)</div>
+                            <div style="font-weight: 700; color: #0f172a;">LGU Website / Social Media</div>
+                        </div>
+                    </div>
+                `,
+                confirmLabel: 'Confirm',
+                confirmBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
+                headerBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
+                headerBorderColor: 'rgba(255,255,255,0.12)',
+                titleColor: '#ffffff',
+                closeColor: 'rgba(255,255,255,0.85)',
+                iconBackground: 'rgba(255,255,255,0.15)',
+                iconColor: '#ffffff',
+                iconHtml: '<i class="fas fa-circle-check"></i>',
+                maxWidth: '560px',
+                onConfirm: onConfirm,
+            });
+        }
+
         function openBatchUploadReminder(onConfirm) {
             openActionConfirmModal({
                 title: 'Batch Upload Reminder',
@@ -3351,7 +3423,7 @@
                         }
 
                         event.preventDefault();
-                        openBatchUploadReminder(function() {
+                        openBatchUploadSubmitConfirmation(form, function() {
                             form.dataset.batchUploadConfirmed = '1';
                             if (typeof form.requestSubmit === 'function') {
                                 form.requestSubmit();
