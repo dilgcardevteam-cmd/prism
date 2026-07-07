@@ -927,6 +927,18 @@
             border-radius: 14px;
             border: 1px solid #dbeafe;
             background: #f8fbff;
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .notification-summary-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .notification-summary-card.is-active {
+            border-color: #1d4ed8;
+            box-shadow: 0 12px 28px rgba(29, 78, 216, 0.16);
         }
 
         .notification-summary-card__icon {
@@ -979,6 +991,38 @@
             border-radius: 14px;
             border: 1px solid #dbeafe;
             background: #f8fbff;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            transition: box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        button.notification-list-modal__section-header {
+            appearance: none;
+        }
+
+        .notification-list-modal__section-header:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .notification-list-modal__section-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .notification-list-modal__section-chevron {
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.85);
+            color: #334155;
+            transition: transform 0.18s ease;
         }
 
         .notification-list-modal__section-copy {
@@ -1024,6 +1068,20 @@
             background: rgba(255, 255, 255, 0.85);
             color: #0f172a;
             flex-shrink: 0;
+        }
+
+        .notification-list-modal__section-body {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .notification-list-modal__section.is-collapsed .notification-list-modal__section-body {
+            display: none;
+        }
+
+        .notification-list-modal__section.is-collapsed .notification-list-modal__section-chevron {
+            transform: rotate(-90deg);
         }
 
         .notification-list-modal__section-header.danger,
@@ -3452,7 +3510,7 @@
                         </div>
                     </div>
                     <div class="notification-summary-grid">
-                        <div class="notification-summary-card info" data-notification-summary-card data-summary-kind="read-state" data-summary-value="unread">
+                        <button type="button" class="notification-summary-card info" data-notification-summary-card data-summary-kind="read-state" data-summary-value="unread">
                             <span class="notification-summary-card__icon">
                                 <i class="fas fa-envelope"></i>
                             </span>
@@ -3460,8 +3518,8 @@
                                 <strong>Unread</strong>
                                 <span data-notification-summary-count>{{ number_format($unreadNotifications) }} items</span>
                             </div>
-                        </div>
-                        <div class="notification-summary-card neutral" data-notification-summary-card data-summary-kind="read-state" data-summary-value="read">
+                        </button>
+                        <button type="button" class="notification-summary-card neutral" data-notification-summary-card data-summary-kind="read-state" data-summary-value="read">
                             <span class="notification-summary-card__icon">
                                 <i class="fas fa-envelope-open"></i>
                             </span>
@@ -3469,8 +3527,8 @@
                                 <strong>Read</strong>
                                 <span data-notification-summary-count>{{ number_format($readNotificationCount) }} items</span>
                             </div>
-                        </div>
-                        <div class="notification-summary-card warning" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="approval">
+                        </button>
+                        <button type="button" class="notification-summary-card warning" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="approval">
                             <span class="notification-summary-card__icon">
                                 <i class="fas fa-clipboard-check"></i>
                             </span>
@@ -3478,8 +3536,8 @@
                                 <strong>For Your Approval</strong>
                                 <span data-notification-summary-count>{{ number_format($notificationApprovalCount) }} items</span>
                             </div>
-                        </div>
-                        <div class="notification-summary-card danger" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="returned">
+                        </button>
+                        <button type="button" class="notification-summary-card danger" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="returned">
                             <span class="notification-summary-card__icon">
                                 <i class="fas fa-rotate-left"></i>
                             </span>
@@ -3487,12 +3545,12 @@
                                 <strong>Returned to You</strong>
                                 <span data-notification-summary-count>{{ number_format($notificationReturnedCount) }} items</span>
                             </div>
-                        </div>
+                        </button>
                     </div>
                     <div class="notification-list-modal__items">
                         @foreach($notificationSections as $notificationSection)
                             <section class="notification-list-modal__section" data-notification-section="{{ $notificationSection['key'] }}">
-                                <div class="notification-list-modal__section-header {{ $notificationSection['tone'] }}">
+                                <button type="button" class="notification-list-modal__section-header {{ $notificationSection['tone'] }}" data-notification-section-toggle aria-expanded="true">
                                     <div class="notification-list-modal__section-copy">
                                         <span class="notification-list-modal__section-icon">
                                             <i class="fas {{ $notificationSection['icon'] }}"></i>
@@ -3502,8 +3560,14 @@
                                             <p class="notification-list-modal__section-description">{{ $notificationSection['description'] }}</p>
                                         </div>
                                     </div>
-                                    <span class="notification-list-modal__section-count" data-notification-section-count>{{ number_format($notificationSection['count']) }}</span>
-                                </div>
+                                    <span class="notification-list-modal__section-meta">
+                                        <span class="notification-list-modal__section-count" data-notification-section-count>{{ number_format($notificationSection['count']) }}</span>
+                                        <span class="notification-list-modal__section-chevron" aria-hidden="true">
+                                            <i class="fas fa-chevron-down"></i>
+                                        </span>
+                                    </span>
+                                </button>
+                                <div class="notification-list-modal__section-body" data-notification-section-body>
                                 @foreach($notificationSection['modules'] as $notificationModule)
                                     <div class="notification-list-modal__module" data-notification-module="{{ $notificationModule['module_key'] }}">
                                         <div class="notification-list-modal__module-header">
@@ -3556,6 +3620,7 @@
                                         </div>
                                     </div>
                                 @endforeach
+                                </div>
                             </section>
                         @endforeach
                     </div>
@@ -4042,8 +4107,10 @@
             const allViewButton = document.getElementById('notificationsAllViewBtn');
             const viewButtons = [unreadViewButton, readViewButton, allViewButton].filter(Boolean);
             const summaryCards = Array.from(document.querySelectorAll('[data-notification-summary-card]'));
+            const sectionElements = Array.from(document.querySelectorAll('.notification-list-modal__section'));
             const numberFormatter = new Intl.NumberFormat();
             let activeReadState = viewButtons.find((button) => button.classList.contains('is-active'))?.dataset.viewState || 'unread';
+            let activeSummaryFilter = 'all';
 
             if (!projectCodeInput || !provinceSelect || !citySelect || !barangaySelect || !moduleSelect || !queueSelect || !applyButton || !resetButton) {
                 return;
@@ -4162,6 +4229,50 @@
                 });
             };
 
+            const setActiveSummaryFilter = (nextSummaryFilter) => {
+                activeSummaryFilter = ['all', 'approval', 'returned'].includes(nextSummaryFilter) ? nextSummaryFilter : 'all';
+                summaryCards.forEach((summaryCard) => {
+                    const summaryKind = String(summaryCard.dataset.summaryKind || '');
+                    const summaryValue = String(summaryCard.dataset.summaryValue || '');
+                    const isActive = (summaryKind === 'read-state' && summaryValue === activeReadState)
+                        || (summaryKind === 'queue-group' && summaryValue === activeSummaryFilter);
+                    summaryCard.classList.toggle('is-active', isActive);
+                });
+            };
+
+            const setSectionExpanded = (sectionElement, shouldExpand) => {
+                if (!sectionElement) {
+                    return;
+                }
+
+                sectionElement.classList.toggle('is-collapsed', !shouldExpand);
+                const toggleButton = sectionElement.querySelector('[data-notification-section-toggle]');
+                if (toggleButton) {
+                    toggleButton.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+                }
+            };
+
+            const ensureVisibleAccordionState = () => {
+                const visibleSections = sectionElements.filter((sectionElement) => sectionElement.style.display !== 'none');
+                if (!visibleSections.length) {
+                    return;
+                }
+
+                const expandedVisibleSection = visibleSections.find((sectionElement) => !sectionElement.classList.contains('is-collapsed'));
+                if (expandedVisibleSection) {
+                    visibleSections.forEach((sectionElement) => {
+                        if (sectionElement !== expandedVisibleSection) {
+                            setSectionExpanded(sectionElement, false);
+                        }
+                    });
+                    return;
+                }
+
+                visibleSections.forEach((sectionElement, index) => {
+                    setSectionExpanded(sectionElement, index === 0);
+                });
+            };
+
             const updateFilteredEmptyStateMessage = (visibleCount) => {
                 if (!filteredEmptyState) {
                     return;
@@ -4222,14 +4333,17 @@
                         && matchesBarangay
                         && matchesModule
                         && matchesQueue;
+                    const matchesSummaryFilter = activeSummaryFilter === 'all'
+                        || (activeSummaryFilter === 'approval' && ['pending_provincial', 'pending_regional'].includes(itemQueueKey))
+                        || (activeSummaryFilter === 'returned' && itemQueueKey === 'returned');
                     const matchesReadState = activeReadState === 'all' || itemReadState === activeReadState;
 
-                    if (matchesBaseFilters) {
+                    if (matchesBaseFilters && matchesSummaryFilter) {
                         filteredQueueCounts.set(itemQueueKey, (filteredQueueCounts.get(itemQueueKey) || 0) + 1);
                         readStateCounts.set(itemReadState, (readStateCounts.get(itemReadState) || 0) + 1);
                     }
 
-                    const isVisible = matchesBaseFilters && matchesReadState;
+                    const isVisible = matchesBaseFilters && matchesSummaryFilter && matchesReadState;
                     item.style.display = isVisible ? '' : 'none';
                     if (isVisible) {
                         visibleCount += 1;
@@ -4287,6 +4401,8 @@
                     }
                 });
 
+                ensureVisibleAccordionState();
+                setActiveSummaryFilter(activeSummaryFilter);
                 updateFilteredEmptyStateMessage(visibleCount);
             };
 
@@ -4371,6 +4487,7 @@
                     barangaySelect.value = '';
                     moduleSelect.value = '';
                     queueSelect.value = '';
+                    setActiveSummaryFilter('all');
                     applyNotificationFilters();
                 });
             }
@@ -4383,7 +4500,56 @@
                 button.dataset.notificationFilterBound = '1';
                 button.addEventListener('click', function () {
                     setActiveReadState(String(button.dataset.viewState || 'unread'));
+                    setActiveSummaryFilter('all');
                     applyNotificationFilters();
+                });
+            });
+
+            summaryCards.forEach((summaryCard) => {
+                if (summaryCard.dataset.notificationSummaryBound === '1') {
+                    return;
+                }
+
+                summaryCard.dataset.notificationSummaryBound = '1';
+                summaryCard.addEventListener('click', function () {
+                    const summaryKind = String(summaryCard.dataset.summaryKind || '');
+                    const summaryValue = String(summaryCard.dataset.summaryValue || '');
+
+                    if (summaryKind === 'read-state') {
+                        setActiveReadState(summaryValue);
+                        setActiveSummaryFilter('all');
+                    } else if (summaryKind === 'queue-group') {
+                        setActiveReadState('all');
+                        setActiveSummaryFilter(activeSummaryFilter === summaryValue ? 'all' : summaryValue);
+                        queueSelect.value = '';
+                    }
+
+                    applyNotificationFilters();
+                });
+            });
+
+            sectionElements.forEach((sectionElement, index) => {
+                const toggleButton = sectionElement.querySelector('[data-notification-section-toggle]');
+                if (!toggleButton || toggleButton.dataset.notificationAccordionBound === '1') {
+                    setSectionExpanded(sectionElement, index === 0);
+                    return;
+                }
+
+                toggleButton.dataset.notificationAccordionBound = '1';
+                setSectionExpanded(sectionElement, index === 0);
+                toggleButton.addEventListener('click', function () {
+                    if (sectionElement.style.display === 'none') {
+                        return;
+                    }
+
+                    const shouldExpand = sectionElement.classList.contains('is-collapsed');
+                    sectionElements.forEach((otherSectionElement) => {
+                        if (otherSectionElement.style.display === 'none') {
+                            return;
+                        }
+
+                        setSectionExpanded(otherSectionElement, shouldExpand && otherSectionElement === sectionElement);
+                    });
                 });
             });
         }
