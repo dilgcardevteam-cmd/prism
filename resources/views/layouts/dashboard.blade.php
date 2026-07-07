@@ -776,10 +776,221 @@
             padding: 18px 10px 8px;
         }
 
+        .notification-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 0 0 12px;
+        }
+
+        .notification-summary-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid #dbe4f0;
+            background: #ffffff;
+        }
+
+        .notification-summary-card__icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            background: rgba(37, 99, 235, 0.1);
+            color: #2563eb;
+        }
+
+        .notification-summary-card__copy {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .notification-summary-card__copy strong {
+            font-size: 12px;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.35;
+        }
+
+        .notification-summary-card__copy span {
+            font-size: 12px;
+            color: #475569;
+            font-weight: 600;
+        }
+
+        .notification-summary-card.info {
+            border-color: #bfdbfe;
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        }
+
+        .notification-summary-card.info .notification-summary-card__icon {
+            background: rgba(37, 99, 235, 0.14);
+            color: #1d4ed8;
+        }
+
+        .notification-summary-card.warning {
+            border-color: #fde68a;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        }
+
+        .notification-summary-card.warning .notification-summary-card__icon {
+            background: rgba(217, 119, 6, 0.14);
+            color: #b45309;
+        }
+
+        .notification-summary-card.danger {
+            border-color: #fecaca;
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        }
+
+        .notification-summary-card.danger .notification-summary-card__icon {
+            background: rgba(220, 38, 38, 0.12);
+            color: #b91c1c;
+        }
+
+        .notification-summary-card.neutral {
+            border-color: #dbe4f0;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+
+        .notification-summary-card.neutral .notification-summary-card__icon {
+            background: rgba(71, 85, 105, 0.1);
+            color: #475569;
+        }
+
         .notification-list-modal__items {
             display: flex;
             flex-direction: column;
             gap: 10px;
+        }
+
+        .notification-list-modal__section {
+            border: 1px solid #dbe4f0;
+            border-radius: 16px;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .notification-list-modal__section-header {
+            width: 100%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 16px;
+            background: #f8fafc;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .notification-list-modal__section-header.info {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        }
+
+        .notification-list-modal__section-header.warning {
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        }
+
+        .notification-list-modal__section-header.danger {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        }
+
+        .notification-list-modal__section-header.neutral {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+
+        .notification-list-modal__section-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .notification-list-modal__section-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.72);
+            color: #1d4ed8;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+        }
+
+        .notification-list-modal__section-header.warning .notification-list-modal__section-icon {
+            color: #b45309;
+        }
+
+        .notification-list-modal__section-header.danger .notification-list-modal__section-icon {
+            color: #b91c1c;
+        }
+
+        .notification-list-modal__section-header.neutral .notification-list-modal__section-icon {
+            color: #475569;
+        }
+
+        .notification-list-modal__section-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .notification-list-modal__section-description {
+            margin: 4px 0 0;
+            font-size: 12px;
+            color: #475569;
+            line-height: 1.45;
+        }
+
+        .notification-list-modal__section-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex: 0 0 auto;
+        }
+
+        .notification-list-modal__section-count {
+            min-width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            padding: 0 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.92);
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .notification-list-modal__section-chevron {
+            color: #334155;
+            transition: transform 0.18s ease;
+        }
+
+        .notification-list-modal__section.is-collapsed .notification-list-modal__section-chevron {
+            transform: rotate(-90deg);
+        }
+
+        .notification-list-modal__section-content {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .notification-list-modal__section.is-collapsed .notification-list-modal__section-content {
+            display: none;
         }
 
         .notification-list-modal__item {
@@ -2691,6 +2902,10 @@
                         ->where('user_id', Auth::id())
                         ->whereNull('read_at');
                     $unreadNotifications = (clone $unreadNotificationQuery)->count();
+                    $readNotifications = \Illuminate\Support\Facades\DB::table('tbnotifications')
+                        ->where('user_id', Auth::id())
+                        ->whereNotNull('read_at')
+                        ->count();
                     $allUnreadNotifications = \Illuminate\Support\Facades\DB::table('tbnotifications')
                         ->where('user_id', Auth::id())
                         ->whereNull('read_at')
@@ -2701,6 +2916,96 @@
                         ->orderByDesc('created_at')
                         ->limit(12)
                         ->get(['id', 'message', 'created_at', 'read_at']);
+
+                    $notificationQueueMeta = [
+                        'returned' => [
+                            'label' => 'Returned to You',
+                            'description' => 'Returned items that need your revision or follow-up.',
+                            'tone' => 'danger',
+                            'icon' => 'fa-rotate-left',
+                        ],
+                        'pending_provincial' => [
+                            'label' => 'For Your Provincial Approval',
+                            'description' => 'Items awaiting provincial review or validation.',
+                            'tone' => 'warning',
+                            'icon' => 'fa-building',
+                        ],
+                        'pending_regional' => [
+                            'label' => 'For Your Regional Approval',
+                            'description' => 'Items awaiting regional review or validation.',
+                            'tone' => 'info',
+                            'icon' => 'fa-map',
+                        ],
+                        'other' => [
+                            'label' => 'Other Updates',
+                            'description' => 'Unread items that do not fall under approval queues.',
+                            'tone' => 'neutral',
+                            'icon' => 'fa-bell',
+                        ],
+                    ];
+
+                    $resolveNotificationQueue = static function (string $message): string {
+                        $normalizedMessage = strtolower(trim($message));
+
+                        if (
+                            str_contains($normalizedMessage, 'returned by regional office and requires your review')
+                            || str_contains($normalizedMessage, 'returned by the regional office and requires your review')
+                            || str_contains($normalizedMessage, 'for provincial review')
+                            || str_contains($normalizedMessage, 'awaiting dilg provincial office validation')
+                            || str_contains($normalizedMessage, 'awaiting dilg provincial office review')
+                        ) {
+                            return 'pending_provincial';
+                        }
+
+                        if (
+                            str_contains($normalizedMessage, 'awaiting dilg regional office validation')
+                            || str_contains($normalizedMessage, 'awaiting dilg regional office review')
+                            || str_contains($normalizedMessage, 'pending your approval')
+                            || str_contains($normalizedMessage, 'forwarded to you for approval')
+                        ) {
+                            return 'pending_regional';
+                        }
+
+                        if (str_contains($normalizedMessage, 'returned')) {
+                            return 'returned';
+                        }
+
+                        return 'other';
+                    };
+
+                    $groupedUnreadNotificationSections = collect($allUnreadNotifications)
+                        ->map(function ($notification) use ($resolveNotificationQueue) {
+                            $notification->queue_key = $resolveNotificationQueue((string) ($notification->message ?? ''));
+                            return $notification;
+                        })
+                        ->groupBy('queue_key')
+                        ->map(function ($items, $queueKey) use ($notificationQueueMeta) {
+                            $meta = $notificationQueueMeta[$queueKey] ?? $notificationQueueMeta['other'];
+
+                            return [
+                                'key' => $queueKey,
+                                'label' => $meta['label'],
+                                'description' => $meta['description'],
+                                'tone' => $meta['tone'],
+                                'icon' => $meta['icon'],
+                                'count' => $items->count(),
+                                'items' => $items->values(),
+                            ];
+                        })
+                        ->sortBy(function ($section) {
+                            return match ($section['key']) {
+                                'returned' => 1,
+                                'pending_provincial' => 2,
+                                'pending_regional' => 3,
+                                default => 4,
+                            };
+                        })
+                        ->values();
+
+                    $pendingProvincialCount = (int) ($groupedUnreadNotificationSections->firstWhere('key', 'pending_provincial')['count'] ?? 0);
+                    $pendingRegionalCount = (int) ($groupedUnreadNotificationSections->firstWhere('key', 'pending_regional')['count'] ?? 0);
+                    $forYourApprovalCount = $pendingProvincialCount + $pendingRegionalCount;
+                    $returnedToYouCount = (int) ($groupedUnreadNotificationSections->firstWhere('key', 'returned')['count'] ?? 0);
 
                     $notificationFilterConfiguredProvinces = [];
                     $notificationFilterConfiguredCitiesByProvince = [];
@@ -2952,25 +3257,94 @@
                             </button>
                         </div>
                     </div>
+                    <div class="notification-summary-grid">
+                        <div class="notification-summary-card neutral">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-envelope-open-text" aria-hidden="true"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>Read</strong>
+                                <span>{{ number_format($readNotifications) }} notifications</span>
+                            </div>
+                        </div>
+                        <div class="notification-summary-card info">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-bell" aria-hidden="true"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>Unread</strong>
+                                <span>{{ number_format($unreadNotifications) }} notifications</span>
+                            </div>
+                        </div>
+                        <div class="notification-summary-card warning">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>For Your Approval</strong>
+                                <span>{{ number_format($forYourApprovalCount) }} notifications</span>
+                            </div>
+                        </div>
+                        <div class="notification-summary-card danger">
+                            <span class="notification-summary-card__icon">
+                                <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                            </span>
+                            <div class="notification-summary-card__copy">
+                                <strong>Returned to You</strong>
+                                <span>{{ number_format($returnedToYouCount) }} notifications</span>
+                            </div>
+                        </div>
+                    </div>
                     <div class="notification-list-modal__items">
-                        @foreach($allUnreadNotifications as $notificationItem)
-                            <a
-                                href="{{ route('notifications.read', ['id' => $notificationItem->id]) }}"
-                                class="notification-list-modal__item"
-                            >
-                                <div class="notification-list-modal__item-row">
-                                    <span class="notification-unread-dot" aria-hidden="true"></span>
-                                    <div class="notification-list-modal__item-copy">
-                                        <div class="notification-list-modal__item-message">{{ $notificationItem->message }}</div>
-                                        <div class="notification-list-modal__item-time">
-                                            {{ \Illuminate\Support\Carbon::parse($notificationItem->created_at)->format('M d, Y h:i A') }}
+                        @foreach($groupedUnreadNotificationSections as $notificationSection)
+                            @php
+                                $isInitiallyOpen = $notificationSection['key'] === 'pending_regional';
+                            @endphp
+                            <section class="notification-list-modal__section {{ $isInitiallyOpen ? '' : 'is-collapsed' }}" data-notification-section="{{ $notificationSection['key'] }}">
+                                <button
+                                    type="button"
+                                    class="notification-list-modal__section-header {{ $notificationSection['tone'] }}"
+                                    data-notification-section-toggle
+                                    aria-expanded="{{ $isInitiallyOpen ? 'true' : 'false' }}"
+                                >
+                                    <div class="notification-list-modal__section-copy">
+                                        <span class="notification-list-modal__section-icon">
+                                            <i class="fas {{ $notificationSection['icon'] }}"></i>
+                                        </span>
+                                        <div>
+                                            <h4 class="notification-list-modal__section-title">{{ $notificationSection['label'] }}</h4>
+                                            <p class="notification-list-modal__section-description">{{ $notificationSection['description'] }}</p>
                                         </div>
                                     </div>
-                                    <span class="notification-list-modal__item-arrow" aria-hidden="true">
-                                        <i class="fas fa-chevron-right"></i>
+                                    <span class="notification-list-modal__section-meta">
+                                        <span class="notification-list-modal__section-count" data-notification-section-count>{{ number_format($notificationSection['count']) }}</span>
+                                        <span class="notification-list-modal__section-chevron" aria-hidden="true">
+                                            <i class="fas fa-chevron-down"></i>
+                                        </span>
                                     </span>
+                                </button>
+                                <div class="notification-list-modal__section-content">
+                                    @foreach($notificationSection['items'] as $notificationItem)
+                                        <a
+                                            href="{{ route('notifications.read', ['id' => $notificationItem->id]) }}"
+                                            class="notification-list-modal__item"
+                                        >
+                                            <div class="notification-list-modal__item-row">
+                                                <span class="notification-unread-dot" aria-hidden="true"></span>
+                                                <div class="notification-list-modal__item-copy">
+                                                    <div class="notification-list-modal__item-message">{{ $notificationItem->message }}</div>
+                                                    <div class="notification-list-modal__item-time">
+                                                        {{ \Illuminate\Support\Carbon::parse($notificationItem->created_at)->format('M d, Y h:i A') }}
+                                                    </div>
+                                                </div>
+                                                <span class="notification-list-modal__item-arrow" aria-hidden="true">
+                                                    <i class="fas fa-chevron-right"></i>
+                                                </span>
+                                            </div>
+                                        </a>
+                                    @endforeach
                                 </div>
-                            </a>
+                            </section>
                         @endforeach
                     </div>
                     <div class="notification-list-modal__empty-filter" id="notificationsFilteredEmptyState">
@@ -3429,12 +3803,33 @@
             }
         }
 
+        function initializeNotificationAccordions() {
+            document.querySelectorAll('[data-notification-section-toggle]').forEach((toggleButton) => {
+                if (toggleButton.dataset.notificationAccordionBound === '1') {
+                    return;
+                }
+
+                toggleButton.dataset.notificationAccordionBound = '1';
+                toggleButton.addEventListener('click', function () {
+                    const sectionElement = toggleButton.closest('[data-notification-section]');
+                    if (!sectionElement) {
+                        return;
+                    }
+
+                    const shouldExpand = sectionElement.classList.contains('is-collapsed');
+                    sectionElement.classList.toggle('is-collapsed', !shouldExpand);
+                    toggleButton.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+                });
+            });
+        }
+
         function initializeNotificationFilters() {
             const notificationItems = Array.from(document.querySelectorAll('.notification-list-modal__item'));
             if (!notificationItems.length) {
                 return;
             }
 
+            const notificationSections = Array.from(document.querySelectorAll('[data-notification-section]'));
             const projectCodeInput = document.getElementById('notificationsProjectCodeFilter');
             const provinceSelect = document.getElementById('notificationsProvinceFilter');
             const citySelect = document.getElementById('notificationsCityFilter');
@@ -3555,6 +3950,27 @@
                     }
                 });
 
+                notificationSections.forEach((sectionElement) => {
+                    const visibleItems = Array.from(sectionElement.querySelectorAll('.notification-list-modal__item'))
+                        .filter((item) => item.style.display !== 'none')
+                        .length;
+                    const countElement = sectionElement.querySelector('[data-notification-section-count]');
+                    const toggleButton = sectionElement.querySelector('[data-notification-section-toggle]');
+
+                    if (countElement) {
+                        countElement.textContent = String(visibleItems);
+                    }
+
+                    sectionElement.style.display = visibleItems > 0 ? '' : 'none';
+
+                    if (visibleItems > 0 && toggleButton && toggleButton.getAttribute('aria-expanded') !== 'true') {
+                        if (sectionElement.dataset.notificationSection === 'pending_regional') {
+                            sectionElement.classList.remove('is-collapsed');
+                            toggleButton.setAttribute('aria-expanded', 'true');
+                        }
+                    }
+                });
+
                 if (filteredEmptyState) {
                     filteredEmptyState.style.display = visibleCount === 0 ? 'block' : 'none';
                 }
@@ -3567,6 +3983,7 @@
             setNotificationSelectOptions(provinceSelect, provinceValues, 'All');
             refreshCityOptions();
             refreshBarangayOptions();
+            initializeNotificationAccordions();
             applyNotificationFilters();
 
             if (projectCodeInput.dataset.notificationFilterBound !== '1') {
