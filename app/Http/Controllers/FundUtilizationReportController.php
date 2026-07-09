@@ -6,6 +6,7 @@ use App\Http\Requests\FundUtilizationApprovalActionRequest;
 use App\Http\Requests\FundUtilizationBatchDocumentBulkUploadRequest;
 use App\Http\Requests\FundUtilizationBatchDocumentUploadRequest;
 use App\Http\Requests\FundUtilizationFdpUploadRequest;
+use App\Http\Requests\FundUtilizationIndividualDocumentBulkUploadRequest;
 use App\Http\Requests\FundUtilizationMovUploadRequest;
 use App\Http\Requests\FundUtilizationPostingLinkRequest;
 use App\Http\Requests\FundUtilizationWrittenNoticeUploadRequest;
@@ -24,6 +25,7 @@ use App\Support\NotificationUrl;
 use App\Models\User;
 use App\Services\FundUtilizationWorkflowService;
 use App\Services\SecureTimestampService;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Facades\Auth;
@@ -42,7 +44,7 @@ class FundUtilizationReportController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:fund_utilization_reports,view')->only(['index', 'edit', 'show', 'viewDocument']);
-        $this->middleware('crud_permission:fund_utilization_reports,add')->only(['create', 'store', 'uploadMOV', 'uploadBatchDocument', 'uploadBatchDocumentsBulk', 'uploadWrittenNotice', 'uploadFDP']);
+        $this->middleware('crud_permission:fund_utilization_reports,add')->only(['create', 'store', 'uploadMOV', 'uploadBatchDocument', 'uploadBatchDocumentsBulk', 'uploadIndividualDocumentsBulk', 'uploadWrittenNotice', 'uploadFDP']);
         $this->middleware('crud_permission:fund_utilization_reports,update')->only(['update', 'approveUpload']);
         $this->middleware('crud_permission:fund_utilization_reports,delete')->only(['deleteDocument']);
     }
@@ -909,14 +911,31 @@ class FundUtilizationReportController extends Controller
                 ->orderBy('project_code');
         };
 
-        $batchUploadProjects = $applyListingOrder(clone $reportsQuery)->get();
+        $reportsCollection = $this->attachFundUtilizationListingData(
+            $applyListingOrder($reportsQuery)->get()
+        );
 
-        $reports = $applyListingOrder($reportsQuery)
-            ->paginate($perPage)
-            ->withQueryString();
+        $sortedReports = $this->sortFundUtilizationReportsForListing($reportsCollection);
+        $batchUploadProjects = $sortedReports;
 
+        $currentPage = max(1, (int) $request->query('page', 1));
+        $reports = new LengthAwarePaginator(
+            $sortedReports->slice(($currentPage - 1) * $perPage, $perPage)->values(),
+            $sortedReports->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
+        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects'));
+    }
+
+    private function attachFundUtilizationListingData($reportsCollection)
+    {
         $quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
-        $reportsCollection = $reports->getCollection();
         $projectCodes = $reportsCollection
             ->pluck('project_code')
             ->filter(fn($code) => trim((string) $code) !== '')
@@ -955,7 +974,7 @@ class FundUtilizationReportController extends Controller
                 ->keyBy(fn($row) => $row->project_code . '|' . strtoupper((string) $row->quarter));
         }
 
-        $reports->setCollection($reportsCollection->map(function ($report) use ($quarters, $movUploadsByKey, $batchDocumentsByKey, $writtenNoticesByKey, $fdpDocumentsByKey) {
+        return $reportsCollection->map(function ($report) use ($quarters, $movUploadsByKey, $batchDocumentsByKey, $writtenNoticesByKey, $fdpDocumentsByKey) {
             $projectCode = trim((string) ($report->project_code ?? ''));
             $quarterDocuments = [];
 
@@ -979,9 +998,44 @@ class FundUtilizationReportController extends Controller
             $report->validation_listing = $this->summarizeFundUtilizationListing($quarterDocuments);
 
             return $report;
-        }));
+        });
+    }
 
-        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects'));
+    private function sortFundUtilizationReportsForListing($reportsCollection)
+    {
+        return $reportsCollection
+            ->sort(function ($left, $right) {
+                $leftPending = (int) (($left->validation_summary['pending_total'] ?? 0) > 0);
+                $rightPending = (int) (($right->validation_summary['pending_total'] ?? 0) > 0);
+
+                if ($leftPending !== $rightPending) {
+                    return $rightPending <=> $leftPending;
+                }
+
+                $leftApprovalTimestamp = $left->validation_listing['approval_status_sort_timestamp'] ?? PHP_INT_MIN;
+                $rightApprovalTimestamp = $right->validation_listing['approval_status_sort_timestamp'] ?? PHP_INT_MIN;
+
+                if ($leftApprovalTimestamp !== $rightApprovalTimestamp) {
+                    return $rightApprovalTimestamp <=> $leftApprovalTimestamp;
+                }
+
+                $leftSubmittedTimestamp = $left->validation_listing['date_submitted_sort_timestamp'] ?? PHP_INT_MIN;
+                $rightSubmittedTimestamp = $right->validation_listing['date_submitted_sort_timestamp'] ?? PHP_INT_MIN;
+
+                if ($leftSubmittedTimestamp !== $rightSubmittedTimestamp) {
+                    return $rightSubmittedTimestamp <=> $leftSubmittedTimestamp;
+                }
+
+                $leftPriority = (int) ($left->validation_priority ?? PHP_INT_MAX);
+                $rightPriority = (int) ($right->validation_priority ?? PHP_INT_MAX);
+
+                if ($leftPriority !== $rightPriority) {
+                    return $leftPriority <=> $rightPriority;
+                }
+
+                return strnatcasecmp((string) ($left->project_code ?? ''), (string) ($right->project_code ?? ''));
+            })
+            ->values();
     }
 
     /**
@@ -1666,15 +1720,7 @@ class FundUtilizationReportController extends Controller
 
     private function resolveFundUtilizationValidatedAtLabel(array $document): string
     {
-        $status = strtolower(trim((string) ($document['status'] ?? '')));
-        if ($status === 'returned') {
-            $validatedAt = $document['approved_at'] ?? null;
-        } else {
-            $validatorLevel = $this->resolveFundUtilizationValidatorLevelForDisplay($document);
-            $validatedAt = $validatorLevel === 'regional'
-                ? ($document['approved_at_dilg_ro'] ?? null)
-                : ($validatorLevel === 'provincial' ? ($document['approved_at_dilg_po'] ?? null) : null);
-        }
+        $validatedAt = $this->resolveFundUtilizationValidatedAtValue($document);
 
         if (empty($validatedAt)) {
             return '—';
@@ -1685,6 +1731,41 @@ class FundUtilizationReportController extends Controller
             ->format('M d, Y h:i A');
     }
 
+    private function resolveFundUtilizationValidatedAtValue(array $document)
+    {
+        $status = strtolower(trim((string) ($document['status'] ?? '')));
+        if ($status === 'returned') {
+            return $document['approved_at'] ?? null;
+        }
+
+        $validatorLevel = $this->resolveFundUtilizationValidatorLevelForDisplay($document);
+
+        $validatedAt = $validatorLevel === 'regional'
+            ? ($document['approved_at_dilg_ro'] ?? null)
+            : ($validatorLevel === 'provincial' ? ($document['approved_at_dilg_po'] ?? null) : null);
+
+        if (!empty($validatedAt)) {
+            return $validatedAt;
+        }
+
+        if ($status === 'pending') {
+            return $document['uploaded_at'] ?? null;
+        }
+
+        return null;
+    }
+
+    private function resolveFundUtilizationValidatedAtTimestamp(array $document): ?int
+    {
+        $validatedAt = $this->resolveFundUtilizationValidatedAtValue($document);
+
+        if (empty($validatedAt)) {
+            return null;
+        }
+
+        return Carbon::parse($validatedAt)->getTimestamp();
+    }
+
     private function summarizeFundUtilizationListing(array $quarterDocuments): array
     {
         $summary = [
@@ -1692,7 +1773,9 @@ class FundUtilizationReportController extends Controller
             'approval_status_text_color' => '#4b5563',
             'approval_status_background_color' => '#f3f4f6',
             'approval_status_border_color' => '#d1d5db',
+            'approval_status_sort_timestamp' => null,
             'date_submitted_label' => '—',
+            'date_submitted_sort_timestamp' => null,
             'validation_level_label' => '—',
             'validation_level_text_color' => '#4b5563',
             'validation_level_background_color' => '#f3f4f6',
@@ -1798,7 +1881,10 @@ class FundUtilizationReportController extends Controller
             $summary['date_submitted_label'] = Carbon::parse($selectedDocument['uploaded_at'])
                 ->setTimezone(config('app.timezone'))
                 ->format('M d, Y h:i A');
+            $summary['date_submitted_sort_timestamp'] = Carbon::parse($selectedDocument['uploaded_at'])->getTimestamp();
         }
+
+        $summary['approval_status_sort_timestamp'] = $this->resolveFundUtilizationValidatedAtTimestamp($selectedDocument);
 
         if ($this->hasFundUtilizationReturned($selectedDocument['path'] ?? null, $selectedDocument['status'] ?? null)) {
             $summary['approval_status_label'] = 'Returned';
@@ -2737,6 +2823,315 @@ class FundUtilizationReportController extends Controller
             : back()->with('success', $message);
     }
 
+    public function uploadIndividualDocumentsBulk(FundUtilizationIndividualDocumentBulkUploadRequest $request, FundUtilizationWorkflowService $workflowService)
+    {
+        $validated = $request->validated();
+
+        $projectCodes = collect($validated['project_codes'] ?? [])
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($projectCodes->isEmpty()) {
+            $message = 'Please select at least one project for batch upload.';
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->withErrors(['project_codes' => $message]);
+        }
+
+        $user = Auth::user();
+        if (!$this->canUploadFundUtilizationDocuments($user)) {
+            $message = 'Only LGU User and DILG Provincial Office users can upload documents.';
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 403)
+                : back()->withErrors(['individual_documents' => $message]);
+        }
+
+        $movFile = $request->file('mov_file');
+        $writtenNoticeFiles = [];
+        foreach (array_keys($this->writtenNoticeFieldConfigs()) as $field) {
+            if ($request->hasFile($field)) {
+                $writtenNoticeFiles[$field] = $request->file($field);
+            }
+        }
+        $fdpFile = $request->file('fdp_file');
+        $postingLinkInput = trim((string) ($validated['posting_link'] ?? ''));
+        $postingLink = $postingLinkInput !== '' ? InputSanitizer::sanitizeHttpUrl($postingLinkInput) : null;
+
+        if ($postingLinkInput !== '' && $postingLink === null) {
+            $message = 'Please enter a valid http or https URL.';
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->withErrors(['posting_link' => $message]);
+        }
+
+        $newFilePaths = [];
+        $oldFilePaths = [];
+        $processedCount = 0;
+
+        try {
+            foreach ($projectCodes as $projectCode) {
+                if ($movFile) {
+                    $result = $this->storeMovForProject($projectCode, $validated['quarter'], $movFile, $user, $workflowService);
+                    $newFilePaths = array_merge($newFilePaths, $result['newFilePaths'] ?? []);
+                    $oldFilePaths = array_merge($oldFilePaths, $result['oldFilePaths'] ?? []);
+                }
+
+                if (!empty($writtenNoticeFiles)) {
+                    $result = $this->storeWrittenNoticeFilesForProject($projectCode, $validated['quarter'], $writtenNoticeFiles, $user, $workflowService);
+                    $newFilePaths = array_merge($newFilePaths, $result['newFilePaths'] ?? []);
+                    $oldFilePaths = array_merge($oldFilePaths, $result['oldFilePaths'] ?? []);
+                }
+
+                if ($fdpFile) {
+                    $result = $this->storeFdpForProject($projectCode, $validated['quarter'], $fdpFile, $user, $workflowService);
+                    $newFilePaths = array_merge($newFilePaths, $result['newFilePaths'] ?? []);
+                    $oldFilePaths = array_merge($oldFilePaths, $result['oldFilePaths'] ?? []);
+                }
+
+                if ($postingLink !== null) {
+                    $this->storePostingLinkForProject($projectCode, $validated['quarter'], $postingLink, $user, $workflowService);
+                }
+
+                $processedCount++;
+            }
+        } catch (\Throwable $exception) {
+            foreach (array_unique($newFilePaths) as $path) {
+                if ($path && Storage::disk('public')->exists($path)) {
+                    Storage::disk('public')->delete($path);
+                }
+            }
+
+            Log::error('Fund utilization individual batch upload failed.', [
+                'quarter' => $validated['quarter'] ?? null,
+                'project_codes' => $projectCodes->all(),
+                'user_id' => auth()->id(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            $message = 'Individual document batch upload failed. Please try again.';
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 500)
+                : back()->withErrors(['individual_documents' => $message]);
+        }
+
+        foreach (array_unique($oldFilePaths) as $path) {
+            if ($path && !in_array($path, $newFilePaths, true) && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+
+        $message = $processedCount === 1
+            ? 'Individual documents uploaded successfully for 1 project.'
+            : "Individual documents uploaded successfully for {$processedCount} projects.";
+
+        return $request->expectsJson()
+            ? response()->json(['message' => $message, 'processed_count' => $processedCount])
+            : back()->with('success', $message);
+    }
+
+    private function storeMovForProject(string $projectCode, string $quarter, $file, $user, FundUtilizationWorkflowService $workflowService): array
+    {
+        $report = $this->getReportOrLfpProject($projectCode);
+        $existingRecord = FURMovUpload::where('project_code', $projectCode)
+            ->where('quarter', $quarter)
+            ->first();
+        $oldFilePath = $existingRecord?->mov_file_path;
+        $path = $file->store('fur/mov/' . $projectCode, 'public');
+
+        try {
+            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService) {
+                $secureTimestamp = SecureTimestampService::getUploadTimestamp();
+
+                $updates = [
+                    'mov_file_path' => $path,
+                    'updated_at' => $secureTimestamp,
+                    'encoder_id' => auth()->id(),
+                    'mov_uploaded_at' => $secureTimestamp,
+                    'mov_encoder_id' => auth()->id(),
+                    'status' => 'pending',
+                ];
+
+                if (!$existingRecord) {
+                    $updates['created_at'] = $secureTimestamp;
+                }
+
+                $record = FURMovUpload::updateOrCreate(
+                    ['project_code' => $projectCode, 'quarter' => $quarter],
+                    $updates
+                );
+
+                $workflowService->submitOrResubmit($report, $quarter, 'mov', $record, $user);
+                SecureTimestampService::logUploadTimestamp('mov', $projectCode, $quarter, $secureTimestamp);
+
+                return $record;
+            });
+        } catch (\Throwable $exception) {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+
+            throw $exception;
+        }
+
+        return [
+            'oldFilePaths' => array_values(array_filter([$oldFilePath])),
+            'newFilePaths' => array_values(array_filter([$record->mov_file_path ?? $path])),
+        ];
+    }
+
+    private function storeWrittenNoticeFilesForProject(string $projectCode, string $quarter, array $files, $user, FundUtilizationWorkflowService $workflowService): array
+    {
+        $report = $this->getReportOrLfpProject($projectCode);
+        $existingRecord = FURWrittenNotice::where('project_code', $projectCode)
+            ->where('quarter', $quarter)
+            ->first();
+        $data = ['project_code' => $projectCode, 'quarter' => $quarter];
+        $updates = [];
+        $secureTimestamp = SecureTimestampService::getUploadTimestamp();
+        $replacedPaths = [];
+        $newPaths = [];
+        $uploadedDocumentTypes = [];
+
+        foreach ($this->writtenNoticeFieldConfigs() as $requestField => $fieldConfig) {
+            if (!array_key_exists($requestField, $files) || !$files[$requestField]) {
+                continue;
+            }
+
+            $oldPath = $existingRecord?->{$fieldConfig['path']};
+            $file = $files[$requestField];
+            $path = $file->store('fur/written-notice/' . $projectCode, 'public');
+            $updates[$fieldConfig['path']] = $path;
+            $replacedPaths[] = ['old' => $oldPath, 'new' => $path];
+            $newPaths[] = $path;
+            $uploadedDocumentTypes[] = $fieldConfig['workflow_type'];
+            $updates[$fieldConfig['uploaded_at']] = $secureTimestamp;
+            $updates[$fieldConfig['encoder_id']] = auth()->id();
+            $updates[$fieldConfig['status']] = 'pending';
+            $updates['status'] = 'pending';
+
+            $shortFieldName = str_replace('secretary_', '', $requestField);
+            SecureTimestampService::logUploadTimestamp('written-notice-' . $shortFieldName, $projectCode, $quarter, $secureTimestamp);
+        }
+
+        if (empty($updates)) {
+            return [
+                'oldFilePaths' => [],
+                'newFilePaths' => [],
+            ];
+        }
+
+        try {
+            DB::transaction(function () use ($existingRecord, $data, $updates, $secureTimestamp, $report, $quarter, $uploadedDocumentTypes, $user, $workflowService) {
+                if (!$existingRecord) {
+                    $updates['created_at'] = $secureTimestamp;
+                }
+
+                $record = FURWrittenNotice::updateOrCreate($data, $updates);
+
+                foreach (array_unique($uploadedDocumentTypes) as $documentType) {
+                    $workflowService->submitOrResubmit($report, $quarter, $documentType, $record, $user);
+                }
+            });
+        } catch (\Throwable $exception) {
+            foreach (array_unique($newPaths) as $newPath) {
+                if ($newPath && Storage::disk('public')->exists($newPath)) {
+                    Storage::disk('public')->delete($newPath);
+                }
+            }
+
+            throw $exception;
+        }
+
+        return [
+            'oldFilePaths' => array_values(array_filter(array_map(fn ($entry) => $entry['old'] ?? null, $replacedPaths))),
+            'newFilePaths' => array_values(array_filter($newPaths)),
+        ];
+    }
+
+    private function storeFdpForProject(string $projectCode, string $quarter, $file, $user, FundUtilizationWorkflowService $workflowService): array
+    {
+        $report = $this->getReportOrLfpProject($projectCode);
+        $existingRecord = FURFDP::where('project_code', $projectCode)
+            ->where('quarter', $quarter)
+            ->first();
+        $oldFilePath = $existingRecord?->fdp_file_path;
+        $path = $file->store('fur/fdp/' . $projectCode, 'public');
+
+        try {
+            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService) {
+                $secureTimestamp = SecureTimestampService::getUploadTimestamp();
+
+                $updates = [
+                    'fdp_file_path' => $path,
+                    'updated_at' => $secureTimestamp,
+                    'encoder_id' => auth()->id(),
+                    'fdp_uploaded_at' => $secureTimestamp,
+                    'fdp_encoder_id' => auth()->id(),
+                    'fdp_status' => 'pending',
+                    'status' => 'pending',
+                ];
+
+                if (!$existingRecord) {
+                    $updates['created_at'] = $secureTimestamp;
+                }
+
+                $record = FURFDP::updateOrCreate(
+                    ['project_code' => $projectCode, 'quarter' => $quarter],
+                    $updates
+                );
+
+                $workflowService->submitOrResubmit($report, $quarter, 'fdp', $record, $user);
+                SecureTimestampService::logUploadTimestamp('fdp', $projectCode, $quarter, $secureTimestamp);
+
+                return $record;
+            });
+        } catch (\Throwable $exception) {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+
+            throw $exception;
+        }
+
+        return [
+            'oldFilePaths' => array_values(array_filter([$oldFilePath])),
+            'newFilePaths' => array_values(array_filter([$record->fdp_file_path ?? $path])),
+        ];
+    }
+
+    private function storePostingLinkForProject(string $projectCode, string $quarter, string $postingLink, $user, FundUtilizationWorkflowService $workflowService): void
+    {
+        $report = $this->getReportOrLfpProject($projectCode);
+        $secureTimestamp = SecureTimestampService::getUploadTimestamp();
+
+        DB::transaction(function () use ($projectCode, $quarter, $postingLink, $secureTimestamp, $report, $user, $workflowService) {
+            $record = FURFDP::updateOrCreate(
+                ['project_code' => $projectCode, 'quarter' => $quarter],
+                [
+                    'posting_link' => $postingLink,
+                    'posting_uploaded_at' => $secureTimestamp,
+                    'posting_encoder_id' => auth()->id(),
+                    'posting_status' => 'pending',
+                ]
+            );
+
+            $workflowService->submitOrResubmit($report, $quarter, 'posting-link', $record, $user);
+        });
+
+        Log::channel('upload_timestamps')->info('Document uploaded', [
+            'document_type' => 'posting-link',
+            'project_code' => $projectCode,
+            'quarter' => $quarter,
+            'upload_timestamp' => $secureTimestamp->format('Y-m-d H:i:s'),
+            'timezone' => $secureTimestamp->timezone->getName(),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'user_id' => auth()->id(),
+        ]);
+    }
+
     private function storeBatchDocumentsForProject(string $projectCode, string $quarter, array $files, $user, FundUtilizationWorkflowService $workflowService): array
     {
         $report = $this->getReportOrLfpProject($projectCode);
@@ -2802,32 +3197,9 @@ class FundUtilizationReportController extends Controller
         ];
     }
 
-    /**
-     * Upload Written Notice files
-     */
-    public function uploadWrittenNotice(FundUtilizationWrittenNoticeUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
+    private function writtenNoticeFieldConfigs(): array
     {
-        $report = $this->getReportOrLfpProject($projectCode);
-        $user = Auth::user();
-        if (!$this->canUploadFundUtilizationDocuments($user)) {
-            return back()->withErrors([
-                'written_notice' => 'Only LGU User and DILG Provincial Office users can upload documents.',
-            ]);
-        }
-        $data = ['project_code' => $projectCode, 'quarter' => $request->quarter];
-        $updates = [];
-
-        // Get secure, tamper-proof timestamp from PAGASA server
-        $secureTimestamp = SecureTimestampService::getUploadTimestamp();
-        $existingRecord = FURWrittenNotice::where('project_code', $projectCode)
-            ->where('quarter', $request->quarter)
-            ->first();
-        $replacedPaths = [];
-        $newPaths = [];
-        $uploadedDocumentTypes = [];
-
-        // Map request fields to database fields and individual upload timestamp fields
-        $fields = [
+        return [
             'secretary_dbm' => [
                 'workflow_type' => 'written-notice-dbm',
                 'path' => 'secretary_dbm_path',
@@ -2901,6 +3273,33 @@ class FundUtilizationReportController extends Controller
                 'remarks' => 'senate_remarks',
             ],
         ];
+    }
+
+    /**
+     * Upload Written Notice files
+     */
+    public function uploadWrittenNotice(FundUtilizationWrittenNoticeUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
+    {
+        $report = $this->getReportOrLfpProject($projectCode);
+        $user = Auth::user();
+        if (!$this->canUploadFundUtilizationDocuments($user)) {
+            return back()->withErrors([
+                'written_notice' => 'Only LGU User and DILG Provincial Office users can upload documents.',
+            ]);
+        }
+        $data = ['project_code' => $projectCode, 'quarter' => $request->quarter];
+        $updates = [];
+
+        // Get secure, tamper-proof timestamp from PAGASA server
+        $secureTimestamp = SecureTimestampService::getUploadTimestamp();
+        $existingRecord = FURWrittenNotice::where('project_code', $projectCode)
+            ->where('quarter', $request->quarter)
+            ->first();
+        $replacedPaths = [];
+        $newPaths = [];
+        $uploadedDocumentTypes = [];
+
+        $fields = $this->writtenNoticeFieldConfigs();
 
         foreach ($fields as $requestField => $fieldConfig) {
             if ($request->hasFile($requestField)) {

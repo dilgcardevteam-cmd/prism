@@ -33,6 +33,50 @@ class FundUtilizationWorkflowRoutingService
         return $this->resolveApprover($levelConfig, $report, $uploader);
     }
 
+    public function getValidatorsForLevel(string $projectCode, int $level, User $uploader): Collection
+    {
+        $report = FundUtilizationReport::query()
+            ->where('project_code', $projectCode)
+            ->first();
+
+        if (!$report) {
+            return collect();
+        }
+
+        $chainKey = $uploader->isProvincialDilgAssignment() ? 'provincial' : 'lgu';
+
+        $levelConfig = collect(config('fund_utilization_workflow.uploader_chains.' . $chainKey, []))
+            ->firstWhere('level', $level);
+
+        if (!$levelConfig) {
+            return collect();
+        }
+
+        $role = (string) ($levelConfig['role'] ?? '');
+
+        if ($role === User::ROLE_REGIONAL) {
+            return User::query()
+                ->where('status', 'active')
+                ->whereRaw('UPPER(TRIM(COALESCE(agency, ""))) = ?', ['DILG'])
+                ->where(function ($builder) {
+                    $builder->whereRaw('LOWER(TRIM(COALESCE(role, ""))) = ?', [User::ROLE_REGIONAL])
+                        ->orWhere(function ($fallback) {
+                            $fallback->where(function ($regional) {
+                                $regional->whereRaw('LOWER(TRIM(COALESCE(province, ""))) = ?', ['regional office'])
+                                    ->orWhereRaw('LOWER(TRIM(COALESCE(office, ""))) LIKE ?', ['%regional office%']);
+                            });
+                        });
+                })
+                ->get()
+                ->reject(fn (User $candidate) => (int) $candidate->getKey() === (int) $uploader->getKey())
+                ->values();
+        }
+
+        return $this->candidatesForLevel($levelConfig, $report, $uploader)
+            ->reject(fn (User $candidate) => (int) $candidate->getKey() === (int) $uploader->getKey())
+            ->values();
+    }
+
     public function userCanActOnWorkflowLevel(FundUtilizationApprovalWorkflow $workflow, User $actor): bool
     {
         $currentLevel = (int) ($workflow->current_approval_level ?? 0);

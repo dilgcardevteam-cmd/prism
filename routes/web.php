@@ -2785,6 +2785,7 @@ Route::middleware(['auth'])->group(function () {
             return redirect()->route('fund-utilization.index', $redirectParameters);
         })->name('fund-utilization.batch-upload-documents.get');
         Route::post('/batch-upload-documents', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadBatchDocumentsBulk'])->name('fund-utilization.batch-upload-documents');
+        Route::post('/batch-upload-individual-documents', [App\Http\Controllers\FundUtilizationReportController::class, 'uploadIndividualDocumentsBulk'])->name('fund-utilization.batch-upload-individual-documents');
         Route::get('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'show'])->name('fund-utilization.show');
         Route::get('/{projectCode}/edit', [App\Http\Controllers\FundUtilizationReportController::class, 'edit'])->name('fund-utilization.edit');
         Route::put('/{projectCode}', [App\Http\Controllers\FundUtilizationReportController::class, 'update'])->name('fund-utilization.update');

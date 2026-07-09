@@ -565,28 +565,233 @@
                             <span class="fur-batch-document-pill">Batch Upload</span>
                         </div>
 
-                        <div class="fur-batch-document-layout">
-                            <div class="fur-batch-document-main">
-                                <div class="fur-batch-document-dropzone">
-                                    <div class="fur-batch-document-copy">
-                                        <div class="fur-batch-document-icon">
-                                            <i class="fas fa-folder-open" aria-hidden="true"></i>
+                        <div class="fur-batch-document-mode-actions" role="group" aria-label="Choose batch upload mode">
+                            <button
+                                type="button"
+                                id="batchUploadDocumentModeCategoryBtn"
+                                class="fur-batch-document-mode-btn"
+                                data-batch-document-mode-btn="category"
+                                data-batch-document-mode-target="batchUploadDocumentCategoryPanel"
+                                aria-pressed="false"
+                            >
+                                <i class="fas fa-sitemap" aria-hidden="true"></i>
+                                Upload Documents per Category
+                            </button>
+                            <button
+                                type="button"
+                                id="batchUploadDocumentModeSingleBtn"
+                                class="fur-batch-document-mode-btn"
+                                data-batch-document-mode-btn="single"
+                                data-batch-document-mode-target="batchUploadDocumentAsOnePanel"
+                                aria-pressed="false"
+                            >
+                                <i class="fas fa-layer-group" aria-hidden="true"></i>
+                                Upload Documents as One
+                            </button>
+                        </div>
+
+                        <div class="fur-batch-document-mode-card" id="batchUploadDocumentAsOnePanel" hidden>
+                            <div class="fur-batch-document-layout">
+                                <div class="fur-batch-document-main">
+                                    <div class="fur-batch-document-dropzone">
+                                        <div class="fur-batch-document-copy">
+                                            <div class="fur-batch-document-icon">
+                                                <i class="fas fa-folder-open" aria-hidden="true"></i>
+                                            </div>
+                                            <div>
+                                                <h5>Choose one or more PDF documents</h5>
+                                                <p>Only PDF files are allowed, with a maximum size of 50 MB per file.</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h5>Choose one or more PDF documents</h5>
-                                            <p>Only PDF files are allowed, with a maximum size of 50 MB per file.</p>
+
+                                        <label for="batchUploadDocumentFiles" class="fur-batch-document-button">
+                                            <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                            Select Documents
+                                        </label>
+                                        <input id="batchUploadDocumentFiles" type="file" multiple accept="application/pdf,.pdf" class="fur-batch-document-input">
+                                    </div>
+                                </div>
+                                <div class="fur-batch-document-file-list" id="batchUploadDocumentList" hidden></div>
+                            </div>
+                        </div>
+
+                        <div class="fur-batch-document-mode-card fur-batch-category-inline-panel" id="batchUploadDocumentCategoryPanel" hidden>
+                            <div class="fur-batch-category-body">
+                                <div class="fur-batch-category-summary-card">
+                                    <div class="fur-batch-category-summary-grid">
+                                        <div class="fur-batch-category-summary-block">
+                                            <div class="fur-batch-category-summary-label">Selected Projects</div>
+                                            <div id="batchUploadCategoryProjectCount" class="fur-batch-category-summary-value">0</div>
+                                            <div id="batchUploadCategoryProjectPreview" class="fur-batch-category-summary-copy">No projects selected yet.</div>
+                                        </div>
+                                        <div class="fur-batch-category-summary-block">
+                                            <label for="batchUploadCategoryQuarter" class="fur-batch-category-summary-label">Quarter</label>
+                                            <select id="batchUploadCategoryQuarter" class="fur-batch-quarter-select fur-batch-category-quarter-select">
+                                                <option value="">Select Quarter</option>
+                                                <option value="Q1">Q1 (January - March)</option>
+                                                <option value="Q2">Q2 (April - June)</option>
+                                                <option value="Q3">Q3 (July - September)</option>
+                                                <option value="Q4">Q4 (October - December)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="fur-batch-category-individual-shell">
+                                    <div class="fur-batch-category-document-card">
+                                        <h3 class="fur-batch-category-document-card-header">
+                                            <span class="fur-batch-category-document-card-title-wrap">
+                                                <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-red">
+                                                    <i class="fas fa-file-pdf" aria-hidden="true"></i>
+                                                </span>
+                                                <span class="fur-batch-category-document-card-title-group">
+                                                    <span class="fur-batch-category-document-card-title">Fund Utilization Report</span>
+                                                    <span class="fur-batch-category-document-card-copy">MOV on PDF Format</span>
+                                                </span>
+                                            </span>
+                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                        </h3>
+                                        <div class="fur-batch-category-document-card-content">
+                                            <div class="fur-batch-category-document-field-wrap">
+                                                <div class="fur-batch-category-document-field">
+                                                    <input id="batchUploadCategoryMovFile" type="file" accept="application/pdf,.pdf" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategoryMovFileName">
+                                                </div>
+                                                <div id="batchUploadCategoryMovFileName" class="fur-batch-category-file-name">No file selected.</div>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <label for="batchUploadDocumentFiles" class="fur-batch-document-button">
-                                        <i class="fas fa-paperclip" aria-hidden="true"></i>
-                                        Select Documents
-                                    </label>
-                                    <input id="batchUploadDocumentFiles" type="file" multiple accept="application/pdf,.pdf" class="fur-batch-document-input">
+                                    <div class="fur-batch-category-document-card">
+                                        <div class="fur-batch-category-written-section-header">
+                                            <div class="fur-batch-category-document-card-title-wrap">
+                                                <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-blue">
+                                                    <i class="fas fa-envelope-open-text" aria-hidden="true"></i>
+                                                </span>
+                                                <div>
+                                                    <p class="fur-batch-category-written-section-title">Written Notice</p>
+                                                    <p class="fur-batch-category-written-section-copy">MOV Screenshot of Emailed Notice &amp; Written Notice PDF</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="fur-batch-category-document-card-content">
+                                            <div class="fur-batch-category-written-recipient-shell">
+                                                <p class="fur-batch-category-written-recipient-title">Distribution Recipients:</p>
+                                                <div class="fur-batch-category-written-grid">
+                                                    <div class="fur-batch-category-written-card">
+                                                        <label class="fur-batch-category-written-card-label">
+                                                            <span>Secretary of DBM</span>
+                                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                                        </label>
+                                                        <div class="fur-batch-category-document-field">
+                                                            <input id="batchUploadCategorySecretaryDbm" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategorySecretaryDbmName">
+                                                        </div>
+                                                        <div id="batchUploadCategorySecretaryDbmName" class="fur-batch-category-file-name">No file selected.</div>
+                                                    </div>
+                                                    <div class="fur-batch-category-written-card">
+                                                        <label class="fur-batch-category-written-card-label">
+                                                            <span>Secretary of DILG</span>
+                                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                                        </label>
+                                                        <div class="fur-batch-category-document-field">
+                                                            <input id="batchUploadCategorySecretaryDilg" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategorySecretaryDilgName">
+                                                        </div>
+                                                        <div id="batchUploadCategorySecretaryDilgName" class="fur-batch-category-file-name">No file selected.</div>
+                                                    </div>
+                                                    <div class="fur-batch-category-written-card">
+                                                        <label class="fur-batch-category-written-card-label">
+                                                            <span>Speaker of the House</span>
+                                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                                        </label>
+                                                        <div class="fur-batch-category-document-field">
+                                                            <input id="batchUploadCategorySpeakerHouse" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategorySpeakerHouseName">
+                                                        </div>
+                                                        <div id="batchUploadCategorySpeakerHouseName" class="fur-batch-category-file-name">No file selected.</div>
+                                                    </div>
+                                                    <div class="fur-batch-category-written-card">
+                                                        <label class="fur-batch-category-written-card-label">
+                                                            <span>President of the Senate</span>
+                                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                                        </label>
+                                                        <div class="fur-batch-category-document-field">
+                                                            <input id="batchUploadCategoryPresidentSenate" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategoryPresidentSenateName">
+                                                        </div>
+                                                        <div id="batchUploadCategoryPresidentSenateName" class="fur-batch-category-file-name">No file selected.</div>
+                                                    </div>
+                                                    <div class="fur-batch-category-written-card">
+                                                        <label class="fur-batch-category-written-card-label">
+                                                            <span>House Committee on Appropriation</span>
+                                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                                        </label>
+                                                        <div class="fur-batch-category-document-field">
+                                                            <input id="batchUploadCategoryHouseCommittee" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategoryHouseCommitteeName">
+                                                        </div>
+                                                        <div id="batchUploadCategoryHouseCommitteeName" class="fur-batch-category-file-name">No file selected.</div>
+                                                    </div>
+                                                    <div class="fur-batch-category-written-card">
+                                                        <label class="fur-batch-category-written-card-label">
+                                                            <span>Senate Committee on Finance</span>
+                                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                                        </label>
+                                                        <div class="fur-batch-category-document-field">
+                                                            <input id="batchUploadCategorySenateCommittee" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategorySenateCommitteeName">
+                                                        </div>
+                                                        <div id="batchUploadCategorySenateCommitteeName" class="fur-batch-category-file-name">No file selected.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="fur-batch-category-document-card">
+                                        <h3 class="fur-batch-category-document-card-header">
+                                            <span class="fur-batch-category-document-card-title-wrap">
+                                                <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-red">
+                                                    <i class="fas fa-file-pdf" aria-hidden="true"></i>
+                                                </span>
+                                                <span class="fur-batch-category-document-card-title-group">
+                                                    <span class="fur-batch-category-document-card-title">Full Disclosure Policy (FDP)</span>
+                                                    <span class="fur-batch-category-document-card-copy">On PDF Format</span>
+                                                </span>
+                                            </span>
+                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                        </h3>
+                                        <div class="fur-batch-category-document-card-content">
+                                            <div class="fur-batch-category-document-field-wrap">
+                                                <div class="fur-batch-category-document-field">
+                                                    <input id="batchUploadCategoryFdpFile" type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png" class="fur-batch-category-file-input" data-batch-category-file-name-target="batchUploadCategoryFdpFileName">
+                                                </div>
+                                                <div id="batchUploadCategoryFdpFileName" class="fur-batch-category-file-name">No file selected.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="fur-batch-category-document-card">
+                                        <h3 class="fur-batch-category-document-card-header">
+                                            <span class="fur-batch-category-document-card-title-wrap">
+                                                <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-green">
+                                                    <i class="fas fa-link" aria-hidden="true"></i>
+                                                </span>
+                                                <span class="fur-batch-category-document-card-title-group">
+                                                    <span class="fur-batch-category-document-card-title">LGU Website / Social Media</span>
+                                                    <span class="fur-batch-category-document-card-copy">Posting Link</span>
+                                                </span>
+                                            </span>
+                                            <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
+                                        </h3>
+                                        <div class="fur-batch-category-document-card-content">
+                                            <div class="fur-batch-category-document-field-wrap">
+                                                <div class="fur-batch-category-document-field">
+                                                    <input id="batchUploadCategoryPostingLink" type="text" class="fur-batch-category-text-input" placeholder="https://example.com/post">
+                                                </div>
+                                                <div class="fur-batch-category-file-name">Enter a valid http or https link if you want to submit a posting link.</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="fur-batch-document-file-list" id="batchUploadDocumentList" hidden></div>
+
                         </div>
+
                         <div class="fur-batch-document-submit-row" id="batchUploadDocumentSubmitRow" hidden>
                             <button type="button" id="batchUploadDocumentSubmitBtn" class="fur-batch-document-submit-btn">
                                 <i class="fas fa-upload" aria-hidden="true"></i>
@@ -664,6 +869,17 @@
                             <div class="fur-batch-empty-state" id="batchUploadSelectedEmpty">
                                 No selected projects yet.
                             </div>
+                        </div>
+                        <div class="fur-batch-selected-documents-summary" id="batchUploadSelectedDocumentsSummary" hidden>
+                            <div class="fur-batch-selected-documents-summary-header">
+                                <div>
+                                    <div class="fur-batch-selected-documents-summary-title">Prepared Document Summary</div>
+                                    <div class="fur-batch-selected-documents-summary-copy" id="batchUploadSelectedDocumentsSummaryCopy">
+                                        No prepared category documents yet.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="fur-batch-selected-documents-summary-list" id="batchUploadSelectedDocumentsSummaryList"></div>
                         </div>
                     </section>
                         </div>
@@ -829,6 +1045,7 @@
         let selectedFormat = '';
         const shouldAutoOpenBatchUploadModal = @json($batchUploadOpen);
         const BATCH_UPLOAD_BULK_ROUTE = @json(route('fund-utilization.batch-upload-documents'));
+        const BATCH_UPLOAD_INDIVIDUAL_ROUTE = @json(route('fund-utilization.batch-upload-individual-documents'));
         const BATCH_UPLOAD_CSRF_TOKEN = @json(csrf_token());
 
         function openExportModal(format) {
@@ -856,6 +1073,12 @@
                 files: [],
                 objectUrls: new Map(),
             },
+            individualDocuments: {
+                quarter: '',
+                postingLink: '',
+                files: {},
+            },
+            uploadMode: '',
             submitState: {
                 quarter: '',
             },
@@ -863,6 +1086,9 @@
                 fileKey: '',
             },
             submitRequest: {
+                isSubmitting: false,
+            },
+            individualSubmitRequest: {
                 isSubmitting: false,
             },
             documentPersistence: {
@@ -1150,6 +1376,39 @@
             writeBatchUploadModalOpenState(false);
         }
 
+        function setBatchUploadDocumentMode(mode) {
+            const normalizedMode = mode === 'category' || mode === 'single' ? mode : '';
+            const panel = document.getElementById('batchUploadDocumentFiles')?.closest('.fur-batch-document-panel');
+            const categoryPanel = document.getElementById('batchUploadDocumentCategoryPanel');
+            const singlePanel = document.getElementById('batchUploadDocumentAsOnePanel');
+
+            batchUploadModalCache.uploadMode = normalizedMode;
+
+            if (categoryPanel) {
+                categoryPanel.hidden = normalizedMode !== 'category';
+            }
+
+            if (singlePanel) {
+                singlePanel.hidden = normalizedMode !== 'single';
+            }
+
+            if (panel) {
+                if (normalizedMode) {
+                    panel.dataset.uploadMode = normalizedMode;
+                } else {
+                    delete panel.dataset.uploadMode;
+                }
+            }
+
+            document.querySelectorAll('[data-batch-document-mode-btn]').forEach((button) => {
+                const isActive = button.dataset.batchDocumentModeBtn === normalizedMode;
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+
+            updateBatchUploadIndividualCategoryPreparedUi();
+        }
+
         function resetBatchUploadDocumentState() {
             const batchUploadDocumentFiles = document.getElementById('batchUploadDocumentFiles');
             const batchUploadDocumentList = document.getElementById('batchUploadDocumentList');
@@ -1189,6 +1448,7 @@
 
             batchUploadDocumentPanel?.classList.remove('has-files');
             persistBatchUploadDocuments([]);
+            setBatchUploadDocumentMode('');
         }
 
         function resetBatchUploadFilters() {
@@ -1234,6 +1494,7 @@
             closeBatchUploadQuarterModal();
             closeBatchUploadDocumentPreviewModal();
             closeBatchUploadSubmitConfirmModal();
+            closeBatchUploadIndividualCategoryModal();
 
             batchUploadModalCache.submitState.quarter = '';
             const quarterSelect = document.getElementById('batchUploadQuarterSelect');
@@ -1251,6 +1512,7 @@
 
             batchUploadModalCache.shuttleState.clear();
             resetBatchUploadDocumentState();
+            resetBatchUploadIndividualCategoryModal();
         }
 
         function resetAndCloseBatchUploadModal() {
@@ -1414,6 +1676,382 @@
 
                 element.dataset.batchPreviewCloseBound = '1';
                 element.addEventListener('click', closeBatchUploadDocumentPreviewModal);
+            });
+        }
+
+        function updateBatchUploadIndividualCategoryProjectSummary() {
+            const selectedProjectCodes = getSelectedBatchUploadProjectCodes();
+            const projectCount = document.getElementById('batchUploadCategoryProjectCount');
+            const projectPreview = document.getElementById('batchUploadCategoryProjectPreview');
+            const projectMap = new Map(BATCH_UPLOAD_PROJECTS.map((project) => [project.project_code, project]));
+
+            if (projectCount) {
+                projectCount.textContent = String(selectedProjectCodes.length);
+            }
+
+            if (projectPreview) {
+                if (selectedProjectCodes.length === 0) {
+                    projectPreview.textContent = 'No projects selected yet.';
+                    return;
+                }
+
+                const previewText = selectedProjectCodes
+                    .slice(0, 3)
+                    .map((projectCode) => {
+                        const project = projectMap.get(projectCode);
+                        return project?.project_title
+                            ? `${projectCode} - ${project.project_title}`
+                            : projectCode;
+                    })
+                    .join(' | ');
+                projectPreview.textContent = selectedProjectCodes.length > 3
+                    ? `${previewText} | +${selectedProjectCodes.length - 3} more`
+                    : previewText;
+            }
+        }
+
+        function getBatchUploadIndividualCategoryFieldLabelMap() {
+            return {
+                mov_file: 'Fund Utilization Report',
+                secretary_dbm: 'Secretary of DBM',
+                secretary_dilg: 'Secretary of DILG',
+                speaker_house: 'Speaker of the House',
+                president_senate: 'President of the Senate',
+                house_committee: 'House Committee on Appropriation',
+                senate_committee: 'Senate Committee on Finance',
+                fdp_file: 'Full Disclosure Policy (FDP)',
+            };
+        }
+
+        function syncBatchUploadIndividualCategoryDocumentsFromInputs() {
+            const quarterSelect = document.getElementById('batchUploadCategoryQuarter');
+            const fieldMap = [
+                ['mov_file', 'batchUploadCategoryMovFile'],
+                ['secretary_dbm', 'batchUploadCategorySecretaryDbm'],
+                ['secretary_dilg', 'batchUploadCategorySecretaryDilg'],
+                ['speaker_house', 'batchUploadCategorySpeakerHouse'],
+                ['president_senate', 'batchUploadCategoryPresidentSenate'],
+                ['house_committee', 'batchUploadCategoryHouseCommittee'],
+                ['senate_committee', 'batchUploadCategorySenateCommittee'],
+                ['fdp_file', 'batchUploadCategoryFdpFile'],
+            ];
+            const postingLink = (document.getElementById('batchUploadCategoryPostingLink')?.value || '').trim();
+            const selectedQuarter = (quarterSelect?.value || '').trim();
+            const selectedFiles = fieldMap
+                .map(([fieldName, inputId]) => ({
+                    fieldName,
+                    input: document.getElementById(inputId),
+                }))
+                .filter(({ input }) => input && input.files && input.files[0]);
+
+            batchUploadModalCache.individualDocuments.quarter = selectedQuarter;
+            batchUploadModalCache.individualDocuments.postingLink = postingLink;
+            batchUploadModalCache.individualDocuments.files = Object.fromEntries(
+                selectedFiles.map(({ fieldName, input }) => [fieldName, input.files[0]])
+            );
+        }
+
+        function getBatchUploadPreparedIndividualCategoryDocuments() {
+            syncBatchUploadIndividualCategoryDocumentsFromInputs();
+            const state = batchUploadModalCache.individualDocuments;
+            const fileEntries = Object.entries(state.files || {}).filter(([, file]) => file instanceof File);
+
+            return {
+                quarter: String(state.quarter || '').trim(),
+                postingLink: String(state.postingLink || '').trim(),
+                files: Object.fromEntries(fileEntries),
+                fileCount: fileEntries.length,
+            };
+        }
+
+        function hasPreparedIndividualCategoryDocuments() {
+            const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+            return preparedState.fileCount > 0 || preparedState.postingLink !== '';
+        }
+
+        function getPreparedIndividualCategoryDocumentEntries() {
+            const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+            const fieldLabelMap = getBatchUploadIndividualCategoryFieldLabelMap();
+            const formatBatchUploadDocumentSize = (bytes) => {
+                if (!Number.isFinite(bytes) || bytes <= 0) {
+                    return '0 B';
+                }
+
+                const units = ['B', 'KB', 'MB', 'GB'];
+                const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+                const value = bytes / (1024 ** exponent);
+                return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+            };
+            const entries = Object.entries(preparedState.files).reduce((preparedEntries, [fieldName, file]) => {
+                if (!fieldLabelMap[fieldName] || !(file instanceof File)) {
+                    return preparedEntries;
+                }
+
+                preparedEntries.push({
+                    label: fieldLabelMap[fieldName],
+                    meta: file.name,
+                    status: formatBatchUploadDocumentSize(file.size),
+                });
+                return preparedEntries;
+            }, []);
+
+            if (preparedState.postingLink !== '') {
+                entries.push({
+                    label: 'LGU Website / Social Media',
+                    meta: preparedState.postingLink,
+                    status: 'URL',
+                });
+            }
+
+            return entries;
+        }
+
+        function updateBatchUploadSelectedDocumentsSummary() {
+            const summaryCard = document.getElementById('batchUploadSelectedDocumentsSummary');
+            const summaryCopy = document.getElementById('batchUploadSelectedDocumentsSummaryCopy');
+            const summaryList = document.getElementById('batchUploadSelectedDocumentsSummaryList');
+            const selectedProjectCodes = getSelectedBatchUploadProjectCodes();
+            const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+            const preparedEntries = getPreparedIndividualCategoryDocumentEntries();
+            const shouldShowSummary = preparedEntries.length > 0;
+            const escapeBatchUploadHtml = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            if (!summaryCard || !summaryCopy || !summaryList) {
+                return;
+            }
+
+            if (!shouldShowSummary) {
+                summaryCard.hidden = true;
+                summaryList.innerHTML = '';
+                summaryCopy.textContent = 'No prepared category documents yet.';
+                return;
+            }
+
+            summaryCard.hidden = false;
+            const quarterLabel = preparedState.quarter !== '' ? `Quarter ${preparedState.quarter}` : 'Selected documents';
+            summaryCopy.textContent = selectedProjectCodes.length > 0
+                ? `${quarterLabel}: these uploaded documents will be submitted to the same individual-document fields of ${selectedProjectCodes.length} selected project${selectedProjectCodes.length === 1 ? '' : 's'}.`
+                : `${quarterLabel}: these uploaded documents are ready. Select projects from the table to submit them to the same individual-document fields.`;
+            summaryList.innerHTML = preparedEntries.map((entry) => `
+                <div class="fur-batch-selected-documents-summary-item">
+                    <div class="fur-batch-selected-documents-summary-item-copy">
+                        <div class="fur-batch-selected-documents-summary-item-title">${escapeBatchUploadHtml(entry.label)}</div>
+                        <div class="fur-batch-selected-documents-summary-item-meta">${escapeBatchUploadHtml(entry.meta)}</div>
+                    </div>
+                    <div class="fur-batch-selected-documents-summary-item-status">${escapeBatchUploadHtml(entry.status)}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateBatchUploadSharedSubmitUi() {
+            const submitRow = document.getElementById('batchUploadDocumentSubmitRow');
+            const submitButton = document.getElementById('batchUploadDocumentSubmitBtn');
+            const selectedProjectCodes = getSelectedBatchUploadProjectCodes();
+            const hasSelectedProjects = selectedProjectCodes.length > 0;
+            const hasSingleDocuments = Array.isArray(batchUploadModalCache.documents?.files) && batchUploadModalCache.documents.files.length > 0;
+            const hasCategoryDocuments = hasPreparedIndividualCategoryDocuments();
+            const isSingleModeActive = batchUploadModalCache.uploadMode === 'single';
+            const isCategoryModeActive = batchUploadModalCache.uploadMode === 'category';
+            const shouldShowSubmit = hasSelectedProjects && (
+                (isSingleModeActive && hasSingleDocuments) ||
+                (isCategoryModeActive && hasCategoryDocuments)
+            );
+
+            if (submitRow) {
+                submitRow.hidden = !shouldShowSubmit;
+            }
+
+            if (submitButton) {
+                submitButton.disabled = !shouldShowSubmit;
+            }
+        }
+
+        function updateBatchUploadIndividualCategoryPreparedUi() {
+            updateBatchUploadSelectedDocumentsSummary();
+            updateBatchUploadSharedSubmitUi();
+        }
+
+        function syncBatchUploadIndividualCategoryFileName(inputElement) {
+            if (!inputElement) {
+                return;
+            }
+
+            const targetId = inputElement.dataset.batchCategoryFileNameTarget || '';
+            const output = targetId ? document.getElementById(targetId) : null;
+            if (!output) {
+                return;
+            }
+
+            const file = inputElement.files && inputElement.files[0] ? inputElement.files[0] : null;
+            output.textContent = file ? file.name : 'No file selected.';
+            syncBatchUploadIndividualCategoryDocumentsFromInputs();
+            updateBatchUploadIndividualCategoryPreparedUi();
+        }
+
+        function resetBatchUploadIndividualCategoryModal() {
+            const quarterSelect = document.getElementById('batchUploadCategoryQuarter');
+            const postingLinkInput = document.getElementById('batchUploadCategoryPostingLink');
+            batchUploadModalCache.individualDocuments.quarter = '';
+            batchUploadModalCache.individualDocuments.postingLink = '';
+            batchUploadModalCache.individualDocuments.files = {};
+
+            if (quarterSelect) {
+                quarterSelect.value = '';
+            }
+
+            if (postingLinkInput) {
+                postingLinkInput.value = '';
+            }
+
+            document.querySelectorAll('.fur-batch-category-file-input').forEach((inputElement) => {
+                inputElement.value = '';
+                syncBatchUploadIndividualCategoryFileName(inputElement);
+            });
+
+            updateBatchUploadIndividualCategoryProjectSummary();
+            updateBatchUploadIndividualCategoryPreparedUi();
+        }
+
+        function openBatchUploadIndividualCategoryModal() {
+            const quarterSelect = document.getElementById('batchUploadCategoryQuarter');
+            const postingLinkInput = document.getElementById('batchUploadCategoryPostingLink');
+            const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+
+            updateBatchUploadIndividualCategoryProjectSummary();
+            if (quarterSelect && !quarterSelect.value) {
+                quarterSelect.value = preparedState.quarter || batchUploadModalCache.submitState.quarter || '';
+            }
+
+            if (postingLinkInput && !postingLinkInput.value.trim()) {
+                postingLinkInput.value = preparedState.postingLink;
+            }
+
+            setBatchUploadDocumentMode('category');
+        }
+
+        function closeBatchUploadIndividualCategoryModal() {
+            setBatchUploadDocumentMode('');
+        }
+
+        async function submitPreparedBatchUploadIndividualCategoryDocuments() {
+            if (batchUploadModalCache.individualSubmitRequest.isSubmitting) {
+                return;
+            }
+
+            syncBatchUploadIndividualCategoryDocumentsFromInputs();
+            const selectedProjectCodes = getSelectedBatchUploadProjectCodes();
+            const submitButton = document.getElementById('batchUploadDocumentSubmitBtn');
+            const originalButtonText = submitButton?.innerHTML || 'Submit Documents';
+            const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+
+            if (!hasPreparedIndividualCategoryDocuments()) {
+                alert('Please upload or provide at least one individual document first.');
+                return;
+            }
+
+            if (preparedState.quarter === '') {
+                document.getElementById('batchUploadCategoryQuarter')?.focus();
+                alert('Please select a quarter first.');
+                return;
+            }
+
+            if (selectedProjectCodes.length === 0) {
+                alert('Please select at least one project first.');
+                return;
+            }
+
+            batchUploadModalCache.individualSubmitRequest.isSubmitting = true;
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Uploading...';
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('_token', BATCH_UPLOAD_CSRF_TOKEN);
+                formData.append('quarter', preparedState.quarter);
+                selectedProjectCodes.forEach((projectCode) => {
+                    formData.append('project_codes[]', projectCode);
+                });
+                Object.entries(preparedState.files).forEach(([fieldName, file]) => {
+                    formData.append(fieldName, file);
+                });
+                if (preparedState.postingLink !== '') {
+                    formData.append('posting_link', preparedState.postingLink);
+                }
+
+                const response = await fetch(BATCH_UPLOAD_INDIVIDUAL_ROUTE, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: formData,
+                });
+
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    const validationMessage = payload?.errors
+                        ? Object.values(payload.errors).flat().find((value) => typeof value === 'string' && value.trim() !== '')
+                        : '';
+                    throw new Error(validationMessage || payload?.message || 'Individual document batch upload failed. Please try again.');
+                }
+
+                resetBatchUploadModalState();
+                closeBatchUploadModal();
+                alert(payload?.message || 'Individual documents uploaded successfully.');
+                window.location.reload();
+            } catch (error) {
+                alert(error?.message || 'Individual document batch upload failed. Please try again.');
+            } finally {
+                batchUploadModalCache.individualSubmitRequest.isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+                updateBatchUploadIndividualCategoryPreparedUi();
+            }
+        }
+
+        function cancelPreparedBatchUploadIndividualCategoryDocuments() {
+            resetBatchUploadIndividualCategoryModal();
+            setBatchUploadDocumentMode('');
+        }
+
+        function initializeBatchUploadIndividualCategoryModal() {
+            const quarterSelect = document.getElementById('batchUploadCategoryQuarter');
+            if (quarterSelect && quarterSelect.dataset.batchCategoryQuarterBound !== '1') {
+                quarterSelect.dataset.batchCategoryQuarterBound = '1';
+                quarterSelect.addEventListener('change', () => {
+                    syncBatchUploadIndividualCategoryDocumentsFromInputs();
+                    updateBatchUploadIndividualCategoryPreparedUi();
+                });
+            }
+
+            const postingLinkInput = document.getElementById('batchUploadCategoryPostingLink');
+            if (postingLinkInput && postingLinkInput.dataset.batchCategoryPostingLinkBound !== '1') {
+                postingLinkInput.dataset.batchCategoryPostingLinkBound = '1';
+                postingLinkInput.addEventListener('input', () => {
+                    syncBatchUploadIndividualCategoryDocumentsFromInputs();
+                    updateBatchUploadIndividualCategoryPreparedUi();
+                });
+            }
+
+            document.querySelectorAll('.fur-batch-category-file-input').forEach((inputElement) => {
+                if (inputElement.dataset.batchCategoryFileBound === '1') {
+                    return;
+                }
+
+                inputElement.dataset.batchCategoryFileBound = '1';
+                inputElement.addEventListener('change', () => {
+                    syncBatchUploadIndividualCategoryFileName(inputElement);
+                });
+                syncBatchUploadIndividualCategoryFileName(inputElement);
             });
         }
 
@@ -1708,10 +2346,9 @@
             const availableToggleAll = document.getElementById('batchUploadAvailableToggleAll');
             const selectedToggleAll = document.getElementById('batchUploadSelectedToggleAll');
             const selectedCodesInput = document.getElementById('batch_upload_selected_project_codes');
-            const batchUploadDocumentSubmitBtn = document.getElementById('batchUploadDocumentSubmitBtn');
             const shuttleRoot = document.querySelector('[data-batch-shuttle]');
 
-            if (!availableBody || !selectedBody || !availableEmpty || !selectedEmpty || !availableCount || !selectedCount || !availableToggleAll || !selectedToggleAll || !selectedCodesInput || !shuttleRoot || !batchUploadDocumentSubmitBtn) {
+            if (!availableBody || !selectedBody || !availableEmpty || !selectedEmpty || !availableCount || !selectedCount || !availableToggleAll || !selectedToggleAll || !selectedCodesInput || !shuttleRoot) {
                 return;
             }
 
@@ -1847,10 +2484,12 @@
                 selectedEmpty.hidden = selectedProjectCount > 0;
                 availableCount.textContent = String(availableProjectCount);
                 selectedCount.textContent = String(selectedProjectCount);
-                batchUploadDocumentSubmitBtn.disabled = selectedProjectCount === 0;
 
                 syncHiddenField();
                 syncToggleStates();
+                updateBatchUploadIndividualCategoryProjectSummary();
+                updateBatchUploadSharedSubmitUi();
+                updateBatchUploadIndividualCategoryPreparedUi();
             };
 
             const buildShuttleStateCacheKey = () => {
@@ -2850,6 +3489,25 @@
             const batchUploadDocumentList = document.getElementById('batchUploadDocumentList');
             const batchUploadDocumentSubmitRow = document.getElementById('batchUploadDocumentSubmitRow');
             const batchUploadDocumentSubmitBtn = document.getElementById('batchUploadDocumentSubmitBtn');
+            const batchUploadDocumentModeCategoryBtn = document.getElementById('batchUploadDocumentModeCategoryBtn');
+            const batchUploadDocumentModeSingleBtn = document.getElementById('batchUploadDocumentModeSingleBtn');
+            if (batchUploadDocumentModeCategoryBtn && batchUploadDocumentModeCategoryBtn.dataset.batchDocumentModeBound !== '1') {
+                batchUploadDocumentModeCategoryBtn.dataset.batchDocumentModeBound = '1';
+                batchUploadDocumentModeCategoryBtn.addEventListener('click', () => {
+                    openBatchUploadIndividualCategoryModal();
+                });
+            }
+
+            if (batchUploadDocumentModeSingleBtn && batchUploadDocumentModeSingleBtn.dataset.batchDocumentModeBound !== '1') {
+                batchUploadDocumentModeSingleBtn.dataset.batchDocumentModeBound = '1';
+                batchUploadDocumentModeSingleBtn.addEventListener('click', () => {
+                    setBatchUploadDocumentMode('single');
+                });
+            }
+
+            setBatchUploadDocumentMode('');
+            updateBatchUploadIndividualCategoryPreparedUi();
+
             if (batchUploadDocumentFiles && batchUploadDocumentList && batchUploadDocumentSubmitRow && batchUploadDocumentSubmitBtn) {
                 const batchUploadDocumentPanel = batchUploadDocumentFiles.closest('.fur-batch-document-panel');
                 const batchDocumentState = batchUploadModalCache.documents;
@@ -2894,8 +3552,8 @@
                     if (files.length === 0) {
                         batchUploadDocumentList.hidden = true;
                         batchUploadDocumentList.innerHTML = '';
-                        batchUploadDocumentSubmitRow.hidden = true;
                         batchUploadDocumentPanel?.classList.remove('has-files');
+                        updateBatchUploadSharedSubmitUi();
                         return;
                     }
 
@@ -2906,7 +3564,6 @@
                         : `${files.length} file${files.length === 1 ? '' : 's'} selected: ${previewNames.join(', ')}`;
 
                     batchUploadDocumentList.hidden = false;
-                    batchUploadDocumentSubmitRow.hidden = false;
                     batchUploadDocumentPanel?.classList.add('has-files');
                     batchUploadDocumentList.innerHTML = `
                         <div class="fur-batch-document-file-list-header">
@@ -2935,6 +3592,7 @@
                             }).join('')}
                         </div>
                     `;
+                    updateBatchUploadSharedSubmitUi();
                 };
                 const removeBatchDocumentFile = (fileKey) => {
                     batchDocumentState.files = batchDocumentState.files.filter((file) => batchDocumentKey(file) !== fileKey);
@@ -3016,7 +3674,16 @@
                 });
 
                 batchUploadDocumentSubmitBtn.addEventListener('click', () => {
-                    if (batchDocumentState.files.length === 0 || batchUploadDocumentSubmitBtn.disabled) {
+                    if (batchUploadDocumentSubmitBtn.disabled) {
+                        return;
+                    }
+
+                    if (batchUploadModalCache.uploadMode === 'category') {
+                        submitPreparedBatchUploadIndividualCategoryDocuments();
+                        return;
+                    }
+
+                    if (batchDocumentState.files.length === 0) {
                         return;
                     }
 
@@ -3050,6 +3717,7 @@
 
                     syncBatchDocumentInputFiles();
                     updateBatchUploadDocumentMeta();
+                    setBatchUploadDocumentMode('single');
                 });
             }
 
@@ -3109,6 +3777,7 @@
             initializeBatchUploadDocumentChecklist();
             initializeBatchUploadQuarterModal();
             initializeBatchUploadDocumentPreviewModal();
+            initializeBatchUploadIndividualCategoryModal();
             initializeBatchUploadSubmitConfirmModal();
 
             if (shouldAutoOpenBatchUploadModal || readBatchUploadModalOpenState()) {
@@ -3898,6 +4567,285 @@
             text-align: center;
         }
 
+        .fur-batch-category-dialog {
+            width: min(1120px, 100%);
+            max-height: min(90vh, 920px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fur-batch-category-inline-panel {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .fur-batch-category-body {
+            flex: 1;
+            min-height: 0;
+            padding: 22px;
+            background: #f8fbff;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .fur-batch-category-inline-panel .fur-batch-category-body {
+            overflow: visible;
+        }
+
+        .fur-batch-category-summary-card {
+            border: 1px solid #dbe4f0;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+            overflow: hidden;
+        }
+
+        .fur-batch-category-summary-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+            gap: 16px;
+            padding: 18px;
+        }
+
+        .fur-batch-category-summary-block {
+            min-width: 0;
+        }
+
+        .fur-batch-category-summary-label {
+            display: block;
+            color: #475569;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .fur-batch-category-summary-value {
+            color: #0f172a;
+            font-size: 28px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .fur-batch-category-summary-copy {
+            margin-top: 8px;
+            color: #475569;
+            font-size: 12px;
+            line-height: 1.55;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-category-quarter-select {
+            width: 100%;
+        }
+
+        .fur-batch-category-individual-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .fur-batch-category-document-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            border-left-width: 4px;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        .fur-batch-category-document-card:nth-child(1) {
+            border-left-color: #059669;
+        }
+
+        .fur-batch-category-document-card:nth-child(2) {
+            border-left-color: #2563eb;
+        }
+
+        .fur-batch-category-document-card:nth-child(3),
+        .fur-batch-category-document-card:nth-child(4) {
+            border-left-color: #f59e0b;
+        }
+
+        .fur-batch-category-document-card-header,
+        .fur-batch-category-written-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            margin: 0;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .fur-batch-category-document-card-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .fur-batch-category-document-card-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 13px;
+        }
+
+        .fur-batch-category-document-card-icon-red {
+            background: rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+        }
+
+        .fur-batch-category-document-card-icon-blue {
+            background: rgba(37, 99, 235, 0.1);
+            color: #2563eb;
+        }
+
+        .fur-batch-category-document-card-icon-green {
+            background: rgba(5, 150, 105, 0.1);
+            color: #059669;
+        }
+
+        .fur-batch-category-document-card-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            min-width: 0;
+        }
+
+        .fur-batch-category-document-card-title,
+        .fur-batch-category-written-section-title {
+            margin: 0;
+            color: #1e293b;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .fur-batch-category-document-card-copy,
+        .fur-batch-category-written-section-copy {
+            margin: 0;
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+
+        .fur-batch-category-document-status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-category-document-status-badge-warning {
+            background-color: #f59e0b;
+            color: #ffffff;
+        }
+
+        .fur-batch-category-document-card-content {
+            padding: 16px;
+        }
+
+        .fur-batch-category-document-field-wrap,
+        .fur-batch-category-written-card {
+            padding: 12px;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+
+        .fur-batch-category-document-field {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .fur-batch-category-written-recipient-shell {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 15px;
+            margin-top: 15px;
+        }
+
+        .fur-batch-category-written-recipient-title {
+            margin: 0 0 15px;
+            color: #374151;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .fur-batch-category-file-input,
+        .fur-batch-category-text-input {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 12px;
+            font-family: inherit;
+            box-sizing: border-box;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .fur-batch-category-file-input {
+            padding: 8px 10px;
+        }
+
+        .fur-batch-category-text-input {
+            min-width: 240px;
+            padding: 10px;
+        }
+
+        .fur-batch-category-file-input:focus,
+        .fur-batch-category-text-input:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.18);
+        }
+
+        .fur-batch-category-file-name {
+            margin-top: 0;
+            color: #059669;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-category-written-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .fur-batch-category-written-card-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.4;
+            gap: 8px;
+        }
+
         .fur-batch-modal-dialog {
             position: relative;
             z-index: 1;
@@ -4257,6 +5205,120 @@
             font-family: inherit;
         }
 
+        .fur-batch-document-mode-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .fur-batch-document-mode-btn {
+            border: 1px solid #dbe4f0;
+            border-radius: 12px;
+            background: #f8fafc;
+            color: #1e293b;
+            padding: 11px 14px;
+            font-size: 11px;
+            font-weight: 800;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+        }
+
+        .fur-batch-document-mode-btn:hover {
+            border-color: rgba(0, 44, 118, 0.28);
+            background: #f1f5f9;
+        }
+
+        .fur-batch-document-mode-btn.is-active {
+            border-color: #002C76;
+            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
+            color: #ffffff;
+            box-shadow: 0 8px 16px rgba(0, 44, 118, 0.14);
+            transform: translateY(-1px);
+        }
+
+        .fur-batch-document-mode-card {
+            border: 1px solid #dbe4f0;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            padding: 14px;
+        }
+
+        .fur-batch-document-mode-card-category-summary {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .fur-batch-document-layout-prepared {
+            grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+            gap: 16px;
+        }
+
+        .fur-batch-document-prepared-main {
+            min-width: 0;
+        }
+
+        .fur-batch-document-prepared-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 16px;
+            min-height: 100%;
+            padding: 14px 16px;
+            border-right: 1px solid #e5e7eb;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        }
+
+        .fur-batch-document-prepared-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .fur-batch-document-mode-card-guide {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .fur-batch-document-mode-card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-document-mode-card-copy {
+            min-width: 0;
+        }
+
+        .fur-batch-document-mode-card-copy h5 {
+            margin: 0;
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+            font-family: inherit;
+        }
+
+        .fur-batch-document-mode-card-copy p {
+            margin: 4px 0 0;
+            color: #475569;
+            font-size: 11px;
+            line-height: 1.45;
+            font-family: inherit;
+        }
+
         .fur-batch-document-dropzone {
             display: flex;
             align-items: center;
@@ -4320,6 +5382,13 @@
             font-family: inherit;
         }
 
+        .fur-batch-document-button-secondary {
+            border: none;
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+            box-shadow: none;
+        }
+
         .fur-batch-document-input {
             position: absolute;
             width: 1px;
@@ -4345,6 +5414,7 @@
             margin-top: 14px;
             display: flex;
             justify-content: flex-end;
+            gap: 10px;
         }
 
         .fur-batch-document-submit-btn {
@@ -4361,6 +5431,21 @@
             justify-content: center;
             gap: 8px;
             box-shadow: 0 8px 16px rgba(0, 44, 118, 0.16);
+        }
+
+        .fur-batch-document-cancel-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 11px 18px;
+            background: #e2e8f0;
+            color: #475569;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .fur-batch-document-submit-btn:disabled {
@@ -4441,6 +5526,23 @@
             color: #64748b;
             font-size: 11px;
             line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-document-file-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .fur-batch-document-file-actions {
@@ -4684,6 +5786,88 @@
             margin: 16px;
         }
 
+        .fur-batch-selected-documents-summary {
+            margin: 0 16px 16px;
+            border: 1px solid #dbe4f0;
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            overflow: hidden;
+        }
+
+        .fur-batch-selected-documents-summary-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f8fbff;
+        }
+
+        .fur-batch-selected-documents-summary-title {
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .fur-batch-selected-documents-summary-copy {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .fur-batch-selected-documents-summary-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .fur-batch-selected-documents-summary-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 12px 16px;
+            border-top: 1px solid #eef2f7;
+        }
+
+        .fur-batch-selected-documents-summary-item:first-child {
+            border-top: none;
+        }
+
+        .fur-batch-selected-documents-summary-item-copy {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .fur-batch-selected-documents-summary-item-title {
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-selected-documents-summary-item-meta {
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-selected-documents-summary-item-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(0, 44, 118, 0.08);
+            color: #002C76;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
         body.fur-batch-modal-open {
             overflow: hidden;
         }
@@ -4703,6 +5887,25 @@
             }
 
             .fur-batch-document-panel.has-files .fur-batch-document-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .fur-batch-document-layout-prepared {
+                grid-template-columns: 1fr;
+            }
+
+            .fur-batch-document-prepared-card {
+                border-right: none;
+                border-bottom: 1px solid #e5e7eb;
+            }
+
+            .fur-batch-document-dropzone {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .fur-batch-category-summary-grid,
+            .fur-batch-category-written-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -4761,6 +5964,51 @@
                 width: 48px;
                 height: 48px;
                 border-radius: 14px;
+            }
+
+            .fur-batch-document-mode-actions {
+                flex-direction: column;
+            }
+
+            .fur-batch-document-mode-btn,
+            .fur-batch-document-button,
+            .fur-batch-document-submit-btn,
+            .fur-batch-document-cancel-btn {
+                width: 100%;
+            }
+
+            .fur-batch-document-mode-card-guide,
+            .fur-batch-document-file-item,
+            .fur-batch-selected-documents-summary-item {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .fur-batch-document-file-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            .fur-batch-category-body {
+                padding: 16px;
+            }
+
+            .fur-batch-category-document-card-header,
+            .fur-batch-category-written-section-header,
+            .fur-batch-category-summary-grid {
+                padding: 14px;
+            }
+
+            .fur-batch-category-document-card-header,
+            .fur-batch-category-written-section-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .fur-batch-document-prepared-actions,
+            .fur-batch-document-submit-row-category {
+                flex-direction: column;
+                align-items: stretch;
             }
         }
     </style>

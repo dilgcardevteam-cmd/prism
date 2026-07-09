@@ -642,6 +642,10 @@
             white-space: pre-line;
         }
 
+        .lfp-physical-timeline-remarks p + p {
+            margin-top: 8px;
+        }
+
         .lfp-physical-footer-meta {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1739,6 +1743,36 @@
                     $periodKey = $physicalTimelineCursor->format('Y-m');
                     $row = $physicalTimelineByPeriod[$periodKey] ?? [];
 
+                    $remarkItems = [];
+                    foreach ([
+                        'status_project_fou_remarks' => 'FOU Status',
+                        'status_project_ro_remarks' => 'RO Status',
+                        'accomplishment_pct_remarks' => 'FOU Accomplishment',
+                        'accomplishment_pct_ro_remarks' => 'RO Accomplishment',
+                        'slippage_remarks' => 'FOU Slippage',
+                        'slippage_ro_remarks' => 'RO Slippage',
+                        'risk_aging_remarks' => 'Risk',
+                        'nc_letters_remarks' => 'NC Letters',
+                    ] as $remarkField => $remarkLabel) {
+                        $remarkText = trim((string) ($row[$remarkField] ?? ''));
+                        if ($remarkText !== '') {
+                            $remarkItems[] = [
+                                'label' => $remarkLabel,
+                                'text' => $remarkText,
+                            ];
+                        }
+                    }
+
+                    if ($periodKey === $currentPhysicalTimelineKey) {
+                        $generalRemarkText = trim((string) ($project->physical_remarks ?? ''));
+                        if ($generalRemarkText !== '') {
+                            $remarkItems[] = [
+                                'label' => 'General',
+                                'text' => $generalRemarkText,
+                            ];
+                        }
+                    }
+
                     $hasData = collect([
                         $row['status_project_fou'] ?? null,
                         $row['status_project_ro'] ?? null,
@@ -1750,7 +1784,7 @@
                         $row['nc_letters'] ?? null,
                     ])->contains(function ($value) {
                         return $value !== null && $value !== '';
-                    });
+                    }) || !empty($remarkItems);
 
                     $physicalTimelineEntries[] = [
                         'timeline_year' => $timelineYear,
@@ -1771,7 +1805,7 @@
                         'previous_accomplishment_pct_ro' => $previousPhysicalMetricValues['accomplishment_pct_ro'],
                         'previous_slippage' => $previousPhysicalMetricValues['slippage'],
                         'previous_slippage_ro' => $previousPhysicalMetricValues['slippage_ro'],
-                        'remarks' => $periodKey === $currentPhysicalTimelineKey ? ($project->physical_remarks ?? null) : null,
+                        'remark_items' => $remarkItems,
                     ];
 
                     foreach (['accomplishment_pct', 'accomplishment_pct_ro', 'slippage', 'slippage_ro'] as $metricField) {
@@ -2042,10 +2076,12 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    @if(!empty($entry['remarks']))
+                                                    @if(!empty($entry['remark_items']))
                                                         <div class="lfp-physical-timeline-remarks">
                                                             <span>Remarks</span>
-                                                            <p>{{ $entry['remarks'] }}</p>
+                                                            @foreach($entry['remark_items'] as $remarkItem)
+                                                                <p><strong>{{ $remarkItem['label'] }}:</strong> {{ $remarkItem['text'] }}</p>
+                                                            @endforeach
                                                         </div>
                                                     @endif
                                                 </div>

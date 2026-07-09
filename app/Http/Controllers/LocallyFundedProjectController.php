@@ -1763,6 +1763,58 @@ class LocallyFundedProjectController extends Controller
         return "TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(SUBSTRING_INDEX(TRIM(COALESCE({$columnExpression}, '')), ',', 1)), '(capital)', ''), 'municipality of ', ''), 'city of ', ''), ' municipality', ''), ' city', ''), '  ', ' '))";
     }
 
+    private function normalizeRegionScopeLabel(?string $value): string
+    {
+        $normalizedValue = Str::lower(trim((string) $value));
+        $normalizedValue = preg_replace('/\([^)]*\)/', ' ', $normalizedValue) ?? $normalizedValue;
+        $normalizedValue = preg_replace('/[^a-z0-9\s-]/i', ' ', $normalizedValue) ?? $normalizedValue;
+        $normalizedValue = preg_replace('/\s+/', ' ', $normalizedValue) ?? $normalizedValue;
+        $normalizedValue = trim($normalizedValue);
+
+        return match ($normalizedValue) {
+            'car', 'cordillera administrative region' => 'cordillera administrative region',
+            'ncr', 'national capital region' => 'national capital region',
+            'barmm', 'bangsamoro autonomous region in muslim mindanao' => 'bangsamoro autonomous region in muslim mindanao',
+            default => $normalizedValue,
+        };
+    }
+
+    private function regionScopeVariants(?string $value): array
+    {
+        $normalizedValue = $this->normalizeRegionScopeLabel($value);
+
+        return match ($normalizedValue) {
+            'cordillera administrative region' => ['car', 'cordillera administrative region'],
+            'national capital region' => ['ncr', 'national capital region'],
+            'bangsamoro autonomous region in muslim mindanao' => ['barmm', 'bangsamoro autonomous region in muslim mindanao'],
+            '' => [],
+            default => [$normalizedValue],
+        };
+    }
+
+    private function applyRegionScopeToQuery($query, string $regionColumnExpression, ?string $region): void
+    {
+        $regionVariants = $this->regionScopeVariants($region);
+        if (empty($regionVariants)) {
+            return;
+        }
+
+        $query->where(function ($subQuery) use ($regionColumnExpression, $regionVariants) {
+            foreach ($regionVariants as $index => $regionVariant) {
+                $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                $subQuery->{$method}('LOWER(TRIM(COALESCE(' . $regionColumnExpression . ', ""))) = ?', [$regionVariant]);
+            }
+        });
+    }
+
+    private function regionScopeMatches(?string $leftRegion, ?string $rightRegion): bool
+    {
+        $leftVariants = $this->regionScopeVariants($leftRegion);
+        $rightVariants = $this->regionScopeVariants($rightRegion);
+
+        return !empty(array_intersect($leftVariants, $rightVariants));
+    }
+
     private function applyOfficeScopeToLocationQuery($query, string $cityColumnExpression, string $officeLower, string $officeComparableLower): void
     {
         if ($officeLower === '') {
@@ -1818,14 +1870,14 @@ class LocallyFundedProjectController extends Controller
             return;
         }
 
-        if ($user->isProvincialUser()) {
+        if ($user->isProvincialUser() || $user->isProvincialDilgAssignment()) {
             if ($province !== '') {
                 $query->whereRaw(
                     $this->comparableLocationSql($provinceColumnExpression) . ' = ?',
                     [ProjectLocationFilterHelper::normalizeComparableLocationLabel($user->province)]
                 );
             } elseif ($region !== '') {
-                $query->whereRaw('LOWER(TRIM(COALESCE(' . $regionColumnExpression . ', ""))) = ?', [$regionLower]);
+                $this->applyRegionScopeToQuery($query, $regionColumnExpression, $region);
             }
 
             return;
@@ -1841,7 +1893,7 @@ class LocallyFundedProjectController extends Controller
 
         if ($isRegionalOfficeUser) {
             if ($region !== '') {
-                $query->whereRaw('LOWER(TRIM(COALESCE(' . $regionColumnExpression . ', ""))) = ?', [$regionLower]);
+                $this->applyRegionScopeToQuery($query, $regionColumnExpression, $region);
             }
 
             return;
@@ -1853,7 +1905,7 @@ class LocallyFundedProjectController extends Controller
                 [ProjectLocationFilterHelper::normalizeComparableLocationLabel($user->province)]
             );
         } elseif ($region !== '') {
-            $query->whereRaw('LOWER(TRIM(COALESCE(' . $regionColumnExpression . ', ""))) = ?', [$regionLower]);
+            $this->applyRegionScopeToQuery($query, $regionColumnExpression, $region);
         }
     }
 
@@ -1887,14 +1939,14 @@ class LocallyFundedProjectController extends Controller
             return $user->matchesAssignedOffice($recordCity) || $user->matchesAssignedOffice($recordOffice);
         }
 
-        if ($user->isProvincialUser()) {
+        if ($user->isProvincialUser() || $user->isProvincialDilgAssignment()) {
             if ($user->normalizedProvince() !== '') {
                 return $recordProvinceComparable !== ''
                     && $recordProvinceComparable === $userProvinceComparable;
             }
 
             if ($user->normalizedRegion() !== '') {
-                return $recordRegionLower === $user->normalizedRegion();
+                return $this->regionScopeMatches($region, $user->region);
             }
 
             return true;
@@ -1909,7 +1961,7 @@ class LocallyFundedProjectController extends Controller
         }
 
         if ($user->isRegionalOfficeAssignment()) {
-            return $user->normalizedRegion() === '' || $recordRegionLower === $user->normalizedRegion();
+            return $user->normalizedRegion() === '' || $this->regionScopeMatches($region, $user->region);
         }
 
         if ($user->normalizedProvince() !== '') {
@@ -1917,7 +1969,7 @@ class LocallyFundedProjectController extends Controller
         }
 
         if ($user->normalizedRegion() !== '') {
-            return $recordRegionLower === $user->normalizedRegion();
+            return $this->regionScopeMatches($region, $user->region);
         }
 
         return true;
@@ -4756,9 +4808,11 @@ $url = route('locally-funded-project.show', $project, false);
         /** @var User|null $user */
         $user = Auth::user();
         $canEditProjectProfile = $user instanceof User
-            && strtoupper(trim((string) ($user->agency ?? ''))) === 'DILG'
-            && trim((string) ($user->province ?? '')) === 'Regional Office'
-            && $user->isSuperAdmin();
+            && (
+                $user->isSuperAdmin()
+                || $user->isRegionalUser()
+                || $user->isRegionalOfficeAssignment()
+            );
 
         if ($section === 'profile' && !$canEditProjectProfile) {
             abort(403, 'Unauthorized');
@@ -4812,7 +4866,7 @@ $url = route('locally-funded-project.show', $project, false);
 
             $isProvincialDilgUser = $user instanceof User
                 && $user->isDilgUser()
-                && $user->isProvincialUser()
+                && $user->isProvincialDilgAssignment()
                 && !$user->isRegionalOfficeAssignment();
 
             if ($isProvincialDilgUser) {

@@ -92,15 +92,10 @@ class FundUtilizationWorkflowService
                 forwardedToId: $validator->getKey(),
             );
 
-            DB::afterCommit(function () use ($validator, $report, $quarter, $documentType, $uploader, $workflow): void {
-                $this->notifyUser(
-                    $validator,
-                    sprintf(
-                        'A fund utilization %s for %s (%s) is pending your approval.',
-                        str_replace('-', ' ', $documentType),
-                        $report->project_code,
-                        $quarter
-                    ),
+            DB::afterCommit(function () use ($validator, $report, $quarter, $documentType, $uploader, $targetLevel): void {
+                $this->notifyUsers(
+                    $this->resolveValidatorsForLevel($report, $uploader, $targetLevel, [$validator]),
+                    $this->pendingValidationMessage($documentType, $report->project_code, $quarter, $targetLevel),
                     $report,
                     $quarter,
                     $documentType,
@@ -176,14 +171,9 @@ class FundUtilizationWorkflowService
 
             DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $nextLevel, $actor): void {
                 if ($nextLevel !== null) {
-                    $this->notifyUser(
-                        $workflow->currentApprover,
-                        sprintf(
-                            'A fund utilization %s for %s (%s) has been forwarded to you for approval.',
-                            str_replace('-', ' ', $documentType),
-                            $report->project_code,
-                            $quarter
-                        ),
+                    $this->notifyUsers(
+                        $this->resolveValidatorsForLevel($report, $workflow->uploader, $nextLevel, [$workflow->currentApprover]),
+                        $this->pendingValidationMessage($documentType, $report->project_code, $quarter, $nextLevel, true),
                         $report,
                         $quarter,
                         $documentType,
@@ -266,8 +256,8 @@ class FundUtilizationWorkflowService
                 );
 
                 DB::afterCommit(function () use ($provincialOfficer, $report, $quarter, $documentType, $actor, $workflow): void {
-                    $this->notifyUser(
-                        $provincialOfficer,
+                    $this->notifyUsers(
+                        $this->resolveValidatorsForLevel($report, $workflow->uploader, 1, [$provincialOfficer]),
                         sprintf(
                             'A fund utilization %s for %s (%s) was returned by the Regional Office and requires your review.',
                             str_replace('-', ' ', $documentType),
@@ -344,8 +334,8 @@ class FundUtilizationWorkflowService
                 );
 
                 DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
-                    $this->notifyUser(
-                        $workflow->currentApprover,
+                    $this->notifyUsers(
+                        $this->resolveValidatorsForLevel($report, $workflow->uploader, 1, [$workflow->currentApprover]),
                         sprintf(
                             'A fund utilization %s for %s (%s) was returned by the Regional Office for provincial review.',
                             str_replace('-', ' ', $documentType),
@@ -505,14 +495,25 @@ class FundUtilizationWorkflowService
 
     protected function notifyUser(?User $user, string $message, FundUtilizationReport $report, string $quarter, string $documentType, User $actor): void
     {
-        if (!$user) {
+        $this->notifyUsers($user ? [$user] : [], $message, $report, $quarter, $documentType, $actor);
+    }
+
+    protected function notifyUsers(iterable $users, string $message, FundUtilizationReport $report, string $quarter, string $documentType, User $actor): void
+    {
+        $recipients = collect($users)
+            ->filter(fn ($user) => $user instanceof User)
+            ->unique(fn (User $user) => (int) $user->getKey())
+            ->reject(fn (User $user) => (int) $user->getKey() === (int) $actor->getKey())
+            ->values();
+
+        if ($recipients->isEmpty()) {
             return;
         }
 
         try {
             \Log::channel('upload_timestamps')->info('Sending workflow notification', [
-                'to_user_id' => $user->getKey(),
-                'to_user_username' => $user->username ?? null,
+                'to_user_ids' => $recipients->map(fn (User $user) => $user->getKey())->all(),
+                'to_user_usernames' => $recipients->map(fn (User $user) => $user->username ?? null)->filter()->values()->all(),
                 'project_code' => $report->project_code,
                 'quarter' => $quarter,
                 'document_type' => $documentType,
@@ -520,7 +521,7 @@ class FundUtilizationWorkflowService
                 'actor_user_id' => $actor->getKey(),
             ]);
 
-            Notification::send($user, new FundUtilizationWorkflowNotification(
+            Notification::send($recipients, new FundUtilizationWorkflowNotification(
                 $message,
                 $this->workflowNotificationUrl($report, $quarter, $documentType),
                 $documentType,
@@ -531,11 +532,28 @@ class FundUtilizationWorkflowService
         } catch (\Throwable $e) {
             \Log::channel('upload_timestamps')->warning('Failed to send workflow notification', [
                 'error' => $e->getMessage(),
-                'to_user_id' => $user->getKey(),
+                'to_user_ids' => $recipients->map(fn (User $user) => $user->getKey())->all(),
                 'project_code' => $report->project_code,
                 'document_type' => $documentType,
             ]);
         }
+    }
+
+    protected function resolveValidatorsForLevel(
+        FundUtilizationReport $report,
+        User $uploader,
+        int $level,
+        array $fallbackRecipients = []
+    ) {
+        $recipients = $this->routingService->getValidatorsForLevel($report->project_code, $level, $uploader);
+
+        if ($recipients->isNotEmpty()) {
+            return $recipients;
+        }
+
+        return collect($fallbackRecipients)
+            ->filter(fn ($user) => $user instanceof User)
+            ->values();
     }
 
     protected function workflowNotificationUrl(FundUtilizationReport $report, string $quarter, string $documentType): string
@@ -553,6 +571,28 @@ class FundUtilizationWorkflowService
         }
 
         return route('fund-utilization.show', $parameters, false);
+    }
+
+    protected function pendingValidationMessage(
+        string $documentType,
+        string $projectCode,
+        string $quarter,
+        int $approvalLevel,
+        bool $wasForwarded = false,
+    ): string {
+        $documentLabel = str_replace('-', ' ', $documentType);
+        $approvalOffice = $approvalLevel >= 2
+            ? 'DILG Regional Office'
+            : 'DILG Provincial Office';
+
+        return sprintf(
+            'A fund utilization %s for %s (%s) is awaiting %s validation%s.',
+            $documentLabel,
+            $projectCode,
+            $quarter,
+            $approvalOffice,
+            $wasForwarded ? ' after prior review' : ''
+        );
     }
 
     protected function logWorkflowAction(
@@ -596,15 +636,15 @@ class FundUtilizationWorkflowService
             $record->setAttribute($statusField, 'pending');
         }
 
-        if ($targetLevel >= 2) {
+        if ($uploader->isProvincialDilgAssignment() || $uploader->normalizedRole() === User::ROLE_PROVINCIAL) {
             $approvedAtField = $fieldMap['po_approved_at'] ?? null;
             if ($approvedAtField) {
-                $record->setAttribute($approvedAtField, now());
+                $record->setAttribute($approvedAtField, null);
             }
 
             $approvedByField = $fieldMap['po_approved_by'] ?? null;
             if ($approvedByField) {
-                $record->setAttribute($approvedByField, $uploader->getKey());
+                $record->setAttribute($approvedByField, null);
             }
         }
 
