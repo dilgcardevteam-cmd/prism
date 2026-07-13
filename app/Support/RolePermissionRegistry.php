@@ -542,6 +542,7 @@ class RolePermissionRegistry
             User::ROLE_SUPERADMIN => ['*'],
             User::ROLE_REGIONAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $dataManagementPermissions, $ticketingPermissions[User::ROLE_REGIONAL], [
                 'locally_funded_projects.update',
+                'confirmation_of_fund_receipt.view',
                 'dilg_deliverables_monitoring_evaluation.view',
                 'dilg_deliverables_rlip_lime_monthly.view',
                 'dilg_deliverables_qaar_tool_monitoring.view',

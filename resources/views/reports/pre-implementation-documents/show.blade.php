@@ -180,25 +180,23 @@
                     $hasFile = !empty($path);
                     $fileViewUrl = $hasFile ? route($routeConfig['document'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) : null;
                     $isReturned = $fileRecord && $fileRecord->status === 'returned';
-                    $isApprovedRo = $fileRecord && $fileRecord->approved_at_dilg_ro;
-                    $isPendingRo = $fileRecord && $fileRecord->approved_at_dilg_po && !$fileRecord->approved_at_dilg_ro;
-                    $disableUpload = $isMultiUpload ? $isRegionalDilg : ($hasFile || $isRegionalDilg);
+                    $isApprovedRo = $fileRecord && $fileRecord->status === 'approved';
+                    $isPendingRo = $fileRecord && $fileRecord->status === 'pending_ro';
+                    $disableUpload = !$isMultiUpload && $hasFile;
                     $canDeleteReturnedDocument = !$isMultiUpload
                         && $hasFile
                         && $isReturned
                         && !$isRegionalDilg
                         && $currentUser
                         && $currentUser->hasCrudPermission('pre_implementation_documents', 'add');
-                    $uploadDisabledMessage = $isRegionalDilg && !$hasFile
-                        ? 'Regional Office cannot upload files. Choose file is disabled.'
-                        : ($canDeleteReturnedDocument
-                            ? 'Document was returned. Delete the current file, then upload and submit a replacement.'
-                            : null);
+                    $uploadDisabledMessage = $canDeleteReturnedDocument
+                        ? 'Document was returned. Delete the current file, then upload and submit a replacement.'
+                        : null;
 
                     $statusLabel = 'Pending Upload';
                     $statusColor = '#f59e0b';
                     if ($hasFile) {
-                        $statusLabel = 'For DILG Provincial Office Validation';
+                        $statusLabel = 'Uploaded';
                         $statusColor = '#3b82f6';
                     }
                     if ($isPendingRo) {
@@ -322,16 +320,7 @@
                         return $aTime <=> $bTime;
                     });
 
-                    $isForRegionalValidation = $fileRecord && $fileRecord->approved_at_dilg_po && !$fileRecord->approved_at_dilg_ro;
-                    $isApproved = $fileRecord && $fileRecord->status === 'approved';
-                    $hideReturnButton = $isProvincialDilg && $isReturned;
-                    $showApprovalButtons = $fileRecord
-                        && $hasFile
-                        && $isDilg
-                        && !($isProvincialDilg && $isForRegionalValidation)
-                        && !($isRegionalDilg && $isReturned)
-                        && !($isRegionalDilg && $isApproved)
-                        && !($isProvincialDilg && $isApproved);
+                    $showApprovalButtons = false;
                 @endphp
 
                 @if ($isMultiUpload)
@@ -509,22 +498,14 @@
                         Upload
                     </button>
 
-                    @if ($isRegionalDilg && $hasFile && (!$fileRecord || !$fileRecord->approved_at_dilg_po))
-                        <div style="font-size: 11px; color: #92400e; margin-top: 8px;">
-                            Waiting for DILG Provincial validation.
-                        </div>
-                    @endif
-
                     @if ($showApprovalButtons)
                         <div style="display: flex; gap: 8px; margin-top: 8px;">
                             <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                 Approve
                             </button>
-                            @if (!$hideReturnButton)
-                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
-                                    Return
-                                </button>
-                            @endif
+                            <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                                Return
+                            </button>
                         </div>
                     @endif
                 </form>
@@ -571,7 +552,7 @@
                             </div>
                             <div style="margin-top: 14px; color: #0f172a; font-size: 30px; font-weight: 800; line-height: 1;">{{ $multiUploadCount }}</div>
                             <div style="margin-top: 6px; color: #475569; font-size: 13px; font-weight: 600;">{{ \Illuminate\Support\Str::plural($isPhotoMultiUpload ? 'photo' : 'document', $multiUploadCount) }} in this set</div>
-                            <div style="margin-top: 10px; color: #64748b; font-size: 12px; line-height: 1.5;">Use this panel to review every submitted {{ $isPhotoMultiUpload ? 'image' : 'file' }}, then validate or return each one individually.</div>
+                            <div style="margin-top: 10px; color: #64748b; font-size: 12px; line-height: 1.5;">Use this panel to review every submitted {{ $isPhotoMultiUpload ? 'image' : 'file' }} for this requirement.</div>
                         </div>
 
                         <div style="border: 1px solid #dbe7ff; border-radius: 16px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); padding: 18px;">
@@ -588,20 +569,13 @@
                                 @endif
                             </div>
 
-                            @if (!$isRegionalDilg)
-                                <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                                    @csrf
-                                    <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;">
-                                    <button type="submit" style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18);">
-                                        Upload {{ $isPhotoMultiUpload ? 'Photo' : 'Document' }}
-                                    </button>
-                                </form>
-                            @else
-                                <div style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 12px; background: #f8fafc; border: 1px solid #e5e7eb; color: #64748b; font-size: 12px;">
-                                    <i class="fas fa-lock"></i>
-                                    <span>Regional Office cannot upload files in this modal.</span>
-                                </div>
-                            @endif
+                            <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                @csrf
+                                <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;">
+                                <button type="submit" style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18);">
+                                    Upload {{ $isPhotoMultiUpload ? 'Photo' : 'Document' }}
+                                </button>
+                            </form>
                         </div>
                     </div>
 
@@ -627,7 +601,7 @@
                                             && $currentUser
                                             && $currentUser->hasCrudPermission('pre_implementation_documents', 'add');
                                         $statusMeta = ['label' => 'Pending', 'bg' => '#fef3c7', 'color' => '#92400e'];
-                                        if ($multiFile->approved_at_dilg_ro) {
+                                        if (($multiFile->status ?? null) === 'approved' || $multiFile->approved_at_dilg_ro) {
                                             $statusMeta = ['label' => 'Approved', 'bg' => '#d1fae5', 'color' => '#065f46'];
                                         } elseif ($multiFile->status === 'returned') {
                                             $statusMeta = ['label' => 'Returned', 'bg' => '#fee2e2', 'color' => '#991b1b'];
@@ -661,16 +635,6 @@
                                                     </button>
                                                 </form>
                                             @endif
-                                            @if ($isDilg && !($isProvincialDilg && $multiFile->approved_at_dilg_po && !$multiFile->approved_at_dilg_ro) && !($isRegionalDilg && $multiFile->status === 'returned') && !($isRegionalDilg && $multiFile->status === 'approved') && !($isProvincialDilg && $multiFile->status === 'approved'))
-                                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'approve')" style="margin-left: 6px; padding: 7px 11px; background-color: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
-                                                    Approve
-                                                </button>
-                                                @if (!($isProvincialDilg && $multiFile->status === 'returned'))
-                                                    <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'return')" style="margin-left: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
-                                                        Return
-                                                    </button>
-                                                @endif
-                                            @endif
                                         </td>
                                     </tr>
                                 @empty
@@ -681,7 +645,7 @@
                                                     <i class="fas {{ $isPhotoMultiUpload ? 'fa-images' : 'fa-folder-open' }}"></i>
                                                 </span>
                                                 <div style="font-size: 14px; font-weight: 700; color: #334155;">No uploads yet</div>
-                                                <div style="font-size: 12px; line-height: 1.5; max-width: 320px;">Upload the first {{ $isPhotoMultiUpload ? 'photo' : 'supporting document' }} above to start the validation history for this requirement.</div>
+                                                <div style="font-size: 12px; line-height: 1.5; max-width: 320px;">Upload the first {{ $isPhotoMultiUpload ? 'photo' : 'supporting document' }} above to start the document history for this requirement.</div>
                                             </div>
                                         </td>
                                     </tr>

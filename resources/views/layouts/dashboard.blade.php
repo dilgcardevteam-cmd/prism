@@ -3231,24 +3231,68 @@
                     $notificationFilterConfiguredProvinces = [];
                     $notificationFilterConfiguredCitiesByProvince = [];
                     $notificationFilterConfiguredBarangaysByCity = [];
+                    $notificationFilterUser = Auth::user();
+                    $notificationFilterRegionComparable = $notificationFilterUser?->normalizedRegionComparable() ?? '';
+                    $notificationFilterProvinceComparable = \App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel(
+                        (string) ($notificationFilterUser->province ?? '')
+                    );
+                    $notificationFilterOfficeComparable = $notificationFilterUser?->normalizedOfficeComparable() ?? '';
+                    $notificationFilterUseRegionScope = $notificationFilterUser
+                        && ($notificationFilterUser->isRegionalUser() || $notificationFilterUser->isRegionalOfficeAssignment());
+                    $notificationFilterUseProvinceScope = $notificationFilterUser
+                        && !$notificationFilterUseRegionScope
+                        && $notificationFilterProvinceComparable !== '';
+                    $notificationFilterUseCityScope = $notificationFilterUser
+                        && $notificationFilterUser->isLguScopedUser()
+                        && $notificationFilterOfficeComparable !== '';
 
                     if (\Illuminate\Support\Facades\Schema::hasTable('location_provinces')
                         && \Illuminate\Support\Facades\Schema::hasTable('location_city_municipalities')) {
-                        $configuredLocationRows = \Illuminate\Support\Facades\DB::table('location_city_municipalities as lcm')
+                        $configuredLocationQuery = \Illuminate\Support\Facades\DB::table('location_city_municipalities as lcm')
                             ->join('location_provinces as lp', 'lp.id', '=', 'lcm.province_id')
                             ->selectRaw('TRIM(COALESCE(lp.province_name, "")) as province')
                             ->selectRaw('TRIM(COALESCE(lcm.citymun_name, "")) as city_municipality')
                             ->whereRaw('TRIM(COALESCE(lp.province_name, "")) <> ""')
                             ->whereRaw('TRIM(COALESCE(lcm.citymun_name, "")) <> ""')
                             ->orderBy('lp.province_name')
-                            ->orderBy('lcm.citymun_name')
-                            ->get();
+                            ->orderBy('lcm.citymun_name');
+
+                        if (\Illuminate\Support\Facades\Schema::hasTable('location_regions')) {
+                            $configuredLocationQuery
+                                ->leftJoin('location_regions as lr', 'lr.id', '=', 'lp.region_id')
+                                ->selectRaw('TRIM(COALESCE(lr.region_name, "")) as region');
+                        } elseif (\Illuminate\Support\Facades\Schema::hasColumn('location_provinces', 'region_name')) {
+                            $configuredLocationQuery->selectRaw('TRIM(COALESCE(lp.region_name, "")) as region');
+                        } else {
+                            $configuredLocationQuery->selectRaw('"" as region');
+                        }
+
+                        $configuredLocationRows = $configuredLocationQuery->get();
 
                         foreach ($configuredLocationRows as $configuredLocationRow) {
+                            $regionLabel = trim((string) ($configuredLocationRow->region ?? ''));
                             $provinceLabel = strtoupper(trim((string) ($configuredLocationRow->province ?? '')));
                             $cityLabel = strtoupper(trim((string) ($configuredLocationRow->city_municipality ?? '')));
 
                             if ($provinceLabel === '' || $cityLabel === '') {
+                                continue;
+                            }
+
+                            $matchesUserScope = true;
+
+                            if ($notificationFilterUseRegionScope && $notificationFilterRegionComparable !== '') {
+                                $matchesUserScope = $notificationFilterUser->normalizedRegionComparable($regionLabel) === $notificationFilterRegionComparable;
+                            }
+
+                            if ($matchesUserScope && $notificationFilterUseProvinceScope) {
+                                $matchesUserScope = \App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($provinceLabel) === $notificationFilterProvinceComparable;
+                            }
+
+                            if ($matchesUserScope && $notificationFilterUseCityScope) {
+                                $matchesUserScope = \App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($cityLabel) === $notificationFilterOfficeComparable;
+                            }
+
+                            if (!$matchesUserScope) {
                                 continue;
                             }
 

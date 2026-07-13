@@ -296,7 +296,6 @@ class LgsfProjectCompletionReportController extends Controller
         $now = now();
         $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
-        $isProvincialDilgUploader = $currentUser && $currentUser->isDilgUser() && !$currentUser->isRegionalOfficeAssignment();
         $uploadedDocumentTypes = [];
 
         foreach ($this->singleUploadDocumentTypes() as $field) {
@@ -324,11 +323,11 @@ class LgsfProjectCompletionReportController extends Controller
             $fileRecord->file_path = $path;
             $fileRecord->uploaded_at = $now;
             $fileRecord->uploaded_by = $userId;
-            $fileRecord->status = $isProvincialDilgUploader ? 'pending_ro' : 'pending';
-            $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
-            $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
-            $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
-            $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
+            $fileRecord->status = 'approved';
+            $fileRecord->approved_at = $now;
+            $fileRecord->approved_by = $userId;
+            $fileRecord->approved_at_dilg_po = null;
+            $fileRecord->approved_by_dilg_po = null;
             $fileRecord->approved_at_dilg_ro = null;
             $fileRecord->approved_by_dilg_ro = null;
             $fileRecord->approval_remarks = null;
@@ -386,7 +385,6 @@ class LgsfProjectCompletionReportController extends Controller
         $now = now();
         $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
-        $isProvincialDilgUploader = $currentUser && $currentUser->isDilgUser() && !$currentUser->isRegionalOfficeAssignment();
         $path = $validated['document_file']->store($folder, 'public');
 
         $fileRecord = new LgsfProjectCompletionReportFile();
@@ -395,11 +393,11 @@ class LgsfProjectCompletionReportController extends Controller
         $fileRecord->file_path = $path;
         $fileRecord->uploaded_at = $now;
         $fileRecord->uploaded_by = $userId;
-        $fileRecord->status = $isProvincialDilgUploader ? 'pending_ro' : 'pending';
-        $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
-        $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
-        $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
-        $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
+        $fileRecord->status = 'approved';
+        $fileRecord->approved_at = $now;
+        $fileRecord->approved_by = $userId;
+        $fileRecord->approved_at_dilg_po = null;
+        $fileRecord->approved_by_dilg_po = null;
         $fileRecord->approved_at_dilg_ro = null;
         $fileRecord->approved_by_dilg_ro = null;
         $fileRecord->approval_remarks = null;
@@ -464,7 +462,7 @@ class LgsfProjectCompletionReportController extends Controller
 
             if ($actor->isLguScopedUser() && $targetProvince !== '') {
                 $message = sprintf(
-                    '%s uploaded %s for %s and it is awaiting DILG Provincial Office validation.',
+                    '%s uploaded %s for %s.',
                     $actorName,
                     $documentSummary,
                     $messageContext
@@ -483,7 +481,7 @@ class LgsfProjectCompletionReportController extends Controller
 
             if ($actor->isDilgUser() && !$actor->isRegionalOfficeAssignment()) {
                 $message = sprintf(
-                    '%s uploaded %s for %s and it is awaiting DILG Regional Office validation.',
+                    '%s uploaded %s for %s.',
                     $actorName,
                     $documentSummary,
                     $messageContext
