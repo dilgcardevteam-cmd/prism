@@ -147,7 +147,10 @@ class NadaiManagementController extends Controller
         $user = auth()->user();
 
         return $user
-            && ($user->isSuperAdmin() || ($user->isDilgUser() && $user->isRegionalOfficeAssignment()));
+            && (
+                $user->isSuperAdmin()
+                || ($user->isDilgUser() && ($user->isRegionalOfficeAssignment() || $user->isProvincialDilgAssignment()))
+            );
     }
 
     private function canDeleteNadai(): bool
@@ -208,6 +211,58 @@ class NadaiManagementController extends Controller
         }
 
         return null;
+    }
+
+    private function resolveProvinceWideOfficeLabel(string $provinceName): ?string
+    {
+        $provinceOffices = $this->getOffices()[$provinceName] ?? [];
+
+        foreach ($provinceOffices as $officeName) {
+            if ($this->isProvinceWideOffice($officeName)) {
+                return $officeName;
+            }
+        }
+
+        return null;
+    }
+
+    private function buildProvinceMunicipalityOptions(string $resolvedProvince, string $provinceName): array
+    {
+        $configuredProvinceCityMap = ProjectLocationFilterHelper::buildConfiguredProvinceCityMap([$resolvedProvince]);
+        $municipalityOptions = $configuredProvinceCityMap[$resolvedProvince] ?? [];
+
+        if (empty($municipalityOptions)) {
+            $hierarchyProvinceCityMap = ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy([$resolvedProvince]);
+            $municipalityOptions = $hierarchyProvinceCityMap[$resolvedProvince] ?? [];
+        }
+
+        $provinceWideOffice = $this->resolveProvinceWideOfficeLabel($provinceName);
+        if ($provinceWideOffice !== null) {
+            array_unshift($municipalityOptions, $provinceWideOffice);
+        }
+
+        return collect($municipalityOptions)
+            ->map([ProjectLocationFilterHelper::class, 'normalizeLabel'])
+            ->filter()
+            ->unique(function (string $label) {
+                return mb_strtolower($label);
+            })
+            ->sort(function (string $left, string $right) {
+                $leftIsPlgu = str_starts_with($left, 'PLGU ');
+                $rightIsPlgu = str_starts_with($right, 'PLGU ');
+
+                if ($leftIsPlgu && !$rightIsPlgu) {
+                    return -1;
+                }
+
+                if (!$leftIsPlgu && $rightIsPlgu) {
+                    return 1;
+                }
+
+                return strnatcasecmp($left, $right);
+            })
+            ->values()
+            ->all();
     }
 
     private function buildSubayProfileOptions(): array
@@ -283,7 +338,9 @@ class NadaiManagementController extends Controller
         $resolvedProvince = $this->resolveConfiguredProvinceLabel($provinceName, $configuredProvinceLabels);
         $provinceOptions = array_values(array_filter([$resolvedProvince]));
 
-        $provinceMunicipalityMap = ProjectLocationFilterHelper::buildConfiguredProvinceCityMapFromHierarchy($provinceOptions);
+        $provinceMunicipalityMap = [
+            $resolvedProvince => $this->buildProvinceMunicipalityOptions($resolvedProvince, $provinceName),
+        ];
         $municipalityOptions = $provinceMunicipalityMap[$resolvedProvince] ?? [];
         $matchedMunicipality = $this->resolveConfiguredMunicipalityLabel($officeName, $municipalityOptions);
 
@@ -305,6 +362,10 @@ class NadaiManagementController extends Controller
                 $municipalityBarangayMap,
                 array_fill_keys($municipalityOptions, true)
             );
+
+            foreach ($municipalityOptions as $municipalityOption) {
+                $municipalityBarangayMap[$municipalityOption] ??= [];
+            }
         }
 
         $subayOptions = $this->buildSubayProfileOptions();
@@ -594,7 +655,7 @@ class NadaiManagementController extends Controller
         }
 
         if (!$this->canUploadNadai()) {
-            abort(403, 'Only DILG Regional Office users can upload NADAI documents.');
+            abort(403, 'Only DILG Regional Office or Provincial Office users can upload NADAI documents.');
         }
 
         $uploadFormOptions = $this->buildUploadFormOptions($officeName, $province);
@@ -732,7 +793,7 @@ class NadaiManagementController extends Controller
         }
 
         if (!$this->canUploadNadai()) {
-            abort(403, 'Only DILG Regional Office users can edit NADAI documents.');
+            abort(403, 'Only DILG Regional Office or Provincial Office users can edit NADAI documents.');
         }
 
         $document = NadaiManagementDocument::query()
