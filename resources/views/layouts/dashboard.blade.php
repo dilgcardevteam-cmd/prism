@@ -2947,7 +2947,7 @@
                 </ul>
             </li>
             @endif
-            @if($canViewPreImplementationDocuments)
+            @if($canViewPreImplementationDocuments && config('features.nadai_management'))
                 <li>
                     <a href="{{ route('nadai-management.index') }}" class="@if(request()->routeIs('nadai-management.*')) active @endif" title="Notice of Authority to Debit Account Issued">
                         <i class="fas fa-folder-tree"></i>

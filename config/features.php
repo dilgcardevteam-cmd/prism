@@ -10,6 +10,6 @@ return [
     | Re-enable later by setting the matching .env value to true.
     |
     */
-    'nadai_management' => env('FEATURE_NADAI_MANAGEMENT_ENABLED', false),
+    'nadai_management' => env('FEATURE_NADAI_MANAGEMENT_ENABLED', true),
     'confirmation_of_fund_receipt' => env('FEATURE_CONFIRMATION_OF_FUND_RECEIPT_ENABLED', true),
 ];
