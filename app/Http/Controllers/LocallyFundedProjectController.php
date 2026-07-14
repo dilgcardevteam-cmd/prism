@@ -53,6 +53,23 @@ class LocallyFundedProjectController extends Controller
         return self::$schemaColumnExistsCache[$cacheKey];
     }
 
+    private function selectPhysicalUpdateColumns(array $columns): array
+    {
+        return array_map(function (string $column) {
+            if ($this->hasColumnCached('locally_funded_physical_updates', $column)) {
+                return 'locally_funded_physical_updates.' . $column;
+            }
+
+            return DB::raw('NULL as ' . $column);
+        }, $columns);
+    }
+
+    private function physicalUpdateColumnExists(string $column): bool
+    {
+        return $this->hasTableCached('locally_funded_physical_updates')
+            && $this->hasColumnCached('locally_funded_physical_updates', $column);
+    }
+
     private function getLocallyFundedStaticOptions(): array
     {
         $provinces = [
@@ -3593,6 +3610,8 @@ $url = route('locally-funded-project.show', $project, false);
      */
     public function show(LocallyFundedProject $project)
     {
+        $this->authorizeLocallyFundedProjectAccess($project);
+
         $currentYear = now()->year;
         $currentMonth = now()->month;
         $parseNumericValue = static function ($value): ?float {
@@ -3742,64 +3761,67 @@ $url = route('locally-funded-project.show', $project, false);
             }
         }
 
-        $allPhysicalUpdates = \Illuminate\Support\Facades\DB::table('locally_funded_physical_updates')
-            ->leftJoin('tbusers', 'tbusers.idno', '=', 'locally_funded_physical_updates.updated_by')
-            ->where('locally_funded_physical_updates.project_id', $project->id)
-            ->orderBy('locally_funded_physical_updates.year')
-            ->orderBy('locally_funded_physical_updates.month')
-            ->select(
-                'locally_funded_physical_updates.year',
-                'locally_funded_physical_updates.month',
-                'locally_funded_physical_updates.status_project_fou',
-                'locally_funded_physical_updates.status_project_ro',
-                'locally_funded_physical_updates.accomplishment_pct',
-                'locally_funded_physical_updates.accomplishment_pct_ro',
-                'locally_funded_physical_updates.slippage',
-                'locally_funded_physical_updates.slippage_ro',
-                'locally_funded_physical_updates.risk_aging',
-                'locally_funded_physical_updates.nc_letters',
-                'locally_funded_physical_updates.status_project_fou_updated_at',
-                'locally_funded_physical_updates.status_project_ro_updated_at',
-                'locally_funded_physical_updates.accomplishment_pct_updated_at',
-                'locally_funded_physical_updates.accomplishment_pct_ro_updated_at',
-                'locally_funded_physical_updates.slippage_updated_at',
-                'locally_funded_physical_updates.slippage_ro_updated_at',
-                'locally_funded_physical_updates.risk_aging_updated_at',
-                'locally_funded_physical_updates.nc_letters_updated_at',
-                'locally_funded_physical_updates.status_project_fou_remarks',
-                'locally_funded_physical_updates.status_project_ro_remarks',
-                'locally_funded_physical_updates.accomplishment_pct_remarks',
-                'locally_funded_physical_updates.accomplishment_pct_ro_remarks',
-                'locally_funded_physical_updates.slippage_remarks',
-                'locally_funded_physical_updates.slippage_ro_remarks',
-                'locally_funded_physical_updates.risk_aging_remarks',
-                'locally_funded_physical_updates.nc_letters_remarks',
-                'locally_funded_physical_updates.status_project_fou_remarks_updated_at',
-                'locally_funded_physical_updates.status_project_ro_remarks_updated_at',
-                'locally_funded_physical_updates.accomplishment_pct_remarks_updated_at',
-                'locally_funded_physical_updates.accomplishment_pct_ro_remarks_updated_at',
-                'locally_funded_physical_updates.slippage_remarks_updated_at',
-                'locally_funded_physical_updates.slippage_ro_remarks_updated_at',
-                'locally_funded_physical_updates.risk_aging_remarks_updated_at',
-                'locally_funded_physical_updates.nc_letters_remarks_updated_at',
-                'locally_funded_physical_updates.status_project_fou_updated_by',
-                'locally_funded_physical_updates.status_project_ro_updated_by',
-                'locally_funded_physical_updates.accomplishment_pct_updated_by',
-                'locally_funded_physical_updates.accomplishment_pct_ro_updated_by',
-                'locally_funded_physical_updates.slippage_updated_by',
-                'locally_funded_physical_updates.slippage_ro_updated_by',
-                'locally_funded_physical_updates.risk_aging_updated_by',
-                'locally_funded_physical_updates.nc_letters_updated_by',
-                'locally_funded_physical_updates.status_project_fou_remarks_updated_by',
-                'locally_funded_physical_updates.status_project_ro_remarks_updated_by',
-                'locally_funded_physical_updates.accomplishment_pct_remarks_updated_by',
-                'locally_funded_physical_updates.accomplishment_pct_ro_remarks_updated_by',
-                'locally_funded_physical_updates.slippage_remarks_updated_by',
-                'locally_funded_physical_updates.slippage_ro_remarks_updated_by',
-                'locally_funded_physical_updates.risk_aging_remarks_updated_by',
-                'locally_funded_physical_updates.nc_letters_remarks_updated_by'
-            )
-            ->get();
+        $physicalUpdateColumns = [
+            'year',
+            'month',
+            'status_project_fou',
+            'status_project_ro',
+            'accomplishment_pct',
+            'accomplishment_pct_ro',
+            'slippage',
+            'slippage_ro',
+            'risk_aging',
+            'nc_letters',
+            'status_project_fou_updated_at',
+            'status_project_ro_updated_at',
+            'accomplishment_pct_updated_at',
+            'accomplishment_pct_ro_updated_at',
+            'slippage_updated_at',
+            'slippage_ro_updated_at',
+            'risk_aging_updated_at',
+            'nc_letters_updated_at',
+            'status_project_fou_remarks',
+            'status_project_ro_remarks',
+            'accomplishment_pct_remarks',
+            'accomplishment_pct_ro_remarks',
+            'slippage_remarks',
+            'slippage_ro_remarks',
+            'risk_aging_remarks',
+            'nc_letters_remarks',
+            'status_project_fou_remarks_updated_at',
+            'status_project_ro_remarks_updated_at',
+            'accomplishment_pct_remarks_updated_at',
+            'accomplishment_pct_ro_remarks_updated_at',
+            'slippage_remarks_updated_at',
+            'slippage_ro_remarks_updated_at',
+            'risk_aging_remarks_updated_at',
+            'nc_letters_remarks_updated_at',
+            'status_project_fou_updated_by',
+            'status_project_ro_updated_by',
+            'accomplishment_pct_updated_by',
+            'accomplishment_pct_ro_updated_by',
+            'slippage_updated_by',
+            'slippage_ro_updated_by',
+            'risk_aging_updated_by',
+            'nc_letters_updated_by',
+            'status_project_fou_remarks_updated_by',
+            'status_project_ro_remarks_updated_by',
+            'accomplishment_pct_remarks_updated_by',
+            'accomplishment_pct_ro_remarks_updated_by',
+            'slippage_remarks_updated_by',
+            'slippage_ro_remarks_updated_by',
+            'risk_aging_remarks_updated_by',
+            'nc_letters_remarks_updated_by',
+        ];
+
+        $allPhysicalUpdates = $this->hasTableCached('locally_funded_physical_updates')
+            ? \Illuminate\Support\Facades\DB::table('locally_funded_physical_updates')
+                ->where('locally_funded_physical_updates.project_id', $project->id)
+                ->orderBy('locally_funded_physical_updates.year')
+                ->orderBy('locally_funded_physical_updates.month')
+                ->select($this->selectPhysicalUpdateColumns($physicalUpdateColumns))
+                ->get()
+            : collect();
 
         $physicalUpdates = $allPhysicalUpdates
             ->filter(function ($row) use ($currentYear) {
@@ -4850,6 +4872,8 @@ $url = route('locally-funded-project.show', $project, false);
                 $physicalRemarkLabels[$remarkField] = $label . ' Remarks';
             }
             $requestData = $request->all();
+            $allPhysicalFieldRules = $rulesByField;
+            $allPhysicalRemarkRules = $remarkRulesByField;
             $provincialEditablePhysicalFields = [
                 'status_project_fou',
                 'accomplishment_pct',
@@ -4872,6 +4896,46 @@ $url = route('locally-funded-project.show', $project, false);
                     abort(403, 'Unauthorized');
                 }
             }
+
+            if (!$this->hasTableCached('locally_funded_physical_updates')) {
+                return redirect()->route('locally-funded-project.show', $project)
+                    ->with('error', 'Physical updates table is missing. Please run the latest database migrations.');
+            }
+
+            $availablePhysicalFields = array_filter(
+                array_keys($rulesByField),
+                fn (string $field): bool => $this->physicalUpdateColumnExists($field)
+            );
+            $availablePhysicalRemarkFields = array_filter(
+                array_keys($remarkRulesByField),
+                fn (string $field): bool => $this->physicalUpdateColumnExists($field)
+            );
+            $unavailableSubmittedFields = array_values(array_intersect(
+                array_keys($requestData),
+                array_diff(
+                    array_merge(array_keys($allPhysicalFieldRules), array_keys($allPhysicalRemarkRules)),
+                    array_merge($availablePhysicalFields, $availablePhysicalRemarkFields)
+                )
+            ));
+
+            if (!empty($unavailableSubmittedFields)) {
+                return redirect()->route('locally-funded-project.show', $project)
+                    ->with('error', 'Physical updates cannot be saved because the deployed database is missing columns for: ' . implode(', ', $unavailableSubmittedFields) . '. Please run the latest database migrations.');
+            }
+
+            $projectLevelPhysicalColumns = [
+                'physical_remarks' => 'physical_remarks',
+                'actual_date_completion' => 'actual_date_completion',
+            ];
+            foreach ($projectLevelPhysicalColumns as $requestKey => $column) {
+                if (array_key_exists($requestKey, $requestData) && !$this->hasColumnCached('locally_funded_projects', $column)) {
+                    return redirect()->route('locally-funded-project.show', $project)
+                        ->with('error', 'Physical updates cannot be saved because the deployed database is missing the ' . $column . ' column. Please run the latest database migrations.');
+                }
+            }
+
+            $rulesByField = array_intersect_key($rulesByField, array_flip($availablePhysicalFields));
+            $remarkRulesByField = array_intersect_key($remarkRulesByField, array_flip($availablePhysicalRemarkFields));
 
             $now = now();
             $projectUpdates = [];
