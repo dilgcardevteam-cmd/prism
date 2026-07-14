@@ -1088,6 +1088,7 @@
         $isLguAgencyUser = $userAgency === 'LGU';
         $canUpdateLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'update');
         $canUpdatePhysicalAccomplishment = $canUpdateLocallyFundedProject
+            || Auth::user()->isSuperAdmin()
             || (Auth::user()->isDilgUser() && Auth::user()->isProvincialUser())
             || Auth::user()->isRegionalUser()
             || Auth::user()->isRegionalOfficeAssignment();
@@ -4649,7 +4650,8 @@
             if (button.hasAttribute('data-physical-toggle')) {
                 const currentMonth = {{ $currentMonth }};
                 const isROUser = @json(
-                    Auth::user()->isRegionalUser()
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
                     || Auth::user()->isRegionalOfficeAssignment()
                 );
                 
