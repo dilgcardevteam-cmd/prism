@@ -1088,11 +1088,15 @@
         $isLguAgencyUser = $userAgency === 'LGU';
         $canUpdateLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'update');
         $canUpdatePhysicalForProvincialUser = $canUpdateLocallyFundedProject
-            || (Auth::user()->isDilgUser() && Auth::user()->isProvincialUser());
+            || Auth::user()->isSuperAdmin()
+            || (Auth::user()->isDilgUser() && Auth::user()->isProvincialUser())
+            || Auth::user()->isRegionalUser()
+            || Auth::user()->isRegionalOfficeAssignment();
         $canDeleteLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'delete');
         $canEditProjectProfile = $userAgency === 'DILG'
             && $userProvince === 'Regional Office'
             && Auth::user()->isSuperAdmin();
+        $viewErrors = $errors ?? session('errors') ?? null;
     @endphp
 
     <div class="lfp-mobile-shell">
@@ -1114,10 +1118,10 @@
         </div>
     </div>
 
-    @if ($errors->any())
+    @if ($viewErrors && $viewErrors->any())
         <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 16px; border-radius: 8px; margin: 16px 0;">
             <ul style="margin: 0; padding-left: 20px;">
-                @foreach ($errors->all() as $error)
+                @foreach ($viewErrors->all() as $error)
                     <li>{{ $error }}</li>
                 @endforeach
             </ul>
@@ -4648,7 +4652,11 @@
                 const currentMonth = {{ $currentMonth }};
                 const userAgency = '{{ Auth::user()->agency }}';
                 const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-physical-edit="true"]').forEach((input) => {
                     const inputMonth = parseInt(input.getAttribute('data-month'), 10);
@@ -4674,7 +4682,11 @@
                 const currentMonth = {{ $currentMonth }};
                 const userAgency = '{{ Auth::user()->agency }}';
                 const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-financial-edit="true"]').forEach((input) => {
                     const inputMonth = parseInt(input.getAttribute('data-month'), 10);
@@ -4710,7 +4722,11 @@
             if (button.hasAttribute('data-monitoring-toggle')) {
                 const userAgency = '{{ Auth::user()->agency }}';
                 const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-monitoring-edit="true"]').forEach((input) => {
                     const isROOnly = input.hasAttribute('data-ro-only');
@@ -4747,7 +4763,11 @@
             if (button.hasAttribute('data-post-implementation-toggle')) {
                 const userAgency = '{{ Auth::user()->agency }}';
                 const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-post-implementation-edit="true"]').forEach((input) => {
                     const isROOnly = input.hasAttribute('data-ro-only');
@@ -5222,7 +5242,7 @@
         Object.keys(inlineEditConfigs).forEach((targetId) => {
             syncInlineEditSaveState(targetId);
         });
-        const initialInlineDirtySectionKey = @json($errors->any() ? old('section') : '');
+        const initialInlineDirtySectionKey = @json(($viewErrors && $viewErrors->any()) ? old('section') : '');
         const initialInlineDirtyTargetId = initialInlineDirtySectionKey
             ? ({
                 profile: 'editProfileForm',

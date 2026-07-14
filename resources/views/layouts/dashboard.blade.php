@@ -2500,8 +2500,8 @@
                 </a>
             </li>
             @php
-                $canViewLocallyFundedProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
-                $canViewRssaProjects = $canViewLocallyFundedProjects;
+                $canViewLocallyFundedProjects = true;
+                $canViewRssaProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
                 $canViewRlipLimeProjects = Auth::user()->hasCrudPermission('rlip_lime_projects', 'view');
                 $canViewProjectAtRiskProjects = Auth::user()->hasCrudPermission('project_at_risk_projects', 'view');
                 $canViewSglgifPortal = Auth::user()->hasCrudPermission('sglgif_portal', 'view');

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\LocallyFundedProjectController;
 use App\Models\User;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class LocallyFundedProjectAccessTest extends TestCase
@@ -33,5 +34,17 @@ class LocallyFundedProjectAccessTest extends TestCase
         );
 
         $this->assertTrue($canAccess);
+    }
+
+    public function test_missing_locally_funded_project_redirects_to_the_project_list(): void
+    {
+        $route = Route::getRoutes()->getByName('locally-funded-project.show');
+        $missingHandler = $route?->getMissing();
+
+        $this->assertNotNull($missingHandler);
+
+        $response = $missingHandler();
+
+        $this->assertTrue($response->isRedirect(route('projects.locally-funded')));
     }
 }
