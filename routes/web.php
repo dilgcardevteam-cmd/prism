@@ -2875,7 +2875,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/projects/locally-funded/ensure/{projectCode}', [App\Http\Controllers\LocallyFundedProjectController::class, 'ensureFromSubay'])
         ->name('locally-funded-project.ensure');
     Route::post('/projects/locally-funded', [App\Http\Controllers\LocallyFundedProjectController::class, 'store'])->name('locally-funded-project.store');
-    Route::get('/projects/locally-funded/{project}', [App\Http\Controllers\LocallyFundedProjectController::class, 'show'])->name('locally-funded-project.show');
+    Route::get('/projects/locally-funded/{project}', [App\Http\Controllers\LocallyFundedProjectController::class, 'show'])
+        ->missing(function () {
+            return redirect()
+                ->route('projects.locally-funded')
+                ->with('error', 'The locally funded project could not be found. It may have been removed or replaced during a data import.');
+        })
+        ->name('locally-funded-project.show');
     Route::get('/projects/locally-funded/{project}/pcr-mov', [App\Http\Controllers\LocallyFundedProjectController::class, 'viewPcrMov'])->name('locally-funded-project.view-pcr-mov');
     Route::get('/projects/locally-funded/{project}/edit', [App\Http\Controllers\LocallyFundedProjectController::class, 'edit'])->name('locally-funded-project.edit');
     Route::put('/projects/locally-funded/{project}', [App\Http\Controllers\LocallyFundedProjectController::class, 'update'])->name('locally-funded-project.update');

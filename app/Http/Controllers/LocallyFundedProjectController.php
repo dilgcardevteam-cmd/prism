@@ -2579,7 +2579,7 @@ $url = route('locally-funded-project.show', $project, false);
             $rawFilterState['fund_source'] = $this->normalizeLocallyFundedFundSourceFilter($rawFilterState['fund_source']);
         }
         $filterHash = md5(serialize($rawFilterState));
-        $cacheKey = "lfp_index_v9:{$userId}:{$filterHash}";
+        $cacheKey = "lfp_index_v11:{$userId}:{$filterHash}";
 
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
@@ -2881,7 +2881,7 @@ $url = route('locally-funded-project.show', $project, false);
         ];
 
         $scopedLocationOptionsQuery = clone $query;
-        $scopedOptionsCacheKey = "lfp_index_scoped_options_v2:{$userId}:{$currentYear}:{$currentMonth}";
+        $scopedOptionsCacheKey = "lfp_index_scoped_options_v4:{$userId}:{$currentYear}:{$currentMonth}";
 
         $normalizedFundSourceExpression = "COALESCE(NULLIF(UPPER(TRIM(COALESCE(lfp.fund_source, ''))), ''), {$subayFundSourceKeyExpr})";
         $normalizedProcurementExpression = "COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.mode_of_procurement, ''))), ''), {$subayProcurementKeyExpr})";
@@ -3595,8 +3595,6 @@ $url = route('locally-funded-project.show', $project, false);
      */
     public function show(LocallyFundedProject $project)
     {
-        $this->authorizeLocallyFundedProjectAccess($project);
-
         $currentYear = now()->year;
         $currentMonth = now()->month;
         $parseNumericValue = static function ($value): ?float {
@@ -4580,8 +4578,6 @@ $url = route('locally-funded-project.show', $project, false);
 
     public function viewPcrMov(LocallyFundedProject $project)
     {
-        $this->authorizeLocallyFundedProjectAccess($project);
-
         if (!$project->pcr_mov_file_path) {
             abort(404, 'PCR MOV document not found');
         }
@@ -4802,11 +4798,18 @@ $url = route('locally-funded-project.show', $project, false);
      */
     public function update(Request $request, LocallyFundedProject $project)
     {
-        $this->authorizeLocallyFundedProjectAccess($project);
-
         $section = $request->input('section');
         /** @var User|null $user */
         $user = Auth::user();
+        $isProvincialDilgUser = $user instanceof User
+            && $user->isDilgUser()
+            && $user->isProvincialDilgAssignment()
+            && !$user->isRegionalOfficeAssignment();
+
+        if ($section !== 'physical' || !$isProvincialDilgUser) {
+            $this->authorizeLocallyFundedProjectAccess($project);
+        }
+
         $canEditProjectProfile = $user instanceof User
             && (
                 $user->isSuperAdmin()
@@ -4853,6 +4856,7 @@ $url = route('locally-funded-project.show', $project, false);
                 'status_project_fou',
                 'accomplishment_pct',
                 'slippage',
+                'nc_letters',
             ];
             $provincialEditablePhysicalRemarkFields = array_map(
                 static fn ($field) => $field . '_remarks',
@@ -4861,13 +4865,8 @@ $url = route('locally-funded-project.show', $project, false);
             $restrictedPhysicalRequestKeys = array_merge(
                 array_diff(array_keys($rulesByField), $provincialEditablePhysicalFields),
                 array_diff(array_keys($remarkRulesByField), $provincialEditablePhysicalRemarkFields),
-                ['actual_date_completion', 'physical_remarks']
+                ['physical_remarks']
             );
-
-            $isProvincialDilgUser = $user instanceof User
-                && $user->isDilgUser()
-                && $user->isProvincialDilgAssignment()
-                && !$user->isRegionalOfficeAssignment();
 
             if ($isProvincialDilgUser) {
                 $submittedRestrictedKeys = array_intersect(array_keys($requestData), $restrictedPhysicalRequestKeys);

@@ -1133,7 +1133,6 @@ class FundUtilizationReportController extends Controller
             'Date Valdiated by DILG Regional Office',
         ];
 
-        $useHtmlLinks = $format === 'xls';
         $rows = [];
         foreach ($reports as $report) {
             $quarter = $selectedQuarter ?: 'Q1'; // Default to Q1 if no quarter selected, but since filtered, it should have data
@@ -1154,47 +1153,43 @@ class FundUtilizationReportController extends Controller
                 $report->contract_amount !== null ? 'PHP ' . number_format((float) $report->contract_amount, 2) : '-',
                 $report->project_status,
                 $report->project_title,
-                $this->formatExportLink($movUpload ? $movUpload->mov_file_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($movUpload ? $movUpload->mov_file_path : null),
                 $movUpload && $movUpload->mov_uploaded_at ? $movUpload->mov_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $movUpload && $movUpload->approved_at_dilg_po ? $movUpload->approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $movUpload && $movUpload->approved_at_dilg_ro ? $movUpload->approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($batchDocument ? $batchDocument->batch_document_file_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($batchDocument ? $batchDocument->batch_document_file_path : null),
                 $batchDocument && $batchDocument->batch_document_uploaded_at ? $batchDocument->batch_document_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $batchDocument && $batchDocument->approved_at_dilg_po ? $batchDocument->approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $batchDocument && $batchDocument->approved_at_dilg_ro ? $batchDocument->approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($writtenNotice ? $writtenNotice->secretary_dbm_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($writtenNotice ? $writtenNotice->secretary_dbm_path : null),
                 $writtenNotice && $writtenNotice->dbm_uploaded_at ? $writtenNotice->dbm_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->dbm_approved_at_dilg_po ? $writtenNotice->dbm_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->dbm_approved_at_dilg_ro ? $writtenNotice->dbm_approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($writtenNotice ? $writtenNotice->speaker_house_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($writtenNotice ? $writtenNotice->speaker_house_path : null),
                 $writtenNotice && $writtenNotice->speaker_uploaded_at ? $writtenNotice->speaker_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->speaker_approved_at_dilg_po ? $writtenNotice->speaker_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->speaker_approved_at_dilg_ro ? $writtenNotice->speaker_approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($writtenNotice ? $writtenNotice->house_committee_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($writtenNotice ? $writtenNotice->house_committee_path : null),
                 $writtenNotice && $writtenNotice->house_uploaded_at ? $writtenNotice->house_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->house_approved_at_dilg_po ? $writtenNotice->house_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->house_approved_at_dilg_ro ? $writtenNotice->house_approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($writtenNotice ? $writtenNotice->secretary_dilg_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($writtenNotice ? $writtenNotice->secretary_dilg_path : null),
                 $writtenNotice && $writtenNotice->dilg_uploaded_at ? $writtenNotice->dilg_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->dilg_approved_at_dilg_po ? $writtenNotice->dilg_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->dilg_approved_at_dilg_ro ? $writtenNotice->dilg_approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($writtenNotice ? $writtenNotice->president_senate_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($writtenNotice ? $writtenNotice->president_senate_path : null),
                 $writtenNotice && $writtenNotice->president_uploaded_at ? $writtenNotice->president_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->president_approved_at_dilg_po ? $writtenNotice->president_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->president_approved_at_dilg_ro ? $writtenNotice->president_approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($writtenNotice ? $writtenNotice->senate_committee_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($writtenNotice ? $writtenNotice->senate_committee_path : null),
                 $writtenNotice && $writtenNotice->senate_uploaded_at ? $writtenNotice->senate_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->senate_approved_at_dilg_po ? $writtenNotice->senate_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $writtenNotice && $writtenNotice->senate_approved_at_dilg_ro ? $writtenNotice->senate_approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $this->formatExportLink($fdpDocument ? $fdpDocument->fdp_file_path : null, $useHtmlLinks),
+                $this->formatExportUploadMarker($fdpDocument ? $fdpDocument->fdp_file_path : null),
                 $fdpDocument && $fdpDocument->fdp_uploaded_at ? $fdpDocument->fdp_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $fdpDocument && $fdpDocument->approved_at_dilg_po ? $fdpDocument->approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $fdpDocument && $fdpDocument->approved_at_dilg_ro ? $fdpDocument->approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
-                $fdpDocument && $fdpDocument->posting_link
-                    ? ($useHtmlLinks
-                        ? $this->toHtmlLink($fdpDocument->posting_link)
-                        : (InputSanitizer::sanitizeHttpUrl($fdpDocument->posting_link) ?? InputSanitizer::sanitizePlainText($fdpDocument->posting_link)))
-                    : '-',
+                $this->formatExportUploadMarker($fdpDocument ? $fdpDocument->posting_link : null),
                 $fdpDocument && $fdpDocument->posting_uploaded_at ? $fdpDocument->posting_uploaded_at->format('Y-m-d H:i:s') : '-',
                 $fdpDocument && $fdpDocument->posting_approved_at_dilg_po ? $fdpDocument->posting_approved_at_dilg_po->format('Y-m-d H:i:s') : '-',
                 $fdpDocument && $fdpDocument->posting_approved_at_dilg_ro ? $fdpDocument->posting_approved_at_dilg_ro->format('Y-m-d H:i:s') : '-',
@@ -2279,14 +2274,9 @@ class FundUtilizationReportController extends Controller
         return $table;
     }
 
-    private function formatExportLink(?string $path, bool $asHtmlLink): string
+    private function formatExportUploadMarker(?string $value): string
     {
-        if (!$path) {
-            return '-';
-        }
-
-        $url = $this->publicFileUrl($path);
-        return $asHtmlLink ? $this->toHtmlLink($url) : $url;
+        return trim((string) $value) !== '' ? '✔' : '✘';
     }
 
     private function sanitizeReportPayload(array $validated): array
@@ -2305,20 +2295,6 @@ class FundUtilizationReportController extends Controller
     private function sanitizeReportRemarks(?string $remarks): ?string
     {
         return InputSanitizer::sanitizeNullablePlainText($remarks, true);
-    }
-
-    private function toHtmlLink(string $value): string
-    {
-        $safeText = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-        $safeUrl = InputSanitizer::sanitizeHttpUrl($value);
-
-        if ($safeUrl === null) {
-            return $safeText;
-        }
-
-        $escapedUrl = htmlspecialchars($safeUrl, ENT_QUOTES, 'UTF-8');
-
-        return '<a href="' . $escapedUrl . '">' . $safeText . '</a>';
     }
 
     /**

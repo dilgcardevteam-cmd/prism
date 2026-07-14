@@ -2447,7 +2447,7 @@
                     </div>
                     <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                         <input type="date" id="actual_date_completion_physical" name="actual_date_completion" value="{{ old('actual_date_completion', $project->actual_date_completion ? $project->actual_date_completion->format('Y-m-d') : '') }}"
-                               data-physical-edit="true" data-month="{{ $currentMonth }}" data-ro-only="true" disabled
+                               data-physical-edit="true" data-month="{{ $currentMonth }}" disabled
                                style="padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: #f3f4f6;">
                     </div>
                 </form>
@@ -2569,7 +2569,7 @@
                                     @endphp
                                     <div>{{ $monthName }}</div>
                                     <div class="lfp-physical-field-cell">
-                                        <select name="nc_letters[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" disabled
+                                        <select name="nc_letters[{{ $monthNumber }}]" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled
                                                 style="width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background-color: {{ $bgColor }}; color: {{ $textColor }};">
                                             <option value="">-- Select --</option>
                                             <option value="NC No. 1" {{ $value === 'NC No. 1' ? 'selected' : '' }}>NC No. 1</option>
@@ -2578,7 +2578,7 @@
                                             <option value="No" {{ $value === 'No' ? 'selected' : '' }}>No</option>
                                         </select>
                                         <label class="lfp-physical-remark-label" for="nc_letters_remarks_{{ $monthNumber }}">Remarks</label>
-                                        <textarea id="nc_letters_remarks_{{ $monthNumber }}" name="nc_letters_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" data-ro-only="true" disabled
+                                        <textarea id="nc_letters_remarks_{{ $monthNumber }}" name="nc_letters_remarks[{{ $monthNumber }}]" rows="3" data-physical-edit="true" data-month="{{ $monthNumber }}" disabled
                                                   style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 12px; resize: vertical; background-color: #f3f4f6;">{{ $remarkValue }}</textarea>
                                         <div class="lfp-physical-remark-meta">
                                             <span><strong>Remark Date:</strong> {{ $remarkUpdatedAt }}</span>
@@ -5190,14 +5190,12 @@
                     },
                 });
 
-                const html = await response.text();
+                await response.text();
                 if (!response.ok) {
                     throw new Error('Request failed');
                 }
 
-                document.open();
-                document.write(html);
-                document.close();
+                window.location.assign(response.url || actionUrl);
             } catch (error) {
                 if (saveButton) {
                     saveButton.disabled = false;
