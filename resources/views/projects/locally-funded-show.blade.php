@@ -1087,7 +1087,7 @@
         $userProvince = trim((string) (Auth::user()->province ?? ''));
         $isLguAgencyUser = $userAgency === 'LGU';
         $canUpdateLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'update');
-        $canUpdatePhysicalAccomplishment = $canUpdateLocallyFundedProject
+        $canUpdatePhysicalForProvincialUser = $canUpdateLocallyFundedProject
             || Auth::user()->isSuperAdmin()
             || (Auth::user()->isDilgUser() && Auth::user()->isProvincialUser())
             || Auth::user()->isRegionalUser()
@@ -1096,6 +1096,7 @@
         $canEditProjectProfile = $userAgency === 'DILG'
             && $userProvince === 'Regional Office'
             && Auth::user()->isSuperAdmin();
+        $viewErrors = $errors ?? session('errors') ?? null;
     @endphp
 
     <div class="lfp-mobile-shell">
@@ -1117,10 +1118,10 @@
         </div>
     </div>
 
-    @if ($errors->any())
+    @if ($viewErrors && $viewErrors->any())
         <div style="background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; padding: 16px; border-radius: 8px; margin: 16px 0;">
             <ul style="margin: 0; padding-left: 20px;">
-                @foreach ($errors->all() as $error)
+                @foreach ($viewErrors->all() as $error)
                     <li>{{ $error }}</li>
                 @endforeach
             </ul>
@@ -1918,7 +1919,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid #00267C; padding-bottom: 10px;">
                 <h3 class="lfp-physical-section-title" style="color: #00267C; font-size: clamp(14px, 4vw, 18px); font-weight: 700; margin: 0;">Physical Accomplishment</h3>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    @if($canUpdatePhysicalAccomplishment)
+                    @if($canUpdatePhysicalForProvincialUser)
                         <a href="#" class="lfp-inline-edit-trigger" data-toggle="inline-edit" data-target="editPhysicalForm" data-physical-toggle="true"><i class="fas fa-edit" aria-hidden="true"></i>Update</a>
                     @endif
                 </div>
@@ -4649,6 +4650,8 @@
 
             if (button.hasAttribute('data-physical-toggle')) {
                 const currentMonth = {{ $currentMonth }};
+                const userAgency = '{{ Auth::user()->agency }}';
+                const userProvince = '{{ Auth::user()->province }}';
                 const isROUser = @json(
                     Auth::user()->isSuperAdmin()
                     || Auth::user()->isRegionalUser()
@@ -4679,7 +4682,11 @@
                 const currentMonth = {{ $currentMonth }};
                 const userAgency = '{{ Auth::user()->agency }}';
                 const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-financial-edit="true"]').forEach((input) => {
                     const inputMonth = parseInt(input.getAttribute('data-month'), 10);
@@ -4715,7 +4722,11 @@
             if (button.hasAttribute('data-monitoring-toggle')) {
                 const userAgency = '{{ Auth::user()->agency }}';
                 const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-monitoring-edit="true"]').forEach((input) => {
                     const isROOnly = input.hasAttribute('data-ro-only');
@@ -4752,7 +4763,11 @@
             if (button.hasAttribute('data-post-implementation-toggle')) {
                 const userAgency = '{{ Auth::user()->agency }}';
                 const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isSuperAdmin()
+                    || Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-post-implementation-edit="true"]').forEach((input) => {
                     const isROOnly = input.hasAttribute('data-ro-only');
@@ -5227,7 +5242,7 @@
         Object.keys(inlineEditConfigs).forEach((targetId) => {
             syncInlineEditSaveState(targetId);
         });
-        const initialInlineDirtySectionKey = @json($errors->any() ? old('section') : '');
+        const initialInlineDirtySectionKey = @json(($viewErrors && $viewErrors->any()) ? old('section') : '');
         const initialInlineDirtyTargetId = initialInlineDirtySectionKey
             ? ({
                 profile: 'editProfileForm',
