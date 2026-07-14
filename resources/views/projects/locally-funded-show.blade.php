@@ -1087,8 +1087,10 @@
         $userProvince = trim((string) (Auth::user()->province ?? ''));
         $isLguAgencyUser = $userAgency === 'LGU';
         $canUpdateLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'update');
-        $canUpdatePhysicalForProvincialUser = $canUpdateLocallyFundedProject
-            || (Auth::user()->isDilgUser() && Auth::user()->isProvincialUser());
+        $canUpdatePhysicalAccomplishment = $canUpdateLocallyFundedProject
+            || (Auth::user()->isDilgUser() && Auth::user()->isProvincialUser())
+            || Auth::user()->isRegionalUser()
+            || Auth::user()->isRegionalOfficeAssignment();
         $canDeleteLocallyFundedProject = Auth::user()->hasCrudPermission('locally_funded_projects', 'delete');
         $canEditProjectProfile = $userAgency === 'DILG'
             && $userProvince === 'Regional Office'
@@ -1915,7 +1917,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid #00267C; padding-bottom: 10px;">
                 <h3 class="lfp-physical-section-title" style="color: #00267C; font-size: clamp(14px, 4vw, 18px); font-weight: 700; margin: 0;">Physical Accomplishment</h3>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    @if($canUpdatePhysicalForProvincialUser)
+                    @if($canUpdatePhysicalAccomplishment)
                         <a href="#" class="lfp-inline-edit-trigger" data-toggle="inline-edit" data-target="editPhysicalForm" data-physical-toggle="true"><i class="fas fa-edit" aria-hidden="true"></i>Update</a>
                     @endif
                 </div>
@@ -4646,9 +4648,10 @@
 
             if (button.hasAttribute('data-physical-toggle')) {
                 const currentMonth = {{ $currentMonth }};
-                const userAgency = '{{ Auth::user()->agency }}';
-                const userProvince = '{{ Auth::user()->province }}';
-                const isROUser = userAgency === 'DILG' && userProvince === 'Regional Office';
+                const isROUser = @json(
+                    Auth::user()->isRegionalUser()
+                    || Auth::user()->isRegionalOfficeAssignment()
+                );
                 
                 document.querySelectorAll('[data-physical-edit="true"]').forEach((input) => {
                     const inputMonth = parseInt(input.getAttribute('data-month'), 10);
