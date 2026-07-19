@@ -22,6 +22,7 @@
             'search' => '',
             'program' => [],
             'funding_year' => [],
+            'project_status' => [],
             'province' => [],
             'city' => [],
             'barangay' => [],
@@ -50,7 +51,7 @@
             ->unique()
             ->sort()
             ->values();
-        $multiFilterKeys = ['program', 'funding_year', 'province', 'city', 'barangay'];
+        $multiFilterKeys = ['program', 'funding_year', 'project_status', 'province', 'city', 'barangay'];
         $batchUploadProjects = collect($batchUploadProjects ?? [])
             ->map(function ($report) {
                 return [
@@ -133,6 +134,22 @@
                     <select id="fund_utilization_funding_year" name="funding_year[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Funding Year" aria-hidden="true">
                         @foreach(($filterOptions['funding_years'] ?? []) as $option)
                             <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['funding_year'] ?? []), true))>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_project_status" data-badge-container-id="fund_utilization_project_status_badges" data-dropdown-toggle-id="fund_utilization_project_status_dropdown_toggle" data-dropdown-menu-id="fund_utilization_project_status_dropdown_menu" data-empty-badge-text="All">
+                    <label for="fund_utilization_project_status_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Status</label>
+                    <div class="dashboard-stacked-filter-dropdown">
+                        <div id="fund_utilization_project_status_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_project_status_dropdown_menu">
+                            <div id="fund_utilization_project_status_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                        </div>
+                        <div id="fund_utilization_project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                    </div>
+                    <select id="fund_utilization_project_status" name="project_status[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Status" aria-hidden="true">
+                        @foreach(($filterOptions['project_statuses'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['project_status'] ?? []), true))>{{ $option }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -488,6 +505,22 @@
                                             <select id="batch_upload_funding_year" name="funding_year[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Funding Year" aria-hidden="true">
                                                 @foreach(($filterOptions['funding_years'] ?? []) as $option)
                                                     <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['funding_year'] ?? []), true))>{{ $option }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="batch_upload_project_status" data-badge-container-id="batch_upload_project_status_badges" data-dropdown-toggle-id="batch_upload_project_status_dropdown_toggle" data-dropdown-menu-id="batch_upload_project_status_dropdown_menu" data-empty-badge-text="All">
+                                            <label for="batch_upload_project_status_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Status</label>
+                                            <div class="dashboard-stacked-filter-dropdown">
+                                                <div id="batch_upload_project_status_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="batch_upload_project_status_dropdown_menu">
+                                                    <div id="batch_upload_project_status_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                                    <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                                </div>
+                                                <div id="batch_upload_project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                            </div>
+                                            <select id="batch_upload_project_status" name="project_status[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Status" aria-hidden="true">
+                                                @foreach(($filterOptions['project_statuses'] ?? []) as $option)
+                                                    <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['project_status'] ?? []), true))>{{ $option }}</option>
                                                 @endforeach
                                             </select>
                                         </div>
@@ -1457,7 +1490,7 @@
                 searchInput.value = '';
             }
 
-            ['program', 'funding_year', 'province', 'city', 'barangay'].forEach((suffix) => {
+            ['program', 'funding_year', 'project_status', 'province', 'city', 'barangay'].forEach((suffix) => {
                 const select = document.getElementById(`batch_upload_${suffix}`);
                 if (!select) {
                     return;

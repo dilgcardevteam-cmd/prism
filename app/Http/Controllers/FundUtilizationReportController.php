@@ -214,6 +214,7 @@ class FundUtilizationReportController extends Controller
         $programs = $filters['program'] ?? [];
         $fundSources = $filters['fund_source'] ?? [];
         $fundingYears = $filters['funding_year'] ?? [];
+        $projectStatuses = $filters['project_status'] ?? [];
         $provinces = $filters['province'] ?? [];
         $cities = $filters['city'] ?? [];
         $barangays = $filters['barangay'] ?? [];
@@ -257,6 +258,11 @@ class FundUtilizationReportController extends Controller
         if (!in_array('funding_year', $exclude, true) && !empty($fundingYears)) {
             $furQuery->whereIn(DB::raw('TRIM(COALESCE(tbfur.funding_year, ""))'), $fundingYears);
             $lfpQuery->whereIn(DB::raw('TRIM(COALESCE(locally_funded_projects.funding_year, ""))'), $fundingYears);
+        }
+
+        if (!in_array('project_status', $exclude, true) && !empty($projectStatuses)) {
+            $furQuery->whereIn(DB::raw("LOWER({$expressions['fur_project_status']})"), $projectStatuses);
+            $lfpQuery->whereIn(DB::raw("LOWER({$expressions['lfp_project_status']})"), $projectStatuses);
         }
 
         if (!in_array('province', $exclude, true) && !empty($provinces)) {
@@ -1207,6 +1213,7 @@ class FundUtilizationReportController extends Controller
         $search = trim((string) $request->query('search', ''));
         $programs = $this->normalizeFilterValues($request->query('program', []), true);
         $fundingYears = $this->normalizeFilterValues($request->query('funding_year', []));
+        $projectStatuses = $this->normalizeFilterValues($request->query('project_status', []), true);
         $provinces = $this->normalizeFilterValues($request->query('province', []), true);
         $cities = $this->normalizeFilterValues($request->query('city', []), true);
         $barangays = $this->normalizeFilterValues($request->query('barangay', []), true);
@@ -1232,6 +1239,8 @@ class FundUtilizationReportController extends Controller
         $lfpProgramExpression = "TRIM(COALESCE(spp.program, locally_funded_projects.fund_source, ''))";
         $furFundSourceExpression = "TRIM(COALESCE(tbfur.fund_source, locally_funded_projects.fund_source, ''))";
         $lfpFundSourceExpression = "TRIM(COALESCE(locally_funded_projects.fund_source, ''))";
+        $furProjectStatusExpression = "TRIM(COALESCE(tbfur.project_status, ''))";
+        $lfpProjectStatusExpression = "'Ongoing'";
         $furProvinceExpression = "TRIM(COALESCE(tbfur.province, locally_funded_projects.province, spp.province, ''))";
         $lfpProvinceExpression = "TRIM(COALESCE(locally_funded_projects.province, spp.province, ''))";
         $furCityExpression = "TRIM(COALESCE(locally_funded_projects.city_municipality, spp.city_municipality, ''))";
@@ -1387,6 +1396,7 @@ class FundUtilizationReportController extends Controller
             'program' => $programs,
             'fund_source' => [],
             'funding_year' => $fundingYears,
+            'project_status' => $projectStatuses,
             'province' => $provinces,
             'city' => $cities,
             'barangay' => $barangays,
@@ -1396,6 +1406,7 @@ class FundUtilizationReportController extends Controller
             'program' => $this->normalizeFilterValues($request->query('program', [])),
             'fund_source' => [],
             'funding_year' => $this->normalizeFilterValues($request->query('funding_year', [])),
+            'project_status' => $this->normalizeFilterValues($request->query('project_status', [])),
             'province' => $this->normalizeFilterValues($request->query('province', [])),
             'city' => $this->normalizeFilterValues($request->query('city', [])),
             'barangay' => $this->normalizeFilterValues($request->query('barangay', [])),
@@ -1410,6 +1421,8 @@ class FundUtilizationReportController extends Controller
                 'lfp_program' => $lfpProgramExpression,
                 'fur_fund_source' => $furFundSourceExpression,
                 'lfp_fund_source' => $lfpFundSourceExpression,
+                'fur_project_status' => $furProjectStatusExpression,
+                'lfp_project_status' => $lfpProjectStatusExpression,
                 'fur_province' => $furProvinceExpression,
                 'lfp_province' => $lfpProvinceExpression,
                 'fur_city' => $furCityExpression,
@@ -1430,6 +1443,8 @@ class FundUtilizationReportController extends Controller
                 'lfp_program' => $lfpProgramExpression,
                 'fur_fund_source' => $furFundSourceExpression,
                 'lfp_fund_source' => $lfpFundSourceExpression,
+                'fur_project_status' => $furProjectStatusExpression,
+                'lfp_project_status' => $lfpProjectStatusExpression,
                 'fur_province' => $furProvinceExpression,
                 'lfp_province' => $lfpProvinceExpression,
                 'fur_city' => $furCityExpression,
@@ -1447,6 +1462,7 @@ class FundUtilizationReportController extends Controller
             'program' => $activeFilters['program'],
             'fund_source' => $activeFilters['fund_source'],
             'funding_year' => $activeFilters['funding_year'],
+            'project_status' => $activeFilters['project_status'],
             'province' => $activeFilters['province'],
             'city' => $activeFilters['city'],
             'barangay' => $activeFilters['barangay'],
@@ -1519,6 +1535,26 @@ class FundUtilizationReportController extends Controller
             ->filter()
             ->unique()
             ->sortByDesc(fn ($value) => (int) $value)
+            ->values();
+
+        [$statusFurQuery, $statusLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['project_status']);
+        $projectStatuses = $statusFurQuery
+            ->selectRaw($expressions['fur_project_status'] . ' as project_status')
+            ->whereRaw($expressions['fur_project_status'] . " <> ''")
+            ->distinct()
+            ->pluck('project_status')
+            ->concat(
+                $statusLfpQuery
+                    ->selectRaw($expressions['lfp_project_status'] . ' as project_status')
+                    ->whereRaw($expressions['lfp_project_status'] . " <> ''")
+                    ->distinct()
+                    ->pluck('project_status')
+            )
+            ->concat(collect($activeFilters['project_status'] ?? []))
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->sort()
             ->values();
 
         [$locationFurQuery, $locationLfpQuery] = $this->buildFundUtilizationOptionQueries($furQuery, $lfpQuery, $filters, $expressions, ['province', 'city', 'barangay']);
@@ -1607,6 +1643,7 @@ class FundUtilizationReportController extends Controller
             'programs' => $programs,
             'fund_sources' => $fundSources,
             'funding_years' => $fundingYears,
+            'project_statuses' => $projectStatuses,
             'provinces' => $provinces,
             'barangays' => $selectedBarangays,
             'provinceMunicipalities' => $provinceMunicipalities,
