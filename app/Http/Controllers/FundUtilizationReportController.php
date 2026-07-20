@@ -3581,18 +3581,51 @@ class FundUtilizationReportController extends Controller
 
         $workflow = $workflowService->workflowFor($report->project_code, $quarter, $uploadType);
         if (!$workflow) {
-            try {
-                \Log::channel('upload_timestamps')->warning('Approve/return attempted but workflow missing', [
-                    'project_code' => $report->project_code,
-                    'quarter' => $quarter,
-                    'upload_type' => $uploadType,
-                    'user_id' => optional(Auth::user())->getKey(),
-                ]);
-            } catch (\Throwable $e) {
-                // Ignore logging failures
-            }
+            $encoderField = match ($uploadType) {
+                'written-notice-dbm' => 'dbm_encoder_id',
+                'written-notice-dilg' => 'dilg_encoder_id',
+                'written-notice-speaker' => 'speaker_encoder_id',
+                'written-notice-president' => 'president_encoder_id',
+                'written-notice-house' => 'house_encoder_id',
+                'written-notice-senate' => 'senate_encoder_id',
+                default => 'encoder_id',
+            };
 
-            return $errorResponse('No workflow record exists yet for this submission. Resubmit the document first.');
+            $uploaderId = $record->{$encoderField} ?? $record->encoder_id ?? null;
+            $uploader = $uploaderId ? User::where('idno', $uploaderId)->orWhere('id', $uploaderId)->first() : null;
+
+            if ($uploader && (int) $uploader->getKey() !== (int) $user->getKey()) {
+                $isProvincialUser = $uploader->isProvincialDilgAssignment();
+                $uploaderRole = $isProvincialUser ? User::ROLE_PROVINCIAL : $uploader->normalizedRole();
+                $isRegionalValidator = $this->isFundUtilizationRegionalValidator($user);
+
+                $workflow = new FundUtilizationApprovalWorkflow();
+                $workflow->project_code = $report->project_code;
+                $workflow->quarter = $quarter;
+                $workflow->document_type = $uploadType;
+                $workflow->uploader_id = $uploader->getKey();
+                $workflow->uploader_role = $uploaderRole;
+                $workflow->revision_number = 1;
+                $workflow->current_approval_level = $isRegionalValidator ? 2 : 1;
+                $workflow->status = $isRegionalValidator ? 'Pending Level 2 Approval' : 'Pending Level 1 Approval';
+                $workflow->current_approver_id = $user->getKey();
+                $workflow->current_approver_role = $user->normalizedRole();
+                $workflow->submitted_at = $record->created_at ?? now();
+                $workflow->save();
+            } else {
+                try {
+                    \Log::channel('upload_timestamps')->warning('Approve/return attempted but workflow missing', [
+                        'project_code' => $report->project_code,
+                        'quarter' => $quarter,
+                        'upload_type' => $uploadType,
+                        'user_id' => optional(Auth::user())->getKey(),
+                    ]);
+                } catch (\Throwable $e) {
+                    // Ignore logging failures
+                }
+
+                return $errorResponse('No workflow record exists yet for this submission. Resubmit the document first.');
+            }
         }
 
         if (!Gate::forUser($user)->allows('fund-utilization.validateWorkflow', $workflow)) {
