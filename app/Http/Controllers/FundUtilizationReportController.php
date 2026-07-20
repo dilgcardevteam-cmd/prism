@@ -3592,7 +3592,7 @@ class FundUtilizationReportController extends Controller
             };
 
             $uploaderId = $record->{$encoderField} ?? $record->encoder_id ?? null;
-            $uploader = $uploaderId ? User::where('idno', $uploaderId)->orWhere('id', $uploaderId)->first() : null;
+            $uploader = $uploaderId ? User::where('idno', $uploaderId)->first() : null;
 
             if ($uploader && (int) $uploader->getKey() !== (int) $user->getKey()) {
                 $isProvincialUser = $uploader->isProvincialDilgAssignment();
