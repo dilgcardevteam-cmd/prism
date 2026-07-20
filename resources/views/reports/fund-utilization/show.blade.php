@@ -2339,10 +2339,11 @@
         }
 
         #batchDocumentViewerModal .modal-content {
-            margin: 0;
-            width: min(1100px, 96vw);
-            max-width: min(1100px, 96vw);
-            max-height: calc(100vh - 48px);
+            margin: 2vh auto;
+            width: 96vw;
+            max-width: 1600px;
+            height: 96vh;
+            max-height: 96vh;
         }
 
         .action-confirm-modal .modal-content {
@@ -2633,8 +2634,8 @@
     <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
     <div id="batchDocumentViewerModal" class="modal" aria-hidden="true">
-        <div class="modal-content" style="padding: 0; overflow: hidden; background: #f8fafc;">
-            <div class="modal-header" style="margin: 0; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12);">
+        <div class="modal-content" style="padding: 0; overflow: hidden; background: #f8fafc; display: flex; flex-direction: column;">
+            <div class="modal-header" style="margin: 0; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12); flex-shrink: 0;">
                 <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
                     <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <i class="fas fa-eye" style="color: white; font-size: 13px;"></i>
@@ -2646,10 +2647,10 @@
                 </div>
                 <button class="close-modal" onclick="closeBatchDocumentViewerModal()" style="color: rgba(255,255,255,0.85); font-size: 22px; line-height: 1; flex-shrink: 0;">&times;</button>
             </div>
-            <div style="padding: 0; background: #e2e8f0;">
-                <iframe id="batchDocumentViewerFrame" class="document-viewer-frame" title="Batch document viewer" loading="lazy"></iframe>
+            <div style="padding: 0; background: #e2e8f0; flex: 1; display: flex;">
+                <iframe id="batchDocumentViewerFrame" class="document-viewer-frame" title="Batch document viewer" loading="lazy" style="width: 100%; height: 100%; border: none;"></iframe>
             </div>
-            <div style="display: flex; justify-content: flex-end; padding: 14px 20px; background: #f8fafc; border-top: 1px solid #cbd5e1;">
+            <div style="display: flex; justify-content: flex-end; padding: 14px 20px; background: #f8fafc; border-top: 1px solid #cbd5e1; flex-shrink: 0;">
                 <button type="button" onclick="closeBatchDocumentViewerModal()" style="padding: 10px 18px; border: none; border-radius: 8px; background: #475569; color: white; font-size: 13px; font-weight: 700; cursor: pointer;">
                     Close
                 </button>
