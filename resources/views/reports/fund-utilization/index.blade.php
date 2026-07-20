@@ -1,4 +1,4 @@
-﻿@extends('layouts.dashboard')
+@extends('layouts.dashboard')
 
 @section('title', 'Fund Utilization Report')
 @section('page-title', 'Fund Utilization Report')
@@ -415,6 +415,13 @@
     </div>
 
     <!-- Export Modal -->
+    @php
+        $modalSelectedProvince = !empty($activeFilters['province']) ? trim((string) $activeFilters['province'][0]) : '';
+        $modalSelectedCity = !empty($activeFilters['city']) ? trim((string) $activeFilters['city'][0]) : '';
+        $modalCityOptions = !empty($modalSelectedProvince) && isset($provinceMunicipalities[$modalSelectedProvince])
+            ? $provinceMunicipalities[$modalSelectedProvince]
+            : [];
+    @endphp
     <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 1000;">
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); max-width: 400px; width: 90%;">
             <h3 style="margin: 0 0 20px 0; color: #111827; font-size: 18px; font-weight: 600;">Select Quarter for Export</h3>
@@ -427,6 +434,24 @@
                         <option value="Q2">Q2 (April - June)</option>
                         <option value="Q3">Q3 (July - September)</option>
                         <option value="Q4">Q4 (October - December)</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="export_province" style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500;">Province:</label>
+                    <select id="export_province" name="province" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background-color: #f9fafb;">
+                        <option value="">All Provinces</option>
+                        @foreach(($filterOptions['provinces'] ?? []) as $option)
+                            <option value="{{ $option }}" {{ $modalSelectedProvince === $option ? 'selected' : '' }}>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="export_city" style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500;">City/Municipality:</label>
+                    <select id="export_city" name="city" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background-color: #f9fafb;" {{ empty($modalSelectedProvince) ? 'disabled' : '' }}>
+                        <option value="">All Cities/Municipalities</option>
+                        @foreach($modalCityOptions as $city)
+                            <option value="{{ $city }}" {{ $modalSelectedCity === $city ? 'selected' : '' }}>{{ $city }}</option>
+                        @endforeach
                     </select>
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -1090,6 +1115,35 @@
             document.getElementById('exportModal').style.display = 'none';
             selectedFormat = '';
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const exportProvinceSelect = document.getElementById('export_province');
+            if (exportProvinceSelect) {
+                exportProvinceSelect.addEventListener('change', function () {
+                    const province = this.value;
+                    const citySelect = document.getElementById('export_city');
+                    if (!citySelect) return;
+                    
+                    // Clear current options
+                    citySelect.innerHTML = '<option value="">All Cities/Municipalities</option>';
+                    
+                    if (province && FUND_UTILIZATION_LOCATION_MAP[province]) {
+                        citySelect.disabled = false;
+                        FUND_UTILIZATION_LOCATION_MAP[province].forEach(function (city) {
+                            const normalizedCity = String(city || '').trim();
+                            if (normalizedCity !== '') {
+                                const option = document.createElement('option');
+                                option.value = normalizedCity;
+                                option.textContent = normalizedCity;
+                                citySelect.appendChild(option);
+                            }
+                        });
+                    } else {
+                        citySelect.disabled = true;
+                    }
+                });
+            }
+        });
 
         const FUND_UTILIZATION_LOCATION_MAP = @json($provinceMunicipalities ?? []);
         const FUND_UTILIZATION_BARANGAY_MAP = @json($cityBarangayMap ?? []);
@@ -3457,9 +3511,19 @@
             url.searchParams.set('quarter', quarter);
 
             for (const [key, value] of currentUrl.searchParams.entries()) {
-                if (key !== 'format' && key !== 'quarter') {
+                if (key !== 'format' && key !== 'quarter' && key !== 'province' && key !== 'city' && !key.startsWith('province[') && !key.startsWith('city[')) {
                     url.searchParams.append(key, value);
                 }
+            }
+
+            const provinceVal = document.getElementById('export_province').value;
+            const cityVal = document.getElementById('export_city').value;
+
+            if (provinceVal) {
+                url.searchParams.append('province[]', provinceVal);
+            }
+            if (cityVal) {
+                url.searchParams.append('city[]', cityVal);
             }
 
             if (window.AppUI && typeof window.AppUI.suppressPageLoaderForDownload === 'function') {
