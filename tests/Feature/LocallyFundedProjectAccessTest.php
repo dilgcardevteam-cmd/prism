@@ -137,4 +137,26 @@ class LocallyFundedProjectAccessTest extends TestCase
 
         $this->assertTrue($response->isRedirect(route('projects.locally-funded')));
     }
+
+    public function test_locally_funded_project_controller_registers_view_middleware(): void
+    {
+        $controller = new LocallyFundedProjectController();
+        $middlewareList = $controller->getMiddleware();
+
+        $foundViewMiddleware = false;
+        foreach ($middlewareList as $item) {
+            if ($item['middleware'] === 'crud_permission:locally_funded_projects,view') {
+                $foundViewMiddleware = true;
+                $options = $item['options'] ?? [];
+                $this->assertArrayHasKey('only', $options);
+                $this->assertContains('index', $options['only']);
+                $this->assertContains('show', $options['only']);
+                $this->assertContains('showSubaybayan', $options['only']);
+                $this->assertContains('viewPcrMov', $options['only']);
+                $this->assertContains('ensureFromSubay', $options['only']);
+            }
+        }
+
+        $this->assertTrue($foundViewMiddleware, 'LocallyFundedProjectController should register the view permission middleware.');
+    }
 }

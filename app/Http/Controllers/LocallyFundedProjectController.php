@@ -28,6 +28,7 @@ class LocallyFundedProjectController extends Controller
     public function __construct()
     {
         $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileExpectedCompletionThisMonth', 'mobileAggregatedDashboard', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage', 'mobileDeleteGalleryImage', 'mobileUpdateGalleryImage']);
+        $this->middleware('crud_permission:locally_funded_projects,view')->only(['index', 'show', 'showSubaybayan', 'viewPcrMov', 'ensureFromSubay']);
         $this->middleware('crud_permission:locally_funded_projects,add')->only(['create', 'store']);
         $this->middleware('crud_permission:locally_funded_projects,update')->only(['edit', 'update']);
         $this->middleware('crud_permission:locally_funded_projects,delete')->only(['destroy']);

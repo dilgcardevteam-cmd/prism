@@ -2500,39 +2500,50 @@
                 </a>
             </li>
             @php
-                $canViewLocallyFundedProjects = true;
+                $canViewLocallyFundedProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
                 $canViewRssaProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
                 $canViewRlipLimeProjects = Auth::user()->hasCrudPermission('rlip_lime_projects', 'view');
                 $canViewProjectAtRiskProjects = Auth::user()->hasCrudPermission('project_at_risk_projects', 'view');
                 $canViewSglgifPortal = Auth::user()->hasCrudPermission('sglgif_portal', 'view');
                 $canViewPreImplementationDocuments = Auth::user()->hasCrudPermission('pre_implementation_documents', 'view');
                 $canViewRbisAnnualCertification = Auth::user()->hasCrudPermission('rbis_annual_certification', 'view');
-                $canViewAnnualAmwp = $canViewRbisAnnualCertification;
-                $canViewAnnualRpmesBase = $canViewRbisAnnualCertification;
-                $canViewAnnualRpmesForm4 = $canViewAnnualRpmesBase
-                    || Auth::user()->hasCrudPermission('annual_rpmes_form_4', 'view');
+                $canViewAnnualAmwp = Auth::user()->hasCrudPermission('annual_maintenance_work_program', 'view');
+                $canViewAnnualRpmesForm4 = Auth::user()->hasCrudPermission('annual_rpmes_form_4', 'view');
                 $canViewAnyAnnualRpmesForm = $canViewAnnualRpmesForm4;
                 $canViewPdNoPbbmMonthlyReports = Auth::user()->hasCrudPermission('pd_no_pbbm_monthly_reports', 'view');
                 $canViewSwaAnnexFMonthlyReports = Auth::user()->hasCrudPermission('swa_annex_f_monthly_reports', 'view');
                 $canViewFundUtilizationReports = Auth::user()->hasCrudPermission('fund_utilization_reports', 'view');
                 $canViewLpmcReports = Auth::user()->hasCrudPermission('local_project_monitoring_committee', 'view');
                 $canViewRoadMaintenanceReports = Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'view');
-                $canViewQuarterlyRpmesBase = $canViewFundUtilizationReports
-                    || $canViewLpmcReports
-                    || $canViewRoadMaintenanceReports;
-                $canViewQuarterlyRpmesForm2 = $canViewQuarterlyRpmesBase
-                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_2', 'view');
-                $canViewQuarterlyRpmesForm5 = $canViewQuarterlyRpmesBase
-                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_5', 'view');
-                $canViewQuarterlyRpmesForm6 = $canViewQuarterlyRpmesBase
-                    || Auth::user()->hasCrudPermission('quarterly_rpmes_form_6', 'view');
+                $canViewQuarterlyDilgMc201819 = Auth::user()->hasCrudPermission('quarterly_dilg_mc_2018_19', 'view');
+                $canViewQuarterlyDilgMc201830 = Auth::user()->hasCrudPermission('quarterly_dilg_mc_2018_30', 'view');
+                $canViewQuarterlyRpmesForm2 = Auth::user()->hasCrudPermission('quarterly_rpmes_form_2', 'view');
+                $canViewQuarterlyRpmesForm5 = Auth::user()->hasCrudPermission('quarterly_rpmes_form_5', 'view');
+                $canViewQuarterlyRpmesForm6 = Auth::user()->hasCrudPermission('quarterly_rpmes_form_6', 'view');
                 $canViewAnyQuarterlyRpmesForm = $canViewQuarterlyRpmesForm2
                     || $canViewQuarterlyRpmesForm5
                     || $canViewQuarterlyRpmesForm6;
-                $currentUser = Auth::user();
-                $canViewDilgDeliverables = $currentUser->isDilgUser()
-                    && !$currentUser->isLguScopedUser()
-                    && ($currentUser->isRegionalOfficeAssignment() || $currentUser->normalizedProvince() !== '');
+                $canViewQuarterlyRpmesBase = $canViewFundUtilizationReports
+                    || $canViewLpmcReports
+                    || $canViewRoadMaintenanceReports
+                    || $canViewQuarterlyDilgMc201819
+                    || $canViewQuarterlyDilgMc201830
+                    || $canViewAnyQuarterlyRpmesForm;
+                $canViewConfirmationOfFundReceipt = Auth::user()->hasCrudPermission('confirmation_of_fund_receipt', 'view');
+                $canViewLgsfProjectCompletionReports = Auth::user()->hasCrudPermission('lgsf_project_completion_reports', 'view');
+                $canViewSglgifProjectCompletionReports = Auth::user()->hasCrudPermission('sglgif_project_completion_reports', 'view');
+                $canViewPisatReports = Auth::user()->hasCrudPermission('pisat_reports', 'view');
+                $canViewAnyProjectCompletionReport = $canViewLgsfProjectCompletionReports || $canViewSglgifProjectCompletionReports;
+                $canViewAnyOneTimeReport = $canViewConfirmationOfFundReceipt
+                    || $canViewPreImplementationDocuments
+                    || $canViewAnyProjectCompletionReport
+                    || $canViewPisatReports;
+                $canViewDilgMonitoringEvaluation = Auth::user()->hasCrudPermission('dilg_deliverables_monitoring_evaluation', 'view');
+                $canViewDilgRlipLimeMonthly = Auth::user()->hasCrudPermission('dilg_deliverables_rlip_lime_monthly', 'view');
+                $canViewDilgQaarTool = Auth::user()->hasCrudPermission('dilg_deliverables_qaar_tool_monitoring', 'view');
+                $canViewDilgDeliverables = $canViewDilgMonitoringEvaluation
+                    || $canViewDilgRlipLimeMonthly
+                    || $canViewDilgQaarTool;
                 $canViewTicketingSystem = Auth::user()->hasCrudPermission('ticketing_system', 'view');
                 $canViewSubaybayanUploads = Auth::user()->hasCrudPermission('subaybayan_data_uploads', 'view');
                 $canViewRssaLgsfUploads = $canViewSubaybayanUploads;
@@ -2557,7 +2568,8 @@
                     || $canViewLpmcReports
                     || $canViewRoadMaintenanceReports
                     || $canViewAnyQuarterlyRpmesForm
-                    || $canViewDilgDeliverables;
+                    || $canViewDilgDeliverables
+                    || $canViewAnyOneTimeReport;
                 $hasAnyUtilitiesAccess = $canViewUtilitiesSystemSetup
                     || $canViewUtilitiesNotifications
                     || $canViewUtilitiesDeadlines
@@ -2691,13 +2703,15 @@
                             <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                         </a>
                         <ul id="reportsDilgDeliverablesMenu" class="submenu" style="display: {{ $reportsDilgDeliverablesMenuActive ? 'block' : 'none' }};">
-                            <li>
-                                <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation') }}" class="@if($reportsDilgMonitoringEvaluationActive) active @endif">
-                                    <i class="fas fa-file-lines"></i>
-                                    <span>Monitoring and Evaluation Reports</span>
-                                </a>
-                            </li>
-                            @if($canViewRlipLimeProjects)
+                            @if($canViewDilgMonitoringEvaluation)
+                                <li>
+                                    <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation') }}" class="@if($reportsDilgMonitoringEvaluationActive) active @endif">
+                                        <i class="fas fa-file-lines"></i>
+                                        <span>Monitoring and Evaluation Reports</span>
+                                    </a>
+                                </li>
+                            @endif
+                            @if($canViewDilgRlipLimeMonthly)
                                 <li>
                                     <a href="{{ route('reports.dilg-deliverables.rlip-lime-monthly') }}" class="@if($reportsDilgRlipLimeActive) active @endif">
                                         <i class="fas fa-chart-column"></i>
@@ -2705,12 +2719,14 @@
                                     </a>
                                 </li>
                             @endif
-                            <li>
-                                <a href="{{ route('reports.dilg-deliverables.qaar-tool-monitoring') }}" class="@if($reportsDilgQaarActive) active @endif">
-                                    <i class="fas fa-clipboard-check"></i>
-                                    <span>QAAR Tool and Monitoring Report</span>
-                                </a>
-                            </li>
+                            @if($canViewDilgQaarTool)
+                                <li>
+                                    <a href="{{ route('reports.dilg-deliverables.qaar-tool-monitoring') }}" class="@if($reportsDilgQaarActive) active @endif">
+                                        <i class="fas fa-clipboard-check"></i>
+                                        <span>QAAR Tool and Monitoring Report</span>
+                                    </a>
+                                </li>
+                            @endif
                         </ul>
                     </li>
                 @endif
@@ -2721,7 +2737,7 @@
                         <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                     </a>
                     <ul id="reportsMenu" class="submenu" style="display: {{ $reportsMenuActive ? 'block' : 'none' }};">
-                    @if($canViewRbisAnnualCertification || $canViewAnyAnnualRpmesForm)
+                    @if($canViewRbisAnnualCertification || $canViewAnnualAmwp || $canViewAnyAnnualRpmesForm)
                         <li>
                             <a href="#" class="@if($reportsAnnualActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsAnnualMenu')">
                                 <i class="fas fa-calendar-alt"></i>
@@ -2799,18 +2815,22 @@
                                         </a>
                                     </li>
                                 @endif
-                                <li>
-                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-19') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-19*')) active @endif" title="Monitoring of Roads and Other Similar Public Works in Compliance with DILG MC No. 2018-19">
-                                        <i class="fas fa-file-lines"></i>
-                                        <span>DILG MC No. 2018-19</span>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="{{ route('reports.quarterly.dilg-mc-2018-30') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-30*')) active @endif" title="Report on Monitoring of Local Government Projects on Contractor's Compliance to Inform the Public before Commencement of Road Projects">
-                                        <i class="fas fa-file-lines"></i>
-                                        <span>DILG MC No. 2018-30</span>
-                                    </a>
-                                </li>
+                                @if($canViewQuarterlyDilgMc201819)
+                                    <li>
+                                        <a href="{{ route('reports.quarterly.dilg-mc-2018-19') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-19*')) active @endif" title="Monitoring of Roads and Other Similar Public Works in Compliance with DILG MC No. 2018-19">
+                                            <i class="fas fa-file-lines"></i>
+                                            <span>DILG MC No. 2018-19</span>
+                                        </a>
+                                    </li>
+                                @endif
+                                @if($canViewQuarterlyDilgMc201830)
+                                    <li>
+                                        <a href="{{ route('reports.quarterly.dilg-mc-2018-30') }}" class="@if(request()->routeIs('reports.quarterly.dilg-mc-2018-30*')) active @endif" title="Report on Monitoring of Local Government Projects on Contractor's Compliance to Inform the Public before Commencement of Road Projects">
+                                            <i class="fas fa-file-lines"></i>
+                                            <span>DILG MC No. 2018-30</span>
+                                        </a>
+                                    </li>
+                                @endif
                                 @if($canViewAnyQuarterlyRpmesForm)
                                     <li>
                                         <a href="#" class="@if($reportsQuarterlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsQuarterlyRpmesMenu')">
@@ -2894,6 +2914,7 @@
                             </ul>
                         </li>
                     @endif
+                    @if($canViewAnyOneTimeReport)
                     <li>
                         <a href="#" class="@if($reportsOneTimeActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsOneTimeMenu')">
                             <i class="fas fa-file-circle-check"></i>
@@ -2901,49 +2922,60 @@
                             <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
                         </a>
                         <ul id="reportsOneTimeMenu" class="submenu" style="display: {{ $reportsOneTimeActive ? 'block' : 'none' }};">
-                            <li>
-                                <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.index') }}" class="@if(request()->routeIs('reports.one-time.confirmation-of-fund-receipt.*')) active @endif">
-                                    <i class="fas fa-receipt"></i>
-                                    <span>Confirmation of Fund Receipt</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents') || request()->routeIs('initial-project-documents.*') || (request()->routeIs('pre-implementation-documents.*') && request()->query('scope') === 'all')) active @endif">
-                                    <i class="fas fa-folder-tree"></i>
-                                    <span>Project Documents</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" class="@if($reportsProjectCompletionActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsProjectCompletionMenu')">
-                                    <i class="fas fa-flag-checkered"></i>
-                                    <span>Project Completion Reports</span>
-                                    <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
-                                </a>
-                                <ul id="reportsProjectCompletionMenu" class="submenu" style="display: {{ $reportsProjectCompletionActive ? 'block' : 'none' }};">
-                                    <li>
-                                        <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp*')) active @endif">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span>LGSF</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                    </li>
-                                    <li>
-                                        <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif*')) active @endif">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span>SGLGIF</span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </li>
-                            <li>
-                                <a href="{{ route('reports.one-time.pisat') }}" class="@if(request()->routeIs('reports.one-time.pisat')) active @endif">
-                                    <i class="fas fa-clipboard-check"></i>
-                                    <span>PISAT</span>
-                                </a>
-                            </li>
+                            @if($canViewConfirmationOfFundReceipt)
+                                <li>
+                                    <a href="{{ route('reports.one-time.confirmation-of-fund-receipt.index') }}" class="@if(request()->routeIs('reports.one-time.confirmation-of-fund-receipt.*')) active @endif">
+                                        <i class="fas fa-receipt"></i>
+                                        <span>Confirmation of Fund Receipt</span>
+                                    </a>
+                                </li>
+                            @endif
+                            @if($canViewPreImplementationDocuments)
+                                <li>
+                                    <a href="{{ route('reports.one-time.project-initial-documents') }}" class="@if(request()->routeIs('reports.one-time.project-initial-documents') || request()->routeIs('initial-project-documents.*') || (request()->routeIs('pre-implementation-documents.*') && request()->query('scope') === 'all')) active @endif">
+                                        <i class="fas fa-folder-tree"></i>
+                                        <span>Project Documents</span>
+                                    </a>
+                                </li>
+                            @endif
+                            @if($canViewAnyProjectCompletionReport)
+                                <li>
+                                    <a href="#" class="@if($reportsProjectCompletionActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsProjectCompletionMenu')">
+                                        <i class="fas fa-flag-checkered"></i>
+                                        <span>Project Completion Reports</span>
+                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
+                                    </a>
+                                    <ul id="reportsProjectCompletionMenu" class="submenu" style="display: {{ $reportsProjectCompletionActive ? 'block' : 'none' }};">
+                                        @if($canViewLgsfProjectCompletionReports)
+                                            <li>
+                                                <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp*')) active @endif">
+                                                    <i class="fas fa-file-alt"></i>
+                                                    <span>LGSF</span>
+                                                </a>
+                                            </li>
+                                        @endif
+                                        @if($canViewSglgifProjectCompletionReports)
+                                            <li>
+                                                <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif*')) active @endif">
+                                                    <i class="fas fa-file-alt"></i>
+                                                    <span>SGLGIF</span>
+                                                </a>
+                                            </li>
+                                        @endif
+                                    </ul>
+                                </li>
+                            @endif
+                            @if($canViewPisatReports)
+                                <li>
+                                    <a href="{{ route('reports.one-time.pisat') }}" class="@if(request()->routeIs('reports.one-time.pisat')) active @endif">
+                                        <i class="fas fa-clipboard-check"></i>
+                                        <span>PISAT</span>
+                                    </a>
+                                </li>
+                            @endif
                         </ul>
                     </li>
+                    @endif
                 </ul>
             </li>
             @endif
