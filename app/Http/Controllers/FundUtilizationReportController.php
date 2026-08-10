@@ -288,6 +288,77 @@ class FundUtilizationReportController extends Controller
                 }
             });
         }
+
+        $submissionYear = trim((string) ($filters['submission_year'] ?? ''));
+        if (!in_array('submission_year', $exclude, true) && $submissionYear !== '') {
+            $furQuery->where(function ($query) use ($submissionYear) {
+                $query->whereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_mov_uploads')
+                        ->whereColumn('tbfur_mov_uploads.project_code', 'tbfur.project_code')
+                        ->whereRaw('YEAR(tbfur_mov_uploads.mov_uploaded_at) = ?', [$submissionYear]);
+                })->orWhereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_written_notice')
+                        ->whereColumn('tbfur_written_notice.project_code', 'tbfur.project_code')
+                        ->where(function ($wn) use ($submissionYear) {
+                            $wn->whereRaw('YEAR(dbm_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(dilg_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(speaker_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(president_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(house_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(senate_uploaded_at) = ?', [$submissionYear]);
+                        });
+                })->orWhereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_fdp')
+                        ->whereColumn('tbfur_fdp.project_code', 'tbfur.project_code')
+                        ->where(function ($fdp) use ($submissionYear) {
+                            $fdp->whereRaw('YEAR(fdp_uploaded_at) = ?', [$submissionYear])
+                                ->orWhereRaw('YEAR(posting_uploaded_at) = ?', [$submissionYear]);
+                        });
+                })->orWhereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_batch_documents')
+                        ->whereColumn('tbfur_batch_documents.project_code', 'tbfur.project_code')
+                        ->whereRaw('YEAR(tbfur_batch_documents.created_at) = ?', [$submissionYear]);
+                });
+            });
+
+            $lfpQuery->where(function ($query) use ($submissionYear) {
+                $query->whereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_mov_uploads')
+                        ->whereColumn('tbfur_mov_uploads.project_code', 'locally_funded_projects.subaybayan_project_code')
+                        ->whereRaw('YEAR(tbfur_mov_uploads.mov_uploaded_at) = ?', [$submissionYear]);
+                })->orWhereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_written_notice')
+                        ->whereColumn('tbfur_written_notice.project_code', 'locally_funded_projects.subaybayan_project_code')
+                        ->where(function ($wn) use ($submissionYear) {
+                            $wn->whereRaw('YEAR(dbm_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(dilg_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(speaker_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(president_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(house_uploaded_at) = ?', [$submissionYear])
+                               ->orWhereRaw('YEAR(senate_uploaded_at) = ?', [$submissionYear]);
+                        });
+                })->orWhereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_fdp')
+                        ->whereColumn('tbfur_fdp.project_code', 'locally_funded_projects.subaybayan_project_code')
+                        ->where(function ($fdp) use ($submissionYear) {
+                            $fdp->whereRaw('YEAR(fdp_uploaded_at) = ?', [$submissionYear])
+                                ->orWhereRaw('YEAR(posting_uploaded_at) = ?', [$submissionYear]);
+                        });
+                })->orWhereExists(function ($sub) use ($submissionYear) {
+                    $sub->select(DB::raw(1))
+                        ->from('tbfur_batch_documents')
+                        ->whereColumn('tbfur_batch_documents.project_code', 'locally_funded_projects.subaybayan_project_code')
+                        ->whereRaw('YEAR(tbfur_batch_documents.created_at) = ?', [$submissionYear]);
+                });
+            });
+        }
     }
 
     private function buildFundUtilizationOptionQueries($furQuery, $lfpQuery, array $filters, array $expressions, array $exclude = []): array
@@ -823,21 +894,21 @@ class FundUtilizationReportController extends Controller
         $postingProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('fdp.posting_encoder_id');
 
         $writtenNoticeConditions = implode(' OR ', [
-            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND NOT {$dbmProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND NOT {$dilgProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND NOT {$speakerProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND NOT {$presidentProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND NOT {$houseProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND NOT {$senateProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND NOT {$dbmProvincialUploaderExpression} AND wn.dbm_approved_at_dilg_po IS NULL)",
+            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND NOT {$dilgProvincialUploaderExpression} AND wn.dilg_approved_at_dilg_po IS NULL)",
+            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND NOT {$speakerProvincialUploaderExpression} AND wn.speaker_approved_at_dilg_po IS NULL)",
+            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND NOT {$presidentProvincialUploaderExpression} AND wn.president_approved_at_dilg_po IS NULL)",
+            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND NOT {$houseProvincialUploaderExpression} AND wn.house_approved_at_dilg_po IS NULL)",
+            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND NOT {$senateProvincialUploaderExpression} AND wn.senate_approved_at_dilg_po IS NULL)",
         ]);
 
         return '('
-            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND NOT {$movProvincialUploaderExpression})"
-            . " OR EXISTS (SELECT 1 FROM tbfur_batch_documents bd WHERE bd.project_code = {$projectCodeColumn} AND TRIM(COALESCE(bd.batch_document_file_path, '')) <> '' AND LOWER(COALESCE(bd.status, '')) = 'pending' AND NOT {$batchProvincialUploaderExpression})"
+            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND NOT {$movProvincialUploaderExpression} AND mu.approved_at_dilg_po IS NULL)"
+            . " OR EXISTS (SELECT 1 FROM tbfur_batch_documents bd WHERE bd.project_code = {$projectCodeColumn} AND TRIM(COALESCE(bd.batch_document_file_path, '')) <> '' AND LOWER(COALESCE(bd.status, '')) = 'pending' AND NOT {$batchProvincialUploaderExpression} AND bd.approved_at_dilg_po IS NULL)"
             . " OR EXISTS (SELECT 1 FROM tbfur_written_notice wn WHERE wn.project_code = {$projectCodeColumn} AND ({$writtenNoticeConditions}))"
             . " OR EXISTS (SELECT 1 FROM tbfur_fdp fdp WHERE fdp.project_code = {$projectCodeColumn} AND ("
-                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND NOT {$fdpProvincialUploaderExpression})"
-                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND NOT {$postingProvincialUploaderExpression})"
+                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND NOT {$fdpProvincialUploaderExpression} AND fdp.approved_at_dilg_po IS NULL)"
+                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND NOT {$postingProvincialUploaderExpression} AND fdp.posting_approved_at_dilg_po IS NULL)"
             . '))'
         . ')';
     }
@@ -856,21 +927,21 @@ class FundUtilizationReportController extends Controller
         $postingProvincialUploaderExpression = $this->buildFundUtilizationProvincialUploaderExistsExpression('fdp.posting_encoder_id');
 
         $writtenNoticeConditions = implode(' OR ', [
-            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND {$dbmProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND {$dilgProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND {$speakerProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND {$presidentProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND {$houseProvincialUploaderExpression})",
-            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND {$senateProvincialUploaderExpression})",
+            "(TRIM(COALESCE(wn.secretary_dbm_path, '')) <> '' AND LOWER(COALESCE(wn.dbm_status, '')) = 'pending' AND ({$dbmProvincialUploaderExpression} OR (NOT {$dbmProvincialUploaderExpression} AND wn.dbm_approved_at_dilg_po IS NOT NULL)) AND wn.dbm_approved_at_dilg_ro IS NULL)",
+            "(TRIM(COALESCE(wn.secretary_dilg_path, '')) <> '' AND LOWER(COALESCE(wn.dilg_status, '')) = 'pending' AND ({$dilgProvincialUploaderExpression} OR (NOT {$dilgProvincialUploaderExpression} AND wn.dilg_approved_at_dilg_po IS NOT NULL)) AND wn.dilg_approved_at_dilg_ro IS NULL)",
+            "(TRIM(COALESCE(wn.speaker_house_path, '')) <> '' AND LOWER(COALESCE(wn.speaker_status, '')) = 'pending' AND ({$speakerProvincialUploaderExpression} OR (NOT {$speakerProvincialUploaderExpression} AND wn.speaker_approved_at_dilg_po IS NOT NULL)) AND wn.speaker_approved_at_dilg_ro IS NULL)",
+            "(TRIM(COALESCE(wn.president_senate_path, '')) <> '' AND LOWER(COALESCE(wn.president_status, '')) = 'pending' AND ({$presidentProvincialUploaderExpression} OR (NOT {$presidentProvincialUploaderExpression} AND wn.president_approved_at_dilg_po IS NOT NULL)) AND wn.president_approved_at_dilg_ro IS NULL)",
+            "(TRIM(COALESCE(wn.house_committee_path, '')) <> '' AND LOWER(COALESCE(wn.house_status, '')) = 'pending' AND ({$houseProvincialUploaderExpression} OR (NOT {$houseProvincialUploaderExpression} AND wn.house_approved_at_dilg_po IS NOT NULL)) AND wn.house_approved_at_dilg_ro IS NULL)",
+            "(TRIM(COALESCE(wn.senate_committee_path, '')) <> '' AND LOWER(COALESCE(wn.senate_status, '')) = 'pending' AND ({$senateProvincialUploaderExpression} OR (NOT {$senateProvincialUploaderExpression} AND wn.senate_approved_at_dilg_po IS NOT NULL)) AND wn.senate_approved_at_dilg_ro IS NULL)",
         ]);
 
         return '('
-            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND {$movProvincialUploaderExpression})"
-            . " OR EXISTS (SELECT 1 FROM tbfur_batch_documents bd WHERE bd.project_code = {$projectCodeColumn} AND TRIM(COALESCE(bd.batch_document_file_path, '')) <> '' AND LOWER(COALESCE(bd.status, '')) = 'pending' AND {$batchProvincialUploaderExpression})"
+            . "EXISTS (SELECT 1 FROM tbfur_mov_uploads mu WHERE mu.project_code = {$projectCodeColumn} AND TRIM(COALESCE(mu.mov_file_path, '')) <> '' AND LOWER(COALESCE(mu.status, '')) = 'pending' AND ({$movProvincialUploaderExpression} OR (NOT {$movProvincialUploaderExpression} AND mu.approved_at_dilg_po IS NOT NULL)) AND mu.approved_at_dilg_ro IS NULL)"
+            . " OR EXISTS (SELECT 1 FROM tbfur_batch_documents bd WHERE bd.project_code = {$projectCodeColumn} AND TRIM(COALESCE(bd.batch_document_file_path, '')) <> '' AND LOWER(COALESCE(bd.status, '')) = 'pending' AND ({$batchProvincialUploaderExpression} OR (NOT {$batchProvincialUploaderExpression} AND bd.approved_at_dilg_po IS NOT NULL)) AND bd.approved_at_dilg_ro IS NULL)"
             . " OR EXISTS (SELECT 1 FROM tbfur_written_notice wn WHERE wn.project_code = {$projectCodeColumn} AND ({$writtenNoticeConditions}))"
             . " OR EXISTS (SELECT 1 FROM tbfur_fdp fdp WHERE fdp.project_code = {$projectCodeColumn} AND ("
-                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND {$fdpProvincialUploaderExpression})"
-                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND {$postingProvincialUploaderExpression})"
+                . "(TRIM(COALESCE(fdp.fdp_file_path, '')) <> '' AND LOWER(COALESCE(fdp.fdp_status, '')) = 'pending' AND ({$fdpProvincialUploaderExpression} OR (NOT {$fdpProvincialUploaderExpression} AND fdp.approved_at_dilg_po IS NOT NULL)) AND fdp.approved_at_dilg_ro IS NULL)"
+                . " OR (TRIM(COALESCE(fdp.posting_link, '')) <> '' AND LOWER(COALESCE(fdp.posting_status, '')) = 'pending' AND ({$postingProvincialUploaderExpression} OR (NOT {$postingProvincialUploaderExpression} AND fdp.posting_approved_at_dilg_po IS NOT NULL)) AND fdp.posting_approved_at_dilg_ro IS NULL)"
             . '))'
         . ')';
     }
@@ -923,6 +994,7 @@ class FundUtilizationReportController extends Controller
 
         $sortedReports = $this->sortFundUtilizationReportsForListing($reportsCollection);
         $batchUploadProjects = $sortedReports;
+        $quarterlyDashboard = $this->buildQuarterlySubmissionDashboard($sortedReports);
 
         $currentPage = max(1, (int) $request->query('page', 1));
         $reports = new LengthAwarePaginator(
@@ -936,7 +1008,93 @@ class FundUtilizationReportController extends Controller
             ]
         );
 
-        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects'));
+        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects', 'quarterlyDashboard'));
+    }
+
+    /**
+     * Build quarterly submission dashboard statistics from the already-computed reports collection.
+     * No additional DB queries — uses the per-quarter bg colors and percentages already attached.
+     */
+    private function buildQuarterlySubmissionDashboard($sortedReports): array
+    {
+        $totalProjects = $sortedReports->count();
+        $quarters = ['q1', 'q2', 'q3', 'q4'];
+        $dashboard = [
+            'total_projects' => $totalProjects,
+            'quarters' => [],
+        ];
+
+        // Color-to-status mapping from resolveFundUtilizationQuarterColor():
+        //   #f3f4f6 = gray   = no uploads
+        //   #fee2e2 = red    = returned
+        //   #fef9c3 = yellow = pending PO / incomplete
+        //   #ffedd5 = orange = pending RO
+        //   #ecfdf5 = green  = fully approved
+        foreach ($quarters as $q) {
+            $bgField = 'quarter_' . $q . '_bg';
+            $pctField = 'quarter_' . $q . '_percentage';
+
+            $withSubmissions = 0;
+            $fullyCompliant = 0;
+            $pendingValidation = 0;
+            $returned = 0;
+            $noSubmission = 0;
+
+            foreach ($sortedReports as $report) {
+                $bg = $report->{$bgField} ?? '#f3f4f6';
+                $pct = (int) ($report->{$pctField} ?? 0);
+
+                if ($bg === '#f3f4f6') {
+                    $noSubmission++;
+                } else {
+                    $withSubmissions++;
+
+                    if ($bg === '#ecfdf5') {
+                        $fullyCompliant++;
+                    } elseif ($bg === '#fee2e2') {
+                        $returned++;
+                    } else {
+                        // yellow (#fef9c3) or orange (#ffedd5) = pending
+                        $pendingValidation++;
+                    }
+                }
+            }
+
+            $submissionRate = $totalProjects > 0
+                ? round(($fullyCompliant / $totalProjects) * 100, 2)
+                : 0.0;
+
+            $dashboard['quarters'][$q] = [
+                'label' => strtoupper($q),
+                'total' => $totalProjects,
+                'with_submissions' => $withSubmissions,
+                'fully_compliant' => $fullyCompliant,
+                'pending_validation' => $pendingValidation,
+                'returned' => $returned,
+                'no_submission' => $noSubmission,
+                'submission_rate' => $submissionRate,
+            ];
+        }
+
+        // Overall stats across all quarters
+        $totalSlots = $totalProjects * 4;
+        $totalSubmitted = collect($dashboard['quarters'])->sum('with_submissions');
+        $totalCompliant = collect($dashboard['quarters'])->sum('fully_compliant');
+        $totalPending = collect($dashboard['quarters'])->sum('pending_validation');
+        $totalReturned = collect($dashboard['quarters'])->sum('returned');
+        $totalNoSubmission = collect($dashboard['quarters'])->sum('no_submission');
+
+        $dashboard['overall_submission_rate'] = $totalSlots > 0
+            ? round(($totalCompliant / $totalSlots) * 100)
+            : 0;
+        $dashboard['overall_compliant'] = $totalCompliant;
+        $dashboard['overall_pending'] = $totalPending;
+        $dashboard['overall_returned'] = $totalReturned;
+        $dashboard['overall_no_submission'] = $totalNoSubmission;
+        $dashboard['overall_submitted'] = $totalSubmitted;
+        $dashboard['total_slots'] = $totalSlots;
+
+        return $dashboard;
     }
 
     private function attachFundUtilizationListingData($reportsCollection)
@@ -953,6 +1111,7 @@ class FundUtilizationReportController extends Controller
         $batchDocumentsByKey = collect();
         $writtenNoticesByKey = collect();
         $fdpDocumentsByKey = collect();
+        $workflows = collect();
 
         if ($projectCodes->isNotEmpty()) {
             $movUploadsByKey = FURMovUpload::query()
@@ -978,9 +1137,13 @@ class FundUtilizationReportController extends Controller
                 ->whereIn('quarter', $quarters)
                 ->get()
                 ->keyBy(fn($row) => $row->project_code . '|' . strtoupper((string) $row->quarter));
+
+            $workflows = FundUtilizationApprovalWorkflow::query()
+                ->whereIn('project_code', $projectCodes)
+                ->get();
         }
 
-        return $reportsCollection->map(function ($report) use ($quarters, $movUploadsByKey, $batchDocumentsByKey, $writtenNoticesByKey, $fdpDocumentsByKey) {
+        return $reportsCollection->map(function ($report) use ($quarters, $movUploadsByKey, $batchDocumentsByKey, $writtenNoticesByKey, $fdpDocumentsByKey, $workflows) {
             $projectCode = trim((string) ($report->project_code ?? ''));
             $quarterDocuments = [];
 
@@ -1000,17 +1163,198 @@ class FundUtilizationReportController extends Controller
                 ];
             }
 
+            $projectWorkflows = $workflows->filter(fn($w) => $w->project_code === $projectCode);
+            $workflowMap = [];
+            foreach ($projectWorkflows as $w) {
+                $mapKey = $this->fundUtilizationWorkflowSubmissionKey($w->document_type, $w->quarter);
+                $workflowMap[$mapKey] = $w;
+            }
+
+            foreach ($quarters as $quarter) {
+                $key = $projectCode . '|' . $quarter;
+                $movUpload = $movUploadsByKey->get($key);
+                $batchDocument = $batchDocumentsByKey->get($key);
+                $writtenNotice = $writtenNoticesByKey->get($key);
+                $fdpDocument = $fdpDocumentsByKey->get($key);
+
+                $style = $this->resolveFundUtilizationQuarterColor(
+                    $movUpload,
+                    $writtenNotice,
+                    $fdpDocument,
+                    $batchDocument,
+                    $quarter,
+                    $workflowMap
+                );
+                $report->{'quarter_' . strtolower($quarter) . '_bg'} = $style['bg'];
+                $report->{'quarter_' . strtolower($quarter) . '_text'} = $style['text'];
+                $report->{'quarter_' . strtolower($quarter) . '_border'} = $style['border'];
+                $report->{'quarter_' . strtolower($quarter) . '_tooltip'} = $style['tooltip'];
+            }
+
             $report->validation_summary = $this->summarizeFundUtilizationValidation($quarterDocuments);
-            $report->validation_listing = $this->summarizeFundUtilizationListing($quarterDocuments);
+            $report->validation_listing = $this->summarizeFundUtilizationListing($quarterDocuments, $workflowMap);
 
             return $report;
         });
+    }
+
+    private function resolveFundUtilizationQuarterColor(
+        $movUpload,
+        $writtenNotice,
+        $fdpDocument,
+        $batchDocument,
+        string $quarter,
+        array $workflowMap
+    ): array {
+        $documents = [];
+
+        if ($movUpload && trim((string) ($movUpload->mov_file_path ?? '')) !== '') {
+            $documents[] = [
+                'path' => $movUpload->mov_file_path,
+                'status' => $movUpload->status ?? null,
+                'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($movUpload, 'mov_encoder_id'),
+                'approved_at_dilg_po' => $movUpload->approved_at_dilg_po ?? null,
+                'approved_at_dilg_ro' => $movUpload->approved_at_dilg_ro ?? null,
+            ];
+        }
+
+        $batchDocumentPaths = $this->getBatchDocumentFilePaths($batchDocument);
+        if ($batchDocument && !empty($batchDocumentPaths)) {
+            $documents[] = [
+                'path' => $batchDocumentPaths[0],
+                'status' => $batchDocument->status ?? null,
+                'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($batchDocument, 'batch_document_encoder_id'),
+                'approved_at_dilg_po' => $batchDocument->approved_at_dilg_po ?? null,
+                'approved_at_dilg_ro' => $batchDocument->approved_at_dilg_ro ?? null,
+            ];
+        }
+
+        if ($writtenNotice) {
+            $wnDocs = [
+                ['path' => $writtenNotice->secretary_dbm_path ?? null, 'status' => $writtenNotice->dbm_status ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dbm_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dbm_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dbm_approved_at_dilg_ro ?? null],
+                ['path' => $writtenNotice->secretary_dilg_path ?? null, 'status' => $writtenNotice->dilg_status ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dilg_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dilg_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dilg_approved_at_dilg_ro ?? null],
+                ['path' => $writtenNotice->speaker_house_path ?? null, 'status' => $writtenNotice->speaker_status ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'speaker_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->speaker_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->speaker_approved_at_dilg_ro ?? null],
+                ['path' => $writtenNotice->president_senate_path ?? null, 'status' => $writtenNotice->president_status ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'president_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->president_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->president_approved_at_dilg_ro ?? null],
+                ['path' => $writtenNotice->house_committee_path ?? null, 'status' => $writtenNotice->house_status ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'house_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->house_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->house_approved_at_dilg_ro ?? null],
+                ['path' => $writtenNotice->senate_committee_path ?? null, 'status' => $writtenNotice->senate_status ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'senate_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->senate_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->senate_approved_at_dilg_ro ?? null],
+            ];
+            foreach ($wnDocs as $doc) {
+                if (trim((string) ($doc['path'] ?? '')) !== '') {
+                    $documents[] = $doc;
+                }
+            }
+        }
+
+        if ($fdpDocument && trim((string) ($fdpDocument->fdp_file_path ?? '')) !== '') {
+            $documents[] = [
+                'path' => $fdpDocument->fdp_file_path,
+                'status' => $fdpDocument->fdp_status ?? null,
+                'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($fdpDocument, 'fdp_encoder_id'),
+                'approved_at_dilg_po' => $fdpDocument->approved_at_dilg_po ?? null,
+                'approved_at_dilg_ro' => $fdpDocument->approved_at_dilg_ro ?? null,
+            ];
+        }
+
+        if ($fdpDocument && trim((string) ($fdpDocument->posting_link ?? '')) !== '') {
+            $documents[] = [
+                'path' => $fdpDocument->posting_link,
+                'status' => $fdpDocument->posting_status ?? null,
+                'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($fdpDocument, 'posting_encoder_id'),
+                'approved_at_dilg_po' => $fdpDocument->posting_approved_at_dilg_po ?? null,
+                'approved_at_dilg_ro' => $fdpDocument->posting_approved_at_dilg_ro ?? null,
+            ];
+        }
+
+        if (empty($documents)) {
+            return [
+                'bg' => '#f3f4f6',
+                'text' => '#6b7280',
+                'border' => '#d1d5db',
+                'tooltip' => 'no uploads',
+            ]; // gray: no uploads
+        }
+
+        // 1. Returned: Red
+        foreach ($documents as $doc) {
+            if ($this->hasFundUtilizationReturned($doc['path'], $doc['status'])) {
+                return [
+                    'bg' => '#fee2e2',
+                    'text' => '#991b1b',
+                    'border' => '#fca5a5',
+                    'tooltip' => 'with upload and have returned documents',
+                ];
+            }
+        }
+
+        // 2. Pending PO: Yellow
+        foreach ($documents as $doc) {
+            if ($this->hasFundUtilizationPendingPo(
+                $doc['path'],
+                $doc['status'],
+                $doc['uploader_level'],
+                $doc['approved_at_dilg_po'],
+                $doc['approved_at_dilg_ro']
+            )) {
+                return [
+                    'bg' => '#fef9c3',
+                    'text' => '#854d0e',
+                    'border' => '#fef08a',
+                    'tooltip' => 'with upload but not 100%',
+                ];
+            }
+        }
+
+        // 3. Pending RO: Orange
+        foreach ($documents as $doc) {
+            if ($this->hasFundUtilizationPendingRo(
+                $doc['path'],
+                $doc['status'],
+                $doc['uploader_level'],
+                $doc['approved_at_dilg_po'],
+                $doc['approved_at_dilg_ro']
+            )) {
+                return [
+                    'bg' => '#ffedd5',
+                    'text' => '#9a3412',
+                    'border' => '#fed7aa',
+                    'tooltip' => 'with new upload and with approval by the regional user',
+                ];
+            }
+        }
+
+        // 4. Incomplete: Yellow
+        $pct = $this->calculateAccomplishmentPercentage($movUpload, $writtenNotice, $fdpDocument, $batchDocument);
+        if ($pct < 100) {
+            return [
+                'bg' => '#fef9c3',
+                'text' => '#854d0e',
+                'border' => '#fef08a',
+                'tooltip' => 'with upload but not 100%',
+            ];
+        }
+
+        // 5. Approved: Green
+        return [
+            'bg' => '#ecfdf5',
+            'text' => '#065f46',
+            'border' => '#a7f3d0',
+            'tooltip' => 'fully approved',
+        ];
     }
 
     private function sortFundUtilizationReportsForListing($reportsCollection)
     {
         return $reportsCollection
             ->sort(function ($left, $right) {
+                // 1. Returned documents first
+                $leftReturned = (int) (($left->validation_summary['returned_count'] ?? 0) > 0);
+                $rightReturned = (int) (($right->validation_summary['returned_count'] ?? 0) > 0);
+
+                if ($leftReturned !== $rightReturned) {
+                    return $rightReturned <=> $leftReturned;
+                }
+
+                // 2. Pending validation documents second
                 $leftPending = (int) (($left->validation_summary['pending_total'] ?? 0) > 0);
                 $rightPending = (int) (($right->validation_summary['pending_total'] ?? 0) > 0);
 
@@ -1425,6 +1769,8 @@ class FundUtilizationReportController extends Controller
             $lfpFundingYearQuery->whereRaw('LOWER(locally_funded_projects.province) = ?', [$userProvinceLower]);
         }
 
+        $submissionYear = trim((string) $request->query('submission_year', ''));
+
         $normalizedFilters = [
             'search' => $search,
             'program' => $programs,
@@ -1434,6 +1780,7 @@ class FundUtilizationReportController extends Controller
             'province' => $provinces,
             'city' => $cities,
             'barangay' => $barangays,
+            'submission_year' => $submissionYear,
         ];
 
         $activeFilters = [
@@ -1444,6 +1791,7 @@ class FundUtilizationReportController extends Controller
             'province' => $this->normalizeFilterValues($request->query('province', [])),
             'city' => $this->normalizeFilterValues($request->query('city', [])),
             'barangay' => $this->normalizeFilterValues($request->query('barangay', [])),
+            'submission_year' => $submissionYear,
         ];
 
         $filterOptions = $this->buildFundUtilizationFilterOptions(
@@ -1500,6 +1848,7 @@ class FundUtilizationReportController extends Controller
             'province' => $activeFilters['province'],
             'city' => $activeFilters['city'],
             'barangay' => $activeFilters['barangay'],
+            'submission_year' => $activeFilters['submission_year'],
         ];
 
         return [$reportsQuery, $filters, $filterOptions];
@@ -1832,7 +2181,7 @@ class FundUtilizationReportController extends Controller
         return Carbon::parse($validatedAt)->getTimestamp();
     }
 
-    private function summarizeFundUtilizationListing(array $quarterDocuments): array
+    private function summarizeFundUtilizationListing(array $quarterDocuments, array $workflowMap = []): array
     {
         $summary = [
             'approval_status_label' => 'Awaiting Upload',
@@ -1859,6 +2208,8 @@ class FundUtilizationReportController extends Controller
 
             if ($movUpload && trim((string) ($movUpload->mov_file_path ?? '')) !== '') {
                 $documents->push([
+                    'type' => 'mov',
+                    'quarter' => $quarter,
                     'path' => $movUpload->mov_file_path,
                     'status' => $movUpload->status ?? null,
                     'uploaded_at' => $movUpload->mov_uploaded_at ?? null,
@@ -1872,6 +2223,8 @@ class FundUtilizationReportController extends Controller
             $batchDocumentPaths = $this->getBatchDocumentFilePaths($batchDocument);
             if ($batchDocument && !empty($batchDocumentPaths)) {
                 $documents->push([
+                    'type' => 'batch-document',
+                    'quarter' => $quarter,
                     'path' => $batchDocumentPaths[0],
                     'status' => $batchDocument->status ?? null,
                     'uploaded_at' => $batchDocument->batch_document_uploaded_at ?? null,
@@ -1884,12 +2237,12 @@ class FundUtilizationReportController extends Controller
 
             if ($writtenNotice) {
                 foreach ([
-                    ['path' => $writtenNotice->secretary_dbm_path ?? null, 'status' => $writtenNotice->dbm_status ?? null, 'uploaded_at' => $writtenNotice->dbm_uploaded_at ?? null, 'approved_at' => $writtenNotice->dbm_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dbm_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dbm_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dbm_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->secretary_dilg_path ?? null, 'status' => $writtenNotice->dilg_status ?? null, 'uploaded_at' => $writtenNotice->dilg_uploaded_at ?? null, 'approved_at' => $writtenNotice->dilg_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dilg_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dilg_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dilg_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->speaker_house_path ?? null, 'status' => $writtenNotice->speaker_status ?? null, 'uploaded_at' => $writtenNotice->speaker_uploaded_at ?? null, 'approved_at' => $writtenNotice->speaker_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'speaker_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->speaker_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->speaker_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->president_senate_path ?? null, 'status' => $writtenNotice->president_status ?? null, 'uploaded_at' => $writtenNotice->president_uploaded_at ?? null, 'approved_at' => $writtenNotice->president_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'president_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->president_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->president_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->house_committee_path ?? null, 'status' => $writtenNotice->house_status ?? null, 'uploaded_at' => $writtenNotice->house_uploaded_at ?? null, 'approved_at' => $writtenNotice->house_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'house_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->house_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->house_approved_at_dilg_ro ?? null],
-                    ['path' => $writtenNotice->senate_committee_path ?? null, 'status' => $writtenNotice->senate_status ?? null, 'uploaded_at' => $writtenNotice->senate_uploaded_at ?? null, 'approved_at' => $writtenNotice->senate_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'senate_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->senate_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->senate_approved_at_dilg_ro ?? null],
+                    ['type' => 'written-notice-dbm', 'quarter' => $quarter, 'path' => $writtenNotice->secretary_dbm_path ?? null, 'status' => $writtenNotice->dbm_status ?? null, 'uploaded_at' => $writtenNotice->dbm_uploaded_at ?? null, 'approved_at' => $writtenNotice->dbm_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dbm_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dbm_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dbm_approved_at_dilg_ro ?? null],
+                    ['type' => 'written-notice-dilg', 'quarter' => $quarter, 'path' => $writtenNotice->secretary_dilg_path ?? null, 'status' => $writtenNotice->dilg_status ?? null, 'uploaded_at' => $writtenNotice->dilg_uploaded_at ?? null, 'approved_at' => $writtenNotice->dilg_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'dilg_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->dilg_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->dilg_approved_at_dilg_ro ?? null],
+                    ['type' => 'written-notice-speaker', 'quarter' => $quarter, 'path' => $writtenNotice->speaker_house_path ?? null, 'status' => $writtenNotice->speaker_status ?? null, 'uploaded_at' => $writtenNotice->speaker_uploaded_at ?? null, 'approved_at' => $writtenNotice->speaker_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'speaker_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->speaker_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->speaker_approved_at_dilg_ro ?? null],
+                    ['type' => 'written-notice-president', 'quarter' => $quarter, 'path' => $writtenNotice->president_senate_path ?? null, 'status' => $writtenNotice->president_status ?? null, 'uploaded_at' => $writtenNotice->president_uploaded_at ?? null, 'approved_at' => $writtenNotice->president_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'president_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->president_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->president_approved_at_dilg_ro ?? null],
+                    ['type' => 'written-notice-house', 'quarter' => $quarter, 'path' => $writtenNotice->house_committee_path ?? null, 'status' => $writtenNotice->house_status ?? null, 'uploaded_at' => $writtenNotice->house_uploaded_at ?? null, 'approved_at' => $writtenNotice->house_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'house_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->house_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->house_approved_at_dilg_ro ?? null],
+                    ['type' => 'written-notice-senate', 'quarter' => $quarter, 'path' => $writtenNotice->senate_committee_path ?? null, 'status' => $writtenNotice->senate_status ?? null, 'uploaded_at' => $writtenNotice->senate_uploaded_at ?? null, 'approved_at' => $writtenNotice->senate_approved_at ?? null, 'uploader_level' => $this->resolveFundUtilizationUploaderLevelFromRecord($writtenNotice, 'senate_encoder_id'), 'approved_at_dilg_po' => $writtenNotice->senate_approved_at_dilg_po ?? null, 'approved_at_dilg_ro' => $writtenNotice->senate_approved_at_dilg_ro ?? null],
                 ] as $writtenNoticeDocument) {
                     if (trim((string) ($writtenNoticeDocument['path'] ?? '')) === '') {
                         continue;
@@ -1901,6 +2254,8 @@ class FundUtilizationReportController extends Controller
 
             if ($fdpDocument && trim((string) ($fdpDocument->fdp_file_path ?? '')) !== '') {
                 $documents->push([
+                    'type' => 'fdp',
+                    'quarter' => $quarter,
                     'path' => $fdpDocument->fdp_file_path,
                     'status' => $fdpDocument->fdp_status ?? null,
                     'uploaded_at' => $fdpDocument->fdp_uploaded_at ?? null,
@@ -1913,6 +2268,8 @@ class FundUtilizationReportController extends Controller
 
             if ($fdpDocument && trim((string) ($fdpDocument->posting_link ?? '')) !== '') {
                 $documents->push([
+                    'type' => 'posting-link',
+                    'quarter' => $quarter,
                     'path' => $fdpDocument->posting_link,
                     'status' => $fdpDocument->posting_status ?? null,
                     'uploaded_at' => $fdpDocument->posting_uploaded_at ?? null,
@@ -1953,11 +2310,28 @@ class FundUtilizationReportController extends Controller
         $summary['approval_status_sort_timestamp'] = $this->resolveFundUtilizationValidatedAtTimestamp($selectedDocument);
 
         if ($this->hasFundUtilizationReturned($selectedDocument['path'] ?? null, $selectedDocument['status'] ?? null)) {
-            $summary['approval_status_label'] = 'Returned';
+            $type = $selectedDocument['type'] ?? '';
+            $q = $selectedDocument['quarter'] ?? '';
+            $key = $this->fundUtilizationWorkflowSubmissionKey($type, $q);
+            $workflow = $workflowMap[$key] ?? null;
+            $workflowStatus = $workflow ? trim((string) $workflow->status) : '';
+
+            $returnedByText = 'Returned';
+            $returnedLevelText = 'Returned to LGU';
+
+            if ($workflowStatus === 'Returned by Regional Officer') {
+                $returnedByText = 'Returned by DILG Regional Office';
+                $returnedLevelText = 'Returned by DILG Regional Office';
+            } elseif ($workflowStatus === 'Returned by Provincial Officer') {
+                $returnedByText = 'Returned by DILG Provincial Office';
+                $returnedLevelText = 'Returned by DILG Provincial Office';
+            }
+
+            $summary['approval_status_label'] = $returnedByText;
             $summary['approval_status_text_color'] = '#b91c1c';
             $summary['approval_status_background_color'] = '#fef2f2';
             $summary['approval_status_border_color'] = '#fca5a5';
-            $summary['validation_level_label'] = 'Returned to LGU';
+            $summary['validation_level_label'] = $returnedLevelText;
             $summary['validation_level_text_color'] = '#b91c1c';
             $summary['validation_level_background_color'] = '#fef2f2';
             $summary['validation_level_border_color'] = '#fca5a5';
@@ -2024,6 +2398,10 @@ class FundUtilizationReportController extends Controller
 
     private function resolveFundUtilizationListingPriority(array $document): int
     {
+        if ($this->hasFundUtilizationReturned($document['path'] ?? null, $document['status'] ?? null)) {
+            return 0;
+        }
+
         if ($this->hasFundUtilizationPendingPo(
             $document['path'] ?? null,
             $document['status'] ?? null,
@@ -2031,7 +2409,7 @@ class FundUtilizationReportController extends Controller
             $document['approved_at_dilg_po'] ?? null,
             $document['approved_at_dilg_ro'] ?? null
         )) {
-            return 0;
+            return 1;
         }
 
         if ($this->hasFundUtilizationPendingRo(
@@ -2041,18 +2419,14 @@ class FundUtilizationReportController extends Controller
             $document['approved_at_dilg_po'] ?? null,
             $document['approved_at_dilg_ro'] ?? null
         )) {
-            return 0;
-        }
-
-        if ($this->hasFundUtilizationReturned($document['path'] ?? null, $document['status'] ?? null)) {
-            return 1;
-        }
-
-        if (!empty($document['path'])) {
             return 2;
         }
 
-        return 3;
+        if (!empty($document['path'])) {
+            return 3;
+        }
+
+        return 4;
     }
 
     private function summarizeFundUtilizationValidation(array $quarterDocuments): array
@@ -2207,12 +2581,23 @@ class FundUtilizationReportController extends Controller
 
         $summary['pending_total'] = $summary['po_count'] + $summary['ro_count'];
 
+        if ($summary['returned_count'] > 0) {
+            $summary['label'] = 'Returned';
+            $summary['detail'] = $summary['returned_count'] . ' returned item' . ($summary['returned_count'] === 1 ? '' : 's');
+            $summary['icon'] = 'fa-undo';
+            $summary['text_color'] = '#b91c1c';
+            $summary['background_color'] = '#fef2f2';
+            $summary['border_color'] = '#fca5a5';
+
+            return $summary;
+        }
+
         if ($summary['pending_total'] > 0) {
             $summary['label'] = 'Pending Validation';
             $summary['icon'] = 'fa-clock';
 
             if ($summary['po_count'] > 0 && $summary['ro_count'] > 0) {
-                $summary['detail'] = 'PO: ' . $summary['po_count'] . ' | RO: ' . $summary['ro_count'];
+                $summary['detail'] = 'For PO: ' . $summary['po_count'] . ' | RO: ' . $summary['ro_count'];
             } elseif ($summary['po_count'] > 0) {
                 $summary['detail'] = 'For PO: ' . $summary['po_count'];
             } else {
@@ -2228,17 +2613,6 @@ class FundUtilizationReportController extends Controller
                 $summary['background_color'] = '#eff6ff';
                 $summary['border_color'] = '#93c5fd';
             }
-
-            return $summary;
-        }
-
-        if ($summary['returned_count'] > 0) {
-            $summary['label'] = 'Returned';
-            $summary['detail'] = $summary['returned_count'] . ' returned item' . ($summary['returned_count'] === 1 ? '' : 's');
-            $summary['icon'] = 'fa-undo';
-            $summary['text_color'] = '#b91c1c';
-            $summary['background_color'] = '#fef2f2';
-            $summary['border_color'] = '#fca5a5';
 
             return $summary;
         }

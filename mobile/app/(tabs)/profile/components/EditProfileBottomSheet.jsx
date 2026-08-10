@@ -24,6 +24,7 @@ const POSITION_OPTIONS = [
   "Project Evaluation Officer II",
   "Project Evaluation Officer III",
   "Information Systems Analyst III",
+  "Administrative Aide VI",
 ];
 
 export default function EditProfileBottomSheet({

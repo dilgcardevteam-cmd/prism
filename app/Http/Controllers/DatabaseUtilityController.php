@@ -219,6 +219,13 @@ class DatabaseUtilityController extends Controller
                 'route' => route('utilities.system-maintenance.index'),
                 'visible' => $user?->isSuperAdmin() ?? false,
             ],
+            [
+                'icon' => 'fas fa-cubes',
+                'title' => 'Modules Configuration',
+                'description' => 'Enable or disable specific system modules and reportorial requirement workflows globally.',
+                'route' => route('utilities.modules-configuration.index'),
+                'visible' => $user?->isSuperAdmin() ?? false,
+            ],
         ])
             ->filter(fn (array $item): bool => $item['visible'])
             ->map(function (array $item): array {
@@ -2463,5 +2470,40 @@ class DatabaseUtilityController extends Controller
         }
 
         return $candidate->format('F j, Y g:i A');
+    }
+
+    public function modulesConfiguration(): \Illuminate\View\View
+    {
+        $modules = \App\Support\RolePermissionRegistry::modules();
+        $dbSettings = \App\Models\ModuleConfiguration::pluck('is_enabled', 'module_key')->toArray();
+
+        return view('admin.utilities.modules-configuration', compact('modules', 'dbSettings'));
+    }
+
+    public function updateModulesConfiguration(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $submitted = $request->input('modules', []);
+
+        $allAspects = [];
+        foreach (\App\Support\RolePermissionRegistry::modules() as $mod) {
+            foreach ($mod['items'] ?? [] as $item) {
+                if (isset($item['aspect'])) {
+                    $allAspects[] = $item['aspect'];
+                }
+            }
+        }
+
+        foreach ($allAspects as $aspect) {
+            $isEnabled = in_array($aspect, $submitted, true);
+            \App\Models\ModuleConfiguration::updateOrCreate(
+                ['module_key' => $aspect],
+                ['is_enabled' => $isEnabled]
+            );
+        }
+
+        \App\Models\ModuleConfiguration::flushCache();
+
+        return redirect()->route('utilities.system-setup.index')
+            ->with('success', 'Modules configuration has been successfully updated.');
     }
 }

@@ -2607,6 +2607,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/system-setup', [App\Http\Controllers\DatabaseUtilityController::class, 'systemSetup'])
             ->middleware('crud_permission:utilities_system_setup,view')
             ->name('system-setup.index');
+        Route::get('/modules-configuration', [App\Http\Controllers\DatabaseUtilityController::class, 'modulesConfiguration'])
+            ->middleware('superadmin')
+            ->name('modules-configuration.index');
+        Route::post('/modules-configuration', [App\Http\Controllers\DatabaseUtilityController::class, 'updateModulesConfiguration'])
+            ->middleware('superadmin')
+            ->name('modules-configuration.update');
         Route::get('/system-maintenance', [App\Http\Controllers\DatabaseUtilityController::class, 'systemMaintenance'])
             ->middleware('superadmin')
             ->name('system-maintenance.index');

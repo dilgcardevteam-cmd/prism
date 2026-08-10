@@ -255,6 +255,8 @@ class FundUtilizationWorkflowService
                     forwardedToId: $provincialOfficer->getKey(),
                 );
 
+                $this->syncRecordAfterReturn($record, $documentType, 2, $actor);
+
                 DB::afterCommit(function () use ($provincialOfficer, $report, $quarter, $documentType, $actor, $workflow): void {
                     $this->notifyUsers(
                         $this->resolveValidatorsForLevel($report, $workflow->uploader, 1, [$provincialOfficer]),
@@ -293,6 +295,8 @@ class FundUtilizationWorkflowService
                     returnedToId: $workflow->uploader_id,
                     forwardedToId: $workflow->uploader_id,
                 );
+
+                $this->syncRecordAfterReturn($record, $documentType, 1, $actor);
 
                 DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
                     $this->notifyUser(
@@ -333,6 +337,8 @@ class FundUtilizationWorkflowService
                     forwardedToId: $workflow->current_approver_id,
                 );
 
+                $this->syncRecordAfterReturn($record, $documentType, 1, $actor);
+
                 DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
                     $this->notifyUsers(
                         $this->resolveValidatorsForLevel($report, $workflow->uploader, 1, [$workflow->currentApprover]),
@@ -371,6 +377,8 @@ class FundUtilizationWorkflowService
                     returnedToId: $workflow->uploader_id,
                     forwardedToId: $workflow->uploader_id,
                 );
+
+                $this->syncRecordAfterReturn($record, $documentType, 2, $actor);
 
                 DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
                     $this->notifyUser(
@@ -692,6 +700,30 @@ class FundUtilizationWorkflowService
                 $fieldMap['approved_by'] ?? null => $actor->getKey(),
             ]);
         }
+
+        $record->save();
+    }
+
+    protected function syncRecordAfterReturn(
+        Model $record,
+        string $documentType,
+        int $returnedFromLevel,
+        User $actor,
+    ): void {
+        $fieldMap = $this->documentFieldMap($documentType);
+        if ($fieldMap === []) {
+            return;
+        }
+
+        $this->fillRecordAttributes($record, [
+            $fieldMap['status'] ?? null => 'returned',
+            $fieldMap['po_approved_at'] ?? null => null,
+            $fieldMap['po_approved_by'] ?? null => null,
+            $fieldMap['ro_approved_at'] ?? null => null,
+            $fieldMap['ro_approved_by'] ?? null => null,
+            $fieldMap['approved_at'] ?? null => null,
+            $fieldMap['approved_by'] ?? null => null,
+        ]);
 
         $record->save();
     }

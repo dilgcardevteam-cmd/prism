@@ -690,12 +690,12 @@
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
+                                @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation && $movUploads[$quarter]->status !== 'approved')
+                                    <button type="button" onclick="deleteDocument('mov', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                        <i class="fas fa-trash-alt"></i> Delete
+                                    </button>
+                                @endif
                                 @if($shouldShowValidationActions($movValidationState))
-                                    @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation && $movUploads[$quarter]->status !== 'approved')
-                                        <button type="button" onclick="deleteDocument('mov', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                                            <i class="fas fa-trash-alt"></i> Delete
-                                        </button>
-                                    @endif
                                     @if($movUploads[$quarter]->status === 'pending')
                                         @if(!($movValidationState['return_only'] ?? false))
                                             <button type="button" onclick="openRemarksModal('mov', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
@@ -1996,12 +1996,12 @@
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation && $fdpDocuments[$quarter]->fdp_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
+                                    <button type="button" onclick="deleteDocument('fdp', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                        <i class="fas fa-trash-alt"></i> Delete
+                                    </button>
+                                @endif
                                 @if($shouldShowValidationActions($fdpValidationState))
-                                    @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation && $fdpDocuments[$quarter]->fdp_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
-                                        <button type="button" onclick="deleteDocument('fdp', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                                            <i class="fas fa-trash-alt"></i> Delete
-                                        </button>
-                                    @endif
                                     @if($fdpDocuments[$quarter]->fdp_status === 'pending')
                                         @if(!($fdpValidationState['return_only'] ?? false))
                                             <button type="button" onclick="openRemarksModal('fdp', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">

@@ -10,6 +10,12 @@ class EnsureCrudPermission
 {
     public function handle(Request $request, Closure $next, string $aspect, string $action): Response
     {
+        if (!\App\Models\ModuleConfiguration::isModuleEnabled($aspect)) {
+            return response()->view('errors.restricted', [
+                'message' => 'This module has been temporarily disabled by the system administrator.'
+            ], 403);
+        }
+
         $user = $request->user();
 
         if ($user && $user->hasCrudPermission($aspect, $action)) {

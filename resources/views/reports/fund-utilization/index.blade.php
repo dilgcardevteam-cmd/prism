@@ -52,7 +52,8 @@
             ->sort()
             ->values();
         $multiFilterKeys = ['program', 'funding_year', 'project_status', 'province', 'city', 'barangay'];
-        $batchUploadProjects = collect($batchUploadProjects ?? [])
+        $rawProjects = collect($batchUploadProjects ?? []);
+        $batchUploadProjects = $rawProjects
             ->map(function ($report) {
                 return [
                     'project_code' => trim((string) ($report->project_code ?? '')),
@@ -71,154 +72,738 @@
             'batch_upload' => $batchUploadOpen ? 1 : null,
         ], fn ($value) => $value !== null && $value !== '');
         $canBatchUploadFundUtilization = Auth::check()
-            && (Auth::user()->isLguScopedUser() || Auth::user()->isProvincialDilgAssignment());
+            && (Auth::user()->isSuperAdmin() || Auth::user()->isLguScopedUser() || Auth::user()->isProvincialDilgAssignment() || Auth::user()->hasCrudPermission('fund_utilization_reports', 'add'));
+        $getSolidColor = function($bgColor) {
+            $bgColor = strtolower(trim((string)$bgColor));
+            if ($bgColor === '#ecfdf5') return '#16a34a'; // Solid Green
+            if ($bgColor === '#fee2e2') return '#ef4444'; // Solid Red
+            if ($bgColor === '#fef9c3' || $bgColor === '#ffedd5') return '#f59e0b'; // Solid Amber/Yellow
+            return '#cbd5e1'; // Solid Gray
+        };
     @endphp
 
     @if($canBatchUploadFundUtilization)
-        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+        {{-- <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
             <button type="button" class="dashboard-filter-export-btn" onclick="openBatchUploadModal()" style="height: 38px; min-width: 210px; border-radius: 8px; background: linear-gradient(180deg, #003a99 0%, #002C76 100%); box-shadow: 0 12px 24px rgba(0, 44, 118, 0.18);">
                 <i class="fas fa-layer-group" aria-hidden="true"></i>
                 Batch Upload FUR
             </button>
-        </div>
+        </div> --}}
     @endif
 
-    <form id="fund-utilization-filters" method="GET" action="{{ route('fund-utilization.index') }}" class="dashboard-card project-filter-form" style="background: #ffffff; padding: 16px 18px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
-        <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
-        @if($batchUploadOpen)
-            <input type="hidden" name="batch_upload" value="1">
-        @endif
-        <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="true" aria-controls="fund-utilization-filter-body">
-            <i class="fas fa-filter" aria-hidden="true" style="font-size: 16px;"></i>
-            <span>PROJECT FILTER</span>
-            <span class="project-filter-chevron">
+    <!-- Quarterly Submissions Dashboard -->
+    @php
+        $qd = $quarterlyDashboard ?? ['total_projects' => 0, 'quarters' => [], 'overall_submission_rate' => 0, 'overall_compliant' => 0, 'overall_submitted' => 0, 'total_slots' => 0];
+        $qdQuarters = $qd['quarters'] ?? [];
+    @endphp
+    <div id="fur-quarterly-dashboard" class="dashboard-card" style="background: #ffffff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 20px; overflow: hidden;">
+        {{-- Dashboard Header / Toggle --}}
+        <button type="button" id="fur-dashboard-toggle" onclick="toggleFurDashboard()" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border: none; background: linear-gradient(135deg, #002C76 0%, #003a99 100%); color: #ffffff; cursor: pointer; font-size: 14px; font-weight: 700; letter-spacing: 0.03em; transition: background 0.3s ease;" aria-expanded="true" aria-controls="fur-dashboard-body">
+            <span style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-chart-bar" aria-hidden="true" style="font-size: 16px; opacity: 0.9;"></i>
+                QUARTERLY SUBMISSIONS DASHBOARD
+            </span>
+            <span id="fur-dashboard-chevron" style="transition: transform 0.3s ease;">
                 <i class="fas fa-chevron-up"></i>
             </span>
         </button>
 
-        <div id="fund-utilization-filter-body" class="project-filter-body">
-            <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px 16px; align-items: end;">
-                <div>
-                    <label for="fund-utilization-search" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Search</label>
-                    <div style="position: relative;">
-                        <i class="fas fa-search" style="position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 13px; pointer-events: none;"></i>
-                        <input id="fund-utilization-search" type="text" name="search" value="{{ $activeFilters['search'] }}" placeholder="Search project code, title, province..." style="width: 100%; height: 34px; padding: 0 12px 0 34px; border: 1px solid #d1d5db; border-radius: 7px; font-size: 12px; background-color: #ffffff; color: #374151; box-sizing: border-box;">
-                    </div>
-                </div>
-
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_program" data-badge-container-id="fund_utilization_program_badges" data-dropdown-toggle-id="fund_utilization_program_dropdown_toggle" data-dropdown-menu-id="fund_utilization_program_dropdown_menu" data-empty-badge-text="No program selected.">
-                    <label for="fund_utilization_program_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Program</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div id="fund_utilization_program_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_program_dropdown_menu">
-                            <div id="fund_utilization_program_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+        <div id="fur-dashboard-body" style="padding: 22px; transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease; overflow: hidden;">
+            <div class="fur-panels-container" style="display: grid; grid-template-columns: 3fr 2fr; gap: 24px; align-items: stretch;">
+                
+                {{-- Left Panel: Dashboard --}}
+                <div class="fur-left-panel" style="background: #f9fafb; padding: 18px 20px; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 20px; box-sizing: border-box;"
+                     data-all-projects="{{ $qd['total_projects'] }}"
+                     data-all-compliant="{{ $qd['overall_compliant'] }}"
+                     data-all-pending="{{ $qd['overall_pending'] }}"
+                     data-all-returned="{{ $qd['overall_returned'] }}"
+                     data-all-no-submission="{{ $qd['overall_no_submission'] }}"
+                     data-all-submitted="{{ $qd['overall_submitted'] }}"
+                     data-all-slots="{{ $qd['total_slots'] }}"
+                     data-all-rate="{{ $qd['overall_submission_rate'] }}"
+                     
+                     data-q1-projects="{{ $qdQuarters['q1']['total'] ?? 0 }}"
+                     data-q1-compliant="{{ $qdQuarters['q1']['fully_compliant'] ?? 0 }}"
+                     data-q1-pending="{{ $qdQuarters['q1']['pending_validation'] ?? 0 }}"
+                     data-q1-returned="{{ $qdQuarters['q1']['returned'] ?? 0 }}"
+                     data-q1-no-submission="{{ $qdQuarters['q1']['no_submission'] ?? 0 }}"
+                     data-q1-submitted="{{ $qdQuarters['q1']['with_submissions'] ?? 0 }}"
+                     data-q1-rate="{{ $qdQuarters['q1']['submission_rate'] ?? 0 }}"
+                     
+                     data-q2-projects="{{ $qdQuarters['q2']['total'] ?? 0 }}"
+                     data-q2-compliant="{{ $qdQuarters['q2']['fully_compliant'] ?? 0 }}"
+                     data-q2-pending="{{ $qdQuarters['q2']['pending_validation'] ?? 0 }}"
+                     data-q2-returned="{{ $qdQuarters['q2']['returned'] ?? 0 }}"
+                     data-q2-no-submission="{{ $qdQuarters['q2']['no_submission'] ?? 0 }}"
+                     data-q2-submitted="{{ $qdQuarters['q2']['with_submissions'] ?? 0 }}"
+                     data-q2-rate="{{ $qdQuarters['q2']['submission_rate'] ?? 0 }}"
+                     
+                     data-q3-projects="{{ $qdQuarters['q3']['total'] ?? 0 }}"
+                     data-q3-compliant="{{ $qdQuarters['q3']['fully_compliant'] ?? 0 }}"
+                     data-q3-pending="{{ $qdQuarters['q3']['pending_validation'] ?? 0 }}"
+                     data-q3-returned="{{ $qdQuarters['q3']['returned'] ?? 0 }}"
+                     data-q3-no-submission="{{ $qdQuarters['q3']['no_submission'] ?? 0 }}"
+                     data-q3-submitted="{{ $qdQuarters['q3']['with_submissions'] ?? 0 }}"
+                     data-q3-rate="{{ $qdQuarters['q3']['submission_rate'] ?? 0 }}"
+                     
+                     data-q4-projects="{{ $qdQuarters['q4']['total'] ?? 0 }}"
+                     data-q4-compliant="{{ $qdQuarters['q4']['fully_compliant'] ?? 0 }}"
+                     data-q4-pending="{{ $qdQuarters['q4']['pending_validation'] ?? 0 }}"
+                     data-q4-returned="{{ $qdQuarters['q4']['returned'] ?? 0 }}"
+                     data-q4-no-submission="{{ $qdQuarters['q4']['no_submission'] ?? 0 }}"
+                     data-q4-submitted="{{ $qdQuarters['q4']['with_submissions'] ?? 0 }}"
+                     data-q4-rate="{{ $qdQuarters['q4']['submission_rate'] ?? 0 }}">
+                    
+                    {{-- Quick Filters: Quarters, Funding Year, Submission Year --}}
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px; gap: 12px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-calendar-alt" style="color: #6b7280;"></i>
+                                Display Quarters
+                            </span>
+                            <div class="fur-quarter-filter" style="display: flex; align-items: center; gap: 4px; background: #f3f4f6; padding: 3px; border-radius: 8px; border: 1px solid #e5e7eb; box-shadow: inset 0 1px 2px rgba(0,0,0,0.03);">
+                                <button type="button" class="fur-q-btn" onclick="filterQuarters('all', this)" style="background: #ffffff; color: #1e3a8a; border: none; outline: none; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">All</button>
+                                <button type="button" class="fur-q-btn" onclick="filterQuarters('q1', this)" style="background: transparent; color: #4b5563; border: none; outline: none; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;">Q1</button>
+                                <button type="button" class="fur-q-btn" onclick="filterQuarters('q2', this)" style="background: transparent; color: #4b5563; border: none; outline: none; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;">Q2</button>
+                                <button type="button" class="fur-q-btn" onclick="filterQuarters('q3', this)" style="background: transparent; color: #4b5563; border: none; outline: none; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;">Q3</button>
+                                <button type="button" class="fur-q-btn" onclick="filterQuarters('q4', this)" style="background: transparent; color: #4b5563; border: none; outline: none; border-radius: 6px; padding: 5px 12px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;">Q4</button>
+                            </div>
                         </div>
-                        <div id="fund_utilization_program_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select id="fund_utilization_program" name="program[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Program" aria-hidden="true">
-                        @foreach(($filterOptions['programs'] ?? []) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['program'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_funding_year" data-badge-container-id="fund_utilization_funding_year_badges" data-dropdown-toggle-id="fund_utilization_funding_year_dropdown_toggle" data-dropdown-menu-id="fund_utilization_funding_year_dropdown_menu" data-empty-badge-text="All">
-                    <label for="fund_utilization_funding_year_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Funding Year</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div id="fund_utilization_funding_year_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_funding_year_dropdown_menu">
-                            <div id="fund_utilization_funding_year_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                        
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            {{-- Funding Year Dropdown --}}
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 4px;">
+                                    <i class="fas fa-filter" style="color: #6b7280; font-size: 10px;"></i>
+                                    Fund Year
+                                </span>
+                                <select id="quick-funding-year" onchange="applyQuickFundingYear(this)" style="height: 28px; padding: 0 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 11px; font-weight: 600; color: #374151; background: #ffffff; cursor: pointer; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                                    <option value="">All</option>
+                                    @foreach(($filterOptions['funding_years'] ?? []) as $yr)
+                                        <option value="{{ $yr }}" @selected(in_array((string) $yr, ($filters['funding_year'] ?? []), true))>{{ $yr }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            
+                            {{-- Submission Year Dropdown --}}
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 4px;">
+                                    <i class="fas fa-file-upload" style="color: #6b7280; font-size: 10px;"></i>
+                                    Sub Year
+                                </span>
+                                <select id="quick-submission-year" onchange="applyQuickSubmissionYear(this)" style="height: 28px; padding: 0 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 11px; font-weight: 600; color: #374151; background: #ffffff; cursor: pointer; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                                    <option value="">All</option>
+                                    @foreach([2026, 2025, 2024, 2023, 2022, 2021] as $yr)
+                                        <option value="{{ $yr }}" @selected(($filters['submission_year'] ?? '') == $yr)>{{ $yr }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                         </div>
-                        <div id="fund_utilization_funding_year_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
                     </div>
-                    <select id="fund_utilization_funding_year" name="funding_year[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Funding Year" aria-hidden="true">
-                        @foreach(($filterOptions['funding_years'] ?? []) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['funding_year'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
 
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_project_status" data-badge-container-id="fund_utilization_project_status_badges" data-dropdown-toggle-id="fund_utilization_project_status_dropdown_toggle" data-dropdown-menu-id="fund_utilization_project_status_dropdown_menu" data-empty-badge-text="All">
-                    <label for="fund_utilization_project_status_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Status</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div id="fund_utilization_project_status_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_project_status_dropdown_menu">
-                            <div id="fund_utilization_project_status_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                    {{-- Overall Stats Strip --}}
+                    <div class="fur-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px;">
+                        {{-- Total Projects --}}
+                        <div onclick="showStatsModal('total')" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1px solid #bfdbfe; border-radius: 10px; padding: 12px 14px; text-align: center; cursor: pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;"
+                             onmouseenter="this.style.transform='translateY(-2px) scale(1.02)'; this.style.boxShadow='0 8px 16px rgba(59, 130, 246, 0.12)';"
+                             onmouseleave="this.style.transform='none'; this.style.boxShadow='none';">
+                            <div style="font-size: 10px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Total Projects</div>
+                            <div style="font-size: 22px; font-weight: 800; color: #1e3a8a; line-height: 1;"><span id="stat-total-projects">{{ $qd['total_projects'] }}</span></div>
                         </div>
-                        <div id="fund_utilization_project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select id="fund_utilization_project_status" name="project_status[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Status" aria-hidden="true">
-                        @foreach(($filterOptions['project_statuses'] ?? []) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['project_status'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_province" data-badge-container-id="fund_utilization_province_badges" data-dropdown-toggle-id="fund_utilization_province_dropdown_toggle" data-dropdown-menu-id="fund_utilization_province_dropdown_menu" data-empty-badge-text="All">
-                    <label for="fund_utilization_province_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Province</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div id="fund_utilization_province_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_province_dropdown_menu">
-                            <div id="fund_utilization_province_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                        {{-- Overall Rate --}}
+                        <div onclick="showStatsModal('rate')" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border: 1px solid #e9d5ff; border-radius: 10px; padding: 12px 14px; text-align: center; cursor: pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;"
+                             onmouseenter="this.style.transform='translateY(-2px) scale(1.02)'; this.style.boxShadow='0 8px 16px rgba(124, 58, 237, 0.12)';"
+                             onmouseleave="this.style.transform='none'; this.style.boxShadow='none';">
+                            <div style="font-size: 10px; font-weight: 700; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Overall Rate</div>
+                            <div style="font-size: 22px; font-weight: 800; color: #5b21b6; line-height: 1;"><span id="stat-overall-rate">{{ $qd['overall_submission_rate'] }}%</span></div>
+                            <div style="font-size: 9px; color: #6b7280; margin-top: 4px;">submission coverage</div>
                         </div>
-                        <div id="fund_utilization_province_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select id="fund_utilization_province" name="province[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Province" aria-hidden="true">
-                        @foreach(($filterOptions['provinces'] ?? []) as $option)
-                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['province'] ?? []), true))>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_city" data-badge-container-id="fund_utilization_city_badges" data-dropdown-toggle-id="fund_utilization_city_dropdown_toggle" data-dropdown-menu-id="fund_utilization_city_dropdown_menu" data-empty-badge-text="All" data-empty-menu-text="Select at least one province first.">
-                    <label for="fund_utilization_city_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div id="fund_utilization_city_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_city_dropdown_menu">
-                            <div id="fund_utilization_city_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                        {{-- Validated & Approved --}}
+                        <div onclick="showStatsModal('validated')" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 14px; text-align: center; cursor: pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;"
+                             onmouseenter="this.style.transform='translateY(-2px) scale(1.02)'; this.style.boxShadow='0 8px 16px rgba(22, 163, 74, 0.12)';"
+                             onmouseleave="this.style.transform='none'; this.style.boxShadow='none';">
+                            <div style="font-size: 10px; font-weight: 700; color: #16a34a; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Validated and Approved</div>
+                            <div style="font-size: 22px; font-weight: 800; color: #065f46; line-height: 1;"><span id="stat-fully-compliant">{{ $qd['overall_compliant'] }}</span></div>
+                            <div id="stat-compliant-desc" style="font-size: 9px; color: #6b7280; margin-top: 4px;">across all quarters</div>
                         </div>
-                        <div id="fund_utilization_city_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
-                    </div>
-                    <select id="fund_utilization_city" name="city[]" multiple class="dashboard-stacked-filter-source" data-filter-label="City/Municipality" aria-hidden="true">
-                        @foreach($cityOptions as $city)
-                            <option value="{{ $city }}" @selected(in_array((string) $city, ($activeFilters['city'] ?? []), true))>{{ $city }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_barangay" data-badge-container-id="fund_utilization_barangay_badges" data-dropdown-toggle-id="fund_utilization_barangay_dropdown_toggle" data-dropdown-menu-id="fund_utilization_barangay_dropdown_menu" data-empty-badge-text="All" data-empty-menu-text="Select at least one city/municipality first.">
-                    <label for="fund_utilization_barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
-                    <div class="dashboard-stacked-filter-dropdown">
-                        <div id="fund_utilization_barangay_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_barangay_dropdown_menu">
-                            <div id="fund_utilization_barangay_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
-                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                        {{-- Submitted to RO --}}
+                        <div onclick="showStatsModal('pending')" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 1px solid #fde68a; border-radius: 10px; padding: 12px 14px; text-align: center; cursor: pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;"
+                             onmouseenter="this.style.transform='translateY(-2px) scale(1.02)'; this.style.boxShadow='0 8px 16px rgba(217, 119, 6, 0.12)';"
+                             onmouseleave="this.style.transform='none'; this.style.boxShadow='none';">
+                            <div style="font-size: 10px; font-weight: 700; color: #d97706; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Submitted to Regional Office</div>
+                            <div style="font-size: 22px; font-weight: 800; color: #92400e; line-height: 1;"><span id="stat-pending">{{ $qd['overall_pending'] }}</span></div>
+                            <div id="stat-pending-desc" style="font-size: 9px; color: #6b7280; margin-top: 4px;">across all quarters</div>
                         </div>
-                        <div id="fund_utilization_barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                        {{-- Returned --}}
+                        <div onclick="showStatsModal('returned')" style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fca5a5; border-radius: 10px; padding: 12px 14px; text-align: center; cursor: pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;"
+                             onmouseenter="this.style.transform='translateY(-2px) scale(1.02)'; this.style.boxShadow='0 8px 16px rgba(239, 68, 68, 0.12)';"
+                             onmouseleave="this.style.transform='none'; this.style.boxShadow='none';">
+                            <div style="font-size: 10px; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Returned</div>
+                            <div style="font-size: 22px; font-weight: 800; color: #991b1b; line-height: 1;"><span id="stat-returned">{{ $qd['overall_returned'] }}</span></div>
+                            <div id="stat-returned-desc" style="font-size: 9px; color: #6b7280; margin-top: 4px;">across all quarters</div>
+                        </div>
+                        {{-- No Upload --}}
+                        <div onclick="showStatsModal('noupload')" style="background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); border: 1px solid #d1d5db; border-radius: 10px; padding: 12px 14px; text-align: center; cursor: pointer; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;"
+                             onmouseenter="this.style.transform='translateY(-2px) scale(1.02)'; this.style.boxShadow='0 8px 16px rgba(75, 85, 99, 0.12)';"
+                             onmouseleave="this.style.transform='none'; this.style.boxShadow='none';">
+                            <div style="font-size: 10px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">No Upload</div>
+                            <div style="font-size: 22px; font-weight: 800; color: #374151; line-height: 1;"><span id="stat-no-submission">{{ $qd['overall_no_submission'] }}</span></div>
+                            <div id="stat-no-submission-desc" style="font-size: 9px; color: #6b7280; margin-top: 4px;">across all quarters</div>
+                        </div>
                     </div>
-                    <select id="fund_utilization_barangay" name="barangay[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Barangay" aria-hidden="true">
-                        @foreach($barangayOptions as $barangay)
-                            <option value="{{ $barangay }}" @selected(in_array((string) $barangay, ($activeFilters['barangay'] ?? []), true))>{{ $barangay }}</option>
+ 
+                    {{-- Quarter Cards --}}
+                    <div class="fur-quarters-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 12px;">
+                        @foreach(['q1' => 'Quarter 1', 'q2' => 'Quarter 2', 'q3' => 'Quarter 3', 'q4' => 'Quarter 4'] as $qKey => $qLabel)
+                            @php
+                                $qData = $qdQuarters[$qKey] ?? ['label' => strtoupper($qKey), 'total' => 0, 'with_submissions' => 0, 'fully_compliant' => 0, 'pending_validation' => 0, 'returned' => 0, 'no_submission' => 0, 'submission_rate' => 0];
+                                $rate = $qData['submission_rate'];
+                                // SVG circle math: circumference = 2 * PI * radius (radius = 40)
+                                $circumference = 251.327;
+                                $dashOffset = $circumference - ($circumference * $rate / 100);
+                                // Ring color based on rate
+                                if ($rate >= 80) {
+                                    $ringColor = '#16a34a';
+                                    $ringBg = '#dcfce7';
+                                } elseif ($rate >= 50) {
+                                    $ringColor = '#d97706';
+                                    $ringBg = '#fef3c7';
+                                } elseif ($rate > 0) {
+                                    $ringColor = '#ea580c';
+                                    $ringBg = '#ffedd5';
+                                } else {
+                                    $ringColor = '#9ca3af';
+                                    $ringBg = '#f3f4f6';
+                                }
+                                $total = max($qData['total'], 1);
+                                $compliantPct = round(($qData['fully_compliant'] / $total) * 100);
+                                $pendingPct = round(($qData['pending_validation'] / $total) * 100);
+                                $returnedPct = round(($qData['returned'] / $total) * 100);
+                                $noSubPct = 100 - $compliantPct - $pendingPct - $returnedPct;
+                                if ($noSubPct < 0) $noSubPct = 0;
+                            @endphp
+                            <div class="fur-quarter-card" data-quarter="{{ $qKey }}" style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 12px; transition: box-shadow 0.3s ease, transform 0.2s ease;"
+                                 onmouseenter="this.style.boxShadow='0 6px 20px rgba(0,44,118,0.12)'; this.style.transform='translateY(-2px)';"
+                                 onmouseleave="this.style.boxShadow='none'; this.style.transform='translateY(0)';">
+ 
+                                {{-- Quarter Label --}}
+                                <div style="font-size: 12px; font-weight: 800; color: #1e3a8a; text-transform: uppercase; letter-spacing: 0.06em;">{{ $qLabel }}</div>
+ 
+                                 {{-- Rotating 3D Flip Card --}}
+                                 <div class="fur-donut-wrapper" style="position: relative; width: 110px; height: 110px; perspective: 1000px;">
+                                      <svg viewBox="0 0 100 100" style="width: 100%; height: 100%; transform: rotate(-90deg);">
+                                          <circle cx="50" cy="50" r="40" fill="none" stroke="{{ $ringBg }}" stroke-width="8"/>
+                                          <circle cx="50" cy="50" r="40" fill="none" stroke="{{ $ringColor }}" stroke-width="8"
+                                                  stroke-dasharray="{{ $circumference }}"
+                                                  stroke-dashoffset="{{ $dashOffset }}"
+                                                  stroke-linecap="round"
+                                                  style="transition: stroke-dashoffset 1s ease-out;"/>
+                                      </svg>
+                                      <div class="fur-donut-interactive" style="position: absolute; inset: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease; transform-style: preserve-3d; border-radius: 50%; background: #ffffff; box-shadow: 0 3px 8px rgba(0,0,0,0.08);" title="Hover to view count">
+                                          {{-- Front Face: Percentage --}}
+                                          <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; backface-visibility: hidden; -webkit-backface-visibility: hidden;">
+                                              <span style="font-size: 20px; font-weight: 800; color: {{ $ringColor }}; line-height: 1;">{{ number_format((float) $rate, 2) }}%</span>
+                                              <span style="font-size: 9px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;">approved</span>
+                                          </div>
+                                          {{-- Back Face: Count --}}
+                                          <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform: rotateY(180deg);">
+                                              <span style="font-size: 15px; font-weight: 800; color: {{ $ringColor }}; line-height: 1; text-align: center; padding: 0 8px; word-break: break-all;">{{ $qData['fully_compliant'] }} / {{ $qData['total'] }}</span>
+                                              <span style="font-size: 8px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;">approved</span>
+                                          </div>
+                                      </div>
+                                  </div>
+ 
+                                {{-- Status Breakdown Bar --}}
+                                <div style="width: 100%; border-radius: 6px; overflow: hidden; height: 7px; background: #f3f4f6; display: flex;">
+                                    @if($compliantPct > 0)
+                                        <div title="Validated and Approved: {{ $qData['fully_compliant'] }}" style="width: {{ $compliantPct }}%; background: #16a34a; height: 100%; transition: width 0.6s ease;"></div>
+                                    @endif
+                                    @if($pendingPct > 0)
+                                        <div title="Submitted to Regional Office: {{ $qData['pending_validation'] }}" style="width: {{ $pendingPct }}%; background: #f59e0b; height: 100%; transition: width 0.6s ease;"></div>
+                                    @endif
+                                    @if($returnedPct > 0)
+                                        <div title="Returned: {{ $qData['returned'] }}" style="width: {{ $returnedPct }}%; background: #ef4444; height: 100%; transition: width 0.6s ease;"></div>
+                                    @endif
+                                    @if($noSubPct > 0)
+                                        <div title="No Upload: {{ $qData['no_submission'] }}" style="width: {{ $noSubPct }}%; background: #e5e7eb; height: 100%; transition: width 0.6s ease;"></div>
+                                    @endif
+                                </div>
+ 
+                                {{-- Status Legend --}}
+                                <div style="display: flex; flex-direction: column; gap: 5px; width: 100%; font-size: 9px; align-self: flex-start; padding-left: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="width: 6px; height: 6px; border-radius: 2px; background: #16a34a; flex-shrink: 0;"></span>
+                                        <span style="color: #374151;">Validated and Approved: <strong>{{ $qData['fully_compliant'] }}</strong></span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="width: 6px; height: 6px; border-radius: 2px; background: #f59e0b; flex-shrink: 0;"></span>
+                                        <span style="color: #374151;">Submitted to Regional Office: <strong>{{ $qData['pending_validation'] }}</strong></span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="width: 6px; height: 6px; border-radius: 2px; background: #ef4444; flex-shrink: 0;"></span>
+                                        <span style="color: #374151;">Returned: <strong>{{ $qData['returned'] }}</strong></span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="width: 6px; height: 6px; border-radius: 2px; background: #e5e7eb; flex-shrink: 0;"></span>
+                                        <span style="color: #374151;">No Upload: <strong>{{ $qData['no_submission'] }}</strong></span>
+                                    </div>
+                                </div>
+                            </div>
                         @endforeach
-                    </select>
+                    </div>
                 </div>
 
-                <div class="dashboard-filter-reset" style="display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-                    <a href="{{ route('fund-utilization.index', $defaultFundUtilizationRouteParams) }}" class="dashboard-filter-reset-link" style="height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px;">
-                        <i class="fas fa-rotate-left" aria-hidden="true"></i>
-                        Reset Filter
-                    </a>
-                    <button type="submit" class="dashboard-filter-apply-btn">
-                        <i class="fas fa-check" aria-hidden="true"></i>
-                        Apply Filter
-                    </button>
-                    <button type="button" class="dashboard-filter-export-btn" onclick="openExportModal('excel')">
-                        <i class="fas fa-file-excel" aria-hidden="true"></i>
-                        Export Report
-                    </button>
+                {{-- Right Panel: Project Filter & Batch Upload --}}
+                <div class="fur-right-panel" style="display: flex; flex-direction: column; gap: 16px; height: 100%;">
+                    <form id="fund-utilization-filters" method="GET" action="{{ route('fund-utilization.index') }}" class="project-filter-form" style="background: #f9fafb; padding: 18px 20px; border-radius: 12px; border: 1px solid #e5e7eb; margin: 0; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02); box-sizing: border-box; display: flex; flex-direction: column; gap: 14px;">
+                        <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
+                        <input type="hidden" id="main-submission-year" name="submission_year" value="{{ $filters['submission_year'] ?? '' }}">
+                        @if($batchUploadOpen)
+                            <input type="hidden" name="batch_upload" value="1">
+                        @endif
+                        
+                        <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1e3a8a; font-size: 13px;">
+                            <i class="fas fa-filter" aria-hidden="true" style="font-size: 14px;"></i>
+                            <span>PROJECT FILTER</span>
+                        </div>
+
+                        <div id="fund-utilization-filter-body" class="project-filter-body" style="flex-grow: 1;">
+                            <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 14px; align-items: end;">
+                                <div>
+                                    <label for="fund-utilization-search" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Search</label>
+                                    <div style="position: relative;">
+                                        <i class="fas fa-search" style="position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 13px; pointer-events: none;"></i>
+                                        <input id="fund-utilization-search" type="text" name="search" value="{{ $activeFilters['search'] }}" placeholder="Search project code, title, province..." style="width: 100%; height: 34px; padding: 0 12px 0 34px; border: 1px solid #d1d5db; border-radius: 7px; font-size: 12px; background-color: #ffffff; color: #374151; box-sizing: border-box;">
+                                    </div>
+                                </div>
+
+                                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_program" data-badge-container-id="fund_utilization_program_badges" data-dropdown-toggle-id="fund_utilization_program_dropdown_toggle" data-dropdown-menu-id="fund_utilization_program_dropdown_menu" data-empty-badge-text="No program selected.">
+                                    <label for="fund_utilization_program_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Program</label>
+                                    <div class="dashboard-stacked-filter-dropdown">
+                                        <div id="fund_utilization_program_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_program_dropdown_menu">
+                                            <div id="fund_utilization_program_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                        </div>
+                                        <div id="fund_utilization_program_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                    </div>
+                                    <select id="fund_utilization_program" name="program[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Program" aria-hidden="true">
+                                        @foreach(($filterOptions['programs'] ?? []) as $option)
+                                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['program'] ?? []), true))>{{ $option }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_funding_year" data-badge-container-id="fund_utilization_funding_year_badges" data-dropdown-toggle-id="fund_utilization_funding_year_dropdown_toggle" data-dropdown-menu-id="fund_utilization_funding_year_dropdown_menu" data-empty-badge-text="All">
+                                    <label for="fund_utilization_funding_year_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Funding Year</label>
+                                    <div class="dashboard-stacked-filter-dropdown">
+                                        <div id="fund_utilization_funding_year_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_funding_year_dropdown_menu">
+                                            <div id="fund_utilization_funding_year_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                        </div>
+                                        <div id="fund_utilization_funding_year_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                    </div>
+                                    <select id="fund_utilization_funding_year" name="funding_year[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Funding Year" aria-hidden="true">
+                                        @foreach(($filterOptions['funding_years'] ?? []) as $option)
+                                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['funding_year'] ?? []), true))>{{ $option }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_project_status" data-badge-container-id="fund_utilization_project_status_badges" data-dropdown-toggle-id="fund_utilization_project_status_dropdown_toggle" data-dropdown-menu-id="fund_utilization_project_status_dropdown_menu" data-empty-badge-text="All">
+                                    <label for="fund_utilization_project_status_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Status</label>
+                                    <div class="dashboard-stacked-filter-dropdown">
+                                        <div id="fund_utilization_project_status_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_project_status_dropdown_menu">
+                                            <div id="fund_utilization_project_status_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                        </div>
+                                        <div id="fund_utilization_project_status_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                    </div>
+                                    <select id="fund_utilization_project_status" name="project_status[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Status" aria-hidden="true">
+                                        @foreach(($filterOptions['project_statuses'] ?? []) as $option)
+                                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['project_status'] ?? []), true))>{{ $option }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_province" data-badge-container-id="fund_utilization_province_badges" data-dropdown-toggle-id="fund_utilization_province_dropdown_toggle" data-dropdown-menu-id="fund_utilization_province_dropdown_menu" data-empty-badge-text="All">
+                                    <label for="fund_utilization_province_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Province</label>
+                                    <div class="dashboard-stacked-filter-dropdown">
+                                        <div id="fund_utilization_province_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_province_dropdown_menu">
+                                            <div id="fund_utilization_province_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                        </div>
+                                        <div id="fund_utilization_province_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                    </div>
+                                    <select id="fund_utilization_province" name="province[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Province" aria-hidden="true">
+                                        @foreach(($filterOptions['provinces'] ?? []) as $option)
+                                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['province'] ?? []), true))>{{ $option }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_city" data-badge-container-id="fund_utilization_city_badges" data-dropdown-toggle-id="fund_utilization_city_dropdown_toggle" data-dropdown-menu-id="fund_utilization_city_dropdown_menu" data-empty-badge-text="All" data-empty-menu-text="Select at least one province first.">
+                                    <label for="fund_utilization_city_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">City/Municipality</label>
+                                    <div class="dashboard-stacked-filter-dropdown">
+                                        <div id="fund_utilization_city_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_city_dropdown_menu">
+                                            <div id="fund_utilization_city_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                        </div>
+                                        <div id="fund_utilization_city_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                    </div>
+                                    <select id="fund_utilization_city" name="city[]" multiple class="dashboard-stacked-filter-source" data-filter-label="City/Municipality" aria-hidden="true">
+                                        @foreach($cityOptions as $option)
+                                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['city'] ?? []), true))>{{ $option }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div class="dashboard-stacked-filter" data-stacked-filter data-source-select-id="fund_utilization_barangay" data-badge-container-id="fund_utilization_barangay_badges" data-dropdown-toggle-id="fund_utilization_barangay_dropdown_toggle" data-dropdown-menu-id="fund_utilization_barangay_dropdown_menu" data-empty-badge-text="All" data-empty-menu-text="Select at least one city/municipality first.">
+                                    <label for="fund_utilization_barangay_dropdown_toggle" style="display: block; color: #1f2937; font-size: 12px; font-weight: 700; margin-bottom: 4px;">Barangay</label>
+                                    <div class="dashboard-stacked-filter-dropdown">
+                                        <div id="fund_utilization_barangay_dropdown_toggle" class="dashboard-stacked-filter-toggle" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-controls="fund_utilization_barangay_dropdown_menu">
+                                            <div id="fund_utilization_barangay_badges" class="dashboard-filter-badge-list" aria-live="polite"></div>
+                                            <span class="dashboard-stacked-filter-chevron"><i class="fas fa-chevron-down"></i></span>
+                                        </div>
+                                        <div id="fund_utilization_barangay_dropdown_menu" class="dashboard-stacked-filter-menu" role="listbox" aria-multiselectable="true"></div>
+                                    </div>
+                                    <select id="fund_utilization_barangay" name="barangay[]" multiple class="dashboard-stacked-filter-source" data-filter-label="Barangay" aria-hidden="true">
+                                        @foreach($barangayOptions as $option)
+                                            <option value="{{ $option }}" @selected(in_array((string) $option, ($activeFilters['barangay'] ?? []), true))>{{ $option }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-filter-reset" style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 14px;">
+                            <a href="{{ route('fund-utilization.index', $defaultFundUtilizationRouteParams) }}" class="dashboard-filter-reset-link" style="height: 34px; min-width: 120px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; font-weight: 600; padding: 0 12px;" data-force-pagination-bound="1">
+                                <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                                Reset Filter
+                            </a>
+                            <button type="submit" class="dashboard-filter-apply-btn" style="height: 34px; font-size: 12px;">
+                                <i class="fas fa-check" aria-hidden="true"></i>
+                                Apply Filter
+                            </button>
+                            <button type="button" class="dashboard-filter-export-btn" onclick="openExportModal('excel')" style="height: 34px; font-size: 12px;">
+                                <i class="fas fa-file-excel" aria-hidden="true"></i>
+                                Export Report
+                            </button>
+                        </div>
+                    </form>
+
+                    @if($canBatchUploadFundUtilization)
+                        <div class="fur-batch-upload-panel">
+                            <div class="fur-batch-upload-header">
+                                <div class="fur-batch-upload-icon-container">
+                                    <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 1px;">
+                                    <h3 class="fur-batch-upload-title">Batch Upload Workspace</h3>
+                                    <span class="fur-batch-upload-subtitle">Bulk Document Upload</span>
+                                </div>
+                            </div>
+                            
+                            <p class="fur-batch-upload-description">
+                                Upload documents for multiple projects simultaneously. You can use the project filter above to narrow your list before opening the workspace.
+                            </p>
+                            
+                            <button type="button" class="fur-batch-upload-btn" onclick="openBatchUploadModal()">
+                                <i class="fas fa-upload" aria-hidden="true"></i>
+                                Open Upload Workspace
+                            </button>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
-    </form>
+    </div>
+
+    <style>
+        /* Quarterly Dashboard Panels Responsive */
+        @media (max-width: 1200px) {
+            .fur-panels-container {
+                grid-template-columns: 1fr !important;
+                gap: 20px !important;
+            }
+        }
+        @media (max-width: 640px) {
+            .fur-stats-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+            .fur-quarters-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+        /* Collapsed state */
+        #fur-quarterly-dashboard.fur-dashboard-collapsed #fur-dashboard-body {
+            max-height: 0 !important;
+            opacity: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            pointer-events: none;
+        }
+        #fur-quarterly-dashboard.fur-dashboard-collapsed #fur-dashboard-chevron {
+            transform: rotate(180deg);
+        }
+
+        /* Batch Upload Panel Style */
+        .fur-batch-upload-panel {
+            background: linear-gradient(135deg, #f0f7ff 0%, #e0effe 100%) !important;
+            padding: 16px 18px !important;
+            border-radius: 12px !important;
+            border: 2px dashed #3b82f6 !important;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.1) !important;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-sizing: border-box;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            position: relative;
+            overflow: hidden;
+            margin-top: auto; /* Push down to align with bottom of left panel */
+        }
+        .fur-batch-upload-panel:hover {
+            border-color: #1d4ed8 !important;
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.15) !important;
+            transform: translateY(-2px);
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+        }
+        .fur-batch-upload-header {
+            display: flex;
+            align-items: center;
+            text-align: left;
+            gap: 12px;
+            width: 100%;
+        }
+        .fur-batch-upload-icon-container {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #3b82f6;
+            color: #2563eb;
+            box-shadow: 0 3px 8px rgba(37, 99, 235, 0.08);
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+        .fur-batch-upload-panel:hover .fur-batch-upload-icon-container {
+            transform: scale(1.08) rotate(5deg);
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+        }
+        .fur-batch-upload-title {
+            font-weight: 800;
+            color: #1e3a8a;
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .fur-batch-upload-subtitle {
+            font-size: 10px;
+            color: #2563eb;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            line-height: 1.2;
+        }
+        .fur-batch-upload-description {
+            font-size: 11px;
+            color: #4b5563;
+            line-height: 1.4;
+            text-align: left;
+            margin: 0;
+        }
+        .fur-batch-upload-btn {
+            width: 100%;
+            height: 34px;
+            border-radius: 7px;
+            border: none;
+            background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%) !important;
+            color: white !important;
+            font-weight: 700;
+            font-size: 11px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 3px 8px rgba(37, 99, 235, 0.15);
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .fur-batch-upload-btn:hover {
+            background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 5px 12px rgba(29, 78, 216, 0.25);
+        }
+        .fur-batch-upload-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+
+    <script>
+        let currentActiveQuarter = 'all';
+
+        function toggleFurDashboard() {
+            var dashboard = document.getElementById('fur-quarterly-dashboard');
+            var body = document.getElementById('fur-dashboard-body');
+            var toggle = document.getElementById('fur-dashboard-toggle');
+            if (dashboard.classList.contains('fur-dashboard-collapsed')) {
+                dashboard.classList.remove('fur-dashboard-collapsed');
+                body.style.maxHeight = body.scrollHeight + 'px';
+                body.style.opacity = '1';
+                toggle.setAttribute('aria-expanded', 'true');
+                setTimeout(function() { body.style.maxHeight = 'none'; }, 400);
+            } else {
+                body.style.maxHeight = body.scrollHeight + 'px';
+                // Force reflow before collapsing
+                body.offsetHeight;
+                dashboard.classList.add('fur-dashboard-collapsed');
+                body.style.maxHeight = '0';
+                body.style.opacity = '0';
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        function filterQuarters(quarter, btn) {
+            currentActiveQuarter = quarter;
+            // Update active state styles for the quarter filter buttons
+            var buttons = document.querySelectorAll('.fur-quarter-filter .fur-q-btn');
+            buttons.forEach(function(b) {
+                b.style.background = 'transparent';
+                b.style.color = '#4b5563';
+                b.style.fontWeight = '500';
+                b.style.boxShadow = 'none';
+            });
+            
+            btn.style.background = '#ffffff';
+            btn.style.color = '#1e3a8a';
+            btn.style.fontWeight = '700';
+            btn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+
+            // Filter cards
+            var cards = document.querySelectorAll('.fur-quarter-card');
+            cards.forEach(function(card) {
+                if (quarter === 'all' || card.getAttribute('data-quarter') === quarter) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            // Update stats grid dynamically
+            var container = document.querySelector('.fur-left-panel');
+            if (container) {
+                var totalProjects = 0;
+                var compliant = 0;
+                var pending = 0;
+                var returned = 0;
+                var noSubmission = 0;
+                var rate = 0;
+                
+                var compliantDesc = '';
+                var pendingDesc = '';
+                var returnedDesc = '';
+                var noSubmissionDesc = '';
+
+                if (quarter === 'all') {
+                    totalProjects = container.getAttribute('data-all-projects') || 0;
+                    compliant = container.getAttribute('data-all-compliant') || 0;
+                    pending = container.getAttribute('data-all-pending') || 0;
+                    returned = container.getAttribute('data-all-returned') || 0;
+                    noSubmission = container.getAttribute('data-all-no-submission') || 0;
+                    rate = container.getAttribute('data-all-rate') || 0;
+                    
+                    compliantDesc = 'across all quarters';
+                    pendingDesc = 'across all quarters';
+                    returnedDesc = 'across all quarters';
+                    noSubmissionDesc = 'across all quarters';
+                } else {
+                    totalProjects = container.getAttribute('data-' + quarter + '-projects') || 0;
+                    compliant = container.getAttribute('data-' + quarter + '-compliant') || 0;
+                    pending = container.getAttribute('data-' + quarter + '-pending') || 0;
+                    returned = container.getAttribute('data-' + quarter + '-returned') || 0;
+                    noSubmission = container.getAttribute('data-' + quarter + '-no-submission') || 0;
+                    rate = container.getAttribute('data-' + quarter + '-rate') || 0;
+                    
+                    compliantDesc = 'for ' + quarter.toUpperCase();
+                    pendingDesc = 'for ' + quarter.toUpperCase();
+                    returnedDesc = 'for ' + quarter.toUpperCase();
+                    noSubmissionDesc = 'for ' + quarter.toUpperCase();
+                }
+
+                var elTotal = document.getElementById('stat-total-projects');
+                var elCompliant = document.getElementById('stat-fully-compliant');
+                var elPending = document.getElementById('stat-pending');
+                var elReturned = document.getElementById('stat-returned');
+                var elNoSubmission = document.getElementById('stat-no-submission');
+                var elRate = document.getElementById('stat-overall-rate');
+                
+                var elCompliantDesc = document.getElementById('stat-compliant-desc');
+                var elPendingDesc = document.getElementById('stat-pending-desc');
+                var elReturnedDesc = document.getElementById('stat-returned-desc');
+                var elNoSubmissionDesc = document.getElementById('stat-no-submission-desc');
+
+                if (elTotal) elTotal.textContent = totalProjects;
+                if (elCompliant) elCompliant.textContent = compliant;
+                if (elPending) elPending.textContent = pending;
+                if (elReturned) elReturned.textContent = returned;
+                if (elNoSubmission) elNoSubmission.textContent = noSubmission;
+                if (elRate) elRate.textContent = rate + '%';
+                
+                if (elCompliantDesc) elCompliantDesc.textContent = compliantDesc;
+                if (elPendingDesc) elPendingDesc.textContent = pendingDesc;
+                if (elReturnedDesc) elReturnedDesc.textContent = returnedDesc;
+                if (elNoSubmissionDesc) elNoSubmissionDesc.textContent = noSubmissionDesc;
+            }
+        }
+
+        function applyQuickFundingYear(select) {
+            var val = select.value;
+            // Clear all multi-select items in fund_utilization_funding_year select
+            var mainSelect = document.getElementById('fund_utilization_funding_year');
+            if (mainSelect) {
+                for (var i = 0; i < mainSelect.options.length; i++) {
+                    mainSelect.options[i].selected = false;
+                }
+                if (val !== '') {
+                    for (var i = 0; i < mainSelect.options.length; i++) {
+                        if (mainSelect.options[i].value === val) {
+                            mainSelect.options[i].selected = true;
+                            break;
+                        }
+                    }
+                }
+                mainSelect.dispatchEvent(new Event('change'));
+            }
+            document.getElementById('fund-utilization-filters').submit();
+        }
+
+        function applyQuickSubmissionYear(select) {
+            var val = select.value;
+            var hiddenInput = document.getElementById('main-submission-year');
+            if (hiddenInput) {
+                hiddenInput.value = val;
+            }
+            document.getElementById('fund-utilization-filters').submit();
+        }
+
+        function toggleDonutContent(element) {
+            if (element.style.transform === 'rotateY(180deg)') {
+                element.style.transform = 'rotateY(0deg)';
+            } else {
+                element.style.transform = 'rotateY(180deg)';
+            }
+        }
+    </script>
 
     <!-- Reports Card -->
     <div class="report-table-card" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
@@ -259,8 +844,14 @@
                             'validation_level_border_color' => '#d1d5db',
                             'date_validated_label' => '—',
                         ];
+                        $rowBg = 'transparent';
+                        if (($validationSummary['returned_count'] ?? 0) > 0) {
+                            $rowBg = '#fef2f2'; // Soft red
+                        } elseif (($validationSummary['pending_total'] ?? 0) > 0) {
+                            $rowBg = '#fff7ed'; // Soft orange
+                        }
                     @endphp
-                    <tr style="border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
+                    <tr style="background-color: {{ $rowBg }}; border-bottom: 1px solid #e5e7eb; transition: all 0.3s ease;">
                         <td style="padding: 12px; color: #111827; font-size: 14px; width: 220px; max-width: 220px;">
                             <div style="display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; background: #e0e7ff; color: #1e3a8a; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px;">
                                 {{ $report->project_code }}
@@ -321,11 +912,27 @@
                                         {{ $validationSummary['detail'] ?? 'No uploaded documents yet' }}
                                     </span>
                                 </span>
-                                <div style="display: grid; grid-template-columns: repeat(2, minmax(54px, 1fr)); gap: 6px; width: 100%; max-width: 170px;">
-                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q1_percentage == 100 ? '#10b981' : ($report->quarter_q1_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q1: {{ $report->quarter_q1_percentage }}%</span>
-                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q2_percentage == 100 ? '#10b981' : ($report->quarter_q2_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q2: {{ $report->quarter_q2_percentage }}%</span>
-                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q3_percentage == 100 ? '#10b981' : ($report->quarter_q3_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q3: {{ $report->quarter_q3_percentage }}%</span>
-                                    <span style="padding: 6px 8px; border-radius: 8px; background: #f8fafc; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: {{ $report->quarter_q4_percentage == 100 ? '#10b981' : ($report->quarter_q4_percentage > 70 ? '#f59e0b' : '#ef4444') }};">Q4: {{ $report->quarter_q4_percentage }}%</span>
+                                <div style="display: flex; flex-direction: column; gap: 5px; width: 100%; max-width: 170px;">
+                                    {{-- Q1 --}}
+                                    <div title="{{ $report->quarter_q1_tooltip ?? 'No uploaded documents yet' }}" style="position: relative; height: 18px; border-radius: 4px; border: 1px solid {{ $report->quarter_q1_border ?? '#d1d5db' }}; background: #f1f5f9; overflow: hidden; cursor: help; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 3px rgba(0,0,0,0.1); width: 100%;">
+                                        <div style="position: absolute; left: 0; top: 0; bottom: 0; width: {{ max($report->quarter_q1_percentage, 0) == 0 && ($report->quarter_q1_bg ?? '#f3f4f6') == '#f3f4f6' ? 100 : $report->quarter_q1_percentage }}%; background: linear-gradient(to bottom, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(0, 0, 0, 0.05) 55%, rgba(0, 0, 0, 0.2) 100%), {{ $getSolidColor($report->quarter_q1_bg ?? '#f3f4f6') }}; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 1px 0 2px rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.15); transition: width 0.3s ease;"></div>
+                                        <span style="position: relative; z-index: 1; font-size: 10px; font-weight: 700; color: {{ $report->quarter_q1_text ?? '#6b7280' }};">Q1: {{ $report->quarter_q1_percentage }}%</span>
+                                    </div>
+                                    {{-- Q2 --}}
+                                    <div title="{{ $report->quarter_q2_tooltip ?? 'No uploaded documents yet' }}" style="position: relative; height: 18px; border-radius: 4px; border: 1px solid {{ $report->quarter_q2_border ?? '#d1d5db' }}; background: #f1f5f9; overflow: hidden; cursor: help; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 3px rgba(0,0,0,0.1); width: 100%;">
+                                        <div style="position: absolute; left: 0; top: 0; bottom: 0; width: {{ max($report->quarter_q2_percentage, 0) == 0 && ($report->quarter_q2_bg ?? '#f3f4f6') == '#f3f4f6' ? 100 : $report->quarter_q2_percentage }}%; background: linear-gradient(to bottom, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(0, 0, 0, 0.05) 55%, rgba(0, 0, 0, 0.2) 100%), {{ $getSolidColor($report->quarter_q2_bg ?? '#f3f4f6') }}; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 1px 0 2px rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.15); transition: width 0.3s ease;"></div>
+                                        <span style="position: relative; z-index: 1; font-size: 10px; font-weight: 700; color: {{ $report->quarter_q2_text ?? '#6b7280' }};">Q2: {{ $report->quarter_q2_percentage }}%</span>
+                                    </div>
+                                    {{-- Q3 --}}
+                                    <div title="{{ $report->quarter_q3_tooltip ?? 'No uploaded documents yet' }}" style="position: relative; height: 18px; border-radius: 4px; border: 1px solid {{ $report->quarter_q3_border ?? '#d1d5db' }}; background: #f1f5f9; overflow: hidden; cursor: help; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 3px rgba(0,0,0,0.1); width: 100%;">
+                                        <div style="position: absolute; left: 0; top: 0; bottom: 0; width: {{ max($report->quarter_q3_percentage, 0) == 0 && ($report->quarter_q3_bg ?? '#f3f4f6') == '#f3f4f6' ? 100 : $report->quarter_q3_percentage }}%; background: linear-gradient(to bottom, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(0, 0, 0, 0.05) 55%, rgba(0, 0, 0, 0.2) 100%), {{ $getSolidColor($report->quarter_q3_bg ?? '#f3f4f6') }}; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 1px 0 2px rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.15); transition: width 0.3s ease;"></div>
+                                        <span style="position: relative; z-index: 1; font-size: 10px; font-weight: 700; color: {{ $report->quarter_q3_text ?? '#6b7280' }};">Q3: {{ $report->quarter_q3_percentage }}%</span>
+                                    </div>
+                                    {{-- Q4 --}}
+                                    <div title="{{ $report->quarter_q4_tooltip ?? 'No uploaded documents yet' }}" style="position: relative; height: 18px; border-radius: 4px; border: 1px solid {{ $report->quarter_q4_border ?? '#d1d5db' }}; background: #f1f5f9; overflow: hidden; cursor: help; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 2px 3px rgba(0,0,0,0.1); width: 100%;">
+                                        <div style="position: absolute; left: 0; top: 0; bottom: 0; width: {{ max($report->quarter_q4_percentage, 0) == 0 && ($report->quarter_q4_bg ?? '#f3f4f6') == '#f3f4f6' ? 100 : $report->quarter_q4_percentage }}%; background: linear-gradient(to bottom, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.05) 45%, rgba(0, 0, 0, 0.05) 55%, rgba(0, 0, 0, 0.2) 100%), {{ $getSolidColor($report->quarter_q4_bg ?? '#f3f4f6') }}; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 1px 0 2px rgba(0, 0, 0, 0.1); border-right: 1px solid rgba(0, 0, 0, 0.15); transition: width 0.3s ease;"></div>
+                                        <span style="position: relative; z-index: 1; font-size: 10px; font-weight: 700; color: {{ $report->quarter_q4_text ?? '#6b7280' }};">Q4: {{ $report->quarter_q4_percentage }}%</span>
+                                    </div>
                                 </div>
                             </div>
                         </td>
@@ -373,6 +980,7 @@
                         Showing {{ $reports->firstItem() ?? 0 }}-{{ $reports->lastItem() ?? 0 }} of {{ $reports->total() }}
                     </div>
                     <form method="GET" action="{{ route('fund-utilization.index') }}" style="display: inline-flex; align-items: center;">
+                        <input type="hidden" name="submission_year" value="{{ $filters['submission_year'] ?? '' }}">
                         @if($batchUploadOpen)
                             <input type="hidden" name="batch_upload" value="1">
                         @endif
@@ -412,6 +1020,57 @@
                 </div>
             </div>
         @endif
+    </div>
+
+    <!-- Stats Detail Modal -->
+    <div id="statsDetailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease; box-sizing: border-box; padding: 20px;">
+        <div id="statsDetailModalContainer" style="background: #ffffff; width: 100%; max-width: 900px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); display: flex; flex-direction: column; max-height: 85vh;">
+            <!-- Modal Header -->
+            <div id="statsDetailModalHeader" style="padding: 20px 24px; color: #ffffff; display: flex; align-items: center; justify-content: space-between; position: relative;">
+                <div>
+                    <h3 id="statsDetailModalTitle" style="margin: 0; font-size: 18px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase;">Project Details</h3>
+                    <p id="statsDetailModalSubtitle" style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9; font-weight: 500;"></p>
+                </div>
+                <button type="button" onclick="closeStatsDetailModal()" style="background: rgba(255,255,255,0.15); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: background 0.2s ease;" onmouseenter="this.style.background='rgba(255,255,255,0.3)'" onmouseleave="this.style.background='rgba(255,255,255,0.15)'">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Modal Search & Info Bar -->
+            <div style="padding: 16px 24px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                <div style="position: relative; flex-grow: 1; max-width: 400px;">
+                    <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 13px;"></i>
+                    <input id="statsDetailModalSearch" type="text" placeholder="Search projects in this list..." oninput="filterStatsModalTable()" style="width: 100%; height: 36px; padding: 0 12px 0 36px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none; transition: border-color 0.2s; background: #ffffff;" onfocus="this.style.borderColor='#3b82f6'">
+                </div>
+                <div id="statsDetailModalBadge" style="font-size: 12px; font-weight: 700; color: #475569; padding: 6px 12px; background: #e2e8f0; border-radius: 999px;">
+                    0 Projects Found
+                </div>
+            </div>
+
+            <!-- Modal Body (Table Scroll) -->
+            <div style="flex-grow: 1; overflow-y: auto; padding: 0 24px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; margin: 16px 0;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; font-size: 12px; font-weight: 700; text-transform: uppercase;">
+                            <th style="padding: 10px 12px;">Project Code</th>
+                            <th style="padding: 10px 12px;">Project Title</th>
+                            <th style="padding: 10px 12px;">Location</th>
+                            <th style="padding: 10px 12px; text-align: center;">Quarter</th>
+                            <th style="padding: 10px 12px; text-align: center;">Status</th>
+                            <th style="padding: 10px 12px; text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsDetailModalTableBody" style="font-size: 13px; color: #334155;">
+                        <!-- Rows will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Modal Footer -->
+            <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" onclick="closeStatsDetailModal()" style="padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; color: #334155; font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.2s;" onmouseenter="this.style.background='#f1f5f9'" onmouseleave="this.style.background='#ffffff'">Close</button>
+            </div>
+        </div>
     </div>
 
     <!-- Export Modal -->
@@ -623,7 +1282,7 @@
                             <span class="fur-batch-document-pill">Batch Upload</span>
                         </div>
 
-                        <div class="fur-batch-document-mode-actions" role="group" aria-label="Choose batch upload mode">
+                        <div class="fur-batch-document-mode-actions" role="group" aria-label="Choose batch upload mode" style="display: none;">
                             <button
                                 type="button"
                                 id="batchUploadDocumentModeCategoryBtn"
@@ -642,6 +1301,7 @@
                                 data-batch-document-mode-btn="single"
                                 data-batch-document-mode-target="batchUploadDocumentAsOnePanel"
                                 aria-pressed="false"
+                                style="display: none;"
                             >
                                 <i class="fas fa-layer-group" aria-hidden="true"></i>
                                 Upload Documents as One
@@ -673,7 +1333,7 @@
                             </div>
                         </div>
 
-                        <div class="fur-batch-document-mode-card fur-batch-category-inline-panel" id="batchUploadDocumentCategoryPanel" hidden>
+                        <div class="fur-batch-document-mode-card fur-batch-category-inline-panel" id="batchUploadDocumentCategoryPanel">
                             <div class="fur-batch-category-body">
                                 <div class="fur-batch-category-summary-card">
                                     <div class="fur-batch-category-summary-grid">
@@ -1100,6 +1760,203 @@
     </div>
 
     <script>
+        let statsModalFilteredData = [];
+
+        function showStatsModal(type) {
+            const modal = document.getElementById('statsDetailModal');
+            const container = document.getElementById('statsDetailModalContainer');
+            const titleEl = document.getElementById('statsDetailModalTitle');
+            const subtitleEl = document.getElementById('statsDetailModalSubtitle');
+            const headerEl = document.getElementById('statsDetailModalHeader');
+            const searchInput = document.getElementById('statsDetailModalSearch');
+            
+            if (!modal) return;
+            
+            if (searchInput) searchInput.value = '';
+
+            let title = 'Projects';
+            let subtitle = '';
+            let headerBg = 'linear-gradient(135deg, #002C76 0%, #003a99 100%)';
+            
+            const quarterLabel = currentActiveQuarter === 'all' ? 'All Quarters' : currentActiveQuarter.toUpperCase();
+
+            statsModalFilteredData = [];
+            
+            BATCH_UPLOAD_PROJECTS.forEach(project => {
+                const quarters = currentActiveQuarter === 'all' ? ['q1', 'q2', 'q3', 'q4'] : [currentActiveQuarter];
+                
+                quarters.forEach(q => {
+                    const bg = project[q + '_bg'] || '#f3f4f6';
+                    const pct = project[q + '_pct'] || 0;
+                    const tooltip = project[q + '_tooltip'] || '';
+                    
+                    let statusLabel = 'No Upload';
+                    let badgeBg = '#f3f4f6';
+                    let badgeText = '#4b5563';
+                    let badgeBorder = '#d1d5db';
+                    
+                    if (bg === '#ecfdf5') {
+                        statusLabel = 'Validated & Approved';
+                        badgeBg = '#ecfdf5';
+                        badgeText = '#065f46';
+                        badgeBorder = '#6ee7b7';
+                    } else if (bg === '#fee2e2') {
+                        statusLabel = 'Returned';
+                        badgeBg = '#fef2f2';
+                        badgeText = '#991b1b';
+                        badgeBorder = '#fca5a5';
+                    } else if (bg === '#fef9c3' || bg === '#ffedd5') {
+                        statusLabel = 'Pending Validation';
+                        badgeBg = '#fffbeb';
+                        badgeText = '#92400e';
+                        badgeBorder = '#fcd34d';
+                    }
+                    
+                    let matches = false;
+                    if (type === 'total') {
+                        if (currentActiveQuarter === 'all') {
+                            if (q === 'q1') matches = true;
+                        } else {
+                            matches = true;
+                        }
+                    } else if (type === 'rate') {
+                        if (bg !== '#f3f4f6') matches = true;
+                    } else if (type === 'validated' && bg === '#ecfdf5') {
+                        matches = true;
+                    } else if (type === 'pending' && (bg === '#fef9c3' || bg === '#ffedd5')) {
+                        matches = true;
+                    } else if (type === 'returned' && bg === '#fee2e2') {
+                        matches = true;
+                    } else if (type === 'noupload' && bg === '#f3f4f6') {
+                        matches = true;
+                    }
+                    
+                    if (matches) {
+                        statsModalFilteredData.push({
+                            project_code: project.project_code,
+                            project_title: project.project_title,
+                            province: project.province || '-',
+                            city_municipality: project.city_municipality || '-',
+                            open_url: project.open_url,
+                            quarter: q.toUpperCase(),
+                            status: statusLabel,
+                            tooltip: tooltip,
+                            badgeBg: badgeBg,
+                            badgeText: badgeText,
+                            badgeBorder: badgeBorder,
+                            isTotalType: type === 'total'
+                        });
+                    }
+                });
+            });
+
+            switch (type) {
+                case 'total':
+                    title = 'Total Projects';
+                    subtitle = 'All unique projects listed for ' + quarterLabel;
+                    headerBg = 'linear-gradient(135deg, #002C76 0%, #003a99 100%)';
+                    break;
+                case 'rate':
+                    title = 'Overall Rate / Submissions';
+                    subtitle = 'All project uploads contributing to submission coverage (' + quarterLabel + ')';
+                    headerBg = 'linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%)';
+                    break;
+                case 'validated':
+                    title = 'Validated and Approved';
+                    subtitle = 'Fully approved and compliant reports for ' + quarterLabel;
+                    headerBg = 'linear-gradient(135deg, #065f46 0%, #16a34a 100%)';
+                    break;
+                case 'pending':
+                    title = 'Pending Validation';
+                    subtitle = 'Reports submitted and awaiting validation for ' + quarterLabel;
+                    headerBg = 'linear-gradient(135deg, #92400e 0%, #d97706 100%)';
+                    break;
+                case 'returned':
+                    title = 'Returned Reports';
+                    subtitle = 'Reports returned for revision in ' + quarterLabel;
+                    headerBg = 'linear-gradient(135deg, #991b1b 0%, #ef4444 100%)';
+                    break;
+                case 'noupload':
+                    title = 'No Upload';
+                    subtitle = 'Projects with no fund utilization reports uploaded yet for ' + quarterLabel;
+                    headerBg = 'linear-gradient(135deg, #374151 0%, #6b7280 100%)';
+                    break;
+            }
+
+            titleEl.textContent = title;
+            subtitleEl.textContent = subtitle;
+            headerEl.style.background = headerBg;
+
+            renderStatsModalTable();
+
+            modal.style.display = 'flex';
+            modal.offsetHeight;
+            modal.style.opacity = '1';
+            container.style.transform = 'scale(1)';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeStatsDetailModal() {
+            const modal = document.getElementById('statsDetailModal');
+            const container = document.getElementById('statsDetailModalContainer');
+            if (!modal) return;
+            
+            modal.style.opacity = '0';
+            container.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        function renderStatsModalTable() {
+            const tbody = document.getElementById('statsDetailModalTableBody');
+            const badge = document.getElementById('statsDetailModalBadge');
+            const searchVal = document.getElementById('statsDetailModalSearch').value.toLowerCase().trim();
+            
+            if (!tbody) return;
+            
+            tbody.innerHTML = '';
+            
+            const filtered = statsModalFilteredData.filter(item => {
+                if (searchVal === '') return true;
+                return item.project_code.toLowerCase().includes(searchVal) ||
+                       item.project_title.toLowerCase().includes(searchVal) ||
+                       item.province.toLowerCase().includes(searchVal) ||
+                       item.city_municipality.toLowerCase().includes(searchVal);
+            });
+
+            badge.textContent = filtered.length + ' ' + (filtered.length === 1 ? 'Record' : 'Records') + ' Found';
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="padding: 30px; text-align: center; color: #64748b;"><i class="fas fa-search" style="font-size: 24px; margin-bottom: 8px; display: block; color: #94a3b8;"></i>No matching projects found.</td></tr>';
+                return;
+            }
+
+            filtered.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid #f1f5f9';
+                tr.style.transition = 'background 0.2s';
+                tr.onmouseenter = () => tr.style.background = '#f8fafc';
+                tr.onmouseleave = () => tr.style.background = '';
+                
+                const quarterCell = item.isTotalType && currentActiveQuarter === 'all' ? '—' : item.quarter;
+                
+                tr.innerHTML = '<td style="padding: 12px; font-weight: 700; color: #0f172a; white-space: nowrap;"><span style="display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e0e7ff; color: #1e3a8a; font-size: 11px;">' + item.project_code + '</span></td>' +
+                    '<td style="padding: 12px; font-weight: 600; line-height: 1.4; color: #1e293b;">' + item.project_title + '</td>' +
+                    '<td style="padding: 12px; color: #475569; font-size: 12px; line-height: 1.4;"><strong>Prov:</strong> ' + item.province + '<br><strong>City/Mun:</strong> ' + item.city_municipality + '</td>' +
+                    '<td style="padding: 12px; text-align: center; font-weight: 700; color: #0f172a;">' + quarterCell + '</td>' +
+                    '<td style="padding: 12px; text-align: center;"><span title="' + item.tooltip + '" style="display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid ' + item.badgeBorder + '; background: ' + item.badgeBg + '; color: ' + item.badgeText + '; font-size: 11px; font-weight: 700; white-space: nowrap;">' + item.status + '</span></td>' +
+                    '<td style="padding: 12px; text-align: center;"><a href="' + item.open_url + '" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; background: #002C76; color: white; border-radius: 6px; text-decoration: none; transition: background 0.2s;" onmouseenter="this.style.background=\'#003a99\'" onmouseleave="this.style.background=\'#002C76\'" title="View Details"><i class="fas fa-eye" style="font-size: 12px;"></i></a></td>';
+                
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterStatsModalTable() {
+            renderStatsModalTable();
+        }
+
         let selectedFormat = '';
         const shouldAutoOpenBatchUploadModal = @json($batchUploadOpen);
         const BATCH_UPLOAD_BULK_ROUTE = @json(route('fund-utilization.batch-upload-documents'));
@@ -1117,6 +1974,14 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            const statsDetailModal = document.getElementById('statsDetailModal');
+            if (statsDetailModal) {
+                statsDetailModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeStatsDetailModal();
+                    }
+                });
+            }
             const exportProvinceSelect = document.getElementById('export_province');
             if (exportProvinceSelect) {
                 exportProvinceSelect.addEventListener('change', function () {
@@ -1153,7 +2018,32 @@
         const BATCH_UPLOAD_DOCUMENT_STORE_NAME = 'modal-state';
         const BATCH_UPLOAD_DOCUMENT_STORE_KEY = 'selected-documents';
         const BATCH_UPLOAD_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
-        const BATCH_UPLOAD_PROJECTS = @json($batchUploadProjects);
+        @php
+            $serializedProjects = $rawProjects->map(function ($p) {
+                return [
+                    'project_code' => trim((string) data_get($p, 'project_code', '')),
+                    'project_title' => trim((string) data_get($p, 'project_title', '')),
+                    'province' => trim((string) data_get($p, 'province', '')),
+                    'city_municipality' => trim((string) (data_get($p, 'city_municipality') ?: data_get($p, 'implementing_unit', ''))),
+                    'barangay' => trim((string) data_get($p, 'barangay', '')),
+                    'funding_year' => trim((string) data_get($p, 'funding_year', '')),
+                    'open_url' => route('fund-utilization.show', data_get($p, 'project_code')),
+                    'q1_bg' => data_get($p, 'quarter_q1_bg') ?: (data_get($p, 'quarter_q1_bg') ?? '#f3f4f6'),
+                    'q2_bg' => data_get($p, 'quarter_q2_bg') ?: (data_get($p, 'quarter_q2_bg') ?? '#f3f4f6'),
+                    'q3_bg' => data_get($p, 'quarter_q3_bg') ?: (data_get($p, 'quarter_q3_bg') ?? '#f3f4f6'),
+                    'q4_bg' => data_get($p, 'quarter_q4_bg') ?: (data_get($p, 'quarter_q4_bg') ?? '#f3f4f6'),
+                    'q1_pct' => data_get($p, 'quarter_q1_percentage') ?? 0,
+                    'q2_pct' => data_get($p, 'quarter_q2_percentage') ?? 0,
+                    'q3_pct' => data_get($p, 'quarter_q3_percentage') ?? 0,
+                    'q4_pct' => data_get($p, 'quarter_q4_percentage') ?? 0,
+                    'q1_tooltip' => data_get($p, 'quarter_q1_tooltip') ?? '',
+                    'q2_tooltip' => data_get($p, 'quarter_q2_tooltip') ?? '',
+                    'q3_tooltip' => data_get($p, 'quarter_q3_tooltip') ?? '',
+                    'q4_tooltip' => data_get($p, 'quarter_q4_tooltip') ?? '',
+                ];
+            });
+        @endphp
+        const BATCH_UPLOAD_PROJECTS = @json($serializedProjects);
         const batchUploadModalCache = {
             elements: null,
             documents: {
@@ -1464,7 +2354,7 @@
         }
 
         function setBatchUploadDocumentMode(mode) {
-            const normalizedMode = mode === 'category' || mode === 'single' ? mode : '';
+            const normalizedMode = 'category';
             const panel = document.getElementById('batchUploadDocumentFiles')?.closest('.fur-batch-document-panel');
             const categoryPanel = document.getElementById('batchUploadDocumentCategoryPanel');
             const singlePanel = document.getElementById('batchUploadDocumentAsOnePanel');
@@ -3902,6 +4792,11 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
+        }
+
+        .fur-donut-wrapper:hover .fur-donut-interactive {
+            transform: rotateY(180deg);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.15) !important;
         }
 
         .project-filter-toggle {

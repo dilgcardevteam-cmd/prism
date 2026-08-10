@@ -181,6 +181,11 @@ class FundUtilizationWorkflowServiceTest extends TestCase
 
         $this->assertSame('Returned by Provincial Officer', $returnedWorkflow->status);
         $this->assertNull($returnedWorkflow->current_approver_id);
+
+        $record->refresh();
+        $this->assertSame('returned', $record->status);
+        $this->assertNull($record->approved_at_dilg_po);
+        $this->assertNull($record->approved_at_dilg_ro);
     }
 
     public function test_any_regional_officer_role_can_validate_level_two(): void

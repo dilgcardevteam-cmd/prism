@@ -1030,7 +1030,8 @@
                     'Financial Analyst III',
                     'Project Evaluation Officer II',
                     'Project Evaluation Officer III',
-                    'Information Systems Analyst III'
+                    'Information Systems Analyst III',
+                    'Administrative Aide VI'
                 ],
                 'LGU': [
                     'Municipal Engineer I',
