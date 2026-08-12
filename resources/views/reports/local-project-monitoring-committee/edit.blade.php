@@ -11,6 +11,9 @@
             <p>Upload or update committee documents and activities.</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" onclick="openLpmcDocHistoryModal('', '', 'All Documents')" style="display: inline-flex; padding: 10px 18px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; align-items: center; gap: 6px; white-space: nowrap;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
             <a href="{{ route('local-project-monitoring-committee.index') }}" style="display: inline-flex; padding: 10px 18px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; align-items: center; gap: 6px; white-space: nowrap;">
                 <i class="fas fa-arrow-left"></i> Back to List
             </a>
@@ -110,6 +113,80 @@
                             : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
                     ];
                 };
+                $resolveStatusTheme = function ($doc) {
+                    $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
+                    $isReturned = $doc && $doc->status === 'returned';
+                    $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
+                    $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
+
+                    if ($isApprovedRo) {
+                        return [
+                            'label' => 'Approved',
+                            'icon' => 'fa-check-circle',
+                            'badgeBg' => '#059669',
+                            'badgeColor' => '#ffffff',
+                            'cardBg' => '#f0fdf4',
+                            'cardBorder' => '#a7f3d0',
+                            'fileBg' => '#ecfdf5',
+                            'fileBorder' => '#a7f3d0',
+                            'fileColor' => '#047857',
+                        ];
+                    }
+
+                    if ($isReturned) {
+                        return [
+                            'label' => 'Returned',
+                            'icon' => 'fa-undo',
+                            'badgeBg' => '#dc2626',
+                            'badgeColor' => '#ffffff',
+                            'cardBg' => '#fef2f2',
+                            'cardBorder' => '#fecaca',
+                            'fileBg' => '#fff1f1',
+                            'fileBorder' => '#fca5a5',
+                            'fileColor' => '#991b1b',
+                        ];
+                    }
+
+                    if ($isPendingRo) {
+                        return [
+                            'label' => 'For DILG Regional Office Validation',
+                            'icon' => 'fa-clock',
+                            'badgeBg' => '#eab308',
+                            'badgeColor' => '#ffffff',
+                            'cardBg' => '#fefce8',
+                            'cardBorder' => '#fef08a',
+                            'fileBg' => '#fef9c3',
+                            'fileBorder' => '#fde047',
+                            'fileColor' => '#713f12',
+                        ];
+                    }
+
+                    if ($hasFile) {
+                        return [
+                            'label' => 'For DILG Provincial Office Validation',
+                            'icon' => 'fa-clock',
+                            'badgeBg' => '#eab308',
+                            'badgeColor' => '#ffffff',
+                            'cardBg' => '#fefce8',
+                            'cardBorder' => '#fef08a',
+                            'fileBg' => '#fef9c3',
+                            'fileBorder' => '#fde047',
+                            'fileColor' => '#713f12',
+                        ];
+                    }
+
+                    return [
+                        'label' => 'Pending Upload',
+                        'icon' => 'fa-hourglass-start',
+                        'badgeBg' => '#6b7280',
+                        'badgeColor' => '#ffffff',
+                        'cardBg' => '#f8fafc',
+                        'cardBorder' => '#e2e8f0',
+                        'fileBg' => '#f1f5f9',
+                        'fileBorder' => '#cbd5e1',
+                        'fileColor' => '#334155',
+                    ];
+                };
             @endphp
             @foreach ($docBlocks as $docBlock)
                 @php
@@ -124,24 +201,7 @@
                     $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                    $statusLabel = 'Pending Upload';
-                    $statusColor = '#f59e0b';
-                    if ($hasFile) {
-                        $statusLabel = 'For DILG Provincial Office Validation';
-                        $statusColor = '#3b82f6';
-                    }
-                    if ($isPendingRo) {
-                        $statusLabel = 'For DILG Regional Office Validation';
-                        $statusColor = '#3b82f6';
-                    }
-                    if ($isApprovedRo) {
-                        $statusLabel = 'Approved';
-                        $statusColor = '#059669';
-                    }
-                    if ($isReturned) {
-                        $statusLabel = 'Returned';
-                        $statusColor = '#dc2626';
-                    }
+                    $statusTheme = $resolveStatusTheme($doc);
                     $uploader = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                     $poApprover = $doc && $doc->approved_by_dilg_po && isset($usersById[$doc->approved_by_dilg_po]) ? $usersById[$doc->approved_by_dilg_po] : null;
                     $roApprover = $doc && $doc->approved_by_dilg_ro && isset($usersById[$doc->approved_by_dilg_ro]) ? $usersById[$doc->approved_by_dilg_ro] : null;
@@ -178,14 +238,14 @@
                         }
                     }
                 @endphp
-                <form method="POST" action="{{ route('local-project-monitoring-committee.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
+                <form method="POST" action="{{ route('local-project-monitoring-committee.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1.5px solid {{ $statusTheme['cardBorder'] }}; padding: 18px; border-radius: 10px; background-color: {{ $statusTheme['cardBg'] }}; transition: all 0.2s ease;">
                     @csrf
                     <input type="hidden" name="doc_type" value="{{ $docBlock['doc_type'] }}">
                     <input type="hidden" name="year" value="{{ $docBlock['year'] }}">
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
-                        <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0;">{{ $docBlock['label'] }}</label>
-                        <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
-                            {{ $statusLabel }}
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+                        <label style="display: block; color: #1e293b; font-weight: 700; font-size: 13px; margin: 0;">{{ $docBlock['label'] }}</label>
+                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background-color: {{ $statusTheme['badgeBg'] }}; color: {{ $statusTheme['badgeColor'] }}; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                            <i class="fas {{ $statusTheme['icon'] }}"></i> {{ $statusTheme['label'] }}
                         </span>
                     </div>
                     <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">
@@ -287,28 +347,48 @@
                             </div>
                         @endforeach
                     </div>
-                    @if ($doc && $doc->file_path)
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-                            <a href="{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
-                                <i class="fas fa-file"></i>&nbsp;View current file
-                            </a>
-                            @if (Auth::user()->isSuperAdmin())
-                                <button
-                                    type="submit"
-                                    form="lpmc-delete-document-{{ $doc->id }}"
-                                    onclick="return confirm('Delete this uploaded document? This action cannot be undone.');"
-                                    style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;"
-                                >
-                                    <i class="fas fa-trash-alt"></i>
-                                    <span>Delete</span>
+                    @if ($doc)
+                        @php $docFiles = $doc->files ?? collect(); @endphp
+                        @if ($docFiles->isNotEmpty())
+                            <div style="margin-bottom: 10px;">
+                                @foreach ($docFiles as $docFile)
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
+                                        <i class="fas fa-file-pdf" style="flex-shrink: 0; color: #dc2626;"></i>
+                                        <span style="flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ $docFile->original_filename ?: basename($docFile->file_path) }}">{{ $docFile->original_filename ?: basename($docFile->file_path) }}</span>
+                                        <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route('local-project-monitoring-committee.view-file', [$officeName, $docFile->id]) }}', '{{ addslashes($docFile->original_filename ?: basename($docFile->file_path)) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #3b82f6; color: white; border-radius: 4px; font-size: 10px; font-weight: 600; text-decoration: none;">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        <button type="button" onclick="openLpmcDocHistoryModal('{{ $docBlock['doc_type'] }}', '{{ $docBlock['year'] }}', '{{ addslashes($docBlock['label']) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
+                                            <i class="fas fa-clock-rotate-left"></i> History
+                                        </button>
+                                        @if (Auth::user()->isSuperAdmin())
+                                            <button type="submit" form="lpmc-delete-file-{{ $docFile->id }}" onclick="return confirm('Delete this file? This action cannot be undone.');" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: 600;">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        @elseif ($doc->file_path)
+                            {{-- Legacy single-file display (before multi-file table existed) --}}
+                            @php $displayName = $doc->original_filename ?: basename($doc->file_path); @endphp
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
+                                <i class="fas fa-file-pdf" style="flex-shrink: 0; color: #dc2626;"></i>
+                                <span style="flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ $displayName }}">{{ $displayName }}</span>
+                                <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}', '{{ addslashes($displayName) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #3b82f6; color: white; border-radius: 4px; font-size: 10px; font-weight: 600; text-decoration: none;">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                                <button type="button" onclick="openLpmcDocHistoryModal('{{ $docBlock['doc_type'] }}', '{{ $docBlock['year'] }}', '{{ addslashes($docBlock['label']) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
+                                    <i class="fas fa-clock-rotate-left"></i> History
                                 </button>
-                            @endif
-                        </div>
+                            </div>
+                        @endif
                     @endif
                     <input
                         id="{{ $inputId }}"
                         type="file"
-                        name="document"
+                        name="document[]"
+                        multiple
                         required
                         @disabled($disableUploadInput)
                         class="ops-upload-input dashboard-file-input"
@@ -361,11 +441,13 @@
                         </div>
                     @endif
                 </form>
-                @if (Auth::user()->isSuperAdmin() && $doc && $doc->file_path)
-                    <form id="lpmc-delete-document-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
-                        @csrf
-                        @method('DELETE')
-                    </form>
+                @if (Auth::user()->isSuperAdmin() && $doc)
+                    @foreach ($doc->files ?? [] as $docFile)
+                        <form id="lpmc-delete-file-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display: none;">
+                            @csrf
+                            @method('DELETE')
+                        </form>
+                    @endforeach
                 @endif
             @endforeach
         </div>
@@ -426,26 +508,8 @@
                                     $disableUploadInput = ($hasFile && !$isReturned)
                                         || $isRegionalOfficeUserForUpload
                                         || $disableQuarterUpload;
-                                    $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
-                                    $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                                    $statusLabel = 'Pending Upload';
-                                    $statusColor = '#f59e0b';
-                                    if ($hasFile) {
-                                        $statusLabel = 'For DILG Provincial Office Validation';
-                                        $statusColor = '#3b82f6';
-                                    }
-                                    if ($isPendingRo) {
-                                        $statusLabel = 'For DILG Regional Office Validation';
-                                        $statusColor = '#3b82f6';
-                                    }
-                                    if ($isApprovedRo) {
-                                        $statusLabel = 'Approved';
-                                        $statusColor = '#059669';
-                                    }
-                                    if ($isReturned) {
-                                        $statusLabel = 'Returned';
-                                        $statusColor = '#dc2626';
-                                    }
+                                    
+                                    $statusTheme = $resolveStatusTheme($doc);
                                     $uploader = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                                     $poApprover = $doc && $doc->approved_by_dilg_po && isset($usersById[$doc->approved_by_dilg_po]) ? $usersById[$doc->approved_by_dilg_po] : null;
                                     $roApprover = $doc && $doc->approved_by_dilg_ro && isset($usersById[$doc->approved_by_dilg_ro]) ? $usersById[$doc->approved_by_dilg_ro] : null;
@@ -483,15 +547,15 @@
                                         }
                                     }
                                 @endphp
-                                <form method="POST" action="{{ route('local-project-monitoring-committee.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 16px; border-radius: 8px; background-color: #f9fafb;">
+                                <form method="POST" action="{{ route('local-project-monitoring-committee.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1.5px solid {{ $statusTheme['cardBorder'] }}; padding: 16px; border-radius: 10px; background-color: {{ $statusTheme['cardBg'] }}; transition: all 0.2s ease;">
                                     @csrf
                                     <input type="hidden" name="doc_type" value="{{ $qDoc['doc_type'] }}">
                                     <input type="hidden" name="quarter" value="{{ $quarter }}">
-                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
-                                        <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0;">{{ $qDoc['label'] }}</label>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+                                        <label style="display: block; color: #1e293b; font-weight: 700; font-size: 13px; margin: 0;">{{ $qDoc['label'] }}</label>
                                         <span style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
-                                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
-                                                {{ $statusLabel }}
+                                            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background-color: {{ $statusTheme['badgeBg'] }}; color: {{ $statusTheme['badgeColor'] }}; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                                                <i class="fas {{ $statusTheme['icon'] }}"></i> {{ $statusTheme['label'] }}
                                             </span>
                                             @if ($submissionTimeliness)
                                                 <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
@@ -599,28 +663,48 @@
                                             </div>
                                         @endforeach
                                     </div>
-                                    @if ($doc && $doc->file_path)
-                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-                                            <a href="{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; color: #002C76; font-size: 12px; text-decoration: none;">
-                                                <i class="fas fa-file"></i>&nbsp;View current file
-                                            </a>
-                                            @if (Auth::user()->isSuperAdmin())
-                                                <button
-                                                    type="submit"
-                                                    form="lpmc-delete-document-{{ $doc->id }}"
-                                                    onclick="return confirm('Delete this uploaded document? This action cannot be undone.');"
-                                                    style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;"
-                                                >
-                                                    <i class="fas fa-trash-alt"></i>
-                                                    <span>Delete</span>
+                                    @if ($doc)
+                                        @php $docFiles = $doc->files ?? collect(); @endphp
+                                        @if ($docFiles->isNotEmpty())
+                                            <div style="margin-bottom: 10px;">
+                                                @foreach ($docFiles as $docFile)
+                                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
+                                                        <i class="fas fa-file-pdf" style="flex-shrink: 0; color: #dc2626;"></i>
+                                                        <span style="flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ $docFile->original_filename ?: basename($docFile->file_path) }}">{{ $docFile->original_filename ?: basename($docFile->file_path) }}</span>
+                                                        <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route('local-project-monitoring-committee.view-file', [$officeName, $docFile->id]) }}', '{{ addslashes($docFile->original_filename ?: basename($docFile->file_path)) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #3b82f6; color: white; border-radius: 4px; font-size: 10px; font-weight: 600; text-decoration: none;">
+                                                            <i class="fas fa-eye"></i> View
+                                                        </a>
+                                                        <button type="button" onclick="openLpmcDocHistoryModal('{{ $qDoc['doc_type'] }}', '{{ $quarter }}', '{{ addslashes($qDoc['label']) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
+                                                            <i class="fas fa-clock-rotate-left"></i> History
+                                                        </button>
+                                                        @if (Auth::user()->isSuperAdmin())
+                                                            <button type="submit" form="lpmc-delete-file-{{ $docFile->id }}" onclick="return confirm('Delete this file? This action cannot be undone.');" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: 600;">
+                                                                <i class="fas fa-trash-alt"></i>
+                                                            </button>
+                                                        @endif
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @elseif ($doc->file_path)
+                                            {{-- Legacy single-file display --}}
+                                            @php $displayName = $doc->original_filename ?: basename($doc->file_path); @endphp
+                                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
+                                                <i class="fas fa-file-pdf" style="flex-shrink: 0; color: #dc2626;"></i>
+                                                <span style="flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ $displayName }}">{{ $displayName }}</span>
+                                                <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route('local-project-monitoring-committee.document', [$officeName, $doc->id]) }}', '{{ addslashes($displayName) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #3b82f6; color: white; border-radius: 4px; font-size: 10px; font-weight: 600; text-decoration: none;">
+                                                    <i class="fas fa-eye"></i> View
+                                                </a>
+                                                <button type="button" onclick="openLpmcDocHistoryModal('{{ $qDoc['doc_type'] }}', '{{ $quarter }}', '{{ addslashes($qDoc['label']) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer;">
+                                                    <i class="fas fa-clock-rotate-left"></i> History
                                                 </button>
-                                            @endif
-                                        </div>
+                                            </div>
+                                        @endif
                                     @endif
                                     <input
                                         id="{{ $inputId }}"
                                         type="file"
-                                        name="document"
+                                        name="document[]"
+                                        multiple
                                         required
                                         @disabled($disableUploadInput)
                                         class="dashboard-file-input"
@@ -674,17 +758,38 @@
                                         </div>
                                     @endif
                                 </form>
-                                @if (Auth::user()->isSuperAdmin() && $doc && $doc->file_path)
-                                    <form id="lpmc-delete-document-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
-                                        @csrf
-                                        @method('DELETE')
-                                    </form>
+                                @if (Auth::user()->isSuperAdmin() && $doc)
+                                    @foreach ($doc->files ?? [] as $docFile)
+                                        <form id="lpmc-delete-file-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display: none;">
+                                            @csrf
+                                            @method('DELETE')
+                                        </form>
+                                    @endforeach
                                 @endif
                             @endforeach
                         </div>
                     </div>
                 </div>
             @endforeach
+        </div>
+    </div>
+
+    <div id="lpmcItemHistoryModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1250; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: white; border-radius: 12px; width: min(900px, 94vw); max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: white; flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <i class="fas fa-history" style="color: white; font-size: 13px;"></i>
+                    </div>
+                    <h2 id="lpmcItemHistoryTitle" style="margin: 0; font-size: 16px; font-weight: 700; color: white;">Item History</h2>
+                </div>
+                <button type="button" onclick="closeLpmcItemHistoryModal()" aria-label="Close" style="border: none; background: rgba(255,255,255,0.15); color: white; width: 30px; height: 30px; border-radius: 999px; cursor: pointer; font-size: 22px; display: inline-flex; align-items: center; justify-content: center; transition: background 0.2s;">
+                    &times;
+                </button>
+            </div>
+            <div id="lpmcItemHistoryBody" style="padding: 20px 24px; overflow-y: auto; max-height: 65vh;">
+                <!-- Populated dynamically via JS -->
+            </div>
         </div>
     </div>
 
@@ -851,13 +956,30 @@
             filenameDiv.classList.add('ops-upload-filename');
 
             if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                const fileName = fileInput.files[0].name;
+                const count = fileInput.files.length;
                 saveBtn.style.opacity = '1';
                 saveBtn.style.pointerEvents = 'auto';
-                const icon = document.createElement('i');
-                icon.className = 'fas fa-file';
-                icon.style.marginRight = '4px';
-                filenameDiv.replaceChildren(icon, document.createTextNode(`Selected: ${fileName}`));
+
+                filenameDiv.replaceChildren();
+                if (count === 1) {
+                    const icon = document.createElement('i');
+                    icon.className = 'fas fa-file';
+                    icon.style.marginRight = '4px';
+                    filenameDiv.appendChild(icon);
+                    filenameDiv.appendChild(document.createTextNode(`Selected: ${fileInput.files[0].name}`));
+                } else {
+                    const icon = document.createElement('i');
+                    icon.className = 'fas fa-copy';
+                    icon.style.marginRight = '4px';
+                    filenameDiv.appendChild(icon);
+                    filenameDiv.appendChild(document.createTextNode(`Selected ${count} files: `));
+
+                    const names = Array.from(fileInput.files).map(f => f.name).join(', ');
+                    const namesSpan = document.createElement('span');
+                    namesSpan.style.fontWeight = '600';
+                    namesSpan.textContent = names;
+                    filenameDiv.appendChild(namesSpan);
+                }
                 filenameDiv.style.display = 'block';
                 filenameDiv.classList.add('has-file');
             } else {
@@ -943,6 +1065,100 @@
             background: #ecfdf3;
             color: #166534;
         }
+
+        /* FUR Timeline modal styles for per-item history */
+        .timeline {
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: #e6e6e6;
+            transform: translateX(-50%);
+        }
+
+        .timeline-item {
+            position: relative;
+            width: 50%;
+            padding: 12px 20px;
+            box-sizing: border-box;
+        }
+
+        .timeline-item.left {
+            left: 0;
+            text-align: right;
+        }
+
+        .timeline-item.right {
+            left: 50%;
+            text-align: left;
+        }
+
+        .timeline-item .timeline-bullet {
+            position: absolute;
+            top: 18px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            border: 3px solid #cbd5e1;
+            box-shadow: 0 2px 4px rgba(2,6,23,0.06);
+        }
+
+        .timeline-bullet.upload, .timeline-bullet.uploaded { border-color: #10b981; background: #10b981; }
+        .timeline-bullet.validated, .timeline-bullet.approved { border-color: #3b82f6; background: #3b82f6; }
+        .timeline-bullet.return, .timeline-bullet.returned { border-color: #ef4444; background: #ef4444; }
+        .timeline-bullet.update { border-color: #6b7280; background: #6b7280; }
+
+        .timeline-item.left .timeline-bullet {
+            right: -6px;
+        }
+
+        .timeline-item.right .timeline-bullet {
+            left: -6px;
+        }
+
+        .timeline-card {
+            display: inline-block;
+            max-width: 460px;
+            padding: 12px 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #fbfbff 100%);
+            border: 1px solid #e6e6e6;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+            transition: transform 160ms ease, box-shadow 160ms ease;
+            text-align: left;
+        }
+
+        .timeline-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 14px 30px rgba(2,6,23,0.08);
+        }
+
+        .timeline-meta { display:flex; gap:8px; align-items:center; font-size:12px; color:#6b7280; margin-bottom:6px; }
+        .avatar {
+            width:28px; height:28px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:white; flex-shrink:0;
+        }
+
+        .doc-chip {
+            display:inline-block; padding:4px 8px; font-size:11px; font-weight:700; border-radius:999px; background:#f1f5f9; color:#0f172a; margin-left:6px;
+        }
+
+        .action-pill { display:inline-block; padding:6px 8px; font-size:11px; font-weight:700; border-radius:999px; color:white; }
+        .action-upload, .action-uploaded { background: #10b981; }
+        .action-validated, .action-approved, .action-validateddilgpo, .action-validateddilgro { background: #3b82f6; }
+        .action-return, .action-returned { background: #ef4444; }
+        .action-deleted, .action-delete { background: #ef4444; }
+        .action-update { background: #6b7280; }
+
+        .timeline-title { display:flex; gap:8px; align-items:center; font-weight:700; color:#0f172a; margin-bottom:6px; font-size:13px; }
+        .timeline-remarks { white-space: pre-wrap; color: #374151; font-size: 13px; margin-top: 6px; }
 
         #lpmcActivityLogBackdrop {
             position: fixed;
@@ -1030,11 +1246,161 @@
         }
     </style>
 
+    @php
+        $lpmcActivityLogsData = collect($activityLogs ?? [])->map(function ($log) use ($usersById) {
+            $u = $log['user_id'] && isset($usersById[$log['user_id']]) ? $usersById[$log['user_id']] : null;
+            $userName = $u ? trim($u->fname . ' ' . $u->lname) : 'Unknown';
+            $userAgency = $u ? ($u->province ?? '') : '';
+            return [
+                'timestamp' => $log['timestamp'] ? $log['timestamp']->format('M d, Y h:i A') : '—',
+                'action' => $log['action'] ?? '',
+                'document' => $log['document'] ?? '',
+                'user_name' => $userName,
+                'user_agency' => $userAgency,
+                'remarks' => $log['remarks'] ?? '',
+            ];
+        })->values();
+    @endphp
+
     <script>
+        const lpmcActivityLogsData = @json($lpmcActivityLogsData);
         const lpmcActivityLogModal = document.getElementById('lpmcActivityLogModal');
         const lpmcActivityLogBackdrop = document.getElementById('lpmcActivityLogBackdrop');
         const lpmcActivityLogFab = document.getElementById('lpmcActivityLogFab');
         const lpmcActivityLogClose = document.getElementById('lpmcActivityLogClose');
+
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return String(unsafe)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function itemMatchesLog(log, targetDocType, targetYq, targetTitle) {
+            const reqDocType = String(targetDocType || '').toLowerCase().trim();
+            const reqYq = String(targetYq || '').toLowerCase().trim();
+            const reqTitle = String(targetTitle || '').toLowerCase().trim();
+
+            const logDocType = String(log.doc_type || '').toLowerCase().trim();
+            const logYear = String(log.year || '').toLowerCase().trim();
+            const logQuarter = String(log.quarter || '').toLowerCase().trim();
+            const logDocLabel = String(log.document || '').toLowerCase().trim();
+
+            // 1. Match Document Type
+            let docTypeMatched = false;
+            if (reqDocType) {
+                if (logDocType) {
+                    docTypeMatched = (logDocType === reqDocType);
+                } else {
+                    if (reqDocType === 'eo' && logDocLabel.includes('executive order')) docTypeMatched = true;
+                    else if (reqDocType === 'awfp' && (logDocLabel.includes('work and financial') || logDocLabel.includes('awfp'))) docTypeMatched = true;
+                    else if (reqDocType === 'mep' && (logDocLabel.includes('monitoring and evaluation') || logDocLabel.includes('mep'))) docTypeMatched = true;
+                    else if (reqDocType === 'meetings' && logDocLabel.includes('meeting')) docTypeMatched = true;
+                    else if (reqDocType === 'monitoring' && logDocLabel.includes('monitoring conducted')) docTypeMatched = true;
+                    else if (reqDocType === 'training' && logDocLabel.includes('training')) docTypeMatched = true;
+                }
+            } else if (reqTitle) {
+                docTypeMatched = logDocLabel.includes(reqTitle);
+            } else {
+                docTypeMatched = true;
+            }
+
+            if (!docTypeMatched) return false;
+
+            // 2. Match Year or Quarter
+            if (reqYq) {
+                let yqMatched = false;
+                if (logYear && logYear === reqYq) yqMatched = true;
+                else if (logQuarter && logQuarter === reqYq) yqMatched = true;
+                else if (logDocLabel.includes(reqYq)) yqMatched = true;
+
+                if (!yqMatched) return false;
+            }
+
+            return true;
+        }
+
+        function openLpmcDocHistoryModal(docType, yearOrQuarter, title) {
+            const modal = document.getElementById('lpmcItemHistoryModal');
+            const titleEl = document.getElementById('lpmcItemHistoryTitle');
+            const bodyEl = document.getElementById('lpmcItemHistoryBody');
+            if (!modal || !titleEl || !bodyEl) return;
+
+            const displayTitle = title || 'Document Item';
+            const subTitle = yearOrQuarter ? ` (${yearOrQuarter})` : '';
+            titleEl.textContent = `${displayTitle}${subTitle} — History`;
+
+            const matchedLogs = lpmcActivityLogsData.filter(log => itemMatchesLog(log, docType, yearOrQuarter, title));
+
+            if (!matchedLogs.length) {
+                bodyEl.innerHTML = `
+                    <div style="padding: 16px; background-color: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; text-align: center; color: #6b7280; font-size: 13px;">
+                        No activity logs found for this item.
+                    </div>
+                `;
+            } else {
+                let html = '<div class="timeline">';
+                matchedLogs.forEach((log, idx) => {
+                    const side = (idx % 2 === 0) ? 'left' : 'right';
+                    const ts = log.timestamp || '—';
+                    const userName = log.user_name || 'Unknown';
+                    const userAgency = log.user_agency || '';
+                    const userDisplay = userName + (userAgency ? ` (${userAgency})` : '');
+                    const initials = (userName || 'U').split(' ').map(s => s[0] || '').join('').substring(0, 2).toUpperCase();
+
+                    let avatarBg = '#6b7280';
+                    if (userAgency.toLowerCase().includes('regional')) avatarBg = '#0ea5a9';
+                    if (userAgency.toLowerCase().includes('provincial')) avatarBg = '#f59e0b';
+                    if (userAgency.toLowerCase().includes('lgu')) avatarBg = '#002C76';
+
+                    const actionStr = String(log.action || 'update');
+                    const actionKey = actionStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const actionLabel = actionStr.toUpperCase();
+                    const docChipLabel = displayTitle + (yearOrQuarter ? ` • ${yearOrQuarter}` : '');
+
+                    html += `
+                        <div class="timeline-item ${side}">
+                            <div class="timeline-bullet ${escapeHtml(actionKey)}" aria-hidden="true"></div>
+                            <div class="timeline-card">
+                                <div class="timeline-meta">
+                                    <span class="avatar" style="background:${avatarBg}">${escapeHtml(initials)}</span>
+                                    <div style="margin-left:8px; display:inline-block; vertical-align:middle;">
+                                        <div style="font-size:12px;color:#6b7280">${escapeHtml(ts)}</div>
+                                        <div style="font-weight:700;color:#0f172a">${escapeHtml(userDisplay)}</div>
+                                    </div>
+                                    <span class="doc-chip">${escapeHtml(docChipLabel)}</span>
+                                </div>
+                                <div class="timeline-title">
+                                    <span class="action-pill action-${escapeHtml(actionKey)}">${escapeHtml(actionLabel)}</span>
+                                </div>
+                                <div class="timeline-remarks">
+                                    <strong>Remarks :</strong> ${escapeHtml(log.remarks || '—')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                bodyEl.innerHTML = html;
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeLpmcItemHistoryModal() {
+            const modal = document.getElementById('lpmcItemHistoryModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        window.addEventListener('click', function(e) {
+            const itemModal = document.getElementById('lpmcItemHistoryModal');
+            if (e.target === itemModal) {
+                closeLpmcItemHistoryModal();
+            }
+        });
 
         function setLpmcActivityLogVisibility(isVisible) {
             if (!lpmcActivityLogModal || !lpmcActivityLogBackdrop || !lpmcActivityLogFab) {

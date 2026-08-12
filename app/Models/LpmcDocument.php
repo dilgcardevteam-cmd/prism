@@ -15,6 +15,7 @@ class LpmcDocument extends Model
         'year',
         'quarter',
         'file_path',
+        'original_filename',
         'uploaded_by',
         'uploaded_at',
         'status',
@@ -34,4 +35,9 @@ class LpmcDocument extends Model
         'approved_at_dilg_ro' => 'datetime',
         'year' => 'integer',
     ];
+
+    public function files()
+    {
+        return $this->hasMany(LpmcDocumentFile::class, 'lpmc_document_id');
+    }
 }

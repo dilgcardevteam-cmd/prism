@@ -3048,6 +3048,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('local-project-monitoring-committee.document');
     Route::delete('local-project-monitoring-committee/{lpmc}/document/{docId}', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'deleteDocument'])
         ->name('local-project-monitoring-committee.delete-document');
+    Route::get('local-project-monitoring-committee/{lpmc}/file/{fileId}', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'viewDocumentFile'])
+        ->name('local-project-monitoring-committee.view-file');
+    Route::delete('local-project-monitoring-committee/{lpmc}/file/{fileId}', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'deleteDocumentFile'])
+        ->name('local-project-monitoring-committee.delete-file');
     Route::resource('local-project-monitoring-committee', App\Http\Controllers\LocalProjectMonitoringCommitteeController::class)
         ->parameters(['local-project-monitoring-committee' => 'lpmc']);
 

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Models\LpmcDocument;
+use App\Models\LpmcDocumentFile;
 use App\Support\InputSanitizer;
 use App\Models\User;
 
@@ -204,6 +205,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
                     'timestamp' => $doc->uploaded_at,
                     'action' => 'Uploaded',
                     'document' => $docLabel,
+                    'doc_type' => $doc->doc_type,
+                    'year' => $doc->year,
+                    'quarter' => $doc->quarter,
                     'user_id' => $doc->uploaded_by,
                     'remarks' => null,
                 ];
@@ -214,6 +218,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
                     'timestamp' => $doc->approved_at_dilg_po,
                     'action' => 'Validated (DILG PO)',
                     'document' => $docLabel,
+                    'doc_type' => $doc->doc_type,
+                    'year' => $doc->year,
+                    'quarter' => $doc->quarter,
                     'user_id' => $doc->approved_by_dilg_po,
                     'remarks' => null,
                 ];
@@ -224,6 +231,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
                     'timestamp' => $doc->approved_at_dilg_ro,
                     'action' => 'Validated (DILG RO)',
                     'document' => $docLabel,
+                    'doc_type' => $doc->doc_type,
+                    'year' => $doc->year,
+                    'quarter' => $doc->quarter,
                     'user_id' => $doc->approved_by_dilg_ro,
                     'remarks' => null,
                 ];
@@ -234,6 +244,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
                     'timestamp' => $doc->approved_at ?? $doc->updated_at ?? $doc->uploaded_at,
                     'action' => 'Returned',
                     'document' => $docLabel,
+                    'doc_type' => $doc->doc_type,
+                    'year' => $doc->year,
+                    'quarter' => $doc->quarter,
                     'user_id' => $doc->approved_by_dilg_ro ?: $doc->approved_by_dilg_po,
                     'remarks' => $doc->approval_remarks,
                 ];
@@ -273,10 +286,42 @@ class LocalProjectMonitoringCommitteeController extends Controller
             $timestamp = Carbon::parse($loggedAt)->setTimezone(config('app.timezone'));
         }
 
+        $docType = $context['doc_type'] ?? '';
+        $year = $context['year'] ?? '';
+        $quarter = $context['quarter'] ?? '';
+        $docLabel = $context['document_label'] ?? 'Document';
+
+        if (!$docType) {
+            $lblLower = strtolower($docLabel);
+            if (str_contains($lblLower, 'executive order')) $docType = 'eo';
+            elseif (str_contains($lblLower, 'work and financial plan') || str_contains($lblLower, 'awfp')) $docType = 'awfp';
+            elseif (str_contains($lblLower, 'monitoring and evaluation plan') || str_contains($lblLower, 'mep')) $docType = 'mep';
+            elseif (str_contains($lblLower, 'meetings')) $docType = 'meetings';
+            elseif (str_contains($lblLower, 'monitoring conducted')) $docType = 'monitoring';
+            elseif (str_contains($lblLower, 'training')) $docType = 'training';
+        }
+
+        if (!$year) {
+            if (str_contains($docLabel, '2025')) $year = '2025';
+            elseif (str_contains($docLabel, '2026')) $year = '2026';
+        }
+
+        if (!$quarter) {
+            foreach (['Q1', 'Q2', 'Q3', 'Q4'] as $q) {
+                if (str_contains($docLabel, $q)) {
+                    $quarter = $q;
+                    break;
+                }
+            }
+        }
+
         return [
             'timestamp' => $timestamp,
             'action' => $context['action_label'] ?? 'Updated',
-            'document' => $context['document_label'] ?? 'Document',
+            'document' => $docLabel,
+            'doc_type' => (string) $docType,
+            'year' => (string) $year,
+            'quarter' => (string) $quarter,
             'user_id' => $context['user_id'] ?? null,
             'remarks' => $context['remarks'] ?? null,
         ];
@@ -998,7 +1043,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $officeName = $id;
         $province = $this->findProvinceByOffice($officeName);
-        $documents = LpmcDocument::where('office', $officeName)->get();
+        $documents = LpmcDocument::where('office', $officeName)->with('files')->get();
         $documentsByKey = $this->indexDocumentsByKey($documents);
         $activityLogs = $this->buildActivityLogs($documents, $officeName);
 
@@ -1061,7 +1106,8 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $officeName = $id;
         $request->validate([
-            'document' => ['required', 'file', 'mimes:pdf', 'max:25600'],
+            'document' => ['required'],
+            'document.*' => ['file', 'mimes:pdf', 'max:25600'],
             'doc_type' => ['required', 'string', 'max:50'],
             'year' => ['nullable', 'integer'],
             'quarter' => ['nullable', 'in:Q1,Q2,Q3,Q4'],
@@ -1099,20 +1145,22 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ->where('quarter', $quarter)
             ->first();
 
-        if ($existingDocument && !empty($existingDocument->file_path) && $existingDocument->status !== 'returned') {
-            return redirect()
-                ->back()
-                ->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
+        // Block new uploads if document was already submitted and not yet returned,
+        // UNLESS the slot has no files at all (legacy: file_path is null AND no files table rows).
+        if ($existingDocument && $existingDocument->status !== 'returned') {
+            $hasFiles = !empty($existingDocument->file_path) ||
+                LpmcDocumentFile::where('lpmc_document_id', $existingDocument->id)->exists();
+            if ($hasFiles) {
+                return redirect()
+                    ->back()
+                    ->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
+            }
         }
 
-        $oldFilePath = $existingDocument?->file_path;
-
-        $file = $request->file('document');
-        $officeSlug = Str::slug($officeName, '_');
-        $path = $file->store('lpmc/' . $officeSlug, 'public');
         $uploadedAt = now();
         $user = auth()->user();
         $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
+        $officeSlug = Str::slug($officeName, '_');
 
         $document = LpmcDocument::updateOrCreate(
             [
@@ -1123,7 +1171,6 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ],
             [
                 'province' => $province,
-                'file_path' => $path,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
                 'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
@@ -1137,8 +1184,32 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ]
         );
 
-        if ($oldFilePath && $oldFilePath !== $path && Storage::disk('public')->exists($oldFilePath)) {
-            Storage::disk('public')->delete($oldFilePath);
+        $uploadedFiles = $request->file('document');
+        if (!is_array($uploadedFiles)) {
+            $uploadedFiles = [$uploadedFiles];
+        }
+
+        $firstFile = true;
+        foreach ($uploadedFiles as $file) {
+            $originalName = $file->getClientOriginalName();
+            $path = $file->storeAs('lpmc/' . $officeSlug, $originalName, 'public');
+
+            LpmcDocumentFile::create([
+                'lpmc_document_id' => $document->id,
+                'file_path' => $path,
+                'original_filename' => $originalName,
+                'uploaded_by' => auth()->id(),
+                'uploaded_at' => $uploadedAt,
+            ]);
+
+            // Keep legacy file_path in sync with the first uploaded file
+            if ($firstFile) {
+                $document->update([
+                    'file_path' => $path,
+                    'original_filename' => $originalName,
+                ]);
+                $firstFile = false;
+            }
         }
 
         $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
@@ -1151,6 +1222,62 @@ class LocalProjectMonitoringCommitteeController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Document uploaded successfully.');
+    }
+
+    public function viewDocumentFile($id, $fileId)
+    {
+        $officeName = $id;
+        $file = LpmcDocumentFile::where('id', $fileId)
+            ->whereHas('document', fn ($q) => $q->where('office', $officeName))
+            ->firstOrFail();
+
+        if (!Storage::disk('public')->exists($file->file_path)) {
+            abort(404);
+        }
+
+        $filePath = Storage::disk('public')->path($file->file_path);
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $inlineExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+        $mimeType = @mime_content_type($filePath) ?: 'application/octet-stream';
+        $headers = [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+        ];
+
+        if (!in_array($extension, $inlineExtensions, true)) {
+            return response()->download($filePath, $file->original_filename ?: basename($filePath), $headers);
+        }
+
+        return response()->file($filePath, $headers);
+    }
+
+    public function deleteDocumentFile($id, $fileId)
+    {
+        $officeName = (string) $id;
+        $file = LpmcDocumentFile::where('id', $fileId)
+            ->whereHas('document', fn ($q) => $q->where('office', $officeName))
+            ->firstOrFail();
+
+        if (Storage::disk('public')->exists($file->file_path)) {
+            Storage::disk('public')->delete($file->file_path);
+        }
+
+        $document = $file->document;
+        $file->delete();
+
+        // If no more files remain, clear the legacy file_path on the parent document
+        $remainingFiles = LpmcDocumentFile::where('lpmc_document_id', $document->id)->latest()->first();
+        if ($remainingFiles) {
+            $document->update([
+                'file_path' => $remainingFiles->file_path,
+                'original_filename' => $remainingFiles->original_filename,
+            ]);
+        } else {
+            $document->update(['file_path' => null, 'original_filename' => null]);
+        }
+
+        return back()->with('success', 'File deleted successfully.');
     }
 
     public function viewDocument($id, $docId)

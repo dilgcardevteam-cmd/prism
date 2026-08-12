@@ -5816,6 +5816,64 @@
         })();
     </script>
 
+    <!-- Global Document Preview Modal -->
+    <div id="globalDocPreviewModal" style="display: none; position: fixed; z-index: 99999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); justify-content: center; align-items: center;">
+        <div style="background-color: #ffffff; margin: auto; padding: 0; border: 1px solid #e5e7eb; border-radius: 12px; width: 95%; max-width: 1400px; height: 90%; max-height: 90%; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; position: relative;">
+            <div style="background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12); flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                    <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <i class="fas fa-eye" style="color: white; font-size: 13px;"></i>
+                    </div>
+                    <div style="min-width: 0;">
+                        <h2 id="globalDocPreviewTitle" style="margin: 0; color: white; font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">View Document</h2>
+                    </div>
+                </div>
+                <button onclick="closeGlobalDocPreviewModal()" style="color: rgba(255,255,255,0.85); font-size: 24px; line-height: 1; flex-shrink: 0; background: none; border: none; cursor: pointer; padding: 0;">&times;</button>
+            </div>
+            <div style="padding: 0; background: #e2e8f0; flex: 1; display: flex; position: relative;">
+                <iframe id="globalDocPreviewFrame" title="Document preview" loading="lazy" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+            <div style="display: flex; justify-content: flex-end; padding: 12px 20px; background: #f8fafc; border-top: 1px solid #cbd5e1; flex-shrink: 0;">
+                <button type="button" onclick="closeGlobalDocPreviewModal()" style="padding: 8px 16px; border: none; border-radius: 6px; background: #475569; color: white; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.15s ease;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#475569'">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openGlobalDocPreviewModal(url, title = 'View Document') {
+            const modal = document.getElementById('globalDocPreviewModal');
+            const frame = document.getElementById('globalDocPreviewFrame');
+            const titleEl = document.getElementById('globalDocPreviewTitle');
+            if (modal && frame && titleEl) {
+                titleEl.textContent = title;
+                frame.src = url;
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        function closeGlobalDocPreviewModal() {
+            const modal = document.getElementById('globalDocPreviewModal');
+            const frame = document.getElementById('globalDocPreviewFrame');
+            if (modal && frame) {
+                frame.src = 'about:blank';
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('globalDocPreviewModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeGlobalDocPreviewModal();
+                    }
+                });
+            }
+        });
+    </script>
+
     @include('partials.global-error-confirm')
 </body>
 </html>
