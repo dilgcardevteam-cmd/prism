@@ -92,9 +92,10 @@ class SecureTimestampService
         string $documentType,
         string $projectCode,
         string $quarter,
-        Carbon $timestamp
+        Carbon $timestamp,
+        array $context = []
     ): void {
-        Log::channel('upload_timestamps')->info('Document uploaded', [
+        $payload = [
             'document_type' => $documentType,
             'project_code' => $projectCode,
             'quarter' => $quarter,
@@ -104,7 +105,13 @@ class SecureTimestampService
             'user_agent' => request()->userAgent(),
             'user_id' => auth()->id() ?? 'anonymous',
             'user_local_timezone' => config('app.timezone')
-        ]);
+        ];
+
+        if (!empty($context)) {
+            $payload = array_merge($payload, $context);
+        }
+
+        Log::channel('upload_timestamps')->info('Document uploaded', $payload);
     }
 
     /**

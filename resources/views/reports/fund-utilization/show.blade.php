@@ -194,7 +194,7 @@
         $isWorkflowValidator = $isProvincialValidator || $isRegionalValidator;
         $isLguWorkflowUser = $currentUser && $currentUser->isLguScopedUser();
         $canUploadFundUtilizationDocuments = $currentUser
-            && ($currentUser->isLguScopedUser() || $currentUser->isProvincialDilgAssignment());
+            && ($currentUser->isLguScopedUser() || $currentUser->isProvincialDilgAssignment() || $currentUser->isSuperAdmin());
         $isProvincialDilgViewer = $isProvincialValidator;
         $resolveUserById = function ($userId) use (&$userLookupCache) {
             $normalizedUserId = trim((string) $userId);
@@ -237,6 +237,32 @@
 
             return null;
         };
+        $resolveResubmissionRequestState = function ($workflow): array {
+            if (!$workflow || !($workflow->logs ?? null)) {
+                return [
+                    'is_requested' => false,
+                    'requested_by' => null,
+                    'requested_remarks' => null,
+                    'requested_at' => null,
+                ];
+            }
+
+            $latestAction = $workflow->logs
+                ->filter(fn ($log) => in_array($log->action, [
+                    'Resubmission Requested',
+                    'Resubmission Request Approved',
+                    'Resubmission Request Rejected',
+                ], true))
+                ->sortByDesc(fn ($log) => $log->created_at?->getTimestamp() ?? 0)
+                ->first();
+
+            return [
+                'is_requested' => $latestAction?->action === 'Resubmission Requested',
+                'requested_by' => $latestAction?->approver_id ?? null,
+                'requested_remarks' => $latestAction?->remarks ?? null,
+                'requested_at' => $latestAction?->created_at ?? null,
+            ];
+        };
         $resolveValidationState = function (
             $record,
             bool $hasDocument,
@@ -246,7 +272,7 @@
             ?string $poTimestampField = 'approved_at_dilg_po',
             ?string $roTimestampField = 'approved_at_dilg_ro',
             ?string $encoderField = null
-        ) use ($resolveUploaderLevel, $submissionWorkflows, $currentUser, $isProvincialValidator, $isRegionalValidator) {
+        ) use ($resolveUploaderLevel, $resolveResubmissionRequestState, $submissionWorkflows, $currentUser, $isProvincialValidator, $isRegionalValidator) {
             $status = $record && $statusField ? strtolower(trim((string) ($record->{$statusField} ?? ''))) : '';
             $uploaderLevel = $resolveUploaderLevel($record, $encoderField);
             $poApprovedAt = $record && $poTimestampField ? ($record->{$poTimestampField} ?? null) : null;
@@ -262,6 +288,7 @@
                 && $workflowStatus === 'Returned by Regional Officer'
                 && $currentApprovalLevel === 1
                 && trim((string) ($workflow->uploader_role ?? '')) === \App\Models\User::ROLE_LGU;
+            $resubmissionRequestState = $resolveResubmissionRequestState($workflow);
             if ($workflow) {
                 $requiredValidator = ((int) ($workflow->current_approval_level ?? 1)) >= 2
                     ? 'regional'
@@ -305,6 +332,9 @@
                 'current_approver_id' => $currentApproverId,
                 'can_validate' => $canValidate,
                 'return_only' => $isReturnOnly,
+                'is_resubmission_requested' => $resubmissionRequestState['is_requested'],
+                'resubmission_requested_by' => $resubmissionRequestState['requested_by'],
+                'resubmission_requested_remarks' => $resubmissionRequestState['requested_remarks'],
             ];
         };
         $canValidateDocument = function (array $validationState) use ($isProvincialValidator, $isRegionalValidator) {
@@ -315,6 +345,34 @@
             return ($validationState['required_validator'] ?? 'provincial') === 'regional'
                 ? $isRegionalValidator
                 : $isProvincialValidator;
+        };
+        $renderResubmissionControls = function (string $documentType, string $quarter, array $validationState) use ($isProvincialValidator, $isRegionalValidator): string {
+            $buttons = [];
+            $isApproved = (bool) ($validationState['is_approved'] ?? false);
+            $isRequested = (bool) ($validationState['is_resubmission_requested'] ?? false);
+
+            if ($isProvincialValidator && $isApproved && !$isRequested) {
+                $buttons[] = sprintf(
+                    '<button type="button" onclick="openRemarksModal(\'%s\', \'%s\', \'request_resubmission\')" style="padding: 6px 12px; background-color: #b45309; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;"><i class="fas fa-undo"></i> Request for Resubmission</button>',
+                    e($documentType),
+                    e($quarter)
+                );
+            }
+
+            if ($isRegionalValidator && $isRequested) {
+                $buttons[] = sprintf(
+                    '<button type="button" onclick="confirmResubmissionDecision(\'%s\', \'%s\', \'approve\')" style="padding: 6px 12px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;"><i class="fas fa-check"></i> Approve Request</button>',
+                    e($documentType),
+                    e($quarter)
+                );
+                $buttons[] = sprintf(
+                    '<button type="button" onclick="confirmResubmissionDecision(\'%s\', \'%s\', \'reject\')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;"><i class="fas fa-xmark"></i> Reject Request</button>',
+                    e($documentType),
+                    e($quarter)
+                );
+            }
+
+            return implode(' ', $buttons);
         };
         $shouldHideLguDeleteUntilProvincialReturn = function (array $validationState) {
             return ($validationState['uploader_level'] ?? null) === 'lgu'
@@ -352,7 +410,8 @@
             }
 
             $status = strtolower(trim((string) ($statusField ? ($record->{$statusField} ?? '') : '')));
-            if ($status !== 'returned') {
+            $isReturned = $status === 'returned' || str_starts_with($status, 'returned by ');
+            if (!$isReturned) {
                 return false;
             }
 
@@ -629,7 +688,7 @@
                     <form action="{{ route('fund-utilization.upload-mov', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path && $isMovReturned) ? 'Document was returned. Delete the current file to upload a new one.' : '')) }}">
+                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                         <button type="submit" id="mov-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -647,38 +706,19 @@
                                     <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-eye"></i> View
                                     </a>
+                                    <button type="button" onclick="openFieldHistoryModal('mov', '{{ $quarter }}', 'MOV', '{{ $movUploads[$quarter]->mov_file_path }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="fas fa-clock-rotate-left"></i> History
+                                    </button>
+                                    {!! $renderResubmissionControls('mov', $quarter, $movValidationState) !!}
                                 @endif
-                                @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation && $movUploads[$quarter]->status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($movValidationState))
+                                @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($movValidationState))
                                     <button type="button" onclick="deleteDocument('mov', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
-            @endif
-
-        </div>
-
-    @endif
-
-@if($isLguWorkflowUser && $movUploads[$quarter])
-
-    <button type="button" onclick="toggleAccordion('mov-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-
-        <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-
-        <i class="fas fa-chevron-down" id="icon-mov-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-
-    </button>
-
-    <div id="mov-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-
-        <textarea id="textarea-mov-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $isMovReturned ? ($movUploads[$quarter]->approval_remarks ?? '') : ($movUploads[$quarter]->user_remarks ?? '') }}</textarea>
-
-        <button type="button" onclick="saveRemarksAjax('mov', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-
-    </div>
-
-@endif
-
-@elseif($isWorkflowValidator)
+                                @endif
+                            </div>
+                        @endif
+                    @elseif($isWorkflowValidator)
                         @if($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path)
                             @php
                                 $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -690,7 +730,11 @@
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation && $movUploads[$quarter]->status !== 'approved')
+                                <button type="button" onclick="openFieldHistoryModal('mov', '{{ $quarter }}', 'MOV', '{{ $movUploads[$quarter]->mov_file_path }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-clock-rotate-left"></i> History
+                                </button>
+                                {!! $renderResubmissionControls('mov', $quarter, $movValidationState) !!}
+                                @if($canDeleteFundUtilizationDocument($movUploads[$quarter], 'status', 'mov_encoder_id') && !$isMovUnderValidation )
                                     <button type="button" onclick="deleteDocument('mov', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
@@ -706,18 +750,6 @@
                                             <i class="fas fa-undo"></i> Return
                                         </button>
                                     @endif
-                                @endif
-                            </div>
-                        @endif
-                        @if($movUploads[$quarter] && ($movUploads[$quarter]->mov_file_path || $movUploads[$quarter]->user_remarks || $isMovReturned))
-                            <button type="button" onclick="toggleAccordion('mov-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                                <i class="fas fa-chevron-down" id="icon-mov-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                            </button>
-                            <div id="mov-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                                <textarea id="textarea-mov-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;" {{ $isMovReturned ? 'readonly' : '' }}>{{ $isMovReturned ? ($movUploads[$quarter]->approval_remarks ?? '') : ($movUploads[$quarter]->user_remarks ?? '') }}</textarea>
-                                @if(!$isMovReturned)
-                                    <button type="button" onclick="saveRemarksAjax('mov', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
                                 @endif
                             </div>
                         @endif
@@ -885,7 +917,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path && $isDbmReturned) ? 'Document was returned. Delete the current file to upload a new one.' : '')) }}">
+                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                                     <button type="submit" id="dbm-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -903,23 +935,17 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dbm_status', 'dbm_encoder_id') && !$isDbmUnderValidation && $writtenNotices[$quarter]->dbm_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($dbmValidationState))
+            <button type="button" onclick="openFieldHistoryModal('written-notice-dbm', '{{ $quarter }}', 'Written Notice (DBM)', '{{ $writtenNotices[$quarter]->secretary_dbm_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            {!! $renderResubmissionControls('written-notice-dbm', $quarter, $dbmValidationState) !!}
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dbm_status', 'dbm_encoder_id') && !$isDbmUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($dbmValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-dbm', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
         @endif
     </div>
-    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->secretary_dbm_path || $isDbmReturned))
-        <button type="button" onclick="toggleAccordion('dbm-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-            <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-            <i class="fas fa-chevron-down" id="icon-dbm-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-        </button>
-        <div id="dbm-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-            <textarea id="textarea-dbm-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->dbm_remarks ?? '' }}</textarea>
-            <button type="button" onclick="saveRemarksAjax('dbm-secretary', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-        </div>
-    @endif
 @elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -932,7 +958,10 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dbm_status', 'dbm_encoder_id') && !$isDbmUnderValidation && $writtenNotices[$quarter]->dbm_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($dbmValidationState))
+            <button type="button" onclick="openFieldHistoryModal('written-notice-dbm', '{{ $quarter }}', 'Written Notice (DBM)', '{{ $writtenNotices[$quarter]->secretary_dbm_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dbm_status', 'dbm_encoder_id') && !$isDbmUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($dbmValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-dbm', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -951,16 +980,6 @@
             @endif
                                         @endif
                                     </div>
-                                    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->secretary_dbm_path || $writtenNotices[$quarter]->user_remarks || $isDbmReturned))
-                                    <button type="button" onclick="toggleAccordion('dbm-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                                        <i class="fas fa-chevron-down" id="icon-dbm-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                                    </button>
-        <div id="dbm-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-            <textarea id="textarea-dbm-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->dbm_remarks ?? '' }}</textarea>
-            <button type="button" onclick="saveRemarksAjax('dbm-secretary', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-        </div>
-                                    @endif
                                 @endif
                             </div>
                             <!-- Secretary of DILG -->
@@ -1070,7 +1089,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path && !$isDilgReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
+                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                                     <button type="submit" id="dilg-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1089,24 +1108,17 @@
                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-eye"></i> View
                 </a>
+                <button type="button" onclick="openFieldHistoryModal('written-notice-dilg', '{{ $quarter }}', 'Written Notice (DILG)', '{{ $writtenNotices[$quarter]->secretary_dilg_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-clock-rotate-left"></i> History
+                </button>
             @endif
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dilg_status', 'dilg_encoder_id') && !$isDilgUnderValidation && $writtenNotices[$quarter]->dilg_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($dilgValidationState))
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dilg_status', 'dilg_encoder_id') && !$isDilgUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($dilgValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-dilg', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
         @endif
     </div>
-    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->secretary_dilg_path || $isDilgReturned))
-        <button type="button" onclick="toggleAccordion('dilg-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-            <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-            <i class="fas fa-chevron-down" id="icon-dilg-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-        </button>
-        <div id="dilg-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-            <textarea id="textarea-dilg-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->dilg_remarks ?? '' }}</textarea>
-            <button type="button" onclick="saveRemarksAjax('dilg-secretary', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-        </div>
-    @endif
 @elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1119,7 +1131,11 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dilg_status', 'dilg_encoder_id') && !$isDilgUnderValidation && $writtenNotices[$quarter]->dilg_status !== 'approved')
+            <button type="button" onclick="openFieldHistoryModal('written-notice-dilg', '{{ $quarter }}', 'Written Notice (DILG)', '{{ $writtenNotices[$quarter]->secretary_dilg_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            {!! $renderResubmissionControls('written-notice-dilg', $quarter, $dilgValidationState) !!}
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'dilg_status', 'dilg_encoder_id') && !$isDilgUnderValidation )
                 <button type="button" onclick="deleteDocument('written-notice-dilg', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1138,18 +1154,6 @@
             @endif
                                         @endif
                                     </div>
-                                    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->secretary_dilg_path || $writtenNotices[$quarter]->user_remarks || $isDilgReturned))
-                                    <button type="button" onclick="toggleAccordion('dilg-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                                        <i class="fas fa-chevron-down" id="icon-dilg-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                                    </button>
-                                    <div id="dilg-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                                        <textarea id="textarea-dilg-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;" {{ $isDilgReturned ? 'readonly' : '' }}>{{ $isDilgReturned ? ($writtenNotices[$quarter]->dilg_remarks ?? '') : ($writtenNotices[$quarter]->user_remarks ?? '') }}</textarea>
-                                        @if(!$isDilgReturned)
-                                            <button type="button" onclick="saveRemarksAjax('dilg-secretary', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                                        @endif
-                                    </div>
-                                    @endif
                                 @endif
                             </div>
 
@@ -1247,40 +1251,40 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path && !$isSpeakerReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
+                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                                     <button type="submit" id="speaker-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
                                 </div>
                                 <div id="speaker-filename-{{ $quarter }}" style="font-size: 11px; color: #059669; font-weight: 600; margin-bottom: 8px;">
                                     @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path)
-                                        <i class="fas fa-file" style="margin-right: 4px;"></i>Uploaded: {{ basename($writtenNotices[$quarter]->speaker_house_path) }}
+                                        @php
+                                            $speakerOriginalName = $writtenNotices[$quarter]->speaker_house_original_name ?? basename($writtenNotices[$quarter]->speaker_house_path);
+                                        @endphp
+                                        <i class="fas fa-file" style="margin-right: 4px;"></i>Uploaded: {{ $speakerOriginalName }}
                                     @endif
                                 </div>
 
 @if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path)
+            @php
+                $speakerOriginalName = $writtenNotices[$quarter]->speaker_house_original_name ?? basename($writtenNotices[$quarter]->speaker_house_path);
+            @endphp
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'speaker_status', 'speaker_encoder_id') && !$isSpeakerUnderValidation && $writtenNotices[$quarter]->speaker_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($speakerValidationState))
+            <button type="button" onclick="openFieldHistoryModal('written-notice-speaker', '{{ $quarter }}', 'Written Notice (Speaker)', '{{ $writtenNotices[$quarter]->speaker_house_path }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            {!! $renderResubmissionControls('written-notice-speaker', $quarter, $speakerValidationState) !!}
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'speaker_status', 'speaker_encoder_id') && !$isSpeakerUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($speakerValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-speaker', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
             @endif
         @endif
     </div>
-    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->speaker_house_path || $isSpeakerReturned))
-        <button type="button" onclick="toggleAccordion('speaker-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-            <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-            <i class="fas fa-chevron-down" id="icon-speaker-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-        </button>
-        <div id="speaker-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-            <textarea id="textarea-speaker-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->speaker_remarks ?? '' }}</textarea>
-            <button type="button" onclick="saveRemarksAjax('speaker-house', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-        </div>
-    @endif
 @elseif($isWorkflowValidator)
                                     @php
                                         $cordilleraProvinces = ['Abra', 'Apayao', 'Benguet', 'City of Baguio', 'Ifugao', 'Kalinga', 'Mountain Province'];
@@ -1290,10 +1294,16 @@
                                     @endphp
                                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->speaker_house_path)
+            @php
+                $speakerOriginalName = $writtenNotices[$quarter]->speaker_house_original_name ?? basename($writtenNotices[$quarter]->speaker_house_path);
+            @endphp
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'speaker_status', 'speaker_encoder_id') && !$isSpeakerUnderValidation && $writtenNotices[$quarter]->speaker_status !== 'approved')
+            <button type="button" onclick="openFieldHistoryModal('written-notice-speaker', '{{ $quarter }}', 'Written Notice (Speaker)', '{{ $writtenNotices[$quarter]->speaker_house_path }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'speaker_status', 'speaker_encoder_id') && !$isSpeakerUnderValidation )
                 <button type="button" onclick="deleteDocument('written-notice-speaker', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1312,16 +1322,6 @@
             @endif
                                         @endif
                                     </div>
-                                    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->speaker_house_path || $writtenNotices[$quarter]->user_remarks))
-                                    <button type="button" onclick="toggleAccordion('speaker-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                                        <i class="fas fa-chevron-down" id="icon-speaker-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                                    </button>
-                                    <div id="speaker-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                                        <textarea id="textarea-speaker-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->speaker_remarks ?? '' }}</textarea>
-                                        <button type="button" onclick="saveRemarksAjax('speaker-house', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                                    </div>
-                                    @endif
                                 @endif
                             </div>
 
@@ -1418,7 +1418,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path && !$isPresidentReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
+                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                                     <button type="submit" id="president-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1435,7 +1435,11 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'president_status', 'president_encoder_id') && !$isPresidentUnderValidation && $writtenNotices[$quarter]->president_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($presidentValidationState))
+            <button type="button" onclick="openFieldHistoryModal('written-notice-president', '{{ $quarter }}', 'Written Notice (President)', '{{ $writtenNotices[$quarter]->president_senate_path }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            {!! $renderResubmissionControls('written-notice-president', $quarter, $presidentValidationState) !!}
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'president_status', 'president_encoder_id') && !$isPresidentUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($presidentValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-president', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1454,7 +1458,10 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'president_status', 'president_encoder_id') && !$isPresidentUnderValidation && $writtenNotices[$quarter]->president_status !== 'approved')
+            <button type="button" onclick="openFieldHistoryModal('written-notice-president', '{{ $quarter }}', 'Written Notice (President)', '{{ $writtenNotices[$quarter]->president_senate_path }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'president_status', 'president_encoder_id') && !$isPresidentUnderValidation )
                 <button type="button" onclick="deleteDocument('written-notice-president', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1473,16 +1480,6 @@
             @endif
                                         @endif
                                     </div>
-                                    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->president_senate_path || $writtenNotices[$quarter]->user_remarks))
-                                    <button type="button" onclick="toggleAccordion('president-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                                        <i class="fas fa-chevron-down" id="icon-president-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                                    </button>
-                                    <div id="president-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                                        <textarea id="textarea-president-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->president_remarks ?? '' }}</textarea>
-                                        <button type="button" onclick="saveRemarksAjax('president-senate', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                                    </div>
-                                    @endif
                                 @endif
                             </div>
 
@@ -1580,7 +1577,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path && !$isHouseReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
+                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                                     <button type="submit" id="house-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1597,7 +1594,11 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'house_status', 'house_encoder_id') && !$isHouseUnderValidation && $writtenNotices[$quarter]->house_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($houseValidationState))
+            <button type="button" onclick="openFieldHistoryModal('written-notice-house', '{{ $quarter }}', 'Written Notice (House)', '{{ $writtenNotices[$quarter]->house_committee_path }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            {!! $renderResubmissionControls('written-notice-house', $quarter, $houseValidationState) !!}
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'house_status', 'house_encoder_id') && !$isHouseUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($houseValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-house', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1616,7 +1617,10 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'house_status', 'house_encoder_id') && !$isHouseUnderValidation && $writtenNotices[$quarter]->house_status !== 'approved')
+            <button type="button" onclick="openFieldHistoryModal('written-notice-house', '{{ $quarter }}', 'Written Notice (House)', '{{ $writtenNotices[$quarter]->house_committee_path }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'house_status', 'house_encoder_id') && !$isHouseUnderValidation )
                 <button type="button" onclick="deleteDocument('written-notice-house', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1635,16 +1639,6 @@
             @endif
                                         @endif
                                     </div>
-                                    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->house_committee_path || $writtenNotices[$quarter]->user_remarks))
-                                    <button type="button" onclick="toggleAccordion('house-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                                        <i class="fas fa-chevron-down" id="icon-house-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                                    </button>
-                                    <div id="house-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                                        <textarea id="textarea-house-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->house_remarks ?? '' }}</textarea>
-                                        <button type="button" onclick="saveRemarksAjax('house-committee', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                                    </div>
-                                    @endif
                                 @endif
                             </div>
 
@@ -1742,7 +1736,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path && !$isSenateReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
+                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                                     <button type="submit" id="senate-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1759,7 +1753,11 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'senate_status', 'senate_encoder_id') && !$isSenateUnderValidation && $writtenNotices[$quarter]->senate_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($senateValidationState))
+            <button type="button" onclick="openFieldHistoryModal('written-notice-senate', '{{ $quarter }}', 'Written Notice (Senate)', '{{ $writtenNotices[$quarter]->senate_committee_path }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            {!! $renderResubmissionControls('written-notice-senate', $quarter, $senateValidationState) !!}
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'senate_status', 'senate_encoder_id') && !$isSenateUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($senateValidationState))
                 <button type="button" onclick="deleteDocument('written-notice-senate', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1778,7 +1776,10 @@
             <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
-            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'senate_status', 'senate_encoder_id') && !$isSenateUnderValidation && $writtenNotices[$quarter]->senate_status !== 'approved')
+            <button type="button" onclick="openFieldHistoryModal('written-notice-senate', '{{ $quarter }}', 'Written Notice (Senate)', '{{ $writtenNotices[$quarter]->senate_committee_path }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fas fa-clock-rotate-left"></i> History
+            </button>
+            @if($canDeleteFundUtilizationDocument($writtenNotices[$quarter], 'senate_status', 'senate_encoder_id') && !$isSenateUnderValidation )
                 <button type="button" onclick="deleteDocument('written-notice-senate', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -1797,16 +1798,6 @@
             @endif
                                         @endif
                                     </div>
-                                    @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->senate_committee_path || $writtenNotices[$quarter]->user_remarks))
-                                    <button type="button" onclick="toggleAccordion('senate-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                        <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                                        <i class="fas fa-chevron-down" id="icon-senate-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                                    </button>
-                                    <div id="senate-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                                        <textarea id="textarea-senate-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $writtenNotices[$quarter]->senate_remarks ?? '' }}</textarea>
-                                        <button type="button" onclick="saveRemarksAjax('senate-committee', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                                    </div>
-                        @endif
                     @endif
                 </div>
 
@@ -1960,7 +1951,7 @@
                     <form action="{{ route('fund-utilization.upload-fdp', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked || ($fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : (($fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path && !$isFdpReturned) ? 'File already uploaded. Delete the current file to upload a new one.' : '')) }}">
+                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                         <button type="submit" id="fdp-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -1977,7 +1968,11 @@
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation && $fdpDocuments[$quarter]->fdp_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
+                                <button type="button" onclick="openFieldHistoryModal('fdp', '{{ $quarter }}', 'FDP', '{{ $fdpDocuments[$quarter]->fdp_file_path }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-clock-rotate-left"></i> History
+                                </button>
+                                {!! $renderResubmissionControls('fdp', $quarter, $fdpValidationState) !!}
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
                                     <button type="button" onclick="deleteDocument('fdp', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
@@ -1996,7 +1991,11 @@
                                 <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
-                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation && $fdpDocuments[$quarter]->fdp_status !== 'approved' && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
+                                <button type="button" onclick="openFieldHistoryModal('fdp', '{{ $quarter }}', 'FDP', '{{ $fdpDocuments[$quarter]->fdp_file_path }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-clock-rotate-left"></i> History
+                                </button>
+                                {!! $renderResubmissionControls('fdp', $quarter, $fdpValidationState) !!}
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'fdp_status', 'fdp_encoder_id') && !$isFdpUnderValidation  && !$shouldHideLguDeleteUntilProvincialReturn($fdpValidationState))
                                     <button type="button" onclick="deleteDocument('fdp', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
@@ -2015,27 +2014,6 @@
                                 @endif
                             </div>
                         @endif
-                        @if($fdpDocuments[$quarter] && ($fdpDocuments[$quarter]->fdp_file_path || $fdpDocuments[$quarter]->user_remarks))
-                        <button type="button" onclick="toggleAccordion('fdp-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                            <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                            <i class="fas fa-chevron-down" id="icon-fdp-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                        </button>
-                        <div id="fdp-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                            <textarea id="textarea-fdp-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $fdpDocuments[$quarter]->user_remarks ?? '' }}</textarea>
-                            <button type="button" onclick="saveRemarksAjax('fdp', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                        </div>
-                        @endif
-                    @endif
-
-                    @if($isLguWorkflowUser && $fdpDocuments[$quarter])
-                        <button type="button" onclick="toggleAccordion('fdp-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                            <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                            <i class="fas fa-chevron-down" id="icon-fdp-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                        </button>
-                        <div id="fdp-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                            <textarea id="textarea-fdp-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $fdpDocuments[$quarter]->user_remarks ?? '' }}</textarea>
-                            <button type="button" onclick="saveRemarksAjax('fdp', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                        </div>
                     @endif
                 </div>
             </div>
@@ -2149,7 +2127,7 @@
                     <form action="{{ route('fund-utilization.save-posting-link', $report->project_code) }}" method="POST" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="text" name="posting_link" value="{{ $postingLinkValue }}" placeholder="https://example.com/post" style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" oninput="showSaveButtonForText(this, 'posting-save-btn-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || $isQuarterIndividualUploadLocked ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : ($isQuarterIndividualUploadLocked ? $individualUploadLockTitle : '') }}">
+                        <input type="text" name="posting_link" value="{{ $postingLinkValue }}" placeholder="https://example.com/post" style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" oninput="showSaveButtonForText(this, 'posting-save-btn-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                         <button type="submit" id="posting-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-save"></i> Submit
                         </button>
@@ -2175,7 +2153,7 @@
                                         <i class="fas fa-eye"></i> Open Link
                                     </a>
                                 @endif
-                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'posting_status', 'posting_encoder_id') && (!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved') && !$shouldHideLguDeleteUntilProvincialReturn($postingValidationState))
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'posting_status', 'posting_encoder_id')  && !$shouldHideLguDeleteUntilProvincialReturn($postingValidationState))
                                     <button type="button" onclick="deleteDocument('posting-link', '{{ $quarter }}')" title="Delete link" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
@@ -2190,12 +2168,12 @@
                                         <i class="fas fa-eye"></i> Open Link
                                     </a>
                                 @endif
-                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'posting_status', 'posting_encoder_id') && (!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved') && !$shouldHideLguDeleteUntilProvincialReturn($postingValidationState))
+                                @if($canDeleteFundUtilizationDocument($fdpDocuments[$quarter], 'posting_status', 'posting_encoder_id')  && !$shouldHideLguDeleteUntilProvincialReturn($postingValidationState))
                                     <button type="button" onclick="deleteDocument('posting-link', '{{ $quarter }}')" title="Delete link" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-trash-alt"></i> Delete
                                     </button>
                                 @endif
-                                @if($shouldShowValidationActions($postingValidationState) && (!$fdpDocuments[$quarter] || $fdpDocuments[$quarter]->posting_status !== 'approved'))
+                                @if($shouldShowValidationActions($postingValidationState) )
                                     @if(!($postingValidationState['return_only'] ?? false))
                                         <button type="button" onclick="openRemarksModal('posting-link', '{{ $quarter }}', 'approve')" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                             <i class="fas fa-check"></i> Approve
@@ -2479,12 +2457,35 @@
             letter-spacing: 0.02em;
         }
 
-        .log-pill.upload { background-color: #d1fae5; color: #065f46; }
-        .log-pill.delete { background-color: #fee2e2; color: #991b1b; }
-        .log-pill.approve { background-color: #dbeafe; color: #1d4ed8; }
-        .log-pill.return { background-color: #fde68a; color: #92400e; }
-        .log-pill.remarks { background-color: #e0e7ff; color: #4338ca; }
-        .log-pill.update { background-color: #e5e7eb; color: #374151; }
+        /* Green (Upload/Submit/Approve/Create) */
+        .log-pill.upload, .log-pill.submitted, .log-pill.resubmitted, .log-pill.approve, .log-pill.approved, .log-pill.resubmission_approve, .log-pill.create {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        /* Red (Delete/Return/Reject/Failed) */
+        .log-pill.delete, .log-pill.deleted, .log-pill.return, .log-pill.returned, .log-pill.resubmission_reject, .log-pill.validation_failed, .log-pill.failed_login {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Orange/Yellow (Request Resubmission / Changes) */
+        .log-pill.request_resubmission, .log-pill.status_change, .log-pill.role_change, .log-pill.permission_change, .log-pill.password_change, .log-pill.password_reset, .log-pill.password_reset_request {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        /* Blue (Forwarded/Link/Remarks/Export) */
+        .log-pill.forwarded, .log-pill.save_posting_link, .log-pill.export, .log-pill.remarks {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        /* Grey (Neutral/Update/Others) */
+        .log-pill.update, .log-pill.action, .log-pill.system, .log-pill.login, .log-pill.logout {
+            background-color: #e5e7eb;
+            color: #374151;
+        }
 
         /* Section card hover accent */
         div[style*="border-left: 4px solid"] {
@@ -2502,6 +2503,123 @@
         /* Notes toggle button polish */
         button[onclick*="toggleAccordion"] {
             transition: background-color 0.15s, color 0.15s;
+        }
+
+        /* Timeline modal styles for per-file history */
+        .timeline {
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: #e6e6e6;
+            transform: translateX(-50%);
+        }
+
+        .timeline-item {
+            position: relative;
+            width: 50%;
+            padding: 12px 20px;
+            box-sizing: border-box;
+        }
+
+        .timeline-item.left {
+            left: 0;
+            text-align: right;
+        }
+
+        .timeline-item.right {
+            left: 50%;
+            text-align: left;
+        }
+
+        .timeline-item .timeline-bullet {
+            position: absolute;
+            top: 18px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            border: 3px solid #cbd5e1;
+            box-shadow: 0 2px 4px rgba(2,6,23,0.06);
+        }
+
+        .timeline-bullet.upload { border-color: #10b981; background: #10b981; }
+        .timeline-bullet.submitted { border-color: #3b82f6; background: #3b82f6; }
+        .timeline-bullet.return { border-color: #ef4444; background: #ef4444; }
+        .timeline-bullet.returned { border-color: #ef4444; background: #ef4444; }
+        .timeline-bullet.update { border-color: #6b7280; background: #6b7280; }
+
+        .timeline-item.left .timeline-bullet {
+            right: -6px;
+        }
+
+        .timeline-item.right .timeline-bullet {
+            left: -6px;
+        }
+
+        .timeline-card {
+            display: inline-block;
+            max-width: 460px;
+            padding: 12px 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #fbfbff 100%);
+            border: 1px solid #e6e6e6;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+            transition: transform 160ms ease, box-shadow 160ms ease;
+        }
+
+        .timeline-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 14px 30px rgba(2,6,23,0.08);
+        }
+
+        .timeline-meta { display:flex; gap:8px; align-items:center; }
+        .avatar {
+            width:28px; height:28px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:white;
+        }
+
+        .doc-chip {
+            display:inline-block; padding:4px 8px; font-size:11px; font-weight:700; border-radius:999px; background:#f1f5f9; color:#0f172a; margin-left:6px;
+        }
+
+        .action-pill { display:inline-block; padding:6px 8px; font-size:11px; font-weight:700; border-radius:999px; color:white; }
+        .action-upload { background: #10b981; }
+        .action-submitted { background: #3b82f6; }
+        .action-resubmitted { background: #3b82f6; }
+        .action-forwarded { background: #3b82f6; }
+        .action-approved { background: #10b981; }
+        .action-return { background: #ef4444; }
+        .action-returned { background: #ef4444; }
+        .action-deleted { background: #ef4444; }
+        .action-update { background: #6b7280; }
+        .action-delete { background: #ef4444; }
+
+        .timeline-title { display:flex; gap:8px; align-items:center; }
+
+        .timeline-meta {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 6px;
+        }
+
+        .timeline-title {
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .timeline-remarks {
+            white-space: pre-wrap;
+            color: #374151;
+            font-size: 13px;
         }
 
         @media (max-width: 768px) {
@@ -2523,11 +2641,11 @@
                     <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <i class="fas fa-history" style="color: white; font-size: 13px;"></i>
                     </div>
-                    <h2 style="margin: 0; color: white; font-size: 16px; font-weight: 700;">Activity Logs</h2>
+                    <h2 id="logsModalTitle" style="margin: 0; color: white; font-size: 16px; font-weight: 700;">Activity Logs</h2>
                 </div>
                 <button class="close-modal" onclick="closeLogsModal()" style="color: rgba(255,255,255,0.8); font-size: 22px; line-height: 1;">&times;</button>
             </div>
-            <div style="padding: 20px; max-height: 60vh; overflow-y: auto;">
+            <div id="logsModalBody" style="padding: 20px; max-height: 60vh; overflow-y: auto;">
                 @if(empty($activityLogs))
                     <div style="padding: 16px; background-color: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; text-align: center; color: #6b7280; font-size: 13px;">
                         No activity logs found for this project.
@@ -2545,10 +2663,10 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($activityLogs as $log)
+                             @foreach($activityLogs as $log)
                                 @php
-                                    $actionLabel = strtoupper($log['action'] ?? 'update');
-                                    $actionClass = $log['action'] ?? 'update';
+                                    $actionLabel = strtoupper($log['action_label'] ?? ($log['action'] ?? 'update'));
+                                    $actionClass = strtolower($log['action'] ?? 'update');
                                     $docType = $log['document_type'] ?? 'n/a';
                                     $docLabelMap = [
                                         'mov' => 'MOV',
@@ -2563,11 +2681,19 @@
                                         'written-notice-house' => 'Written Notice (House)',
                                         'written-notice-senate' => 'Written Notice (Senate)',
                                     ];
-                                    $docLabel = $docLabelMap[$docType] ?? $docType;
+                                    
+                                    if (!empty($log['section']) || !empty($log['field'])) {
+                                        $docLabel = trim(($log['section'] ?? '') . ' — ' . ($log['field'] ?? ''));
+                                    } else {
+                                        $docLabel = $log['document_label'] ?? ($docLabelMap[$docType] ?? $docType);
+                                    }
+
                                     $userDisplay = $log['user_name'] ?? 'Unknown';
                                     if (!empty($log['user_agency'])) {
                                         $userDisplay .= ' (' . $log['user_agency'] . ')';
                                     }
+
+                                    $remarks = $log['remarks'] ?? ($log['details'] ?? '—');
                                 @endphp
                                 <tr>
                                     <td>{{ $log['timestamp']->format('M d, Y h:i A') }}</td>
@@ -2575,7 +2701,7 @@
                                     <td><span class="log-pill {{ $actionClass }}">{{ $actionLabel }}</span></td>
                                     <td>{{ $docLabel }}</td>
                                     <td>{{ $log['quarter'] ?? '—' }}</td>
-                                    <td>{{ $log['remarks'] ?? '—' }}</td>
+                                    <td>{{ $remarks }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -2607,6 +2733,11 @@
             </form>
         </div>
     </div>
+
+    <form id="resubmissionDecisionForm" method="POST" style="display: none;">
+        @csrf
+        <input type="hidden" name="decision" id="resubmissionDecisionInput">
+    </form>
 
     <div id="actionConfirmModal" class="modal action-confirm-modal">
         <div class="modal-content system-dialog-card">
@@ -2666,6 +2797,92 @@
         let actionConfirmCallback = null;
         const projectCode = '{{ $report->project_code }}';
         const baseUrl = '{{ url("/fund-utilization") }}';
+        const activityLogs = @json($activityLogs ?? []);
+        const submissionWorkflows = @json($submissionWorkflows ?? []);
+
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return String(unsafe)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function openFieldHistoryModal(documentType, quarter, title, filePath = null, fileTitle = '') {
+            const modal = document.getElementById('logsModal');
+            const titleEl = document.getElementById('logsModalTitle');
+            const body = document.getElementById('logsModalBody');
+            if (!modal || !titleEl || !body) return;
+            const resolvedTitle = title || 'Activity Logs';
+            const normalizedFilePath = filePath ? String(filePath).trim() : '';
+            titleEl.textContent = normalizedFilePath
+                ? `${resolvedTitle} — ${fileTitle || normalizedFilePath.split('/').pop() || 'Item'} History`
+                : `${resolvedTitle} — History`; 
+
+            const workflowKey = documentType + '::' + quarter;
+            const workflow = (submissionWorkflows && submissionWorkflows[workflowKey]) ? submissionWorkflows[workflowKey] : null;
+            const logs = workflow && workflow.logs ? workflow.logs : [];
+
+            // Sort logs by created_at descending (newest first)
+            const sortedLogs = [...logs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            if (!sortedLogs.length) {
+                body.innerHTML = '<div style="padding: 16px; background-color: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; text-align: center; color: #6b7280; font-size: 13px;">No activity logs found for this item.</div>';
+            } else {
+                let html = '<div class="timeline">';
+                sortedLogs.forEach((log, idx) => {
+                    const side = (idx % 2 === 0) ? 'left' : 'right';
+                    const ts = log.created_at ? (new Date(log.created_at)).toLocaleString() : '';
+                    
+                    let actorName = 'Unknown';
+                    let actorAgency = '';
+                    if (log.approver) {
+                        actorName = (log.approver.fname + ' ' + log.approver.lname).trim();
+                        actorAgency = log.approver.province || '';
+                    } else if (log.uploader) {
+                        actorName = (log.uploader.fname + ' ' + log.uploader.lname).trim();
+                        actorAgency = log.uploader.province || '';
+                    }
+                    const user = actorName + (actorAgency ? (' (' + actorAgency + ')') : '');
+
+                    const actionKey = (log.action || 'update').toString().toLowerCase();
+                    const action = (log.action || 'update').toString().toUpperCase();
+                    const docLabel = resolvedTitle + (quarter ? (' • ' + quarter) : '');
+
+                    // initials for avatar
+                    const initials = (actorName || 'U').split(' ').map(s => s[0] || '').join('').substring(0,2).toUpperCase();
+                    // avatar color by agency
+                    let avatarBg = '#6b7280';
+                    if (actorAgency && String(actorAgency).toLowerCase().includes('dilg')) avatarBg = '#0ea5a9';
+                    if (actorAgency && String(actorAgency).toLowerCase().includes('lgu')) avatarBg = '#f59e0b';
+
+                    html += '<div class="timeline-item ' + side + '">';
+                    html += '<div class="timeline-bullet ' + escapeHtml(actionKey) + '" aria-hidden="true"></div>';
+                    html += '<div class="timeline-card">';
+                    html += '<div class="timeline-meta">';
+                    html += '<span class="avatar" style="background:' + avatarBg + '">' + escapeHtml(initials) + '</span>';
+                    html += '<div style="margin-left:8px; display:inline-block; vertical-align:middle;">';
+                    html += '<div style="font-size:12px;color:#6b7280">' + escapeHtml(ts) + '</div>';
+                    html += '<div style="font-weight:700;color:#0f172a">' + escapeHtml(user) + '</div>';
+                    html += '</div>';
+                    html += '<span class="doc-chip">' + escapeHtml(docLabel) + '</span>';
+                    html += '</div>';
+                    html += '<div class="timeline-title">';
+                    html += '<span class="action-pill action-' + escapeHtml(actionKey) + '">' + escapeHtml(action) + '</span>';
+                    html += '</div>';
+                    html += '<div class="timeline-remarks"><strong>Remarks :</strong> ' + escapeHtml(log.remarks || '—') + '</div>';
+                    html += '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                body.innerHTML = html;
+            }
+            modal.style.display = 'block';
+        }
+
+        // per-file history helper removed; use openFieldHistoryModal(documentType, quarter, title)
 
         function openLogsModal() {
             const modal = document.getElementById('logsModal');
@@ -2831,18 +3048,28 @@
                 title = 'Approve ' + uploadType.replace('-', ' ');
                 actionLabel = 'Approve (Optional remarks)';
                 submitBtn.style.backgroundColor = '#10b981';
+                submitBtn.textContent = 'Approve';
                 remarksField.placeholder = 'Enter optional remarks for approval...';
                 remarksField.required = false;
             } else if (action === 'return') {
                 title = 'Return ' + uploadType.replace('-', ' ');
                 actionLabel = 'Return (Required remarks)';
                 submitBtn.style.backgroundColor = '#dc2626';
+                submitBtn.textContent = 'Return';
                 remarksField.placeholder = 'Enter reason for return...';
+                remarksField.required = true;
+            } else if (action === 'request_resubmission') {
+                title = 'Request Resubmission for ' + uploadType.replace('-', ' ');
+                actionLabel = 'Request Resubmission (Required remarks)';
+                submitBtn.style.backgroundColor = '#b45309';
+                submitBtn.textContent = 'Request Resubmission';
+                remarksField.placeholder = 'Enter the reason for requesting resubmission...';
                 remarksField.required = true;
             } else if (action === 'remark') {
                 title = 'Add Remarks for ' + uploadType.replace('-', ' ');
                 actionLabel = 'Add Remarks';
                 submitBtn.style.backgroundColor = '#6366f1';
+                submitBtn.textContent = 'Submit';
                 remarksField.placeholder = 'Enter remarks...';
                 remarksField.required = true;
             }
@@ -2852,6 +3079,9 @@
 
             // Construct the form action URL directly
             form.setAttribute('action', `${baseUrl}/${projectCode}/approve/${uploadType}/${quarter}`);
+            if (action === 'request_resubmission') {
+                form.setAttribute('action', `${baseUrl}/${projectCode}/request-resubmission/${uploadType}/${quarter}`);
+            }
             form.style.display = 'block';
 
             // Create hidden input for action
@@ -2871,6 +3101,41 @@
         function closeRemarksModal() {
             const modal = document.getElementById('remarksModal');
             modal.style.display = 'none';
+        }
+
+        function submitResubmissionDecision(uploadType, quarter, decision) {
+            const form = document.getElementById('resubmissionDecisionForm');
+            const decisionInput = document.getElementById('resubmissionDecisionInput');
+
+            if (!form || !decisionInput) {
+                return;
+            }
+
+            form.setAttribute('action', `${baseUrl}/${projectCode}/resubmission-request/${uploadType}/${quarter}`);
+            decisionInput.value = decision;
+            form.submit();
+        }
+
+        function confirmResubmissionDecision(uploadType, quarter, decision) {
+            const isApprove = decision === 'approve';
+
+            openActionConfirmModal({
+                title: isApprove ? 'Approve resubmission request' : 'Reject resubmission request',
+                messageHtml: isApprove
+                    ? '<div style="color: #475569; font-size: 13px; line-height: 1.7;">Approving this request will delete the approved document so a replacement can be uploaded.</div>'
+                    : '<div style="color: #475569; font-size: 13px; line-height: 1.7;">Rejecting this request will keep the approved document in place.</div>',
+                confirmLabel: isApprove ? 'Approve' : 'Reject',
+                confirmBackground: isApprove ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                headerBackground: 'linear-gradient(135deg, #002C76 0%, #003d9e 100%)',
+                headerBorderColor: 'rgba(255,255,255,0.12)',
+                titleColor: '#ffffff',
+                closeColor: 'rgba(255,255,255,0.85)',
+                iconBackground: 'rgba(255,255,255,0.15)',
+                iconColor: '#ffffff',
+                iconHtml: isApprove ? '<i class="fas fa-check"></i>' : '<i class="fas fa-times"></i>',
+                maxWidth: '560px',
+                onConfirm: () => submitResubmissionDecision(uploadType, quarter, decision),
+            });
         }
 
         function getBatchUploadReminderMessageHtml() {

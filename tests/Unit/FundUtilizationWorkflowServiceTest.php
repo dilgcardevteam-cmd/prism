@@ -348,6 +348,85 @@ class FundUtilizationWorkflowServiceTest extends TestCase
         $service->approve($report, 'Q1', 'mov', $record->fresh(), $regional);
     }
 
+    public function test_approved_submission_can_be_resubmitted(): void
+    {
+        $service = app(FundUtilizationWorkflowService::class);
+
+        $uploader = $this->createUser([
+            'agency' => 'LGU',
+            'role' => User::ROLE_LGU,
+            'region' => 'CAR',
+            'province' => 'Abra',
+        ]);
+        $provincial = $this->createUser([
+            'agency' => 'DILG',
+            'role' => User::ROLE_PROVINCIAL,
+            'region' => 'CAR',
+            'province' => 'Abra',
+        ]);
+        $regional = $this->createUser([
+            'agency' => 'DILG',
+            'role' => User::ROLE_REGIONAL,
+            'region' => 'CAR',
+            'province' => 'Regional Office',
+            'office' => 'Regional Office',
+        ]);
+
+        $report = $this->createReport('LGU-004', 'Abra', 'Municipality of Bangued');
+        $record = $this->createMovRecord($report->project_code, 'Q1', $uploader);
+
+        $service->submitOrResubmit($report, 'Q1', 'mov', $record, $uploader);
+        $service->approve($report, 'Q1', 'mov', $record->fresh(), $provincial);
+        $service->approve($report, 'Q1', 'mov', $record->fresh(), $regional);
+
+        // Resubmit approved document
+        $record2 = $this->createMovRecord($report->project_code, 'Q1', $uploader);
+        $workflow = $service->submitOrResubmit($report, 'Q1', 'mov', $record2, $uploader);
+
+        $this->assertSame('Pending Level 1 Approval', $workflow->status);
+        $this->assertSame(2, $workflow->revision_number);
+    }
+
+    public function test_resubmission_request_can_be_requested_and_reviewed(): void
+    {
+        $service = app(FundUtilizationWorkflowService::class);
+
+        $uploader = $this->createUser([
+            'agency' => 'LGU',
+            'role' => User::ROLE_LGU,
+            'region' => 'CAR',
+            'province' => 'Abra',
+        ]);
+        $provincial = $this->createUser([
+            'agency' => 'DILG',
+            'role' => User::ROLE_PROVINCIAL,
+            'region' => 'CAR',
+            'province' => 'Abra',
+        ]);
+        $regional = $this->createUser([
+            'agency' => 'DILG',
+            'role' => User::ROLE_REGIONAL,
+            'region' => 'CAR',
+            'province' => 'Regional Office',
+            'office' => 'Regional Office',
+        ]);
+
+        $report = $this->createReport('LGU-RR-001', 'Abra', 'Municipality of Bangued');
+        $record = $this->createMovRecord($report->project_code, 'Q1', $uploader);
+
+        $service->submitOrResubmit($report, 'Q1', 'mov', $record, $uploader);
+        $service->approve($report, 'Q1', 'mov', $record->fresh(), $provincial);
+        $service->approve($report, 'Q1', 'mov', $record->fresh(), $regional);
+
+        $workflow = $service->requestResubmission($report, 'Q1', 'mov', $provincial, 'Please correct the attached file.');
+        $this->assertSame('Approved', $workflow->status);
+        $this->assertSame('Resubmission Requested', ApprovalLog::query()->latest('id')->first()->action);
+
+        $workflow = $service->resolveResubmissionRequest($report, 'Q1', 'mov', $regional, true);
+        $this->assertSame('Resubmission Request Approved', ApprovalLog::query()->latest('id')->first()->action);
+        $this->assertSame('Approved', $workflow->status);
+    }
+
     private function createWorkflowTestTables(): void
     {
         Schema::dropIfExists('approval_logs');

@@ -14,6 +14,7 @@ class FURWrittenNotice extends Model
         'secretary_dbm_path',
         'secretary_dilg_path',
         'speaker_house_path',
+        'speaker_house_original_name',
         'president_senate_path',
         'house_committee_path',
         'senate_committee_path',

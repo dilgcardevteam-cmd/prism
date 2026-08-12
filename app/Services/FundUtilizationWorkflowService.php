@@ -19,6 +19,9 @@ class FundUtilizationWorkflowService
     private const ACTION_FORWARDED = 'Forwarded';
     private const ACTION_APPROVED = 'Approved';
     private const ACTION_RETURNED = 'Returned';
+    private const ACTION_RESUBMISSION_REQUESTED = 'Resubmission Requested';
+    private const ACTION_RESUBMISSION_APPROVED = 'Resubmission Request Approved';
+    private const ACTION_RESUBMISSION_REJECTED = 'Resubmission Request Rejected';
 
     public function __construct(
         protected FundUtilizationWorkflowRoutingService $routingService,
@@ -44,11 +47,7 @@ class FundUtilizationWorkflowService
             $isResubmission = $workflow !== null;
             $previousStatus = $workflow?->status;
 
-            if ($workflow && $workflow->status === 'Approved') {
-                throw new RuntimeException('This submission is already fully approved and cannot be resubmitted.');
-            }
-
-            if ($workflow && !$this->isReturnedStatus($workflow->status)) {
+            if ($workflow && !$this->isReturnedStatus($workflow->status) && $workflow->status !== 'Approved') {
                 throw new RuntimeException('This submission is already under validation and cannot be resubmitted yet.');
             }
 
@@ -80,6 +79,30 @@ class FundUtilizationWorkflowService
             $workflow->save();
             $this->syncRecordAfterSubmission($record, $documentType, $uploader, $targetLevel);
 
+            $remarks = null;
+            if ($documentType === 'mov' && isset($record->mov_file_path)) {
+                $remarks = 'Uploaded: ' . basename($record->mov_file_path);
+            } elseif ($documentType === 'fdp' && isset($record->fdp_file_path)) {
+                $remarks = 'Uploaded: ' . basename($record->fdp_file_path);
+            } elseif ($documentType === 'posting-link' && isset($record->posting_link)) {
+                $remarks = 'Posting link saved: ' . $record->posting_link;
+            } elseif ($documentType === 'batch-document') {
+                $remarks = 'Uploaded Batch Documents';
+            } elseif (str_starts_with($documentType, 'written-notice-')) {
+                $pathField = match ($documentType) {
+                    'written-notice-dbm' => 'secretary_dbm_path',
+                    'written-notice-dilg' => 'secretary_dilg_path',
+                    'written-notice-speaker' => 'speaker_house_path',
+                    'written-notice-president' => 'president_senate_path',
+                    'written-notice-house' => 'house_committee_path',
+                    'written-notice-senate' => 'senate_committee_path',
+                    default => null,
+                };
+                if ($pathField && isset($record->$pathField) && $record->$pathField) {
+                    $remarks = 'Uploaded: ' . basename($record->$pathField);
+                }
+            }
+
             $this->logWorkflowAction(
                 workflow: $workflow,
                 actor: $uploader,
@@ -87,7 +110,7 @@ class FundUtilizationWorkflowService
                 approvalLevel: $targetLevel,
                 previousStatus: $previousStatus,
                 newStatus: $workflow->status,
-                remarks: null,
+                remarks: $remarks,
                 returnedToId: $validator->getKey(),
                 forwardedToId: $validator->getKey(),
             );
@@ -255,7 +278,7 @@ class FundUtilizationWorkflowService
                     forwardedToId: $provincialOfficer->getKey(),
                 );
 
-                $this->syncRecordAfterReturn($record, $documentType, 2, $actor);
+                $this->syncRecordAfterReturn($record, $documentType, 2, $actor, $remarks);
 
                 DB::afterCommit(function () use ($provincialOfficer, $report, $quarter, $documentType, $actor, $workflow): void {
                     $this->notifyUsers(
@@ -296,7 +319,7 @@ class FundUtilizationWorkflowService
                     forwardedToId: $workflow->uploader_id,
                 );
 
-                $this->syncRecordAfterReturn($record, $documentType, 1, $actor);
+                $this->syncRecordAfterReturn($record, $documentType, 1, $actor, $remarks);
 
                 DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
                     $this->notifyUser(
@@ -337,7 +360,7 @@ class FundUtilizationWorkflowService
                     forwardedToId: $workflow->current_approver_id,
                 );
 
-                $this->syncRecordAfterReturn($record, $documentType, 1, $actor);
+                $this->syncRecordAfterReturn($record, $documentType, 1, $actor, $remarks);
 
                 DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
                     $this->notifyUsers(
@@ -378,7 +401,7 @@ class FundUtilizationWorkflowService
                     forwardedToId: $workflow->uploader_id,
                 );
 
-                $this->syncRecordAfterReturn($record, $documentType, 2, $actor);
+                $this->syncRecordAfterReturn($record, $documentType, 2, $actor, $remarks);
 
                 DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
                     $this->notifyUser(
@@ -403,6 +426,133 @@ class FundUtilizationWorkflowService
         });
     }
 
+    public function requestResubmission(
+        FundUtilizationReport $report,
+        string $quarter,
+        string $documentType,
+        User $actor,
+        string $remarks,
+    ): FundUtilizationApprovalWorkflow {
+        return DB::transaction(function () use ($report, $quarter, $documentType, $actor, $remarks): FundUtilizationApprovalWorkflow {
+            $workflow = $this->workflowFor($report->project_code, $quarter, $documentType);
+            if (!$workflow) {
+                throw new RuntimeException('Workflow not found for this submission.');
+            }
+
+            if ($workflow->status !== 'Approved') {
+                throw new RuntimeException('Only approved submissions can be requested for resubmission.');
+            }
+
+            if (!$actor->isProvincialDilgAssignment()) {
+                throw new RuntimeException('Only a Provincial Office user can request resubmission.');
+            }
+
+            $remarks = trim($remarks);
+            if ($remarks === '') {
+                throw new RuntimeException('Remarks are mandatory when requesting resubmission.');
+            }
+
+            $latestResubmissionAction = $this->latestResubmissionRequestAction($workflow);
+            if ($latestResubmissionAction === self::ACTION_RESUBMISSION_REQUESTED) {
+                throw new RuntimeException('A resubmission request is already pending for this submission.');
+            }
+
+            $regionalValidator = $this->resolveValidatorForLevel($report, $workflow->uploader, 2);
+            $previousStatus = $workflow->status;
+
+            $this->logWorkflowAction(
+                workflow: $workflow,
+                actor: $actor,
+                action: self::ACTION_RESUBMISSION_REQUESTED,
+                approvalLevel: 2,
+                previousStatus: $previousStatus,
+                newStatus: $workflow->status,
+                remarks: $remarks,
+                returnedToId: $regionalValidator->getKey(),
+                forwardedToId: $regionalValidator->getKey(),
+            );
+
+            DB::afterCommit(function () use ($regionalValidator, $report, $quarter, $documentType, $actor): void {
+                $this->notifyUser(
+                    $regionalValidator,
+                    sprintf(
+                        'A Provincial Office user requested resubmission for %s (%s).',
+                        $report->project_code,
+                        $quarter
+                    ),
+                    $report,
+                    $quarter,
+                    $documentType,
+                    $actor
+                );
+            });
+
+            return $workflow->fresh(['uploader', 'currentApprover', 'logs']);
+        });
+    }
+
+    public function resolveResubmissionRequest(
+        FundUtilizationReport $report,
+        string $quarter,
+        string $documentType,
+        User $actor,
+        bool $approved,
+    ): FundUtilizationApprovalWorkflow {
+        return DB::transaction(function () use ($report, $quarter, $documentType, $actor, $approved): FundUtilizationApprovalWorkflow {
+            $workflow = $this->workflowFor($report->project_code, $quarter, $documentType);
+            if (!$workflow) {
+                throw new RuntimeException('Workflow not found for this submission.');
+            }
+
+            if (!$actor->isRegionalOfficeAssignment() && $actor->normalizedRole() !== User::ROLE_REGIONAL) {
+                throw new RuntimeException('Only a Regional Office user can review a resubmission request.');
+            }
+
+            $latestResubmissionAction = $this->latestResubmissionRequestAction($workflow);
+            if ($latestResubmissionAction !== self::ACTION_RESUBMISSION_REQUESTED) {
+                throw new RuntimeException('There is no pending resubmission request for this submission.');
+            }
+
+            $requester = $this->latestResubmissionRequestActor($workflow);
+            $previousStatus = $workflow->status;
+            $action = $approved ? self::ACTION_RESUBMISSION_APPROVED : self::ACTION_RESUBMISSION_REJECTED;
+
+            $this->logWorkflowAction(
+                workflow: $workflow,
+                actor: $actor,
+                action: $action,
+                approvalLevel: 2,
+                previousStatus: $previousStatus,
+                newStatus: $workflow->status,
+                remarks: null,
+                returnedToId: $requester?->getKey() ?? $workflow->uploader_id,
+                forwardedToId: $requester?->getKey() ?? $workflow->uploader_id,
+            );
+
+            DB::afterCommit(function () use ($workflow, $requester, $report, $quarter, $documentType, $actor, $approved): void {
+                $message = $approved
+                    ? sprintf(
+                        'Your resubmission request for %s (%s) was approved and the document was deleted for replacement upload.',
+                        $report->project_code,
+                        $quarter
+                    )
+                    : sprintf(
+                        'Your resubmission request for %s (%s) was rejected by the Regional Office.',
+                        $report->project_code,
+                        $quarter
+                    );
+
+                $recipients = collect([$requester, $workflow->uploader])
+                    ->filter(fn ($user) => $user instanceof User)
+                    ->values();
+
+                $this->notifyUsers($recipients, $message, $report, $quarter, $documentType, $actor);
+            });
+
+            return $workflow->fresh(['uploader', 'currentApprover', 'logs']);
+        });
+    }
+
     public function canActorValidate(FundUtilizationApprovalWorkflow $workflow, User $actor): bool
     {
         try {
@@ -416,6 +566,36 @@ class FundUtilizationWorkflowService
     public function canActorReturn(FundUtilizationApprovalWorkflow $workflow, User $actor): bool
     {
         return $this->canActorValidate($workflow, $actor);
+    }
+
+    protected function latestResubmissionRequestAction(FundUtilizationApprovalWorkflow $workflow): ?string
+    {
+        $workflow->loadMissing('logs');
+
+        return $workflow->logs
+            ->filter(fn (ApprovalLog $log) => in_array($log->action, [
+                self::ACTION_RESUBMISSION_REQUESTED,
+                self::ACTION_RESUBMISSION_APPROVED,
+                self::ACTION_RESUBMISSION_REJECTED,
+            ], true))
+            ->sortByDesc(fn (ApprovalLog $log) => $log->created_at?->getTimestamp() ?? 0)
+            ->first()?->action;
+    }
+
+    protected function latestResubmissionRequestActor(FundUtilizationApprovalWorkflow $workflow): ?User
+    {
+        $workflow->loadMissing('logs');
+
+        $latestRequest = $workflow->logs
+            ->filter(fn (ApprovalLog $log) => $log->action === self::ACTION_RESUBMISSION_REQUESTED)
+            ->sortByDesc(fn (ApprovalLog $log) => $log->created_at?->getTimestamp() ?? 0)
+            ->first();
+
+        if (!$latestRequest || !$latestRequest->approver_id) {
+            return null;
+        }
+
+        return User::query()->where('idno', $latestRequest->approver_id)->first();
     }
 
     protected function assertActorCanAct(FundUtilizationApprovalWorkflow $workflow, User $actor): void
@@ -709,6 +889,7 @@ class FundUtilizationWorkflowService
         string $documentType,
         int $returnedFromLevel,
         User $actor,
+        ?string $remarks = null,
     ): void {
         $fieldMap = $this->documentFieldMap($documentType);
         if ($fieldMap === []) {
@@ -724,6 +905,13 @@ class FundUtilizationWorkflowService
             $fieldMap['approved_at'] ?? null => null,
             $fieldMap['approved_by'] ?? null => null,
         ]);
+
+        // If a remarks field is defined for this document type, stamp the return remarks
+        // onto the document so the UI can display returned notes without reading workflow logs.
+        $remarksField = $fieldMap['remarks'] ?? null;
+        if ($remarksField) {
+            $record->setAttribute($remarksField, $remarks);
+        }
 
         $record->save();
     }

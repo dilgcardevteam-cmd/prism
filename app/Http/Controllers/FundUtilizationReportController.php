@@ -486,10 +486,53 @@ class FundUtilizationReportController extends Controller
     {
         return FundUtilizationApprovalWorkflow::query()
             ->where('project_code', $projectCode)
-            ->with('uploader')
+            ->with(['uploader', 'logs.approver', 'logs.uploader'])
             ->get()
             ->keyBy(fn (FundUtilizationApprovalWorkflow $workflow) => $this->fundUtilizationWorkflowSubmissionKey($workflow->document_type, $workflow->quarter))
             ->all();
+    }
+
+    private function resolveFundUtilizationDocumentLabel(string $uploadType): string
+    {
+        return match ($uploadType) {
+            'mov' => 'MOV file',
+            'batch-document' => 'Batch Documents file',
+            'written-notice-dbm' => 'DBM document',
+            'written-notice-dilg' => 'DILG document',
+            'written-notice-speaker' => 'Speaker document',
+            'written-notice-president' => 'President document',
+            'written-notice-house' => 'House document',
+            'written-notice-senate' => 'Senate document',
+            'fdp' => 'FDP document',
+            'posting-link' => 'Posting link',
+            default => 'Document',
+        };
+    }
+
+    private function resolveFundUtilizationUploadRecord(string $uploadType, string $projectCode, string $quarter)
+    {
+        $recordQuery = match ($uploadType) {
+            'mov' => FURMovUpload::query(),
+            'batch-document' => FURBatchDocument::query(),
+            'written-notice-dbm',
+            'written-notice-dilg',
+            'written-notice-speaker',
+            'written-notice-president',
+            'written-notice-house',
+            'written-notice-senate' => FURWrittenNotice::query(),
+            'fdp',
+            'posting-link' => FURFDP::query(),
+            default => null,
+        };
+
+        if ($recordQuery === null) {
+            return null;
+        }
+
+        return $recordQuery
+            ->where('project_code', $projectCode)
+            ->where('quarter', $quarter)
+            ->first();
     }
 
     private function normalizeBatchDocumentFilePaths($value): array
@@ -609,13 +652,38 @@ class FundUtilizationReportController extends Controller
         return $provinceLower === 'regional office' || $officeLower === 'regional office';
     }
 
-    private function canUploadFundUtilizationDocuments(?User $user): bool
+    private function canUploadFundUtilizationDocuments(?User $user, $report = null): bool
     {
         if (!$user) {
             return false;
         }
 
-        return $user->isLguScopedUser() || $user->isProvincialDilgAssignment();
+        $baseAllowed = $user->isLguScopedUser() || $user->isProvincialDilgAssignment() || $user->isSuperAdmin();
+        if (!$baseAllowed) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($report) {
+            $userProvince = strtolower(trim((string) $user->province));
+            $reportProvince = strtolower(trim((string) $report->province));
+
+            if ($user->isProvincialDilgAssignment()) {
+                return $userProvince === $reportProvince;
+            }
+
+            if ($user->isLguScopedUser()) {
+                $userOffice = strtolower(trim((string) $user->office));
+                $reportUnit = strtolower(trim((string) $report->implementing_unit));
+                return $userProvince === $reportProvince 
+                    && ($userOffice === '' || str_contains($reportUnit, $userOffice) || str_contains($userOffice, $reportUnit));
+            }
+        }
+
+        return true;
     }
 
     private function isFundUtilizationProvincialValidator(?User $user): bool
@@ -807,6 +875,9 @@ class FundUtilizationReportController extends Controller
         $isPendingValidation = $workflow
             ? str_starts_with($workflowStatus, 'Pending Level ')
             : $status === 'pending';
+        if ($isApproved) {
+            return false;
+        }
         $shouldHideLguDeleteUntilProvincialReturn = $uploaderLevel === 'lgu'
             && $requiredValidator === 'provincial'
             && !$isReturned;
@@ -814,12 +885,11 @@ class FundUtilizationReportController extends Controller
         $actorIsUploader = $normalizedUploaderId === trim((string) $actor->idno);
 
         if ($actorIsUploader) {
-            return !$isApproved
-                && !$isPendingValidation
+            return !$isPendingValidation
                 && !$shouldHideLguDeleteUntilProvincialReturn;
         }
 
-        if (!$isReturned || $isApproved || $isPendingValidation) {
+        if ((!$isReturned && !$isApproved) || $isPendingValidation) {
             return false;
         }
 
@@ -3077,7 +3147,8 @@ class FundUtilizationReportController extends Controller
                                          ->first();
             $oldFilePath = $existingRecord?->mov_file_path;
             $file = $request->file('mov_file');
-            $path = $file->store('fur/mov/' . $projectCode, 'public');
+            $originalName = basename(trim((string) $file->getClientOriginalName()));
+            $path = $file->storeAs('fur/mov/' . $projectCode, $originalName, 'public');
 
             try {
                 $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService) {
@@ -3359,7 +3430,8 @@ class FundUtilizationReportController extends Controller
             ->where('quarter', $quarter)
             ->first();
         $oldFilePath = $existingRecord?->mov_file_path;
-        $path = $file->store('fur/mov/' . $projectCode, 'public');
+        $originalName = basename(trim((string) $file->getClientOriginalName()));
+        $path = $file->storeAs('fur/mov/' . $projectCode, $originalName, 'public');
 
         try {
             $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService) {
@@ -3422,8 +3494,12 @@ class FundUtilizationReportController extends Controller
 
             $oldPath = $existingRecord?->{$fieldConfig['path']};
             $file = $files[$requestField];
-            $path = $file->store('fur/written-notice/' . $projectCode, 'public');
+            $originalName = basename(trim((string) $file->getClientOriginalName()));
+            $path = $file->storeAs('fur/written-notice/' . $projectCode, $originalName, 'public');
             $updates[$fieldConfig['path']] = $path;
+            if ($requestField === 'speaker_house') {
+                $updates['speaker_house_original_name'] = $originalName;
+            }
             $replacedPaths[] = ['old' => $oldPath, 'new' => $path];
             $newPaths[] = $path;
             $uploadedDocumentTypes[] = $fieldConfig['workflow_type'];
@@ -3433,7 +3509,10 @@ class FundUtilizationReportController extends Controller
             $updates['status'] = 'pending';
 
             $shortFieldName = str_replace('secretary_', '', $requestField);
-            SecureTimestampService::logUploadTimestamp('written-notice-' . $shortFieldName, $projectCode, $quarter, $secureTimestamp);
+            SecureTimestampService::logUploadTimestamp('written-notice-' . $shortFieldName, $projectCode, $quarter, $secureTimestamp, [
+                'file_path' => $path,
+                'file_name' => basename($path),
+            ]);
         }
 
         if (empty($updates)) {
@@ -3478,7 +3557,8 @@ class FundUtilizationReportController extends Controller
             ->where('quarter', $quarter)
             ->first();
         $oldFilePath = $existingRecord?->fdp_file_path;
-        $path = $file->store('fur/fdp/' . $projectCode, 'public');
+        $originalName = basename(trim((string) $file->getClientOriginalName()));
+        $path = $file->storeAs('fur/fdp/' . $projectCode, $originalName, 'public');
 
         try {
             $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService) {
@@ -3609,6 +3689,22 @@ class FundUtilizationReportController extends Controller
             $workflowService->submitOrResubmit($report, $quarter, 'batch-document', $record, $user);
             SecureTimestampService::logUploadTimestamp('batch-document', $projectCode, $quarter, $secureTimestamp);
 
+            // Log each uploaded file separately so we can filter history per-file
+            foreach ($newFilePaths as $fp) {
+                \Log::channel('upload_timestamps')->info('Document uploaded', [
+                    'document_type' => 'batch-document',
+                    'project_code' => $projectCode,
+                    'quarter' => $quarter,
+                    'upload_timestamp' => $secureTimestamp->format('Y-m-d H:i:s'),
+                    'file_path' => $fp,
+                    'file_name' => basename($fp),
+                    'timezone' => $secureTimestamp->timezone->getName(),
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                    'user_id' => auth()->id(),
+                ]);
+            }
+
             return $record;
         });
 
@@ -3726,8 +3822,12 @@ class FundUtilizationReportController extends Controller
             if ($request->hasFile($requestField)) {
                 $oldPath = $existingRecord?->{$fieldConfig['path']};
                 $file = $request->file($requestField);
-                $path = $file->store('fur/written-notice/' . $projectCode, 'public');
+                $originalName = basename(trim((string) $file->getClientOriginalName()));
+                $path = $file->storeAs('fur/written-notice/' . $projectCode, $originalName, 'public');
                 $updates[$fieldConfig['path']] = $path;
+                if ($requestField === 'speaker_house') {
+                    $updates['speaker_house_original_name'] = $originalName;
+                }
                 $replacedPaths[] = ['old' => $oldPath, 'new' => $path];
                 $newPaths[] = $path;
                 $uploadedDocumentTypes[] = $fieldConfig['workflow_type'];
@@ -3804,7 +3904,8 @@ class FundUtilizationReportController extends Controller
                                     ->first();
             $oldFilePath = $existingRecord?->fdp_file_path;
             $file = $request->file('fdp_file');
-            $path = $file->store('fur/fdp/' . $projectCode, 'public');
+            $originalName = basename(trim((string) $file->getClientOriginalName()));
+            $path = $file->storeAs('fur/fdp/' . $projectCode, $originalName, 'public');
 
             try {
                 $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService) {
@@ -3913,6 +4014,126 @@ class FundUtilizationReportController extends Controller
     /**
      * Approve or return upload with remarks
      */
+    public function requestResubmission(Request $request, $projectCode, $uploadType, $quarter, FundUtilizationWorkflowService $workflowService)
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'action' => ['required', 'in:request_resubmission'],
+            'remarks' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $remarks = $this->sanitizeReportRemarks($validated['remarks'] ?? null);
+        if ($remarks === null || trim((string) $remarks) === '') {
+            return back()->withErrors(['remarks' => 'Remarks must contain plain text.']);
+        }
+
+        $report = $this->getReportOrLfpProject($projectCode);
+        $record = $this->resolveFundUtilizationUploadRecord($uploadType, $projectCode, $quarter);
+
+        if (!$record) {
+            return back()->withErrors(['document' => 'The selected document record was not found.']);
+        }
+
+        try {
+            $updatedWorkflow = $workflowService->requestResubmission($report, $quarter, $uploadType, $user, (string) $remarks);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['document' => $exception->getMessage()]);
+        }
+
+        $documentLabel = $this->resolveFundUtilizationDocumentLabel($uploadType);
+
+        Log::channel('upload_timestamps')->info('Document action', [
+            'document_type' => $uploadType,
+            'project_code' => $projectCode,
+            'quarter' => $quarter,
+            'action' => 'request_resubmission',
+            'remarks' => $remarks,
+            'action_timestamp' => pagasa_time()->format('Y-m-d H:i:s'),
+            'timezone' => config('app.timezone'),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'user_id' => auth()->id(),
+        ]);
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => $documentLabel . ' resubmission request submitted successfully.',
+                'status' => $updatedWorkflow->status,
+                'action' => 'request_resubmission',
+            ]);
+        }
+
+        return back()->with('success', $documentLabel . ' resubmission request submitted successfully.');
+    }
+
+    public function decideResubmissionRequest(Request $request, $projectCode, $uploadType, $quarter, FundUtilizationWorkflowService $workflowService)
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'decision' => ['required', 'in:approve,reject'],
+        ]);
+
+        $expectsJson = $request->expectsJson() || $request->ajax();
+        $errorResponse = static function (string $message, int $status = 422) use ($expectsJson) {
+            if ($expectsJson) {
+                return response()->json(['message' => $message], $status);
+            }
+
+            return back()->withErrors(['document' => $message]);
+        };
+
+        $report = $this->getReportOrLfpProject($projectCode);
+        $record = $this->resolveFundUtilizationUploadRecord($uploadType, $projectCode, $quarter);
+
+        if (!$record) {
+            return $errorResponse('The selected document record was not found.', 404);
+        }
+
+        try {
+            if ($validated['decision'] === 'approve') {
+                $deleteResponse = $this->deleteDocument($projectCode, $uploadType, $quarter, true);
+                if (method_exists($deleteResponse, 'getStatusCode') && $deleteResponse->getStatusCode() >= 400) {
+                    $payload = method_exists($deleteResponse, 'getContent') ? json_decode((string) $deleteResponse->getContent(), true) : null;
+                    $message = is_array($payload) && !empty($payload['message']) ? (string) $payload['message'] : 'Unable to delete the document for resubmission.';
+
+                    return $errorResponse($message);
+                }
+            }
+
+            $updatedWorkflow = $workflowService->resolveResubmissionRequest($report, $quarter, $uploadType, $user, $validated['decision'] === 'approve');
+        } catch (\Throwable $exception) {
+            return $errorResponse($exception->getMessage());
+        }
+
+        $documentLabel = $this->resolveFundUtilizationDocumentLabel($uploadType);
+
+        Log::channel('upload_timestamps')->info('Document action', [
+            'document_type' => $uploadType,
+            'project_code' => $projectCode,
+            'quarter' => $quarter,
+            'action' => 'resubmission_' . $validated['decision'],
+            'action_timestamp' => pagasa_time()->format('Y-m-d H:i:s'),
+            'timezone' => config('app.timezone'),
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'user_id' => auth()->id(),
+        ]);
+
+        $message = $validated['decision'] === 'approve'
+            ? $documentLabel . ' resubmission request approved and the document was deleted.'
+            : $documentLabel . ' resubmission request rejected.';
+
+        if ($expectsJson) {
+            return response()->json([
+                'message' => $message,
+                'status' => $updatedWorkflow->status,
+                'action' => 'resubmission_' . $validated['decision'],
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
     public function approveUpload(FundUtilizationApprovalActionRequest $request, $projectCode, $uploadType, $quarter, FundUtilizationWorkflowService $workflowService)
     {
         $user = Auth::user();
@@ -4062,6 +4283,8 @@ class FundUtilizationReportController extends Controller
             'quarter' => $quarter,
             'action' => $action,
             'remarks' => $remarks,
+            'file_path' => $record->speaker_house_path ?? null,
+            'file_name' => $record->speaker_house_path ? basename((string) $record->speaker_house_path) : null,
             'action_timestamp' => pagasa_time()->format('Y-m-d H:i:s'),
             'timezone' => config('app.timezone'),
             'ip_address' => request()->ip(),
@@ -4251,7 +4474,7 @@ class FundUtilizationReportController extends Controller
     /**
      * Delete a document from storage and clear the database path
      */
-    public function deleteDocument($projectCode, $docType, $quarter)
+    public function deleteDocument($projectCode, $docType, $quarter, bool $force = false)
     {
         $docTypeMap = [
             'mov' => ['table' => 'tbfur_mov_uploads', 'column' => 'mov_file_path', 'filePath' => 'mov_file_path', 'has_file' => true, 'statusField' => 'status', 'encoderField' => 'mov_encoder_id'],
@@ -4293,7 +4516,7 @@ class FundUtilizationReportController extends Controller
             return response()->json(['message' => 'Document not found'], 404);
         }
 
-        if (!$this->canDeleteFundUtilizationDocument(auth()->user(), $upload, $projectCode, $docType, $quarter, $statusField, $encoderField)) {
+        if (!$force && !$this->canDeleteFundUtilizationDocument(auth()->user(), $upload, $projectCode, $docType, $quarter, $statusField, $encoderField)) {
             return response()->json(['message' => 'You are not allowed to delete this document.'], 403);
         }
 
@@ -4429,6 +4652,25 @@ class FundUtilizationReportController extends Controller
             'remarks' => $deletedDocumentLabel !== '' ? 'Deleted: ' . $deletedDocumentLabel : 'Document deleted',
         ]);
 
+        $workflow = \App\Models\FundUtilizationApprovalWorkflow::where('project_code', $projectCode)
+            ->where('quarter', $quarter)
+            ->where('document_type', $docType)
+            ->first();
+        if ($workflow) {
+            \App\Models\ApprovalLog::create([
+                'submission_id' => $workflow->id,
+                'project_code' => $projectCode,
+                'quarter' => $quarter,
+                'document_type' => $docType,
+                'approver_id' => auth()->id(),
+                'uploader_id' => $workflow->uploader_id,
+                'approval_level' => (int)$workflow->current_approval_level ?: 1,
+                'action' => 'Deleted',
+                'remarks' => $deletedDocumentLabel !== '' ? 'Deleted: ' . $deletedDocumentLabel : 'Document deleted',
+                'created_at' => now(),
+            ]);
+        }
+
         return response()->json(['message' => 'Document deleted successfully'], 200);
     }
 
@@ -4464,6 +4706,15 @@ class FundUtilizationReportController extends Controller
 
                 $parsed = $this->parseUploadLogLine($logEntry);
                 if ($parsed) {
+                    // Only include logs for the current project of FUR.
+                    // Exclude logs where 'module' is set to other sections (e.g. pre_implementation_documents, locally_funded).
+                    if (isset($parsed['module']) && $parsed['module'] !== 'fund_utilization') {
+                        continue;
+                    }
+                    // Exclude any viewing/reading actions
+                    if (in_array(strtolower($parsed['action'] ?? ''), ['view', 'read', 'download', 'viewed', 'readed', 'downloaded'])) {
+                        continue;
+                    }
                     $entries[] = $parsed;
                 }
             }
@@ -4557,10 +4808,21 @@ class FundUtilizationReportController extends Controller
             'timestamp' => \Carbon\Carbon::parse($timestamp)->setTimezone(config('app.timezone')),
             'message' => $message,
             'action' => $action,
+            'module' => $context['module'] ?? 'fund_utilization',
+            'document_label' => $context['document_label'] ?? null,
+            'action_label' => $context['action_label'] ?? null,
+            'section' => $context['section'] ?? null,
+            'field' => $context['field'] ?? null,
+            'details' => $context['details'] ?? null,
             'document_type' => $context['document_type'] ?? null,
             'quarter' => $context['quarter'] ?? null,
             'user_id' => $context['user_id'] ?? $context['deleted_by'] ?? $context['approved_by'] ?? null,
             'remarks' => $context['remarks'] ?? null,
+            'file_path' => $context['file_path'] ?? $context['storage_path'] ?? null,
+            'file_name' => is_string($context['file_path'] ?? null) ? basename($context['file_path']) : (
+                is_string($context['storage_path'] ?? null) ? basename($context['storage_path']) : null
+            ),
+            'storage_path' => $context['storage_path'] ?? null,
         ];
     }
 

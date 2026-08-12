@@ -411,5 +411,23 @@ class FundUtilizationReportControllerTest extends \Tests\TestCase
 
         $this->assertSame(['P-BOTH', 'P-RETURNED-ONLY', 'P-PENDING-ONLY', 'P-NONE'], $sortedCodes);
     }
+
+    #[Test]
+    public function it_allows_superadmins_to_upload_fund_utilization_documents(): void
+    {
+        $controller = new FundUtilizationReportController();
+        $method = new \ReflectionMethod(FundUtilizationReportController::class, 'canUploadFundUtilizationDocuments');
+        $method->setAccessible(true);
+
+        $superadmin = new User(['role' => User::ROLE_SUPERADMIN]);
+        $provincial = new User(['role' => User::ROLE_PROVINCIAL, 'agency' => 'DILG', 'province' => 'Abra']);
+        $lgu = new User(['role' => User::ROLE_LGU, 'agency' => 'LGU']);
+        $regional = new User(['role' => User::ROLE_REGIONAL, 'agency' => 'DILG', 'province' => 'Regional Office']);
+
+        $this->assertTrue($method->invoke($controller, $superadmin));
+        $this->assertTrue($method->invoke($controller, $provincial));
+        $this->assertTrue($method->invoke($controller, $lgu));
+        $this->assertFalse($method->invoke($controller, $regional));
+    }
 }
 

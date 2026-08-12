@@ -146,10 +146,11 @@
                     : 'Documents are already attached. Delete the current file to upload a new one.'))
                 : '';
         @endphp
+        @if(!$isBatchDocumentUploadDisabled)
         <form action="{{ route('fund-utilization.upload-batch-document', $report->project_code) }}" method="POST" enctype="multipart/form-data" data-batch-upload-form="1" data-confirm-skip="true" style="margin-bottom: 8px;">
             @csrf
             <input type="hidden" name="quarter" value="{{ $quarter }}">
-            <div style="position: relative; padding: 16px 18px; border: 1px solid #dbe4f0; border-radius: 14px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; {{ $isBatchDocumentUploadDisabled ? 'opacity: 0.7;' : '' }}">
+            <div style="position: relative; padding: 16px 18px; border: 1px solid #dbe4f0; border-radius: 14px; background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 260px;">
                     <div style="width: 42px; height: 42px; border-radius: 14px; background: rgba(0, 44, 118, 0.08); color: #002C76; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <i class="fas fa-folder-open" aria-hidden="true"></i>
@@ -160,24 +161,22 @@
                     </div>
                 </div>
 
-                <label for="batch-document-upload-{{ $quarter }}" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border-radius: 999px; background: {{ $isBatchDocumentUploadDisabled ? '#94a3b8' : '#002C76' }}; color: #ffffff; font-size: 11px; font-weight: 800; text-decoration: none; cursor: {{ $isBatchDocumentUploadDisabled ? 'not-allowed' : 'pointer' }}; box-shadow: {{ $isBatchDocumentUploadDisabled ? 'none' : '0 6px 12px rgba(0, 44, 118, 0.12)' }}; white-space: nowrap; {{ $isBatchDocumentUploadDisabled ? 'pointer-events: none;' : '' }}">
-                    <i class="fas fa-paperclip" aria-hidden="true"></i>
-                    Select Documents
-                </label>
-                <input id="batch-document-upload-{{ $quarter }}" type="file" name="batch_document_file[]" multiple class="dashboard-file-input" accept="application/pdf" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;" onchange="showSaveButton(this, 'batch-document-save-btn-{{ $quarter }}', 'batch-document-filename-{{ $quarter }}')" {{ $isBatchDocumentUploadDisabled ? 'disabled' : '' }} title="{{ $batchDocumentUploadTitle }}">
+                <input id="batch-document-upload-{{ $quarter }}" type="file" name="batch_document_file[]" multiple class="dashboard-file-input" accept="application/pdf" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;" onchange="showSaveButton(this, 'batch-document-save-btn-{{ $quarter }}', 'batch-document-filename-{{ $quarter }}')">
             </div>
             <button type="submit" id="batch-document-save-btn-{{ $quarter }}" style="margin-top: 10px; padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                 <i class="fas fa-upload"></i> Submit
             </button>
         </form>
-        <div id="batch-document-filename-{{ $quarter }}" style="font-size: 11px; color: #059669; font-weight: 600; margin-bottom: 8px;">
-            @if($hasBatchDocumentFile)
-                @php
-                    $uploadedInfo = $resolveUploaderMeta($batchDocuments[$quarter], 'batch_document_uploaded_at', 'batch_document_encoder_id');
-                    $uploadedTime = $uploadedInfo['time'];
-                    $uploadedBy = $uploadedInfo['name'];
-                    $uploadedAtLabel = $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '—';
-                @endphp
+        @endif
+
+        @if($hasBatchDocumentFile)
+            @php
+                $uploadedInfo = $resolveUploaderMeta($batchDocuments[$quarter], 'batch_document_uploaded_at', 'batch_document_encoder_id');
+                $uploadedTime = $uploadedInfo['time'];
+                $uploadedBy = $uploadedInfo['name'];
+                $uploadedAtLabel = $uploadedTime ? $uploadedTime->format('M d, Y h:i A') : '—';
+            @endphp
+            <div id="batch-document-filename-{{ $quarter }}" style="font-size: 11px; color: #059669; font-weight: 600; margin-bottom: 8px;">
                 <div style="margin-bottom: 6px;"><i class="fas fa-file" style="margin-right: 4px;"></i>Attached Documents:</div>
                 <div style="overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; background: #ffffff;">
                     <table style="width: 100%; min-width: 640px; border-collapse: collapse; font-size: 11px; color: #374151;">
@@ -186,7 +185,7 @@
                                 <th style="padding: 10px 12px; text-align: left; font-weight: 700; color: #334155;">Document Title</th>
                                 <th style="padding: 10px 12px; text-align: left; font-weight: 700; color: #334155;">Date &amp; Time Uploaded</th>
                                 <th style="padding: 10px 12px; text-align: left; font-weight: 700; color: #334155;">Uploaded By</th>
-                                <th style="padding: 10px 12px; text-align: right; font-weight: 700; color: #334155; width: 72px;">View</th>
+                                <th style="padding: 10px 12px; text-align: right; font-weight: 700; color: #334155; width: 160px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -209,22 +208,35 @@
                                         {{ $uploadedBy }}
                                     </td>
                                     <td style="padding: 10px 12px; vertical-align: top; text-align: right;">
-                                        <button type="button" data-document-url="{{ $uploadedDocumentUrl }}" data-document-title="{{ $uploadedDocumentTitle }}" onclick="openBatchDocumentViewerModal(this.dataset.documentUrl, this.dataset.documentTitle)" style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: #eff6ff; color: #2563eb; text-decoration: none; border: 1px solid #bfdbfe; cursor: pointer;" title="View document">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
+                                        <div style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                                            <button type="button" data-document-url="{{ $uploadedDocumentUrl }}" data-document-title="{{ $uploadedDocumentTitle }}" onclick="openBatchDocumentViewerModal(this.dataset.documentUrl, this.dataset.documentTitle)" style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: #eff6ff; color: #2563eb; text-decoration: none; border: 1px solid #bfdbfe; cursor: pointer;" title="View document">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button type="button" onclick="openFieldHistoryModal('batch-document','{{ $quarter }}','Batch Documents','{{ $uploadedBatchDocumentPath }}','{{ $uploadedDocumentTitle }}')" style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; text-decoration: none; border: 1px solid #bfdbfe; cursor: pointer;" title="View item history">
+                                                <i class="fas fa-clock-rotate-left"></i>
+                                            </button>
+                                            {!! $renderResubmissionControls('batch-document', $quarter, $batchDocumentValidationState) !!}
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
-            @endif
-        </div>
+            </div>
+        @endif
 
         @if($isLguWorkflowUser)
             @if($batchDocuments[$quarter] && ($hasBatchDocumentFile || $isBatchDocumentReturned))
+                @php
+                    $canShowBatchDocumentDelete = $isBatchDocumentReturned
+                        || $canDeleteFundUtilizationDocument($batchDocuments[$quarter], 'status', 'batch_document_encoder_id');
+                @endphp
                 <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-                    @if($canDeleteFundUtilizationDocument($batchDocuments[$quarter], 'status', 'batch_document_encoder_id') && !$isBatchDocumentUnderValidation && $batchDocuments[$quarter]->status !== 'approved' && !($batchDocumentValidationState['uploader_level'] === 'lgu' && (($batchDocumentValidationState['required_validator'] ?? 'provincial') === 'provincial') && !(($batchDocumentValidationState['is_returned'] ?? false))))
+                    <button type="button" onclick="openFieldHistoryModal('batch-document','{{ $quarter }}','Batch Documents')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-history"></i> View Timeline
+                    </button>
+                    @if($canShowBatchDocumentDelete && !$isBatchDocumentUnderValidation && $batchDocuments[$quarter]->status !== 'approved' && !($batchDocumentValidationState['uploader_level'] === 'lgu' && (($batchDocumentValidationState['required_validator'] ?? 'provincial') === 'provincial') && !(($batchDocumentValidationState['is_returned'] ?? false))))
                         <button type="button" onclick="deleteDocument('batch-document', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                             <i class="fas fa-trash-alt"></i> Delete
                         </button>
@@ -232,20 +244,17 @@
                 </div>
             @endif
 
-            @if($isLguWorkflowUser && $batchDocuments[$quarter])
-                <button type="button" onclick="toggleAccordion('batch-document-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                    <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                    <i class="fas fa-chevron-down" id="icon-batch-document-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                </button>
-                <div id="batch-document-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                    <textarea id="textarea-batch-document-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;">{{ $isBatchDocumentReturned ? ($batchDocuments[$quarter]->approval_remarks ?? '') : ($batchDocuments[$quarter]->user_remarks ?? '') }}</textarea>
-                    <button type="button" onclick="saveRemarksAjax('batch-document', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
-                </div>
-            @endif
         @elseif($isWorkflowValidator)
             @if($batchDocuments[$quarter] && $hasBatchDocumentFile)
+                @php
+                    $canShowBatchDocumentDelete = $isBatchDocumentReturned
+                        || $canDeleteFundUtilizationDocument($batchDocuments[$quarter], 'status', 'batch_document_encoder_id');
+                @endphp
                 <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-                    @if($canDeleteFundUtilizationDocument($batchDocuments[$quarter], 'status', 'batch_document_encoder_id') && !$isBatchDocumentUnderValidation && $batchDocuments[$quarter]->status !== 'approved')
+                    <button type="button" onclick="openFieldHistoryModal('batch-document','{{ $quarter }}','Batch Documents')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-history"></i> View Timeline
+                    </button>
+                    @if($canShowBatchDocumentDelete && !$isBatchDocumentUnderValidation && $batchDocuments[$quarter]->status !== 'approved')
                         <button type="button" onclick="deleteDocument('batch-document', '{{ $quarter }}')" title="Delete document" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                             <i class="fas fa-trash-alt"></i> Delete
                         </button>
@@ -259,18 +268,6 @@
                         <button type="button" onclick="openRemarksModal('batch-document', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
                             <i class="fas fa-undo"></i> Return
                         </button>
-                    @endif
-                </div>
-            @endif
-            @if($batchDocuments[$quarter] && ($hasBatchDocumentFile || $batchDocuments[$quarter]->user_remarks || $isBatchDocumentReturned))
-                <button type="button" onclick="toggleAccordion('batch-document-notes-{{ $quarter }}')" style="width: 100%; padding: 6px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; text-align: left; cursor: pointer; font-weight: 600; font-size: 11px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                    <span><i class="fas fa-comment" style="margin-right: 4px;"></i> Notes</span>
-                    <i class="fas fa-chevron-down" id="icon-batch-document-notes-{{ $quarter }}" style="transition: transform 0.3s; font-size: 10px;"></i>
-                </button>
-                <div id="batch-document-notes-{{ $quarter }}" style="display: none; margin-top: 6px; padding: 6px; background-color: white; border: 1px solid #e5e7eb; border-radius: 4px;">
-                    <textarea id="textarea-batch-document-notes-{{ $quarter }}" placeholder="Add notes..." style="width: 100%; padding: 6px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 11px; font-family: inherit; resize: vertical; min-height: 50px;" {{ $isBatchDocumentReturned ? 'readonly' : '' }}>{{ $isBatchDocumentReturned ? ($batchDocuments[$quarter]->approval_remarks ?? '') : ($batchDocuments[$quarter]->user_remarks ?? '') }}</textarea>
-                    @if(!$isBatchDocumentReturned)
-                        <button type="button" onclick="saveRemarksAjax('batch-document', '{{ $quarter }}')" style="margin-top: 4px; width: 100%; padding: 4px; background-color: #059669; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 10px;"><i class="fas fa-check" style="margin-right: 8px;"></i>Save</button>
                     @endif
                 </div>
             @endif

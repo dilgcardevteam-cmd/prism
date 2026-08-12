@@ -2808,14 +2808,17 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{projectCode}/save-posting-link', [App\Http\Controllers\FundUtilizationReportController::class, 'savePostingLink'])->name('fund-utilization.save-posting-link');
         Route::post('/{projectCode}/add-remark', [App\Http\Controllers\FundUtilizationReportController::class, 'addRemark'])->name('fund-utilization.add-remark');
         Route::get('/{projectCode}/approve/{uploadType}/{quarter}', function (string $projectCode, string $uploadType, string $quarter) {
+            // Legacy GET approve endpoint should simply redirect back to the project page
+            // without forwarding query parameters. Approval actions must be performed via
+            // the document approval form (POST). Attach an error message so legacy GET
+            // callers receive a helpful notice.
             return redirect()
-                ->route('fund-utilization.show', [
-                    'projectCode' => $projectCode,
-                    'quarter' => $quarter,
-                    'document' => $uploadType,
-                ]);
+                ->route('fund-utilization.show', ['projectCode' => $projectCode])
+                ->with('error', 'Approval actions must be submitted from the document approval form.');
         })->name('fund-utilization.approve-upload.get');
         Route::post('/{projectCode}/approve/{uploadType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'approveUpload'])->name('fund-utilization.approve-upload');
+        Route::post('/{projectCode}/request-resubmission/{uploadType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'requestResubmission'])->name('fund-utilization.request-resubmission');
+        Route::post('/{projectCode}/resubmission-request/{uploadType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'decideResubmissionRequest'])->name('fund-utilization.decide-resubmission-request');
         Route::post('/{projectCode}/save-remarks/{uploadType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'saveUserRemarks'])->name('fund-utilization.save-remarks');
         Route::get('/{projectCode}/view-document/{docType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'viewDocument'])->name('fund-utilization.view-document');
         Route::post('/{projectCode}/delete-document/{docType}/{quarter}', [App\Http\Controllers\FundUtilizationReportController::class, 'deleteDocument'])->name('fund-utilization.delete-document');
