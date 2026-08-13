@@ -878,6 +878,11 @@ class FundUtilizationReportController extends Controller
         if ($isApproved) {
             return false;
         }
+
+        if ($actor->isSuperAdmin() && $isReturned) {
+            return true;
+        }
+
         $shouldHideLguDeleteUntilProvincialReturn = $uploaderLevel === 'lgu'
             && $requiredValidator === 'provincial'
             && !$isReturned;

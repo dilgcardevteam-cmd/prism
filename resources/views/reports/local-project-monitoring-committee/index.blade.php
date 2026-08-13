@@ -1,4 +1,4 @@
-﻿@extends('layouts.dashboard')
+@extends('layouts.dashboard')
 
 @section('page-title', 'Local Project Monitoring Committee')
 
@@ -131,8 +131,8 @@
                         <span>Returned</span>
                     </span>
                 </div>
-                <div class="table-responsive report-table-shell" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-                    <table id="lpmc-office-table" style="width: 100%; border-collapse: collapse; min-width: 2500px;">
+                <div class="table-responsive report-table-shell">
+                    <table id="lpmc-office-table" style="width: 100%; border-collapse: separate; border-spacing: 0; min-width: 2500px;">
                         <thead>
                             <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                                 <th rowspan="3" style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px;">Province</th>
@@ -316,6 +316,98 @@
 </div>
 
 <style>
+    /* Freeze Header & Columns Styles */
+    .report-table-shell {
+        max-height: 72vh;
+        overflow: auto;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        padding: 0 !important;
+        position: relative;
+    }
+
+    #lpmc-office-table {
+        border-collapse: separate !important;
+        border-spacing: 0;
+        margin: 0;
+    }
+
+    #lpmc-office-table th,
+    #lpmc-office-table td {
+        border-bottom: 1px solid #e5e7eb;
+        border-right: 1px solid #f1f5f9;
+    }
+
+    #lpmc-office-table thead tr:nth-child(1) th {
+        position: sticky;
+        top: 0;
+        z-index: 15;
+        background-color: #f3f4f6;
+        box-shadow: inset 0 -1px 0 #cbd5e1;
+    }
+
+    #lpmc-office-table thead tr:nth-child(2) th {
+        position: sticky;
+        top: 45px;
+        z-index: 14;
+        background-color: #e5e7eb;
+        box-shadow: inset 0 -1px 0 #cbd5e1;
+    }
+
+    #lpmc-office-table thead tr:nth-child(3) th {
+        position: sticky;
+        top: 88px;
+        z-index: 14;
+        background-color: #f3f4f6;
+        box-shadow: inset 0 -2px 0 #cbd5e1;
+    }
+
+    /* Freeze First Column: Province */
+    #lpmc-office-table th:nth-child(1),
+    #lpmc-office-table td:nth-child(1) {
+        position: sticky;
+        left: 0;
+        min-width: 140px;
+        max-width: 160px;
+    }
+
+    /* Freeze Second Column: City/Municipality */
+    #lpmc-office-table th:nth-child(2),
+    #lpmc-office-table td:nth-child(2) {
+        position: sticky;
+        left: 140px;
+        min-width: 170px;
+        max-width: 200px;
+        border-right: 2px solid #cbd5e1 !important;
+        box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.08);
+    }
+
+    /* High Z-Index for Header Intersections (Province & City/Municipality Headers) */
+    #lpmc-office-table thead th:nth-child(1),
+    #lpmc-office-table thead th:nth-child(2) {
+        z-index: 30 !important;
+        background-color: #f3f4f6 !important;
+    }
+
+    /* Table Body Cell Backgrounds for Sticky Columns */
+    #lpmc-office-table tbody td:nth-child(1),
+    #lpmc-office-table tbody td:nth-child(2) {
+        z-index: 8;
+        background-color: #ffffff;
+    }
+
+    #lpmc-office-table tbody tr:nth-child(even) td:nth-child(1),
+    #lpmc-office-table tbody tr:nth-child(even) td:nth-child(2) {
+        background-color: #f9fafb;
+    }
+
+    #lpmc-office-table tbody tr:hover td:nth-child(1),
+    #lpmc-office-table tbody tr:hover td:nth-child(2) {
+        background-color: #f1f5f9 !important;
+    }
+
     .lpmc-filters-panel {
         margin-bottom: 16px;
         border: 1px solid #d1d5db;

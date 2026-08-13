@@ -191,7 +191,7 @@
         $userLookupCache = [];
         $isProvincialValidator = $currentUser && $currentUser->isProvincialDilgAssignment();
         $isRegionalValidator = $currentUser && ($currentUser->normalizedRole() === \App\Models\User::ROLE_REGIONAL || $currentUser->isRegionalOfficeAssignment());
-        $isWorkflowValidator = $isProvincialValidator || $isRegionalValidator;
+        $isWorkflowValidator = $isProvincialValidator || $isRegionalValidator || ($currentUser && $currentUser->isSuperAdmin());
         $isLguWorkflowUser = $currentUser && $currentUser->isLguScopedUser();
         $canUploadFundUtilizationDocuments = $currentUser
             && ($currentUser->isLguScopedUser() || $currentUser->isProvincialDilgAssignment() || $currentUser->isSuperAdmin());
@@ -411,6 +411,9 @@
 
             $status = strtolower(trim((string) ($statusField ? ($record->{$statusField} ?? '') : '')));
             $isReturned = $status === 'returned' || str_starts_with($status, 'returned by ');
+            if ($currentUser->isSuperAdmin() && $isReturned) {
+                return true;
+            }
             if (!$isReturned) {
                 return false;
             }

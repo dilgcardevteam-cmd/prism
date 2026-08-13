@@ -26,6 +26,19 @@ class FundUtilizationReportControllerTest extends \Tests\TestCase
             $table->timestamps();
         });
 
+        Schema::create('fund_utilization_approval_workflows', function ($table) {
+            $table->id();
+            $table->string('project_code');
+            $table->string('quarter');
+            $table->string('document_type');
+            $table->unsignedBigInteger('uploader_id')->nullable();
+            $table->string('uploader_role')->nullable();
+            $table->unsignedSmallInteger('current_approval_level')->nullable();
+            $table->string('current_approver_role')->nullable();
+            $table->string('status');
+            $table->timestamps();
+        });
+
         User::query()->create([
             'idno' => 1,
             'fname' => 'Test',
@@ -428,6 +441,64 @@ class FundUtilizationReportControllerTest extends \Tests\TestCase
         $this->assertTrue($method->invoke($controller, $provincial));
         $this->assertTrue($method->invoke($controller, $lgu));
         $this->assertFalse($method->invoke($controller, $regional));
+    }
+
+    #[Test]
+    public function it_allows_superadmins_to_delete_returned_documents(): void
+    {
+        $controller = new FundUtilizationReportController();
+        $method = new \ReflectionMethod(FundUtilizationReportController::class, 'canDeleteFundUtilizationDocument');
+        $method->setAccessible(true);
+
+        $superadmin = new User([
+            'idno' => 999,
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+
+        $lguUser = User::query()->create([
+            'idno' => 20,
+            'fname' => 'LGU',
+            'lname' => 'Uploader',
+            'role' => User::ROLE_LGU,
+            'agency' => 'LGU',
+            'province' => 'Metro Manila',
+            'office' => 'City Hall',
+            'status' => 'active',
+        ]);
+
+        // Scenario 1: Document is returned
+        $recordReturned = (object)[
+            'encoder_id' => 20,
+            'status' => 'returned',
+            'approved_at_dilg_po' => null,
+            'approved_at_dilg_ro' => null,
+        ];
+
+        $canDelete1 = $method->invoke($controller, $superadmin, $recordReturned, 'P-001', 'mov', 'Q1', 'status', 'encoder_id');
+        $this->assertTrue($canDelete1);
+
+        // Scenario 2: Document is approved
+        $recordApproved = (object)[
+            'encoder_id' => 20,
+            'status' => 'approved',
+            'approved_at_dilg_po' => '2026-06-01 09:00:00',
+            'approved_at_dilg_ro' => '2026-06-01 10:00:00',
+        ];
+
+        $canDelete2 = $method->invoke($controller, $superadmin, $recordApproved, 'P-001', 'mov', 'Q1', 'status', 'encoder_id');
+        $this->assertFalse($canDelete2);
+
+        // Scenario 3: Document is pending
+        $recordPending = (object)[
+            'encoder_id' => 20,
+            'status' => 'pending',
+            'approved_at_dilg_po' => null,
+            'approved_at_dilg_ro' => null,
+        ];
+
+        $canDelete3 = $method->invoke($controller, $superadmin, $recordPending, 'P-001', 'mov', 'Q1', 'status', 'encoder_id');
+        $this->assertFalse($canDelete3);
     }
 }
 

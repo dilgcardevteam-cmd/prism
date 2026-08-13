@@ -1,6 +1,6 @@
 <!-- Batch Documents Section -->
 @php
-    $isWorkflowValidator = $isWorkflowValidator ?? ((Auth::user() && Auth::user()->isProvincialDilgAssignment()) || (Auth::user() && (Auth::user()->normalizedRole() === \App\Models\User::ROLE_REGIONAL || Auth::user()->isRegionalOfficeAssignment())));
+    $isWorkflowValidator = $isWorkflowValidator ?? ((Auth::user() && Auth::user()->isProvincialDilgAssignment()) || (Auth::user() && (Auth::user()->normalizedRole() === \App\Models\User::ROLE_REGIONAL || Auth::user()->isRegionalOfficeAssignment())) || (Auth::user() && Auth::user()->isSuperAdmin()));
     $isLguWorkflowUser = $isLguWorkflowUser ?? (Auth::user() && Auth::user()->isLguScopedUser());
     $storedBatchDocumentFiles = [];
     if ($batchDocuments[$quarter]) {
