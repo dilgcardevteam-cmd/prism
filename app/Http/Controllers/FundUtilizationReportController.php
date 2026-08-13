@@ -4550,6 +4550,8 @@ class FundUtilizationReportController extends Controller
                     'mov_encoder_id' => null,
                     'encoder_id' => null,
                     'updated_at' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'batch-document':
@@ -4560,6 +4562,8 @@ class FundUtilizationReportController extends Controller
                     'batch_document_encoder_id' => null,
                     'encoder_id' => null,
                     'updated_at' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'written-notice-dbm':
@@ -4567,6 +4571,9 @@ class FundUtilizationReportController extends Controller
                     'dbm_status' => 'pending',
                     'dbm_uploaded_at' => null,
                     'dbm_encoder_id' => null,
+                    'dbm_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'written-notice-dilg':
@@ -4574,6 +4581,9 @@ class FundUtilizationReportController extends Controller
                     'dilg_status' => 'pending',
                     'dilg_uploaded_at' => null,
                     'dilg_encoder_id' => null,
+                    'dilg_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'written-notice-speaker':
@@ -4581,6 +4591,9 @@ class FundUtilizationReportController extends Controller
                     'speaker_status' => 'pending',
                     'speaker_uploaded_at' => null,
                     'speaker_encoder_id' => null,
+                    'speaker_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'written-notice-president':
@@ -4588,6 +4601,9 @@ class FundUtilizationReportController extends Controller
                     'president_status' => 'pending',
                     'president_uploaded_at' => null,
                     'president_encoder_id' => null,
+                    'president_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'written-notice-house':
@@ -4595,6 +4611,9 @@ class FundUtilizationReportController extends Controller
                     'house_status' => 'pending',
                     'house_uploaded_at' => null,
                     'house_encoder_id' => null,
+                    'house_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'written-notice-senate':
@@ -4602,6 +4621,9 @@ class FundUtilizationReportController extends Controller
                     'senate_status' => 'pending',
                     'senate_uploaded_at' => null,
                     'senate_encoder_id' => null,
+                    'senate_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'fdp':
@@ -4612,6 +4634,9 @@ class FundUtilizationReportController extends Controller
                     'status' => 'pending',
                     'encoder_id' => null,
                     'updated_at' => null,
+                    'fdp_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
             case 'posting-link':
@@ -4619,6 +4644,9 @@ class FundUtilizationReportController extends Controller
                     'posting_status' => 'pending',
                     'posting_uploaded_at' => null,
                     'posting_encoder_id' => null,
+                    'posting_remarks' => null,
+                    'approval_remarks' => null,
+                    'user_remarks' => null,
                 ]);
                 break;
         }
