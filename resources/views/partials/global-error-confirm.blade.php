@@ -17,77 +17,54 @@
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        gap: 10px;
-        padding: 12px 14px;
-        border-radius: 10px;
-        border: 1px solid;
-        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+        gap: 12px;
+        padding: 16px 18px;
+        border-radius: 16px;
+        border: 1.5px solid #002c76;
+        background: #ffffff;
+        box-shadow: 0 10px 25px rgba(0, 44, 118, 0.08), 0 8px 10px rgba(0, 44, 118, 0.06);
         font-size: 13px;
         line-height: 1.4;
-        animation: app-global-toast-in 180ms ease-out;
-    }
-
-    .app-global-toast.success {
-        background: #ecfdf3;
-        border-color: #86efac;
-        color: #14532d;
-    }
-
-    .app-global-toast.warning {
-        background: #fff7e6;
-        border-color: #fcd34d;
-        color: #92400e;
-    }
-
-    .app-global-toast.error {
-        background: #fef2f2;
-        border-color: #fca5a5;
-        color: #991b1b;
-    }
-
-    .app-global-toast.info {
-        background: #eff6ff;
-        border-color: #93c5fd;
-        color: #1d4ed8;
+        animation: app-global-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+        color: #1e293b;
     }
 
     .app-global-toast-body {
         display: flex;
         align-items: flex-start;
-        gap: 10px;
+        gap: 12px;
         min-width: 0;
         flex: 1;
     }
 
     .app-global-toast-icon {
-        width: 18px;
-        height: 18px;
-        margin-top: 1px;
-        flex: 0 0 18px;
+        width: 20px;
+        height: 20px;
+        flex: 0 0 20px;
         border-radius: 999px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: 11px;
+        font-weight: 800;
         line-height: 1;
-        background: currentColor;
-        color: #ffffff;
+        color: #ffffff !important;
+    }
+
+    .app-global-toast.success .app-global-toast-icon {
+        background: #10b981 !important;
     }
 
     .app-global-toast.warning .app-global-toast-icon {
-        color: #92400e;
-        background: #fed7aa;
+        background: #f59e0b !important;
     }
 
     .app-global-toast.error .app-global-toast-icon {
-        color: #991b1b;
-        background: #fecaca;
+        background: #ef4444 !important;
     }
 
     .app-global-toast.info .app-global-toast-icon {
-        color: #1d4ed8;
-        background: #dbeafe;
+        background: #3b82f6 !important;
     }
 
     .app-global-toast-text {
@@ -99,25 +76,32 @@
         margin: 0;
         font-size: 14px;
         font-weight: 700;
+        color: #002c76;
         line-height: 1.3;
     }
 
     .app-global-toast-message {
-        margin-top: 2px;
+        margin-top: 4px;
         font-size: 12px;
+        color: #475569;
         line-height: 1.45;
-        opacity: 0.92;
+        font-weight: 400;
     }
 
     .app-global-toast-close {
         background: transparent;
         border: 0;
-        color: inherit;
+        color: #64748b;
         cursor: pointer;
-        font-size: 16px;
+        font-size: 18px;
         line-height: 1;
         padding: 0;
-        margin-top: 1px;
+        margin-left: 8px;
+        transition: color 0.15s ease;
+    }
+
+    .app-global-toast-close:hover {
+        color: #002c76;
     }
 
     .app-global-confirm-backdrop {
@@ -187,11 +171,11 @@
     @keyframes app-global-toast-in {
         from {
             opacity: 0;
-            transform: translateY(-6px);
+            transform: translateX(20px);
         }
         to {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateX(0);
         }
     }
 </style>

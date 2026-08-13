@@ -2397,33 +2397,41 @@
 
         .toast {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
             gap: 12px;
-            padding: 12px 14px;
-            border-radius: 12px;
-            color: white;
+            padding: 16px 18px;
+            border-radius: 16px;
+            border: 1.5px solid #002c76;
+            background: #ffffff;
+            color: #1e293b;
             font-size: 13px;
             line-height: 1.4;
-            box-shadow: 0 22px 44px rgba(15, 23, 42, 0.18);
+            box-shadow: 0 10px 25px rgba(0, 44, 118, 0.08), 0 8px 10px rgba(0, 44, 118, 0.06);
             opacity: 0;
             transform: translateX(18px);
             animation: toastEnter 220ms ease-out forwards;
             pointer-events: auto;
         }
 
-        .toast.success { background: #059669; }
-        .toast.error { background: #dc2626; }
-        .toast.info { background: #2563eb; }
+        .toast.success { border-left: 4px solid #10b981; }
+        .toast.error { border-left: 4px solid #ef4444; }
+        .toast.info { border-left: 4px solid #3b82f6; }
 
         .toast button {
             background: transparent;
             border: none;
-            color: rgba(255,255,255,0.95);
+            color: #64748b;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 18px;
             line-height: 1;
             padding: 0;
+            margin-left: 8px;
+            transition: color 0.15s ease;
+        }
+
+        .toast button:hover {
+            color: #002c76;
         }
 
         @keyframes toastEnter {

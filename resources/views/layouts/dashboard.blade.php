@@ -530,6 +530,18 @@
             background: #eff6ff;
         }
 
+        .notification-menu-stat.for-approval {
+            color: #b45309;
+            border-color: #fde68a;
+            background: #fffbeb;
+        }
+
+        .notification-menu-stat.returned {
+            color: #b91c1c;
+            border-color: #fca5a5;
+            background: #fef2f2;
+        }
+
         .notification-clear-btn {
             border: 1px solid #cbd5e1;
             background: #ffffff;
@@ -3251,6 +3263,17 @@
                         return in_array($notificationItem['queue_key'] ?? '', ['pending_provincial', 'pending_regional'], true);
                     })->count();
                     $notificationReturnedCount = $allNotifications->where('queue_key', 'returned')->count();
+
+                    $unreadNotificationApprovalCount = $allUnreadNotifications->filter(function (array $notificationItem) {
+                        return in_array($notificationItem['queue_key'] ?? '', ['pending_provincial', 'pending_regional'], true);
+                    })->count();
+                    $unreadNotificationReturnedCount = $allUnreadNotifications->where('queue_key', 'returned')->count();
+
+                    $recentApprovalNotifications = $allUnreadNotifications->filter(function (array $notificationItem) {
+                        return in_array($notificationItem['queue_key'] ?? '', ['pending_provincial', 'pending_regional'], true);
+                    })->take(5);
+                    $recentReturnedNotifications = $allUnreadNotifications->where('queue_key', 'returned')->take(5);
+
                     $notificationDefaultView = $unreadNotifications > 0 ? 'unread' : ($readNotificationCount > 0 ? 'all' : 'unread');
                     $recentNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
                         ->where('user_id', Auth::id())
@@ -3360,6 +3383,8 @@
                                 <div class="notification-menu-stats">
                                     <button type="button" class="notification-menu-stat unread" data-open-notifications-view="unread" id="notificationMenuUnreadStat">Unread: {{ number_format($unreadNotifications) }}</button>
                                     <button type="button" class="notification-menu-stat read" data-open-notifications-view="read" id="notificationMenuReadStat">Read: {{ number_format($readNotificationCount) }}</button>
+                                    <button type="button" class="notification-menu-stat for-approval" data-open-notifications-view="approval" id="notificationMenuApprovalStat">For Approval: {{ number_format($notificationApprovalCount) }}</button>
+                                    <button type="button" class="notification-menu-stat returned" data-open-notifications-view="returned" id="notificationMenuReturnedStat">Returned: {{ number_format($notificationReturnedCount) }}</button>
                                 </div>
                             </div>
                         </div>
@@ -3408,6 +3433,114 @@
                         </div>
                     </div>
                 </div>
+                <!-- Returned Submissions -->
+                <div class="notification-wrap">
+                    <button
+                        class="notification-bell"
+                        id="returnedBell"
+                        title="Returned Submissions"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                        aria-controls="returnedMenu"
+                    >
+                        <i class="fas fa-undo-alt"></i>
+                        @if($unreadNotificationReturnedCount > 0)
+                            <span class="notification-badge" id="returnedUnreadBadge">{{ $unreadNotificationReturnedCount }}</span>
+                        @endif
+                    </button>
+                    <div class="notification-menu" id="returnedMenu">
+                        <div class="notification-menu-header">
+                            <span class="notification-menu-title">Returned Submissions</span>
+                        </div>
+                        @if($recentReturnedNotifications->isEmpty())
+                            <div class="notification-menu-empty">No returned notifications.</div>
+                        @else
+                            @foreach($recentReturnedNotifications as $notificationItem)
+                                <a
+                                    href="{{ route('notifications.read', ['id' => $notificationItem['id']]) }}"
+                                    class="notification-menu-item unread"
+                                >
+                                    <div class="notification-menu-message-row">
+                                        <span class="notification-unread-dot" aria-label="Unread notification"></span>
+                                        <div style="min-width: 0;">
+                                            <div class="notification-menu-message">{{ $notificationItem['message'] }}</div>
+                                            <div class="notification-menu-meta">
+                                                <span class="notification-status-badge {{ $notificationItem['queue_tone'] }}">
+                                                    {{ $notificationItem['queue_short_label'] }}
+                                                </span>
+                                                <span class="notification-menu-module">{{ $notificationItem['module_label'] }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="notification-menu-time">
+                                        {{ \Illuminate\Support\Carbon::parse($notificationItem['created_at'])->format('M d, Y h:i A') }}
+                                    </div>
+                                </a>
+                            @endforeach
+                        @endif
+                        <div class="notification-menu-footer">
+                            <button type="button" class="notification-menu-view-all" id="openReturnedModalBtn">
+                                <i class="fas fa-envelope-open-text"></i>
+                                <span>Open Returned Center</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- For Approval Notifications -->
+                <div class="notification-wrap">
+                    <button
+                        class="notification-bell"
+                        id="approvalBell"
+                        title="Awaiting Approval"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                        aria-controls="approvalMenu"
+                    >
+                        <i class="fas fa-clipboard-check"></i>
+                        @if($unreadNotificationApprovalCount > 0)
+                            <span class="notification-badge" id="approvalUnreadBadge">{{ $unreadNotificationApprovalCount }}</span>
+                        @endif
+                    </button>
+                    <div class="notification-menu" id="approvalMenu">
+                        <div class="notification-menu-header">
+                            <span class="notification-menu-title">Awaiting Approval</span>
+                        </div>
+                        @if($recentApprovalNotifications->isEmpty())
+                            <div class="notification-menu-empty">No notifications awaiting approval.</div>
+                        @else
+                            @foreach($recentApprovalNotifications as $notificationItem)
+                                <a
+                                    href="{{ route('notifications.read', ['id' => $notificationItem['id']]) }}"
+                                    class="notification-menu-item unread"
+                                >
+                                    <div class="notification-menu-message-row">
+                                        <span class="notification-unread-dot" aria-label="Unread notification"></span>
+                                        <div style="min-width: 0;">
+                                            <div class="notification-menu-message">{{ $notificationItem['message'] }}</div>
+                                            <div class="notification-menu-meta">
+                                                <span class="notification-status-badge {{ $notificationItem['queue_tone'] }}">
+                                                    {{ $notificationItem['queue_short_label'] }}
+                                                </span>
+                                                <span class="notification-menu-module">{{ $notificationItem['module_label'] }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="notification-menu-time">
+                                        {{ \Illuminate\Support\Carbon::parse($notificationItem['created_at'])->format('M d, Y h:i A') }}
+                                    </div>
+                                </a>
+                            @endforeach
+                        @endif
+                        <div class="notification-menu-footer">
+                            <button type="button" class="notification-menu-view-all" id="openApprovalModalBtn">
+                                <i class="fas fa-envelope-open-text"></i>
+                                <span>Open Approval Center</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="notification-wrap">
                     <button
                         class="notification-bell"
@@ -3864,6 +3997,16 @@
         const notificationResetCounterUrl = @json(route('notifications.reset-counter'));
         const messageBell = document.getElementById('messageBell');
         const messageMenu = document.getElementById('messageMenu');
+        
+        const returnedBell = document.getElementById('returnedBell');
+        const returnedMenu = document.getElementById('returnedMenu');
+        const openReturnedModalBtn = document.getElementById('openReturnedModalBtn');
+        const returnedUnreadBadge = document.getElementById('returnedUnreadBadge');
+
+        const approvalBell = document.getElementById('approvalBell');
+        const approvalMenu = document.getElementById('approvalMenu');
+        const openApprovalModalBtn = document.getElementById('openApprovalModalBtn');
+        const approvalUnreadBadge = document.getElementById('approvalUnreadBadge');
         const NOTIFICATION_LOCATION_CONFIG = {
             provinces: @json($notificationFilterConfiguredProvinces ?? []),
             citiesByProvince: @json($notificationFilterConfiguredCitiesByProvince ?? []),
@@ -4093,6 +4236,18 @@
             if (notificationBell) {
                 notificationBell.setAttribute('aria-expanded', 'false');
             }
+            if (returnedMenu) {
+                returnedMenu.classList.remove('show');
+            }
+            if (returnedBell) {
+                returnedBell.setAttribute('aria-expanded', 'false');
+            }
+            if (approvalMenu) {
+                approvalMenu.classList.remove('show');
+            }
+            if (approvalBell) {
+                approvalBell.setAttribute('aria-expanded', 'false');
+            }
 
             notificationsListModal.classList.add('is-open');
             notificationsListModal.setAttribute('aria-hidden', 'false');
@@ -4100,10 +4255,17 @@
 
             initializeNotificationFilters();
 
-            if (preferredViewState && ['unread', 'read', 'all'].includes(preferredViewState)) {
-                const preferredViewButton = notificationsListModal.querySelector(`[data-view-state="${preferredViewState}"]`);
-                if (preferredViewButton instanceof HTMLElement) {
-                    preferredViewButton.click();
+            if (preferredViewState) {
+                if (['unread', 'read', 'all'].includes(preferredViewState)) {
+                    const preferredViewButton = notificationsListModal.querySelector(`[data-view-state="${preferredViewState}"]`);
+                    if (preferredViewButton instanceof HTMLElement) {
+                        preferredViewButton.click();
+                    }
+                } else if (['approval', 'returned'].includes(preferredViewState)) {
+                    const preferredViewButton = notificationsListModal.querySelector(`[data-notification-summary-card][data-summary-value="${preferredViewState}"]`);
+                    if (preferredViewButton instanceof HTMLElement) {
+                        preferredViewButton.click();
+                    }
                 }
             }
         }
@@ -4722,6 +4884,18 @@
                 if (messageBell) {
                     messageBell.setAttribute('aria-expanded', 'false');
                 }
+                if (returnedMenu) {
+                    returnedMenu.classList.remove('show');
+                }
+                if (returnedBell) {
+                    returnedBell.setAttribute('aria-expanded', 'false');
+                }
+                if (approvalMenu) {
+                    approvalMenu.classList.remove('show');
+                }
+                if (approvalBell) {
+                    approvalBell.setAttribute('aria-expanded', 'false');
+                }
             });
         }
 
@@ -4745,6 +4919,18 @@
                 if (messageBell) {
                     messageBell.setAttribute('aria-expanded', 'false');
                 }
+                if (returnedMenu) {
+                    returnedMenu.classList.remove('show');
+                }
+                if (returnedBell) {
+                    returnedBell.setAttribute('aria-expanded', 'false');
+                }
+                if (approvalMenu) {
+                    approvalMenu.classList.remove('show');
+                }
+                if (approvalBell) {
+                    approvalBell.setAttribute('aria-expanded', 'false');
+                }
             });
         }
 
@@ -4764,6 +4950,80 @@
                 if (notificationBell) {
                     notificationBell.setAttribute('aria-expanded', 'false');
                 }
+                if (returnedMenu) {
+                    returnedMenu.classList.remove('show');
+                }
+                if (returnedBell) {
+                    returnedBell.setAttribute('aria-expanded', 'false');
+                }
+                if (approvalMenu) {
+                    approvalMenu.classList.remove('show');
+                }
+                if (approvalBell) {
+                    approvalBell.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        if (returnedBell && returnedMenu) {
+            returnedBell.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeNotificationsListModal();
+                returnedMenu.classList.toggle('show');
+                this.setAttribute('aria-expanded', returnedMenu.classList.contains('show') ? 'true' : 'false');
+                if (profileMenu) {
+                    profileMenu.classList.remove('show');
+                }
+                if (notificationMenu) {
+                    notificationMenu.classList.remove('show');
+                }
+                if (notificationBell) {
+                    notificationBell.setAttribute('aria-expanded', 'false');
+                }
+                if (messageMenu) {
+                    messageMenu.classList.remove('show');
+                }
+                if (messageBell) {
+                    messageBell.setAttribute('aria-expanded', 'false');
+                }
+                if (approvalMenu) {
+                    approvalMenu.classList.remove('show');
+                }
+                if (approvalBell) {
+                    approvalBell.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        if (approvalBell && approvalMenu) {
+            approvalBell.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeNotificationsListModal();
+                approvalMenu.classList.toggle('show');
+                this.setAttribute('aria-expanded', approvalMenu.classList.contains('show') ? 'true' : 'false');
+                if (profileMenu) {
+                    profileMenu.classList.remove('show');
+                }
+                if (notificationMenu) {
+                    notificationMenu.classList.remove('show');
+                }
+                if (notificationBell) {
+                    notificationBell.setAttribute('aria-expanded', 'false');
+                }
+                if (messageMenu) {
+                    messageMenu.classList.remove('show');
+                }
+                if (messageBell) {
+                    messageBell.setAttribute('aria-expanded', 'false');
+                }
+                if (returnedMenu) {
+                    returnedMenu.classList.remove('show');
+                }
+                if (returnedBell) {
+                    returnedBell.setAttribute('aria-expanded', 'false');
+                }
             });
         }
 
@@ -4772,6 +5032,22 @@
                 event.preventDefault();
                 event.stopPropagation();
                 openNotificationsListModal();
+            });
+        }
+
+        if (openReturnedModalBtn) {
+            openReturnedModalBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                openNotificationsListModal('returned');
+            });
+        }
+
+        if (openApprovalModalBtn) {
+            openApprovalModalBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                openNotificationsListModal('approval');
             });
         }
 
@@ -4807,6 +5083,14 @@
             if (messageMenu && messageBell && !messageMenu.contains(e.target) && !messageBell.contains(e.target)) {
                 messageMenu.classList.remove('show');
                 messageBell.setAttribute('aria-expanded', 'false');
+            }
+            if (returnedMenu && returnedBell && !returnedMenu.contains(e.target) && !returnedBell.contains(e.target)) {
+                returnedMenu.classList.remove('show');
+                returnedBell.setAttribute('aria-expanded', 'false');
+            }
+            if (approvalMenu && approvalBell && !approvalMenu.contains(e.target) && !approvalBell.contains(e.target)) {
+                approvalMenu.classList.remove('show');
+                approvalBell.setAttribute('aria-expanded', 'false');
             }
         });
 

@@ -20,42 +20,60 @@
     <style>
         .toast-container {
             position: fixed;
-            top: 20px;
-            right: 20px;
+            top: 24px;
+            right: 24px;
             z-index: 9999;
         }
         .toast {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border: 1px solid #e0e0e0;
+            background-color: #ffffff !important;
+            border-radius: 16px !important;
+            border: 1.5px solid #002c76 !important;
+            box-shadow: 0 10px 25px rgba(0, 44, 118, 0.08), 0 8px 10px rgba(0, 44, 118, 0.06) !important;
+            overflow: hidden;
+            width: 320px;
         }
         .toast.success {
-            border-color: #28a745;
+            border-left: 4px solid #10b981 !important;
         }
         .toast.success .toast-header {
-            background-color: #d4edda;
-            color: #155724;
+            background-color: transparent !important;
+            color: #002c76 !important;
+            border-bottom: none;
+            padding: 16px 18px 4px;
         }
         .toast.error {
-            border-color: #dc3545;
+            border-left: 4px solid #ef4444 !important;
         }
         .toast.error .toast-header {
-            background-color: #f8d7da;
-            color: #721c24;
+            background-color: transparent !important;
+            color: #002c76 !important;
+            border-bottom: none;
+            padding: 16px 18px 4px;
+        }
+        .toast-header strong {
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .toast-header .btn-close {
+            /* standard close button is fine, no need to invert since it is a light background */
+        }
+        .toast-body {
+            padding: 4px 18px 16px !important;
+            color: #475569 !important;
+            font-size: 13px;
         }
         .toast-countdown {
             display: block;
             margin-top: 8px;
             font-size: 12px;
-            color: #4b5563;
+            color: #64748b;
         }
         .toast-progress-track {
             margin-top: 8px;
             width: 100%;
             height: 4px;
             border-radius: 999px;
-            background: rgba(17, 24, 39, 0.15);
+            background: rgba(0, 44, 118, 0.08);
             overflow: hidden;
         }
         .toast-progress-bar {
@@ -63,10 +81,10 @@
             height: 100%;
         }
         .toast.success .toast-progress-bar {
-            background: #16a34a;
+            background: #10b981;
         }
         .toast.error .toast-progress-bar {
-            background: #dc2626;
+            background: #ef4444;
         }
     </style>
 

@@ -243,21 +243,32 @@
 
         .toast {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 16px;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-            z-index: 1000;
-            display: none;
-            max-width: 300px;
+            top: 24px;
+            right: 24px;
+            padding: 16px 18px;
+            border-radius: 16px;
+            border: 1.5px solid #002c76;
+            background-color: #ffffff !important;
+            color: #1e293b;
+            font-size: 13px;
+            line-height: 1.4;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(20px);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            max-width: 320px;
+            box-shadow: 0 10px 25px rgba(0, 44, 118, 0.08), 0 8px 10px rgba(0, 44, 118, 0.06);
         }
-        .toast.error {
-            background-color: #dc2626;
-        }
-        .toast.info {
-            background-color: #2563eb;
+        .toast.success { border-left: 4px solid #10b981; }
+        .toast.error { border-left: 4px solid #ef4444; }
+        .toast.info { border-left: 4px solid #3b82f6; }
+        .toast.warning { border-left: 4px solid #f59e0b; }
+        
+        .toast.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
         }
     </style>
 </head>
@@ -326,10 +337,9 @@
         function showToast(message, type = 'info') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.className = `toast ${type}`;
-            toast.style.display = 'block';
+            toast.className = `toast ${type} show`;
             setTimeout(() => {
-                toast.style.display = 'none';
+                toast.classList.remove('show');
             }, 5000);
         }
 

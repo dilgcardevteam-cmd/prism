@@ -154,52 +154,34 @@
 
         .toast {
             position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #10b981;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            font-size: 14px;
-            font-weight: 500;
+            top: 24px;
+            right: 24px;
+            left: auto;
+            transform: translateX(20px);
+            background-color: #ffffff !important;
+            border: 1.5px solid #002c76;
+            border-radius: 16px;
+            color: #1e293b;
+            padding: 16px 18px;
+            box-shadow: 0 10px 25px rgba(0, 44, 118, 0.08), 0 8px 10px rgba(0, 44, 118, 0.06);
+            font-size: 13px;
+            line-height: 1.4;
             z-index: 9999;
             opacity: 0;
             visibility: hidden;
-            transition: all 0.3s ease-in-out;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            max-width: 320px;
         }
-
+        .toast.success { border-left: 4px solid #10b981; }
+        .toast.error { border-left: 4px solid #ef4444; }
         .toast.show {
             opacity: 1;
             visibility: visible;
-            animation: slideDown 0.3s ease-out;
+            transform: translateX(0);
         }
-
         .toast.fade-out {
-            animation: fadeOut 0.5s ease-out forwards;
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes fadeOut {
-            from {
-                opacity: 1;
-                transform: translateY(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
+            opacity: 0;
+            transform: translateX(20px);
         }
 
         .timer {
@@ -294,26 +276,17 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        // Toast notification function
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.className = 'toast'; // Reset classes
-            toast.classList.add('show');
-
-            // Change color based on type
-            if (type === 'error') {
-                toast.style.backgroundColor = '#dc2626'; // Red for errors
-            } else {
-                toast.style.backgroundColor = '#10b981'; // Green for success
-            }
+            toast.className = `toast ${type} show`;
 
             setTimeout(() => {
                 toast.classList.add('fade-out');
                 setTimeout(() => {
                     toast.classList.remove('show', 'fade-out');
                 }, 500);
-            }, type === 'error' ? 4000 : 2000); // Show longer for errors
+            }, type === 'error' ? 5000 : 3800);
         }
 
         // Check if timer element exists (only after OTP is sent)
