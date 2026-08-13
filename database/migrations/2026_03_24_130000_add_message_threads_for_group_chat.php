@@ -45,8 +45,13 @@ return new class extends Migration
             });
         }
 
+        $driver = DB::getDriverName();
+        $selectRaw = $driver === 'sqlite'
+            ? 'CASE WHEN sender_id < recipient_id THEN sender_id ELSE recipient_id END as user_a, CASE WHEN sender_id > recipient_id THEN sender_id ELSE recipient_id END as user_b'
+            : 'LEAST(sender_id, recipient_id) as user_a, GREATEST(sender_id, recipient_id) as user_b';
+
         $pairs = DB::table('user_messages')
-            ->selectRaw('LEAST(sender_id, recipient_id) as user_a, GREATEST(sender_id, recipient_id) as user_b')
+            ->selectRaw($selectRaw)
             ->whereNotNull('sender_id')
             ->whereNotNull('recipient_id')
             ->groupBy('user_a', 'user_b')

@@ -3299,7 +3299,7 @@ class FundUtilizationReportController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
-            $message = 'Batch upload failed. Please try again.';
+            $message = $exception->getMessage() ?: 'Batch upload failed. Please try again.';
             return $request->expectsJson()
                 ? response()->json(['message' => $message], 500)
                 : back()->withErrors(['batch_upload' => $message]);
@@ -3407,7 +3407,7 @@ class FundUtilizationReportController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
-            $message = 'Individual document batch upload failed. Please try again.';
+            $message = $exception->getMessage() ?: 'Individual document batch upload failed. Please try again.';
             return $request->expectsJson()
                 ? response()->json(['message' => $message], 500)
                 : back()->withErrors(['individual_documents' => $message]);

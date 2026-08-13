@@ -12,6 +12,10 @@ return new class extends Migration
             return;
         }
 
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement('ALTER TABLE `tickets`
             MODIFY `submitted_by` INT UNSIGNED NOT NULL,
             MODIFY `assigned_to` INT UNSIGNED NULL,
@@ -70,6 +74,10 @@ return new class extends Migration
     public function down(): void
     {
         if (!Schema::hasTable('tickets')) {
+            return;
+        }
+
+        if (DB::getDriverName() === 'sqlite') {
             return;
         }
 

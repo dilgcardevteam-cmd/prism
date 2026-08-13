@@ -32,9 +32,12 @@ return new class extends Migration
             });
         }
 
-        $existingIndexes = collect(DB::select('SHOW INDEX FROM tblannual_maintenance_work_program_documents'))
-            ->pluck('Key_name')
-            ->all();
+        $existingIndexes = [];
+        if (DB::getDriverName() !== 'sqlite') {
+            $existingIndexes = collect(DB::select('SHOW INDEX FROM tblannual_maintenance_work_program_documents'))
+                ->pluck('Key_name')
+                ->all();
+        }
 
         Schema::table('tblannual_maintenance_work_program_documents', function (Blueprint $table) use ($existingIndexes) {
             if (!in_array('awmp_docs_office_idx', $existingIndexes, true)) {

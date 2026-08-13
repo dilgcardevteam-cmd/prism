@@ -26,9 +26,12 @@ return new class extends Migration
             });
         }
 
-        $existingIndexes = collect(DB::select('SHOW INDEX FROM tblconfirmation_of_fund_receipt_documents'))
-            ->pluck('Key_name')
-            ->all();
+        $existingIndexes = [];
+        if (DB::getDriverName() !== 'sqlite') {
+            $existingIndexes = collect(DB::select('SHOW INDEX FROM tblconfirmation_of_fund_receipt_documents'))
+                ->pluck('Key_name')
+                ->all();
+        }
 
         Schema::table('tblconfirmation_of_fund_receipt_documents', function (Blueprint $table) use ($existingIndexes) {
             if (!in_array('cfr_docs_office_idx', $existingIndexes, true)) {

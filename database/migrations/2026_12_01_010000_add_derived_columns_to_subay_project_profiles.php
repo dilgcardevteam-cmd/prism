@@ -109,6 +109,10 @@ return new class extends Migration
 
     private function refreshDerivedColumns(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         $dateExpression = $this->parsedDateExpression('date');
 
         DB::statement("

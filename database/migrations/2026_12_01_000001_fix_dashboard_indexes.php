@@ -10,11 +10,19 @@ return new class extends Migration
     public function up(): void
     {
         // These columns are TEXT in this table; use prefix lengths to stay within MySQL index limits.
-        DB::statement('CREATE INDEX idx_prov_city_status ON subay_project_profiles (province(100), city_municipality(100), status(40))');
-        DB::statement('CREATE INDEX idx_project_code ON subay_project_profiles (project_code(120))');
-        DB::statement('CREATE INDEX idx_funding_year ON subay_project_profiles (funding_year(20))');
-        DB::statement('CREATE INDEX idx_program ON subay_project_profiles (program(100))');
-        DB::statement('CREATE INDEX idx_type_of_project ON subay_project_profiles (type_of_project(100))');
+        if (DB::getDriverName() === 'sqlite') {
+            DB::statement('CREATE INDEX idx_prov_city_status ON subay_project_profiles (province, city_municipality, status)');
+            DB::statement('CREATE INDEX idx_project_code ON subay_project_profiles (project_code)');
+            DB::statement('CREATE INDEX idx_funding_year ON subay_project_profiles (funding_year)');
+            DB::statement('CREATE INDEX idx_program ON subay_project_profiles (program)');
+            DB::statement('CREATE INDEX idx_type_of_project ON subay_project_profiles (type_of_project)');
+        } else {
+            DB::statement('CREATE INDEX idx_prov_city_status ON subay_project_profiles (province(100), city_municipality(100), status(40))');
+            DB::statement('CREATE INDEX idx_project_code ON subay_project_profiles (project_code(120))');
+            DB::statement('CREATE INDEX idx_funding_year ON subay_project_profiles (funding_year(20))');
+            DB::statement('CREATE INDEX idx_program ON subay_project_profiles (program(100))');
+            DB::statement('CREATE INDEX idx_type_of_project ON subay_project_profiles (type_of_project(100))');
+        }
 
         Schema::table('project_at_risks', function (Blueprint $table) {
             $table->index('project_code', 'idx_par_project_code');

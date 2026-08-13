@@ -15,9 +15,12 @@ return new class extends Migration
             });
         }
 
-        $existingIndexes = collect(DB::select('SHOW INDEX FROM tblconfirmation_of_fund_receipt_documents'))
-            ->pluck('Key_name')
-            ->all();
+        $existingIndexes = [];
+        if (DB::getDriverName() !== 'sqlite') {
+            $existingIndexes = collect(DB::select('SHOW INDEX FROM tblconfirmation_of_fund_receipt_documents'))
+                ->pluck('Key_name')
+                ->all();
+        }
 
         Schema::table('tblconfirmation_of_fund_receipt_documents', function (Blueprint $table) use ($existingIndexes) {
             if (!in_array('cfr_docs_nadai_document_idx', $existingIndexes, true)) {
@@ -29,9 +32,12 @@ return new class extends Migration
     public function down(): void
     {
         if (Schema::hasColumn('tblconfirmation_of_fund_receipt_documents', 'nadai_document_id')) {
-            $existingIndexes = collect(DB::select('SHOW INDEX FROM tblconfirmation_of_fund_receipt_documents'))
-                ->pluck('Key_name')
-                ->all();
+            $existingIndexes = [];
+            if (DB::getDriverName() !== 'sqlite') {
+                $existingIndexes = collect(DB::select('SHOW INDEX FROM tblconfirmation_of_fund_receipt_documents'))
+                    ->pluck('Key_name')
+                    ->all();
+            }
 
             Schema::table('tblconfirmation_of_fund_receipt_documents', function (Blueprint $table) use ($existingIndexes) {
                 if (in_array('cfr_docs_nadai_document_idx', $existingIndexes, true)) {
