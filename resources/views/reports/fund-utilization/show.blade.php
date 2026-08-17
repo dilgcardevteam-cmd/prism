@@ -759,16 +759,7 @@
                     @endif
                 </div>
                 @if ($movUploads[$quarter])
-                    <!-- DILG Approval Buttons -->
-                    @if($isWorkflowValidator)
-                        <!-- Remarks Section -->
-                        @if($movUploads[$quarter]->approval_remarks)
-                            <div style="margin-top: 12px; padding: 10px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
-                                <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">Approval Remarks:</p>
-                                <p style="color: #374151; font-size: 13px; margin: 0;">{{ $movUploads[$quarter]->approval_remarks }}</p>
-                            </div>
-                        @endif
-                    @elseif($isLguWorkflowUser && $movUploads[$quarter]->approval_remarks)
+                    @if($isLguWorkflowUser && $movUploads[$quarter]->approval_remarks)
                         <!-- View Remarks for LGU -->
                         <div style="margin-top: 12px; padding: 10px; background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 4px;">
                             <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">DILG Remarks:</p>
@@ -1810,16 +1801,7 @@
                 </form>
 
                 @if($writtenNotices[$quarter])
-                    <!-- DILG Approval Buttons -->
-                    @if($isWorkflowValidator)
-                        <!-- Remarks Section -->
-                        @if($writtenNotices[$quarter]->approval_remarks)
-                            <div style="margin-top: 12px; padding: 10px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
-                                <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">Approval Remarks:</p>
-                                <p style="color: #374151; font-size: 13px; margin: 0;">{{ $writtenNotices[$quarter]->approval_remarks }}</p>
-                            </div>
-                        @endif
-                    @elseif($isLguWorkflowUser && $writtenNotices[$quarter]->approval_remarks)
+                    @if($isLguWorkflowUser && $writtenNotices[$quarter]->approval_remarks)
                         <!-- View Remarks for LGU -->
                         <div style="margin-top: 12px; padding: 10px; background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 4px;">
                             <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">DILG Remarks:</p>

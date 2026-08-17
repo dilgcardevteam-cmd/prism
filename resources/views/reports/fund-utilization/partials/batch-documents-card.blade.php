@@ -274,14 +274,7 @@
         @endif
     </div>
     @if ($batchDocuments[$quarter])
-        @if($isWorkflowValidator)
-            @if($batchDocuments[$quarter]->approval_remarks)
-                <div style="margin-top: 12px; padding: 10px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
-                    <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">Approval Remarks:</p>
-                    <p style="color: #374151; font-size: 13px; margin: 0;">{{ $batchDocuments[$quarter]->approval_remarks }}</p>
-                </div>
-            @endif
-        @elseif($isLguWorkflowUser && $batchDocuments[$quarter]->approval_remarks)
+        @if($isLguWorkflowUser && $batchDocuments[$quarter]->approval_remarks)
             <div style="margin-top: 12px; padding: 10px; background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 4px;">
                 <p style="color: #374151; font-weight: 600; font-size: 12px; margin-bottom: 4px;">DILG Remarks:</p>
                 <p style="color: #374151; font-size: 13px; margin: 0;">{{ $batchDocuments[$quarter]->approval_remarks }}</p>
