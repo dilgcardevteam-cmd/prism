@@ -194,22 +194,37 @@
                         : null;
 
                     $statusLabel = 'Pending Upload';
-                    $statusColor = '#f59e0b';
+                    $statusBg = '#ffffff';
+                    $statusTextColor = '#475569';
+                    $cardBg = '#f9fafb';
+                    $cardBorder = '#cbd5f5';
                     if ($hasFile) {
-                        $statusLabel = 'Uploaded';
-                        $statusColor = '#3b82f6';
+                        $statusLabel = 'For DILG Provincial Office Validation';
+                        $statusBg = '#ffffff';
+                        $statusTextColor = '#075985';
+                        $cardBg = '#f0f9ff';
+                        $cardBorder = '#bae6fd';
                     }
                     if ($isPendingRo) {
                         $statusLabel = 'For DILG Regional Office Validation';
-                        $statusColor = '#3b82f6';
+                        $statusBg = '#ffffff';
+                        $statusTextColor = '#c2410c';
+                        $cardBg = '#fff7ed';
+                        $cardBorder = '#fed7aa';
                     }
                     if ($isApprovedRo) {
                         $statusLabel = 'Approved';
-                        $statusColor = '#059669';
+                        $statusBg = '#ffffff';
+                        $statusTextColor = '#065f46';
+                        $cardBg = '#f0fdf4';
+                        $cardBorder = '#a7f3d0';
                     }
                     if ($isReturned) {
                         $statusLabel = 'Returned';
-                        $statusColor = '#dc2626';
+                        $statusBg = '#ffffff';
+                        $statusTextColor = '#991b1b';
+                        $cardBg = '#fef2f2';
+                        $cardBorder = '#fecaca';
                     }
 
                     $inputId = 'pre-impl-doc-input-' . $field;
@@ -320,28 +335,20 @@
                         return $aTime <=> $bTime;
                     });
 
-                    $showApprovalButtons = false;
+                    $showApprovalButtons = $isDilg && $hasFile && in_array($fileRecord?->status, ['uploaded', 'pending_ro', 'returned'], true);
                 @endphp
 
                 @if ($isMultiUpload)
-                    <div style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
+                    <div class="document-card-wrapper" style="--card-border: {{ $cardBorder }}; --card-bg: {{ $cardBg }};">
+                        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 12px;">
                             <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0;">{{ $label }}</label>
-                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                            <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusBg }}; color: {{ $statusTextColor }}; border-radius: 20px; font-size: 10px; font-weight: 700; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
                                 {{ $statusLabel }}
                             </span>
                         </div>
 
-                        <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; min-height: 40px;">
-                            @if (empty($timelineEvents))
-                                <div style="color: #9ca3af;">No upload activity yet.</div>
-                            @endif
-                            @foreach ($timelineEvents as $timelineEvent)
-                                <div style="display: block; font-size: {{ $timelineEvent['font_size'] }}; font-weight: {{ $timelineEvent['font_weight'] }}; color: {{ $timelineEvent['color'] }}; {{ $loop->first ? '' : 'margin-top: 4px;' }}">
-                                    {{ $timelineEvent['message'] }}
-                                </div>
-                            @endforeach
-                        </div>
+
+
 
                         <div class="pre-impl-upload-shell">
                             @if ($uploadCount > 0)
@@ -374,6 +381,37 @@
                                 </button>
                             @endif
                         </div>
+
+                        @if ($fileRecordsForField->count() > 0)
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;">
+                                @php
+                                    $cntPo = $fileRecordsForField->where('status', 'pending')->count();
+                                    $cntRo = $fileRecordsForField->where('status', 'pending_ro')->count();
+                                    $cntApproved = $fileRecordsForField->where('status', 'approved')->count();
+                                    $cntReturned = $fileRecordsForField->where('status', 'returned')->count();
+                                @endphp
+                                 @if ($cntPo > 0)
+                                    <span style="font-size: 9px; color: #075985; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                        PO Validation: {{ $cntPo }}
+                                    </span>
+                                @endif
+                                @if ($cntRo > 0)
+                                    <span style="font-size: 9px; color: #c2410c; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                        RO Validation: {{ $cntRo }}
+                                    </span>
+                                @endif
+                                @if ($cntApproved > 0)
+                                    <span style="font-size: 9px; color: #065f46; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                        Approved: {{ $cntApproved }}
+                                    </span>
+                                @endif
+                                @if ($cntReturned > 0)
+                                    <span style="font-size: 9px; color: #991b1b; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                        Returned: {{ $cntReturned }}
+                                    </span>
+                                @endif
+                            </div>
+                        @endif
                     </div>
                 @else
                 @if ($canDeleteReturnedDocument)
@@ -382,26 +420,18 @@
                         @method('DELETE')
                     </form>
                 @endif
-                <form method="POST" action="{{ route($routeConfig['save'], array_merge(['projectCode' => $project->project_code], $scopeQuery)) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 18px; border-radius: 8px; background-color: #f9fafb;">
+                <form method="POST" action="{{ route($routeConfig['save'], array_merge(['projectCode' => $project->project_code], $scopeQuery)) }}" enctype="multipart/form-data" class="document-card-wrapper" style="--card-border: {{ $cardBorder }}; --card-bg: {{ $cardBg }};">
                     @csrf
 
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 12px;">
                         <label style="display: block; color: #374151; font-weight: 600; font-size: 13px; margin: 0;">{{ $label }}</label>
-                        <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusColor }}; color: white; border-radius: 20px; font-size: 10px; font-weight: 600;">
+                        <span style="display: inline-block; padding: 4px 10px; background-color: {{ $statusBg }}; color: {{ $statusTextColor }}; border-radius: 20px; font-size: 10px; font-weight: 700; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
                             {{ $statusLabel }}
                         </span>
                     </div>
 
-                    <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; min-height: 40px;">
-                        @if (empty($timelineEvents))
-                            <div style="color: #9ca3af;">No upload activity yet.</div>
-                        @endif
-                        @foreach ($timelineEvents as $timelineEvent)
-                            <div style="display: block; font-size: {{ $timelineEvent['font_size'] }}; font-weight: {{ $timelineEvent['font_weight'] }}; color: {{ $timelineEvent['color'] }}; {{ $loop->first ? '' : 'margin-top: 4px;' }}">
-                                {{ $timelineEvent['message'] }}
-                            </div>
-                        @endforeach
-                    </div>
+
+
 
                     <div class="pre-impl-upload-shell{{ $disableUpload ? ' is-disabled' : '' }}">
                         <input
@@ -432,9 +462,8 @@
                             <div style="display: grid; gap: 10px;">
                                 <a
                                     id="{{ $filenameId }}"
-                                    href="{{ $fileViewUrl }}"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    href="javascript:void(0)"
+                                    onclick="openGlobalDocPreviewModal('{{ $fileViewUrl }}', '{{ e($fileName ?: $label) }}')"
                                     class="pre-impl-upload-filebar pre-impl-upload-filelink is-selected"
                                     data-empty-text="{{ $fileName ?: 'View current file' }}"
                                     data-locked="1"
@@ -449,12 +478,18 @@
                                         <span class="pre-impl-upload-filename" data-file-name>{{ $fileName ?: 'View current file' }}</span>
                                     </span>
                                 </a>
-                                @if ($canDeleteReturnedDocument)
-                                    <button type="submit" form="{{ $deleteFormId }}" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
-                                        <i class="fas fa-trash-alt"></i>
-                                        <span>Delete</span>
+                                <div style="display: flex; gap: 6px; width: 100%;">
+                                    <button type="button" onclick="openPreImplementationItemHistory('{{ e($label) }}')" class="btn-history" style="flex: 1; justify-content: center; padding: 10px 14px; border-radius: 10px; font-size: 12px;" title="View history for {{ $label }}">
+                                        <i class="fas fa-clock-rotate-left"></i>
+                                        <span style="margin-left: 6px;">History</span>
                                     </button>
-                                @endif
+                                    @if ($canDeleteReturnedDocument)
+                                        <button type="submit" form="{{ $deleteFormId }}" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
+                                            <i class="fas fa-trash-alt"></i>
+                                            <span>Delete</span>
+                                        </button>
+                                    @endif
+                                </div>
                             </div>
                         @else
                             <div id="{{ $filenameId }}" class="pre-impl-upload-filebar" data-empty-text="No selected file" hidden>
@@ -480,6 +515,37 @@
                         @endif
                     </div>
 
+                    @if ($fileRecordsForField->count() > 0)
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; margin-bottom: 8px;">
+                            @php
+                                $cntPo = $fileRecordsForField->where('status', 'pending')->count();
+                                $cntRo = $fileRecordsForField->where('status', 'pending_ro')->count();
+                                $cntApproved = $fileRecordsForField->where('status', 'approved')->count();
+                                $cntReturned = $fileRecordsForField->where('status', 'returned')->count();
+                            @endphp
+                            @if ($cntPo > 0)
+                                <span style="font-size: 9px; color: #075985; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                    PO Validation: {{ $cntPo }}
+                                </span>
+                            @endif
+                            @if ($cntRo > 0)
+                                <span style="font-size: 9px; color: #c2410c; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                    RO Validation: {{ $cntRo }}
+                                </span>
+                            @endif
+                            @if ($cntApproved > 0)
+                                <span style="font-size: 9px; color: #065f46; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                    Approved: {{ $cntApproved }}
+                                </span>
+                            @endif
+                            @if ($cntReturned > 0)
+                                <span style="font-size: 9px; color: #991b1b; background: #ffffff; padding: 2px 6px; border-radius: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #002c76; box-shadow: 0 2px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.4);">
+                                    Returned: {{ $cntReturned }}
+                                </span>
+                            @endif
+                        </div>
+                    @endif
+
                     @if ($uploadDisabledMessage)
                         <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
                             {{ $uploadDisabledMessage }}
@@ -500,9 +566,11 @@
 
                     @if ($showApprovalButtons)
                         <div style="display: flex; gap: 8px; margin-top: 8px;">
-                            <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
-                                Approve
-                            </button>
+                            @if (($fileRecord?->status ?? '') !== 'returned')
+                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                                    Approve
+                                </button>
+                            @endif
                             <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                 Return
                             </button>
@@ -606,7 +674,7 @@
                                         } elseif ($multiFile->status === 'returned') {
                                             $statusMeta = ['label' => 'Returned', 'bg' => '#fee2e2', 'color' => '#991b1b'];
                                         } elseif ($multiFile->approved_at_dilg_po) {
-                                            $statusMeta = ['label' => 'For DILG RO Validation', 'bg' => '#dbeafe', 'color' => '#1d4ed8'];
+                                            $statusMeta = ['label' => 'For DILG RO Validation', 'bg' => '#ffedd5', 'color' => '#c2410c'];
                                         } elseif ($multiStatus === 'pending') {
                                             $statusMeta = ['label' => 'For DILG PO Validation', 'bg' => '#e0f2fe', 'color' => '#075985'];
                                         }
@@ -621,15 +689,31 @@
                                         </td>
                                         <td style="padding: 12px 14px; font-size: 12px; color: #374151;">{{ $uploadedBy }}</td>
                                         <td style="padding: 12px 14px; text-align: right; white-space: nowrap;">
-                                            <a href="{{ route($routeConfig['document_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 11px; font-weight: 700;">
+                                            <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route($routeConfig['document_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', '{{ e(basename($multiFile->file_path)) }}')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 11px; font-weight: 700;">
                                                 <i class="fas fa-eye"></i>
                                                 View
                                             </a>
+                                            <button type="button" onclick="openPreImplementationItemHistory('{{ e($multiLabel) }}')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;" class="btn-history">
+                                                <i class="fas fa-clock-rotate-left"></i>
+                                                History
+                                            </button>
+                                            @if ($isDilg && in_array($multiFile->status, ['uploaded', 'pending_ro', 'returned'], true))
+                                                @if ($multiFile->status !== 'returned')
+                                                    <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'approve')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
+                                                        <i class="fas fa-check"></i>
+                                                        Approve
+                                                    </button>
+                                                @endif
+                                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'return')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
+                                                    <i class="fas fa-times"></i>
+                                                    Return
+                                                </button>
+                                            @endif
                                             @if ($canDeleteReturnedMultiFile)
                                                 <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; margin-left: 6px;">
                                                     @csrf
                                                     @method('DELETE')
-                                                    <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
+                                                    <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #6b7280; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
                                                         <i class="fas fa-trash-alt"></i>
                                                         Delete
                                                     </button>
@@ -850,12 +934,17 @@
             cursor: pointer;
             font: inherit;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255,255,255,0.6);
         }
 
         .pre-impl-upload-dropzone:hover {
             border-color: #2563eb;
-            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12);
-            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12), inset 0 1px 0 rgba(255,255,255,0.6);
+            transform: translateY(-3px) scale(1.01);
+        }
+
+        .pre-impl-upload-dropzone:active {
+            transform: translateY(-1px) scale(0.99);
         }
 
         .pre-impl-upload-dropzone.is-disabled {
@@ -905,6 +994,7 @@
             background: linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
             text-align: center;
             transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255,255,255,0.6);
         }
 
         .pre-impl-upload-filebar.is-selected {
@@ -928,8 +1018,12 @@
         .pre-impl-upload-filelink:hover {
             border-color: #60a5fa;
             background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.10);
-            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12), inset 0 1px 0 rgba(255,255,255,0.6);
+            transform: translateY(-3px) scale(1.01);
+        }
+
+        .pre-impl-upload-filelink:active {
+            transform: translateY(-1px) scale(0.99);
         }
 
         .pre-impl-upload-filelink:focus-visible {
@@ -1224,7 +1318,7 @@
         });
     </script>
 
-    <div id="preImplApprovalModal" style="display: none; position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.5); z-index: 1000;">
+    <div id="preImplApprovalModal" style="display: none; position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.5); z-index: 1300;">
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); max-width: 420px; width: 90%;">
             <h3 id="preImplApprovalTitle" style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Approve Document</h3>
             <form id="preImplApprovalForm" method="POST">
@@ -1238,7 +1332,383 @@
             </form>
         </div>
     </div>
+
+    <div id="preImplItemHistoryModal" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1100; padding: 24px; align-items: center; justify-content: center;">
+        <div style="max-width: 900px; width: 100%; padding: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); max-height: 80vh; display: flex; flex-direction: column; background: white;">
+            <div style="margin: 0; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <i class="fas fa-history" style="color: white; font-size: 13px;"></i>
+                    </div>
+                    <h2 id="preImplItemHistoryTitle" style="margin: 0; color: white; font-size: 16px; font-weight: 700;">Document History</h2>
+                </div>
+                <button class="close-modal" onclick="closePreImplementationItemHistory()" style="color: rgba(255,255,255,0.8); font-size: 22px; line-height: 1; border: none; background: transparent; cursor: pointer;">×</button>
+            </div>
+            <div id="preImplItemHistoryBody" style="padding: 20px; overflow-y: auto; background: white; flex-grow: 1;">
+                <div class="timeline" style="position: relative; padding: 20px 0;">
+                    <div style="text-align: center; color: #9ca3af;">No activity recorded for this document.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .timeline {
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: #e6e6e6;
+            transform: translateX(-50%);
+        }
+
+        .timeline-item {
+            position: relative;
+            width: 50%;
+            padding: 12px 20px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        .timeline-item.left {
+            left: 0;
+            text-align: right;
+        }
+
+        .timeline-item.right {
+            left: 50%;
+            text-align: left;
+        }
+
+        .timeline-item .timeline-bullet {
+            position: absolute;
+            top: 18px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #fff;
+            border: 3px solid #cbd5e1;
+            box-shadow: 0 2px 4px rgba(2,6,23,0.06);
+            z-index: 10;
+        }
+
+        .timeline-bullet.returned { border-color: #ef4444; background: #ef4444; }
+        .timeline-bullet.approved { border-color: #10b981; background: #10b981; }
+        .timeline-bullet.submitted { border-color: #3b82f6; background: #3b82f6; }
+        .timeline-bullet.upload { border-color: #10b981; background: #10b981; }
+        .timeline-bullet.return { border-color: #ef4444; background: #ef4444; }
+        .timeline-bullet.update { border-color: #6b7280; background: #6b7280; }
+
+        .timeline-item.left .timeline-bullet {
+            right: -6px;
+        }
+
+        .timeline-item.right .timeline-bullet {
+            left: -6px;
+        }
+
+        .timeline-card {
+            display: inline-block;
+            max-width: 460px;
+            padding: 12px 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #fbfbff 100%);
+            border: 1px solid #e6e6e6;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(2,6,23,0.06);
+            transition: transform 160ms ease, box-shadow 160ms ease;
+            text-align: left;
+        }
+
+        .timeline-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 14px 30px rgba(2,6,23,0.08);
+        }
+
+        .timeline-meta {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 6px;
+        }
+
+        .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .doc-chip {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 999px;
+            background: #f1f5f9;
+            color: #0f172a;
+            margin-left: auto;
+        }
+
+        .action-pill {
+            display: inline-block;
+            padding: 6px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 999px;
+            color: white;
+            text-transform: uppercase;
+        }
+
+        .action-returned { background: #ef4444; }
+        .action-approved { background: #10b981; }
+        .action-submitted { background: #3b82f6; }
+        .action-upload { background: #10b981; }
+        .action-return { background: #ef4444; }
+        .action-update { background: #6b7280; }
+
+        .timeline-title {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .timeline-remarks {
+            white-space: pre-wrap;
+            color: #374151;
+            font-size: 13px;
+            margin-top: 6px;
+            text-align: left;
+        }
+
+        .timeline-remarks strong {
+            color: #0f172a;
+        }
+
+        .btn-history {
+            padding: 4px 8px;
+            background-color: #f3f4f6;
+            color: #4b5563;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 11px;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            outline: none;
+        }
+
+        .btn-history:hover {
+            background-color: #eff6ff;
+            color: #2563eb;
+            border-color: #bfdbfe;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.06);
+        }
+
+        .btn-history:focus-visible {
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+            border-color: #3b82f6;
+        }
+
+        .btn-history:active {
+            transform: scale(0.96);
+        }
+
+        .btn-history i {
+            font-size: 10px;
+            transition: transform 0.2s ease;
+        }
+
+        .btn-history:hover i {
+            transform: rotate(-30deg);
+        }
+
+        .btn-individual-file {
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background-color: #f8fafc;
+            color: #334155;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn-individual-file:hover {
+            background-color: #eff6ff;
+            color: #2563eb;
+            border-color: #bfdbfe;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.04);
+        }
+
+        .btn-individual-file:hover i {
+            color: #2563eb !important;
+        }
+
+        .document-card-wrapper {
+            border: 1px dashed var(--card-border, #cbd5f5);
+            padding: 18px;
+            border-radius: 12px;
+            background-color: var(--card-bg, #f9fafb);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.03), 0 2px 4px -1px rgba(15, 23, 42, 0.01);
+            position: relative;
+        }
+
+        .document-card-wrapper:hover {
+            transform: translateY(-5px) scale(1.015);
+            box-shadow: 0 25px 35px -5px rgba(15, 23, 42, 0.08), 0 12px 12px -5px rgba(15, 23, 42, 0.03);
+            border-style: solid;
+        }
+    </style>
     <script>
+        const preImplActivityLogsData = @json($activityLogs ?? []);
+        const preImplUsersData = @json($usersById ?? []);
+
+        function getInitials(name) {
+            if (!name) return '?';
+            const parts = name.trim().split(/\s+/);
+            return parts.map(p => p[0]).join('').toUpperCase().substring(0, 2);
+        }
+
+        function getAvatarColor(name) {
+            const colors = ['#6b7280', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        function getActionClass(action) {
+            if (!action) return 'submitted';
+            const actionLower = action.toLowerCase();
+            if (actionLower.includes('return')) return 'returned';
+            if (actionLower.includes('approved') || actionLower.includes('validated')) return 'approved';
+            if (actionLower.includes('upload')) return 'submitted';
+            return 'submitted';
+        }
+
+        function getActionPillClass(action) {
+            if (!action) return 'action-submitted';
+            const actionLower = action.toLowerCase();
+            if (actionLower.includes('return')) return 'action-returned';
+            if (actionLower.includes('approved') || actionLower.includes('validated')) return 'action-approved';
+            if (actionLower.includes('upload')) return 'action-submitted';
+            return 'action-submitted';
+        }
+
+        function formatActionText(action) {
+            if (!action) return 'SUBMITTED';
+            const actionLower = action.toLowerCase();
+            if (actionLower.includes('return')) return 'RETURNED';
+            if (actionLower.includes('approved') || actionLower.includes('validated')) return 'APPROVED';
+            if (actionLower.includes('upload')) return 'SUBMITTED';
+            return action.toUpperCase();
+        }
+
+        function openPreImplementationItemHistory(documentLabel) {
+            const modal = document.getElementById('preImplItemHistoryModal');
+            const title = document.getElementById('preImplItemHistoryTitle');
+            const historyBody = document.getElementById('preImplItemHistoryBody');
+
+            title.textContent = documentLabel + ' — History';
+
+            // Filter activity logs for this document
+            const filteredLogs = preImplActivityLogsData.filter(log => log.document === documentLabel);
+
+            // Build timeline
+            if (filteredLogs.length === 0) {
+                historyBody.innerHTML = '<div class="timeline" style="position: relative; padding: 20px 0;"><div style="text-align: center; color: #9ca3af;">No activity recorded for this document.</div></div>';
+            } else {
+                const timelineItems = filteredLogs.map((log, index) => {
+                    const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+                    const action = log.action || '—';
+                    const userData = log.user_id && preImplUsersData[log.user_id];
+                    const userName = userData ? (userData.fname + ' ' + userData.lname).trim() : 'Unknown';
+                    const remarks = log.remarks || null;
+                    
+                    const actionClass = getActionClass(action);
+                    const actionPillClass = getActionPillClass(action);
+                    const actionText = formatActionText(action);
+                    const avatarColor = getAvatarColor(userName);
+                    const initials = getInitials(userName);
+                    const isLeft = index % 2 === 0;
+
+                    return `
+                        <div class="timeline-item ${isLeft ? 'left' : 'right'}">
+                            <div class="timeline-bullet ${actionClass}" aria-hidden="true"></div>
+                            <div class="timeline-card">
+                                <div class="timeline-meta">
+                                    <span class="avatar" style="background:${avatarColor}">${initials}</span>
+                                    <div style="margin-left:8px; display:inline-block; vertical-align:middle; text-align:left;">
+                                        <div style="font-size:12px;color:#6b7280">${timestamp}</div>
+                                        <div style="font-weight:700;color:#0f172a">${userName}</div>
+                                    </div>
+                                    <span class="doc-chip">${documentLabel}</span>
+                                </div>
+                                <div class="timeline-title">
+                                    <span class="action-pill ${actionPillClass}">${actionText}</span>
+                                </div>
+                                <div class="timeline-remarks"><strong>Remarks :</strong> ${remarks || '—'}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                historyBody.innerHTML = '<div class="timeline" style="position: relative;">' + timelineItems + '</div>';
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closePreImplementationItemHistory() {
+            document.getElementById('preImplItemHistoryModal').style.display = 'none';
+        }
+
+        window.addEventListener('click', function (event) {
+            const itemHistoryModal = document.getElementById('preImplItemHistoryModal');
+            if (event.target === itemHistoryModal) {
+                closePreImplementationItemHistory();
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                const itemHistoryModal = document.getElementById('preImplItemHistoryModal');
+                if (itemHistoryModal && (itemHistoryModal.style.display === 'block' || itemHistoryModal.style.display === 'flex')) {
+                    closePreImplementationItemHistory();
+                }
+            }
+        });
+
         function openPreImplementationApprovalModal(actionUrl, action) {
             const modal = document.getElementById('preImplApprovalModal');
             const form = document.getElementById('preImplApprovalForm');

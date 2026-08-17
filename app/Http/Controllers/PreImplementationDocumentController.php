@@ -267,7 +267,7 @@ class PreImplementationDocumentController extends Controller
             'activityLogs' => $activityLogs,
             'documentFields' => $this->documentFieldMap(),
             'documentGroups' => $this->documentFieldGroups(),
-            'multiUploadDocumentTypes' => $this->multiUploadDocumentTypes(),
+            'multiUploadDocumentTypes' => $this->multiUploadDocumentTypes($request),
             'allowedModeOfContract' => ['By Contract', 'By Administration'],
             'pageConfig' => $pageConfig,
             'routeConfig' => $routeConfig,
@@ -289,7 +289,7 @@ class PreImplementationDocumentController extends Controller
             'mode_of_contract' => ['nullable', 'in:By Contract,By Administration'],
         ];
 
-        foreach ($this->singleUploadDocumentTypes() as $field) {
+        foreach ($this->singleUploadDocumentTypes($request) as $field) {
             $validationRules[$field] = ['nullable', 'file', 'mimes:pdf', 'max:' . $this->documentUploadMaxKilobytes($field)];
         }
 
@@ -308,6 +308,7 @@ class PreImplementationDocumentController extends Controller
         $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
         $isProvincialDilgUploader = $currentUser && $currentUser->isDilgUser() && !$currentUser->isRegionalOfficeAssignment();
+        $isRegionalDilgUploader = $currentUser && $currentUser->isDilgUser() && $currentUser->isRegionalOfficeAssignment();
         $uploadedDocumentTypes = [];
 
         foreach ($this->singleUploadDocumentTypes() as $field) {
@@ -329,19 +330,39 @@ class PreImplementationDocumentController extends Controller
                     ]);
             }
 
-            $path = $request->file($field)->store($folder, 'public');
+            $file = $request->file($field);
+            $originalName = $file->getClientOriginalName();
+            $path = $file->storeAs($folder, $originalName, 'public');
 
             $document->{$field} = $path;
             $fileRecord->file_path = $path;
             $fileRecord->uploaded_at = $now;
             $fileRecord->uploaded_by = $userId;
-            $fileRecord->status = $isProvincialDilgUploader ? 'pending_ro' : 'pending';
-            $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
-            $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
-            $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
-            $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
-            $fileRecord->approved_at_dilg_ro = null;
-            $fileRecord->approved_by_dilg_ro = null;
+            if ($isRegionalDilgUploader) {
+                $fileRecord->status = 'approved';
+                $fileRecord->approved_at = $now;
+                $fileRecord->approved_by = $userId;
+                $fileRecord->approved_at_dilg_po = $now;
+                $fileRecord->approved_by_dilg_po = $userId;
+                $fileRecord->approved_at_dilg_ro = $now;
+                $fileRecord->approved_by_dilg_ro = $userId;
+            } elseif ($isProvincialDilgUploader) {
+                $fileRecord->status = 'pending_ro';
+                $fileRecord->approved_at = $now;
+                $fileRecord->approved_by = $userId;
+                $fileRecord->approved_at_dilg_po = $now;
+                $fileRecord->approved_by_dilg_po = $userId;
+                $fileRecord->approved_at_dilg_ro = null;
+                $fileRecord->approved_by_dilg_ro = null;
+            } else {
+                $fileRecord->status = 'pending';
+                $fileRecord->approved_at = null;
+                $fileRecord->approved_by = null;
+                $fileRecord->approved_at_dilg_po = null;
+                $fileRecord->approved_by_dilg_po = null;
+                $fileRecord->approved_at_dilg_ro = null;
+                $fileRecord->approved_by_dilg_ro = null;
+            }
             $fileRecord->approval_remarks = null;
             $fileRecord->user_remarks = null;
             $fileRecord->save();
@@ -371,7 +392,7 @@ class PreImplementationDocumentController extends Controller
 
     public function uploadMultiDocument(Request $request, string $projectCode, string $documentType)
     {
-        if (!$this->isMultiUploadDocumentType($documentType) || !array_key_exists($documentType, $this->documentFieldMap())) {
+        if (!$this->isMultiUploadDocumentType($documentType, $request) || !array_key_exists($documentType, $this->documentFieldMap())) {
             abort(404);
         }
 
@@ -398,7 +419,10 @@ class PreImplementationDocumentController extends Controller
         $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
         $isProvincialDilgUploader = $currentUser && $currentUser->isDilgUser() && !$currentUser->isRegionalOfficeAssignment();
-        $path = $validated['document_file']->store($folder, 'public');
+        $isRegionalDilgUploader = $currentUser && $currentUser->isDilgUser() && $currentUser->isRegionalOfficeAssignment();
+        $file = $validated['document_file'];
+        $originalName = $file->getClientOriginalName();
+        $path = $file->storeAs($folder, $originalName, 'public');
 
         $fileRecord = new PreImplementationDocumentFile();
         $fileRecord->project_code = $project->project_code;
@@ -406,13 +430,31 @@ class PreImplementationDocumentController extends Controller
         $fileRecord->file_path = $path;
         $fileRecord->uploaded_at = $now;
         $fileRecord->uploaded_by = $userId;
-        $fileRecord->status = $isProvincialDilgUploader ? 'pending_ro' : 'pending';
-        $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
-        $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
-        $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
-        $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
-        $fileRecord->approved_at_dilg_ro = null;
-        $fileRecord->approved_by_dilg_ro = null;
+        if ($isRegionalDilgUploader) {
+            $fileRecord->status = 'approved';
+            $fileRecord->approved_at = $now;
+            $fileRecord->approved_by = $userId;
+            $fileRecord->approved_at_dilg_po = $now;
+            $fileRecord->approved_by_dilg_po = $userId;
+            $fileRecord->approved_at_dilg_ro = $now;
+            $fileRecord->approved_by_dilg_ro = $userId;
+        } elseif ($isProvincialDilgUploader) {
+            $fileRecord->status = 'pending_ro';
+            $fileRecord->approved_at = $now;
+            $fileRecord->approved_by = $userId;
+            $fileRecord->approved_at_dilg_po = $now;
+            $fileRecord->approved_by_dilg_po = $userId;
+            $fileRecord->approved_at_dilg_ro = null;
+            $fileRecord->approved_by_dilg_ro = null;
+        } else {
+            $fileRecord->status = 'pending';
+            $fileRecord->approved_at = null;
+            $fileRecord->approved_by = null;
+            $fileRecord->approved_at_dilg_po = null;
+            $fileRecord->approved_by_dilg_po = null;
+            $fileRecord->approved_at_dilg_ro = null;
+            $fileRecord->approved_by_dilg_ro = null;
+        }
         $fileRecord->approval_remarks = null;
         $fileRecord->user_remarks = null;
         $fileRecord->save();
@@ -438,7 +480,7 @@ class PreImplementationDocumentController extends Controller
 
     public function deleteDocument(Request $request, string $projectCode, string $documentType)
     {
-        if ($this->isMultiUploadDocumentType($documentType) || !array_key_exists($documentType, $this->documentFieldMap())) {
+        if ($this->isMultiUploadDocumentType($documentType, $request) || !array_key_exists($documentType, $this->documentFieldMap())) {
             abort(404);
         }
 
@@ -1409,9 +1451,18 @@ class PreImplementationDocumentController extends Controller
         ];
     }
 
-    private function multiUploadDocumentTypes(): array
+    private function multiUploadDocumentTypes(?Request $request = null): array
     {
+        if ($request && $this->hasAllProjectsScope($request)) {
+            return array_keys($this->documentFieldMap());
+        }
+
         return [
+            'nadai_path',
+            'confirmation_receipt_fund_path',
+            'proof_transfer_trust_fund_path',
+            'signed_lgu_letter_path',
+            'project_proposal_path',
             'variation_orders_path',
             'suspensions_path',
             'work_resumptions_path',
@@ -1419,14 +1470,14 @@ class PreImplementationDocumentController extends Controller
         ];
     }
 
-    private function singleUploadDocumentTypes(): array
+    private function singleUploadDocumentTypes(?Request $request = null): array
     {
-        return array_values(array_diff(array_keys($this->documentFieldMap()), $this->multiUploadDocumentTypes()));
+        return array_values(array_diff(array_keys($this->documentFieldMap()), $this->multiUploadDocumentTypes($request)));
     }
 
-    private function isMultiUploadDocumentType(string $documentType): bool
+    private function isMultiUploadDocumentType(string $documentType, ?Request $request = null): bool
     {
-        return in_array($documentType, $this->multiUploadDocumentTypes(), true);
+        return in_array($documentType, $this->multiUploadDocumentTypes($request), true);
     }
 
     private function documentUploadMaxKilobytes(string $documentType): int

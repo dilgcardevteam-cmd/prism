@@ -3040,6 +3040,8 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Local Project Monitoring Committee routes
+    Route::get('local-project-monitoring-committee/export', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'export'])
+        ->name('local-project-monitoring-committee.export');
     Route::post('local-project-monitoring-committee/{lpmc}/upload', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'upload'])
         ->name('local-project-monitoring-committee.upload');
     Route::post('local-project-monitoring-committee/{lpmc}/approve/{docId}', [App\Http\Controllers\LocalProjectMonitoringCommitteeController::class, 'approveDocument'])

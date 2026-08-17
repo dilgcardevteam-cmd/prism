@@ -3,9 +3,31 @@
 @section('page-title', 'Local Project Monitoring Committee')
 
 @section('content')
-<div class="content-header">
-    <h1>Local Project Monitoring Committee</h1>
-    <p>Manage and monitor local project committees</p>
+<div class="content-header" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px;">
+    <div>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #002C76;">Local Project Monitoring Committee</h1>
+        <p style="margin: 4px 0 0 0; color: #4b5563; font-size: 14px;">Manage and monitor local project committees</p>
+    </div>
+    
+    <div style="position: relative; display: inline-block;">
+        <details class="lpmc-extract-dropdown" style="position: relative;">
+            <summary class="btn-extract" style="list-style: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; background-color: #002C76; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 10px rgba(0, 44, 118, 0.2); transition: all 0.2s ease;">
+                <i class="fas fa-file-export"></i>
+                <span>Extract Data</span>
+                <i class="fas fa-chevron-down" style="font-size: 10px; margin-left: 2px;"></i>
+            </summary>
+            <div class="lpmc-extract-menu" style="position: absolute; right: 0; top: calc(100% + 6px); background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); z-index: 1050; min-width: 160px; padding: 6px 0; display: flex; flex-direction: column;">
+                <a href="javascript:void(0)" onclick="triggerLpmcExtract('excel')" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; color: #334155; text-decoration: none; font-size: 13px; font-weight: 600; transition: background 0.15s ease;">
+                    <i class="fas fa-file-excel" style="color: #10b981; font-size: 14px;"></i>
+                    <span>Export to Excel</span>
+                </a>
+                <a href="javascript:void(0)" onclick="triggerLpmcExtract('pdf')" style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; color: #334155; text-decoration: none; font-size: 13px; font-weight: 600; transition: background 0.15s ease;">
+                    <i class="fas fa-file-pdf" style="color: #ef4444; font-size: 14px;"></i>
+                    <span>Export to PDF</span>
+                </a>
+            </div>
+        </details>
+    </div>
 </div>
 
 <div class="row">
@@ -606,10 +628,60 @@
         .lpmc-filters-body form {
             align-items: stretch !important;
         }
+ 
+        /* Extract Dropdown Styling */
+        .btn-extract::-webkit-details-marker {
+            display: none;
+        }
+        .btn-extract:hover {
+            background-color: #003d9e !important;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(0, 44, 118, 0.3) !important;
+        }
+        .btn-extract:active {
+            transform: translateY(0);
+        }
+        .lpmc-extract-menu a {
+            box-sizing: border-box;
+            width: 100%;
+        }
+        .lpmc-extract-menu a:hover {
+            background-color: #f8fafc;
+            color: #002C76 !important;
+        }
     }
 </style>
 <script>
+    function triggerLpmcExtract(format) {
+        const details = document.querySelector('.lpmc-extract-dropdown');
+        if (details) {
+            details.removeAttribute('open');
+        }
+
+        const search = document.getElementById('lpmc-search')?.value || '';
+        const province = document.getElementById('filter-province')?.value || '';
+        const city = document.getElementById('filter-city')?.value || '';
+        const status = document.getElementById('filter-status')?.value || '';
+
+        const baseUrl = "{{ route('local-project-monitoring-committee.export') }}";
+        const params = new URLSearchParams({
+            format: format,
+            search: search,
+            province: province,
+            city: city,
+            status: status
+        });
+
+        window.location.href = baseUrl + '?' + params.toString();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('click', function (e) {
+            const dropdown = document.querySelector('.lpmc-extract-dropdown');
+            if (dropdown && dropdown.hasAttribute('open') && !dropdown.contains(e.target)) {
+                dropdown.removeAttribute('open');
+            }
+        });
         const filtersPanel = document.getElementById('lpmc-filters-panel');
         const filtersForm = document.getElementById('lpmc-filters-form');
         const searchInput = document.getElementById('lpmc-search');

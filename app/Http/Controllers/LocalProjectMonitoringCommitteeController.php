@@ -23,7 +23,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:local_project_monitoring_committee,view')->only(['index', 'show', 'edit', 'viewDocument']);
+        $this->middleware('crud_permission:local_project_monitoring_committee,view')->only(['index', 'show', 'edit', 'viewDocument', 'export']);
         $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:local_project_monitoring_committee,update')->only(['update', 'approveDocument']);
         $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy']);
@@ -1373,6 +1373,268 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $this->notifyLguUsersAfterRegionalApproval($document, $action, $isRegionalOffice, $remarks);
 
         return back()->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
+    }
+
+    public function export(Request $request)
+    {
+        $officeRows = $this->buildOfficeRows($this->getOffices());
+        $filters = [
+            'search' => trim((string) $request->query('search', '')),
+            'province' => trim((string) $request->query('province', '')),
+            'city' => trim((string) $request->query('city', '')),
+            'status' => trim((string) $request->query('status', '')),
+        ];
+
+        $user = auth()->user();
+        if ($user && $user->isLguScopedUser() && $user->normalizedOffice() !== '') {
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
+                return $user->matchesAssignedOffice((string) ($row['city_municipality'] ?? ''));
+            }));
+        } elseif (
+            $user
+            && $user->isDilgUser()
+            && !empty($user->province)
+            && !$user->isRegionalUser()
+            && !$user->isRegionalOfficeAssignment()
+        ) {
+            $selectedProvince = $request->query('province');
+            $userProvince = !empty($selectedProvince) ? $selectedProvince : $user->province;
+            if ($userProvince !== 'Regional Office') {
+                $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
+                    return $row['province'] === $userProvince;
+                }));
+            }
+        }
+
+        $documentsByOffice = [];
+        $allOfficeNames = collect($officeRows)
+            ->pluck('city_municipality')
+            ->unique()
+            ->values()
+            ->all();
+
+        if (!empty($allOfficeNames)) {
+            $documents = LpmcDocument::whereIn('office', $allOfficeNames)->get();
+            foreach ($documents as $doc) {
+                $key = $doc->doc_type . '|' . ($doc->year ?? '') . '|' . ($doc->quarter ?? '');
+                $documentsByOffice[$doc->office][$key] = $doc;
+            }
+        }
+
+        if ($filters['search'] !== '') {
+            $keyword = Str::lower($filters['search']);
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($keyword) {
+                $province = Str::lower(trim((string) ($row['province'] ?? '')));
+                $office = Str::lower(trim((string) ($row['city_municipality'] ?? '')));
+
+                return str_contains($province, $keyword) || str_contains($office, $keyword);
+            }));
+        }
+
+        if ($filters['province'] !== '') {
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($filters) {
+                return (string) ($row['province'] ?? '') === $filters['province'];
+            }));
+        }
+
+        if ($filters['city'] !== '') {
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($filters) {
+                return (string) ($row['city_municipality'] ?? '') === $filters['city'];
+            }));
+        }
+
+        if ($filters['status'] !== '') {
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($documentsByOffice, $filters) {
+                $officeName = (string) ($row['city_municipality'] ?? '');
+
+                return $this->officeMatchesStatusFilter($documentsByOffice[$officeName] ?? [], $filters['status']);
+            }));
+        }
+
+        $officeRowsCollection = collect($officeRows);
+        $officeValidationSummaryByOffice = $officeRowsCollection
+            ->mapWithKeys(function (array $row) use ($documentsByOffice) {
+                $officeName = (string) ($row['city_municipality'] ?? '');
+                return [$officeName => $this->summarizeOfficeValidation($documentsByOffice[$officeName] ?? [])];
+            });
+
+        $officeRowsCollection = $officeRowsCollection
+            ->sort(function (array $leftRow, array $rightRow) use ($officeValidationSummaryByOffice) {
+                $leftSummary = $officeValidationSummaryByOffice->get($leftRow['city_municipality'], ['priority' => 3, 'uploaded_at_timestamp' => 0]);
+                $rightSummary = $officeValidationSummaryByOffice->get($rightRow['city_municipality'], ['priority' => 3, 'uploaded_at_timestamp' => 0]);
+
+                $priorityComparison = ((int) ($leftSummary['priority'] ?? 3)) <=> ((int) ($rightSummary['priority'] ?? 3));
+                if ($priorityComparison !== 0) {
+                    return $priorityComparison;
+                }
+
+                $uploadedAtComparison = ((int) ($rightSummary['uploaded_at_timestamp'] ?? 0)) <=> ((int) ($leftSummary['uploaded_at_timestamp'] ?? 0));
+                if ($uploadedAtComparison !== 0) {
+                    return $uploadedAtComparison;
+                }
+
+                $provinceComparison = strcasecmp((string) ($leftRow['province'] ?? ''), (string) ($rightRow['province'] ?? ''));
+                if ($provinceComparison !== 0) {
+                    return $provinceComparison;
+                }
+
+                return strcasecmp((string) ($leftRow['city_municipality'] ?? ''), (string) ($rightRow['city_municipality'] ?? ''));
+            })
+            ->values();
+
+        $headers = [
+            'Province',
+            'City/Municipality',
+            'Executive Order for CY 2025 (MOV)',
+            'Annual Work and Financial Plan (AWFP) for CY 2025',
+            'Monitoring and Evaluation Plan for CY 2025',
+            'Meetings Conducted Q1',
+            'Meetings Conducted Q2',
+            'Meetings Conducted Q3',
+            'Meetings Conducted Q4',
+            'Monitoring Conducted Q1',
+            'Monitoring Conducted Q2',
+            'Monitoring Conducted Q3',
+            'Monitoring Conducted Q4',
+            'Training Conducted Q1',
+            'Training Conducted Q2',
+            'Training Conducted Q3',
+            'Training Conducted Q4',
+            'Executive Order for 2026',
+            'CY 2026 Annual Work and Financial Plan',
+            'CY 2026 Monitoring and Evaluation Plan',
+            'Approval Status',
+            'Date Submitted',
+            'Validation Level'
+        ];
+
+        $getDocStatusText = function ($doc) {
+            if (!$doc) {
+                return '-';
+            }
+            if ($doc->status === 'approved') {
+                return 'Approved';
+            }
+            if ($doc->status === 'returned') {
+                return 'Returned';
+            }
+            if ($doc->status === 'pending_ro') {
+                return 'For RO';
+            }
+            if ($doc->status === 'pending' || !empty($doc->file_path)) {
+                return 'For PO';
+            }
+            return '-';
+        };
+
+        $rows = [];
+        foreach ($officeRowsCollection as $row) {
+            $officeName = $row['city_municipality'];
+            $officeDocs = $documentsByOffice[$officeName] ?? [];
+            $validationSummary = $officeValidationSummaryByOffice[$officeName] ?? [
+                'approval_status_label' => 'Awaiting Upload',
+                'date_submitted_label' => '—',
+                'validation_level_label' => '—',
+            ];
+
+            $rows[] = [
+                $row['province'],
+                $officeName,
+                $getDocStatusText($officeDocs['eo|2025|'] ?? null),
+                $getDocStatusText($officeDocs['awfp|2025|'] ?? null),
+                $getDocStatusText($officeDocs['mep|2025|'] ?? null),
+                $getDocStatusText($officeDocs['meetings||Q1'] ?? null),
+                $getDocStatusText($officeDocs['meetings||Q2'] ?? null),
+                $getDocStatusText($officeDocs['meetings||Q3'] ?? null),
+                $getDocStatusText($officeDocs['meetings||Q4'] ?? null),
+                $getDocStatusText($officeDocs['monitoring||Q1'] ?? null),
+                $getDocStatusText($officeDocs['monitoring||Q2'] ?? null),
+                $getDocStatusText($officeDocs['monitoring||Q3'] ?? null),
+                $getDocStatusText($officeDocs['monitoring||Q4'] ?? null),
+                $getDocStatusText($officeDocs['training||Q1'] ?? null),
+                $getDocStatusText($officeDocs['training||Q2'] ?? null),
+                $getDocStatusText($officeDocs['training||Q3'] ?? null),
+                $getDocStatusText($officeDocs['training||Q4'] ?? null),
+                $getDocStatusText($officeDocs['eo|2026|'] ?? null),
+                $getDocStatusText($officeDocs['awfp|2026|'] ?? null),
+                $getDocStatusText($officeDocs['mep|2026|'] ?? null),
+                $validationSummary['approval_status_label'] ?? 'Awaiting Upload',
+                $validationSummary['date_submitted_label'] ?? '—',
+                $validationSummary['validation_level_label'] ?? '—',
+            ];
+        }
+
+        $format = strtolower($request->query('format', 'excel'));
+        $filename = 'local_project_monitoring_committee_' . date('Ymd_His');
+
+        if ($format === 'pdf') {
+            return $this->exportPdf($filename . '.pdf', $headers, $rows);
+        }
+
+        return $this->exportExcel($filename . '.xls', $headers, $rows);
+    }
+
+    private function exportExcel(string $filename, array $headers, array $rows)
+    {
+        $title = 'Local Project Monitoring Committee (LPMC) Reports';
+        $table = $this->buildHtmlTable($headers, $rows, false, true);
+        $html = '<html><head><meta charset="UTF-8"></head><body>';
+        $html .= '<table border="1" cellpadding="3" cellspacing="0">';
+        $html .= '<tr><td colspan="' . count($headers) . '"><h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2></td></tr>';
+        $html .= '<tr><td colspan="' . count($headers) . '">&nbsp;</td></tr>';
+        $html .= '</table>';
+        $html .= $table;
+        $html .= '</body></html>';
+
+        return response($html)
+            ->header('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
+            ->header('Content-Disposition', "attachment; filename=\"{$filename}\"");
+    }
+
+    private function exportPdf(string $filename, array $headers, array $rows)
+    {
+        $title = 'Local Project Monitoring Committee (LPMC) Reports';
+        $pdf = new \TCPDF('L', 'mm', 'A3', true, 'UTF-8', false);
+        $pdf->SetCreator('PDMU');
+        $pdf->SetAuthor('PDMU');
+        $pdf->SetTitle('LPMC Reports');
+        $pdf->SetMargins(6, 8, 6);
+        $pdf->SetAutoPageBreak(true, 8);
+        $pdf->AddPage();
+        $pdf->SetFont('helvetica', '', 7);
+
+        $html = '<h3>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h3><br>' . $this->buildHtmlTable($headers, $rows, true);
+        $pdf->writeHTML($html, true, false, true, false, '');
+
+        return response($pdf->Output($filename, 'S'), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
+    }
+
+    private function buildHtmlTable(array $headers, array $rows, bool $forPdf, bool $allowHtml = false): string
+    {
+        $table = '<table border="1" cellpadding="3" cellspacing="0" style="font-size: 7px; width: 100%; border-collapse: collapse;">';
+        $table .= '<thead><tr style="background-color:#f3f4f6;">';
+        foreach ($headers as $header) {
+            $table .= '<th style="font-weight:bold; border: 1px solid #d1d5db; text-align: center;">' . htmlspecialchars((string) $header, ENT_QUOTES, 'UTF-8') . '</th>';
+        }
+        $table .= '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            $table .= '<tr>';
+            foreach ($row as $cell) {
+                if ($allowHtml) {
+                    $table .= '<td style="border: 1px solid #e5e7eb;">' . $cell . '</td>';
+                } else {
+                    $table .= '<td style="border: 1px solid #e5e7eb;">' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
+                }
+            }
+            $table .= '</tr>';
+        }
+
+        $table .= '</tbody></table>';
+        return $table;
     }
 
     /**
