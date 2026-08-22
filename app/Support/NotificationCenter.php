@@ -84,6 +84,12 @@ class NotificationCenter
                 'tone' => 'info',
                 'icon' => 'fa-map',
             ],
+            'approved' => [
+                'label' => 'Approved Submissions',
+                'description' => 'Submissions that have been successfully validated and approved.',
+                'tone' => 'success',
+                'icon' => 'fa-check-circle',
+            ],
             'announcement' => [
                 'label' => 'Announcements',
                 'description' => 'Broadcast messages and general notices.',
@@ -298,6 +304,19 @@ class NotificationCenter
                 'short_label' => 'Returned',
                 'icon' => 'fa-rotate-left',
                 'tone' => 'danger',
+            ];
+        }
+
+        if (
+            str_contains($lowerMessage, 'approved')
+            || str_contains($lowerMessage, 'validated (dilg ro)')
+        ) {
+            return [
+                'key' => 'approved',
+                'label' => 'Approved Submissions',
+                'short_label' => 'Approved',
+                'icon' => 'fa-check-circle',
+                'tone' => 'success',
             ];
         }
 

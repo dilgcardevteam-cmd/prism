@@ -3351,4 +3351,7 @@ Route::middleware(['auth'])->group(function () {
         ->name('nadai-management.update-document');
     Route::delete('/nadai-management/{office}/document/{docId}', [App\Http\Controllers\NadaiManagementController::class, 'deleteDocument'])
         ->name('nadai-management.delete-document');
+
+    Route::get('/task-management', [App\Http\Controllers\TaskManagementController::class, 'index'])
+        ->name('task-management.index');
 });

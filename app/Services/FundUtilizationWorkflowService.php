@@ -280,7 +280,7 @@ class FundUtilizationWorkflowService
 
                 $this->syncRecordAfterReturn($record, $documentType, 2, $actor, $remarks);
 
-                DB::afterCommit(function () use ($provincialOfficer, $report, $quarter, $documentType, $actor, $workflow): void {
+                DB::afterCommit(function () use ($provincialOfficer, $report, $quarter, $documentType, $actor, $workflow, $remarks): void {
                     $this->notifyUsers(
                         $this->resolveValidatorsForLevel($report, $workflow->uploader, 1, [$provincialOfficer]),
                         sprintf(
@@ -288,6 +288,21 @@ class FundUtilizationWorkflowService
                             str_replace('-', ' ', $documentType),
                             $report->project_code,
                             $quarter
+                        ),
+                        $report,
+                        $quarter,
+                        $documentType,
+                        $actor
+                    );
+
+                    $this->notifyUser(
+                        $workflow->uploader,
+                        sprintf(
+                            'Your fund utilization %s for %s (%s) was returned by the Regional Office with remarks: "%s".',
+                            str_replace('-', ' ', $documentType),
+                            $report->project_code,
+                            $quarter,
+                            $remarks
                         ),
                         $report,
                         $quarter,
@@ -362,7 +377,7 @@ class FundUtilizationWorkflowService
 
                 $this->syncRecordAfterReturn($record, $documentType, 1, $actor, $remarks);
 
-                DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
+                DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor, $remarks): void {
                     $this->notifyUsers(
                         $this->resolveValidatorsForLevel($report, $workflow->uploader, 1, [$workflow->currentApprover]),
                         sprintf(
@@ -370,6 +385,21 @@ class FundUtilizationWorkflowService
                             str_replace('-', ' ', $documentType),
                             $report->project_code,
                             $quarter
+                        ),
+                        $report,
+                        $quarter,
+                        $documentType,
+                        $actor
+                    );
+
+                    $this->notifyUser(
+                        $workflow->uploader,
+                        sprintf(
+                            'Your fund utilization %s for %s (%s) was returned by the Regional Office with remarks: "%s".',
+                            str_replace('-', ' ', $documentType),
+                            $report->project_code,
+                            $quarter,
+                            $remarks
                         ),
                         $report,
                         $quarter,
@@ -403,14 +433,15 @@ class FundUtilizationWorkflowService
 
                 $this->syncRecordAfterReturn($record, $documentType, 2, $actor, $remarks);
 
-                DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor): void {
+                DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor, $remarks): void {
                     $this->notifyUser(
                         $workflow->uploader,
                         sprintf(
-                            'Your fund utilization %s for %s (%s) was returned by the Regional Office for revision.',
+                            'Your fund utilization %s for %s (%s) was returned by the Regional Office for revision with remarks: "%s".',
                             str_replace('-', ' ', $documentType),
                             $report->project_code,
-                            $quarter
+                            $quarter,
+                            $remarks
                         ),
                         $report,
                         $quarter,
@@ -460,6 +491,9 @@ class FundUtilizationWorkflowService
             $regionalValidator = $this->resolveValidatorForLevel($report, $workflow->uploader, 2);
             $previousStatus = $workflow->status;
 
+            $workflow->status = 'Requested for Deletion';
+            $workflow->save();
+
             $this->logWorkflowAction(
                 workflow: $workflow,
                 actor: $actor,
@@ -476,7 +510,7 @@ class FundUtilizationWorkflowService
                 $this->notifyUser(
                     $regionalValidator,
                     sprintf(
-                        'A Provincial Office user requested resubmission for %s (%s).',
+                        'A Provincial Office user requested deletion for %s (%s).',
                         $report->project_code,
                         $quarter
                     ),
@@ -516,6 +550,13 @@ class FundUtilizationWorkflowService
             $requester = $this->latestResubmissionRequestActor($workflow);
             $previousStatus = $workflow->status;
             $action = $approved ? self::ACTION_RESUBMISSION_APPROVED : self::ACTION_RESUBMISSION_REJECTED;
+
+            if ($approved) {
+                $workflow->status = 'Returned for Resubmission';
+            } else {
+                $workflow->status = 'Approved';
+            }
+            $workflow->save();
 
             $this->logWorkflowAction(
                 workflow: $workflow,
@@ -578,7 +619,14 @@ class FundUtilizationWorkflowService
                 self::ACTION_RESUBMISSION_APPROVED,
                 self::ACTION_RESUBMISSION_REJECTED,
             ], true))
-            ->sortByDesc(fn (ApprovalLog $log) => $log->created_at?->getTimestamp() ?? 0)
+            ->sort(function (ApprovalLog $a, ApprovalLog $b) {
+                $timeA = $a->created_at?->getTimestamp() ?? 0;
+                $timeB = $b->created_at?->getTimestamp() ?? 0;
+                if ($timeA === $timeB) {
+                    return $b->id <=> $a->id;
+                }
+                return $timeB <=> $timeA;
+            })
             ->first()?->action;
     }
 
@@ -588,7 +636,14 @@ class FundUtilizationWorkflowService
 
         $latestRequest = $workflow->logs
             ->filter(fn (ApprovalLog $log) => $log->action === self::ACTION_RESUBMISSION_REQUESTED)
-            ->sortByDesc(fn (ApprovalLog $log) => $log->created_at?->getTimestamp() ?? 0)
+            ->sort(function (ApprovalLog $a, ApprovalLog $b) {
+                $timeA = $a->created_at?->getTimestamp() ?? 0;
+                $timeB = $b->created_at?->getTimestamp() ?? 0;
+                if ($timeA === $timeB) {
+                    return $b->id <=> $a->id;
+                }
+                return $timeB <=> $timeA;
+            })
             ->first();
 
         if (!$latestRequest || !$latestRequest->approver_id) {

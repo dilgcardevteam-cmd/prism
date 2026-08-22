@@ -318,6 +318,35 @@
                     : false)
                 : (($requiredValidator === 'regional' ? $isRegionalValidator : $isProvincialValidator) ?? false);
 
+            $isResubmissionRequested = $workflow
+                ? $workflowStatus === 'Requested for Deletion'
+                : $resubmissionRequestState['is_requested'];
+
+            $statusColor = $hasDocument ? '#10b981' : '#f59e0b';
+            $fieldBg = $hasDocument ? '#fffbeb' : '#f9fafb';
+            $statusLabel = $hasDocument ? 'For DILG Provincial Office Validation' : 'Pending Upload';
+
+            if ($isReturned) {
+                $statusColor = '#ef4444';
+                $statusLabel = 'Returned';
+                $fieldBg = '#fee2e2';
+            } elseif ($isResubmissionRequested) {
+                $statusColor = '#d97706';
+                $statusLabel = 'Requested for Deletion';
+                $fieldBg = '#fef3c7';
+            } elseif ($isApproved) {
+                $statusColor = '#059669';
+                $statusLabel = 'Approved';
+            } elseif ($isPendingRegional) {
+                $statusColor = '#3b82f6';
+                $statusLabel = 'For DILG Regional Office Validation';
+            } else {
+                $statusColor = $hasDocument ? '#10b981' : '#f59e0b';
+                $statusLabel = $hasDocument
+                    ? ($requiredValidator === 'regional' ? 'For DILG Regional Office Validation' : 'For DILG Provincial Office Validation')
+                    : 'Pending Upload';
+            }
+
             return [
                 'uploader_level' => $uploaderLevel,
                 'required_validator' => $requiredValidator,
@@ -332,9 +361,12 @@
                 'current_approver_id' => $currentApproverId,
                 'can_validate' => $canValidate,
                 'return_only' => $isReturnOnly,
-                'is_resubmission_requested' => $resubmissionRequestState['is_requested'],
+                'is_resubmission_requested' => $isResubmissionRequested,
                 'resubmission_requested_by' => $resubmissionRequestState['requested_by'],
                 'resubmission_requested_remarks' => $resubmissionRequestState['requested_remarks'],
+                'status_color' => $statusColor,
+                'status_label' => $statusLabel,
+                'field_bg' => $fieldBg,
             ];
         };
         $canValidateDocument = function (array $validationState) use ($isProvincialValidator, $isRegionalValidator) {
@@ -353,7 +385,7 @@
 
             if ($isProvincialValidator && $isApproved && !$isRequested) {
                 $buttons[] = sprintf(
-                    '<button type="button" onclick="openRemarksModal(\'%s\', \'%s\', \'request_resubmission\')" style="padding: 6px 12px; background-color: #b45309; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;"><i class="fas fa-undo"></i> Request for Resubmission</button>',
+                    '<button type="button" onclick="openRemarksModal(\'%s\', \'%s\', \'request_resubmission\')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;"><i class="fas fa-trash-alt"></i> Request Deletion</button>',
                     e($documentType),
                     e($quarter)
                 );
@@ -392,6 +424,11 @@
         };
         $canDeleteFundUtilizationDocument = function ($record, ?string $statusField = 'status', ?string $encoderField = null) use ($currentUser, $resolveUserById) {
             if (!$currentUser || !$record) {
+                return false;
+            }
+
+            $status = strtolower(trim((string) ($statusField ? ($record->{$statusField} ?? '') : '')));
+            if (($currentUser->isProvincialUser() || $currentUser->isProvincialDilgAssignment()) && $status === 'approved') {
                 return false;
             }
 
@@ -520,9 +557,9 @@
             $quarterWindow = $quarterWindows[$quarter] ?? '';
             $configuredQuarterDeadline = $configuredQuarterDeadlines[$quarter] ?? null;
             $quarterDeadlineDisplay = trim((string) ($configuredQuarterDeadline['display'] ?? ''));
-            $isExpandedByDefault = false;
-            $displayStyle = 'none';
-            $iconRotation = 'rotate(0deg)';
+            $isExpandedByDefault = strtolower(request()->query('open_quarter')) === strtolower($quarter);
+            $displayStyle = $isExpandedByDefault ? 'block' : 'none';
+            $iconRotation = $isExpandedByDefault ? 'rotate(-180deg)' : 'rotate(0deg)';
 
             // Define FDP variables early to avoid undefined variable errors
             $isFdpReturned = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_status === 'returned';
@@ -585,29 +622,13 @@
                     'approved_at_dilg_ro',
                     'mov_encoder_id'
                 );
-                $movStatusColor = $hasMovFile ? '#10b981' : '#f59e0b';
-                $movBackgroundColor = $hasMovFile ? '#fffbeb' : 'transparent';
+                $movStatusColor = $movValidationState['status_color'];
+                $movStatusLabel = $movValidationState['status_label'];
+                $movBackgroundColor = $movValidationState['field_bg'];
                 
                 $isPendingDilgRoValidation = $movValidationState['is_pending_regional'];
                 $isApprovedByDilgRo = $movValidationState['is_approved'] && $movValidationState['required_validator'] === 'regional';
                 $isMovReturned = $movValidationState['is_returned'];
-                
-                if ($isMovReturned) {
-                    $movStatusColor = '#ef4444';
-                    $movStatusLabel = 'Returned';
-                    $movBackgroundColor = '#fee2e2';
-                } else {
-                    if ($movValidationState['is_approved']) {
-                        $movStatusColor = '#059669';
-                        $movStatusLabel = 'Approved';
-                    } elseif ($movValidationState['is_pending_regional']) {
-                        $movStatusColor = '#3b82f6';
-                        $movStatusLabel = 'For DILG Regional Office Validation';
-                    } else {
-                        $movStatusLabel = $hasMovFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                    }
-                }
-
                 $isMovForPoValidation = $movValidationState['is_pending_provincial'];
                 $isMovUnderValidation = $isPendingDilgRoValidation || $isMovForPoValidation;
             @endphp
@@ -691,7 +712,7 @@
                     <form action="{{ route('fund-utilization.upload-mov', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($movValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($movValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                         <button type="submit" id="mov-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -817,29 +838,13 @@
                                     'dbm_approved_at_dilg_ro',
                                     'dbm_encoder_id'
                                 );
-                                $dbmFieldBg = $hasDbmFile ? '#fffbeb' : '#f9fafb';
+                                $dbmStatusColor = $dbmValidationState['status_color'];
+                                $dbmStatusLabel = $dbmValidationState['status_label'];
+                                $dbmFieldBg = $dbmValidationState['field_bg'];
 
                                 $isDbmPendingDilgRoValidation = $dbmValidationState['is_pending_regional'];
                                 $isDbmApprovedByDilgRo = $dbmValidationState['is_approved'] && $dbmValidationState['required_validator'] === 'regional';
                                 $isDbmReturned = $dbmValidationState['is_returned'];
-                                
-                                if ($isDbmReturned) {
-                                    $dbmStatusColor = '#ef4444';
-                                    $dbmStatusLabel = 'Returned';
-                                    $dbmFieldBg = '#fee2e2';
-                                } else {
-                                    if ($dbmValidationState['is_approved']) {
-                                        $dbmStatusColor = '#059669';
-                                        $dbmStatusLabel = 'Approved';
-                                    } elseif ($dbmValidationState['is_pending_regional']) {
-                                        $dbmStatusColor = '#3b82f6';
-                                        $dbmStatusLabel = 'For DILG Regional Office Validation';
-                                    } else {
-                                        $dbmStatusColor = $hasDbmFile ? '#10b981' : '#f59e0b';
-                                        $dbmStatusLabel = $hasDbmFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                                    }
-                                }
-
                                 $isDbmForPoValidation = $dbmValidationState['is_pending_provincial'];
                                 $isDbmUnderValidation = $isDbmPendingDilgRoValidation || $isDbmForPoValidation;
                             @endphp
@@ -911,7 +916,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeDbmValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeDbmValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="dbm-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -968,7 +973,7 @@
                         </button>
                     @endif
                     <button type="button" onclick="openRemarksModal('written-notice-dbm', '{{ $quarter }}', 'return')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;">
-                        <i class="fas fa-undo"></i> Return
+                            <i class="fas fa-undo"></i> Return
                     </button>
                 @endif
             @endif
@@ -989,29 +994,13 @@
                                     'dilg_approved_at_dilg_ro',
                                     'dilg_encoder_id'
                                 );
-                                $dilgFieldBg = $hasDilgFile ? '#fffbeb' : '#f9fafb';
+                                $dilgStatusColor = $dilgValidationState['status_color'];
+                                $dilgStatusLabel = $dilgValidationState['status_label'];
+                                $dilgFieldBg = $dilgValidationState['field_bg'];
 
                                 $isDilgPendingDilgRoValidation = $dilgValidationState['is_pending_regional'];
                                 $isDilgApprovedByDilgRo = $dilgValidationState['is_approved'] && $dilgValidationState['required_validator'] === 'regional';
                                 $isDilgReturned = $dilgValidationState['is_returned'];
-                                
-                                if ($isDilgReturned) {
-                                    $dilgStatusColor = '#ef4444';
-                                    $dilgStatusLabel = 'Returned';
-                                    $dilgFieldBg = '#fee2e2';
-                                } else {
-                                    if ($dilgValidationState['is_approved']) {
-                                        $dilgStatusColor = '#059669';
-                                        $dilgStatusLabel = 'Approved';
-                                    } elseif ($dilgValidationState['is_pending_regional']) {
-                                        $dilgStatusColor = '#3b82f6';
-                                        $dilgStatusLabel = 'For DILG Regional Office Validation';
-                                    } else {
-                                        $dilgStatusColor = $hasDilgFile ? '#10b981' : '#f59e0b';
-                                        $dilgStatusLabel = $hasDilgFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                                    }
-                                }
-
                                 $isDilgForPoValidation = $dilgValidationState['is_pending_provincial'];
                                 $isDilgUnderValidation = $isDilgPendingDilgRoValidation || $isDilgForPoValidation;
                             @endphp
@@ -1083,7 +1072,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeDilgValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeDilgValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="dilg-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1164,29 +1153,13 @@
                                     'speaker_approved_at_dilg_ro',
                                     'speaker_encoder_id'
                                 );
-                                $speakerFieldBg = $hasSpeakerFile ? '#fffbeb' : '#f9fafb';
+                                $speakerStatusColor = $speakerValidationState['status_color'];
+                                $speakerStatusLabel = $speakerValidationState['status_label'];
+                                $speakerFieldBg = $speakerValidationState['field_bg'];
 
                                 $isSpeakerPendingDilgRoValidation = $speakerValidationState['is_pending_regional'];
                                 $isSpeakerApprovedByDilgRo = $speakerValidationState['is_approved'] && $speakerValidationState['required_validator'] === 'regional';
                                 $isSpeakerReturned = $speakerValidationState['is_returned'];
-                                
-                                if ($isSpeakerReturned) {
-                                    $speakerStatusColor = '#ef4444';
-                                    $speakerStatusLabel = 'Returned';
-                                    $speakerFieldBg = '#fee2e2';
-                                } else {
-                                    if ($speakerValidationState['is_approved']) {
-                                        $speakerStatusColor = '#059669';
-                                        $speakerStatusLabel = 'Approved';
-                                    } elseif ($speakerValidationState['is_pending_regional']) {
-                                        $speakerStatusColor = '#3b82f6';
-                                        $speakerStatusLabel = 'For DILG Regional Office Validation';
-                                    } else {
-                                        $speakerStatusColor = $hasSpeakerFile ? '#10b981' : '#f59e0b';
-                                        $speakerStatusLabel = $hasSpeakerFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                                    }
-                                }
-
                                 $isSpeakerForPoValidation = $speakerValidationState['is_pending_provincial'];
                                 $isSpeakerUnderValidation = $isSpeakerPendingDilgRoValidation || $isSpeakerForPoValidation;
                             @endphp
@@ -1245,7 +1218,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeSpeakerValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeSpeakerValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="speaker-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1332,28 +1305,14 @@
                                     'president_approved_at_dilg_ro',
                                     'president_encoder_id'
                                 );
-                                $presidentFieldBg = $hasPresidentFile ? '#fffbeb' : '#f9fafb';
-                                $isPresidentReturned = $presidentValidationState['is_returned'];
-                                if ($isPresidentReturned) {
-                                    $presidentFieldBg = '#fee2e2';
-                                }
-                                $isPresidentPendingDilgRoValidation = $presidentValidationState['is_pending_regional'];
-                                $isPresidentApprovedByDilgRo = $presidentValidationState['is_approved'] && $presidentValidationState['required_validator'] === 'regional';
-                                
-                                if ($isPresidentReturned) {
-                                    $presidentStatusColor = '#ef4444';
-                                    $presidentStatusLabel = 'Returned';
-                                } elseif ($presidentValidationState['is_approved']) {
-                                    $presidentStatusColor = '#059669';
-                                    $presidentStatusLabel = 'Approved';
-                                } elseif ($presidentValidationState['is_pending_regional']) {
-                                    $presidentStatusColor = '#3b82f6';
-                                    $presidentStatusLabel = 'For DILG Regional Office Validation';
-                                } else {
-                                    $presidentStatusColor = $hasPresidentFile ? '#10b981' : '#f59e0b';
-                                    $presidentStatusLabel = $hasPresidentFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                                }
+                                $presidentStatusColor = $presidentValidationState['status_color'];
+                                $presidentStatusLabel = $presidentValidationState['status_label'];
+                                $presidentFieldBg = $presidentValidationState['field_bg'];
 
+                                $isPresidentReturned = $presidentValidationState['is_returned'];
+                                $isPresidentPendingDilgRoValidation = $presidentValidationState['is_pending_regional'];
+                                $isApprovedByDilgRo = $presidentValidationState['is_approved'] && $presidentValidationState['required_validator'] === 'regional';
+                                
                                 $isPresidentForPoValidation = $presidentValidationState['is_pending_provincial'];
                                 $isPresidentUnderValidation = $isPresidentPendingDilgRoValidation || $isPresidentForPoValidation;
                             @endphp
@@ -1412,7 +1371,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticePresidentValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticePresidentValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="president-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1490,29 +1449,13 @@
                                     'house_approved_at_dilg_ro',
                                     'house_encoder_id'
                                 );
-                                $houseFieldBg = $hasHouseFile ? '#fffbeb' : '#f9fafb';
+                                $houseStatusColor = $houseValidationState['status_color'];
+                                $houseStatusLabel = $houseValidationState['status_label'];
+                                $houseFieldBg = $houseValidationState['field_bg'];
 
                                 $isHousePendingDilgRoValidation = $houseValidationState['is_pending_regional'];
                                 $isHouseApprovedByDilgRo = $houseValidationState['is_approved'] && $houseValidationState['required_validator'] === 'regional';
                                 $isHouseReturned = $houseValidationState['is_returned'];
-                                
-                                if ($isHouseReturned) {
-                                    $houseStatusColor = '#ef4444';
-                                    $houseStatusLabel = 'Returned';
-                                    $houseFieldBg = '#fee2e2';
-                                } else {
-                                    if ($houseValidationState['is_approved']) {
-                                        $houseStatusColor = '#059669';
-                                        $houseStatusLabel = 'Approved';
-                                    } elseif ($houseValidationState['is_pending_regional']) {
-                                        $houseStatusColor = '#3b82f6';
-                                        $houseStatusLabel = 'For DILG Regional Office Validation';
-                                    } else {
-                                        $houseStatusColor = $hasHouseFile ? '#10b981' : '#f59e0b';
-                                        $houseStatusLabel = $hasHouseFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                                    }
-                                }
-
                                 $isHouseForPoValidation = $houseValidationState['is_pending_provincial'];
                                 $isHouseUnderValidation = $isHousePendingDilgRoValidation || $isHouseForPoValidation;
                             @endphp
@@ -1571,7 +1514,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeHouseValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeHouseValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="house-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1649,29 +1592,14 @@
                                     'senate_approved_at_dilg_ro',
                                     'senate_encoder_id'
                                 );
-                                $senateFieldBg = $hasSenateFile ? '#fffbeb' : '#f9fafb';
+                                $senateStatusColor = $senateValidationState['status_color'];
+                                $senateStatusLabel = $senateValidationState['status_label'];
+                                $senateFieldBg = $senateValidationState['field_bg'];
+
                                 $isSenateReturned = $senateValidationState['is_returned'];
-                                
-                                if ($isSenateReturned) {
-                                    $senateFieldBg = '#fee2e2';
-                                }
                                 $isSenatePendingDilgRoValidation = $senateValidationState['is_pending_regional'];
                                 $isSenateApprovedByDilgRo = $senateValidationState['is_approved'] && $senateValidationState['required_validator'] === 'regional';
                                 
-                                if ($isSenateReturned) {
-                                    $senateStatusColor = '#ef4444';
-                                    $senateStatusLabel = 'Returned';
-                                } elseif ($senateValidationState['is_approved']) {
-                                    $senateStatusColor = '#059669';
-                                    $senateStatusLabel = 'Approved';
-                                } elseif ($senateValidationState['is_pending_regional']) {
-                                    $senateStatusColor = '#3b82f6';
-                                    $senateStatusLabel = 'For DILG Regional Office Validation';
-                                } else {
-                                    $senateStatusColor = $hasSenateFile ? '#10b981' : '#f59e0b';
-                                    $senateStatusLabel = $hasSenateFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                                }
-
                                 $isSenateForPoValidation = $senateValidationState['is_pending_provincial'];
                                 $isSenateUnderValidation = $isSenatePendingDilgRoValidation || $isSenateForPoValidation;
                             @endphp
@@ -1730,7 +1658,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeSenateValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeSenateValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="senate-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1844,26 +1772,12 @@
                             'approved_at_dilg_ro',
                             'fdp_encoder_id'
                         );
+                        $fdpStatusColor = $fdpValidationState['status_color'];
+                        $fdpStatusLabel = $fdpValidationState['status_label'];
+                        $fdpBackgroundColor = $fdpValidationState['field_bg'];
                         $isFdpPendingDilgRoValidation = $fdpValidationState['is_pending_regional'];
                         $isFdpApprovedByDilgRo = $fdpValidationState['is_approved'] && $fdpValidationState['required_validator'] === 'regional';
                         $isFdpReturned = $fdpValidationState['is_returned'];
-
-                        if ($isFdpReturned) {
-                            $fdpStatusColor = '#ef4444';
-                            $fdpStatusLabel = 'Returned';
-                            $fdpBackgroundColor = '#fee2e2';
-                        } else {
-                            if ($fdpValidationState['is_approved']) {
-                                $fdpStatusColor = '#059669';
-                                $fdpStatusLabel = 'Approved';
-                            } elseif ($fdpValidationState['is_pending_regional']) {
-                                $fdpStatusColor = '#3b82f6';
-                                $fdpStatusLabel = 'For DILG Regional Office Validation';
-                            } else {
-                                $fdpStatusColor = $hasFdpFile ? '#10b981' : '#f59e0b';
-                                $fdpStatusLabel = $hasFdpFile ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                            }
-                        }
 
                         $isFdpForPoValidation = $fdpValidationState['is_pending_provincial'];
                         $isFdpUnderValidation = $isFdpPendingDilgRoValidation || $isFdpForPoValidation;
@@ -1936,7 +1850,7 @@
                     <form action="{{ route('fund-utilization.upload-fdp', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($fdpValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($fdpValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                         <button type="submit" id="fdp-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -2023,20 +1937,9 @@
                 $isPostingReturned = $postingValidationState['is_returned'];
                 $postingBackgroundColor = $hasPostingLink ? '#fffbeb' : 'transparent';
 
-                if ($isPostingReturned) {
-                    $postingStatusColor = '#ef4444';
-                    $postingStatusLabel = 'Returned';
-                    $postingBackgroundColor = '#fee2e2';
-                } elseif ($postingValidationState['is_approved']) {
-                    $postingStatusColor = '#059669';
-                    $postingStatusLabel = 'Approved';
-                } elseif ($postingValidationState['is_pending_regional']) {
-                    $postingStatusColor = '#3b82f6';
-                    $postingStatusLabel = 'For DILG Regional Office Validation';
-                } else {
-                    $postingStatusColor = $hasPostingLink ? '#10b981' : '#f59e0b';
-                    $postingStatusLabel = $hasPostingLink ? 'For DILG Provincial Office Validation' : 'Pending Upload';
-                }
+                $postingStatusColor = $postingValidationState['status_color'];
+                $postingStatusLabel = $postingValidationState['status_label'];
+                $postingBackgroundColor = $postingValidationState['field_bg'];
             @endphp
             <div style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $postingStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
                 <h3 style="margin: 0; padding: 12px 16px; background-color: #f8fafc; border-bottom: 1px solid #e5e7eb; font-weight: 400; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
@@ -3052,11 +2955,11 @@
                 remarksField.placeholder = 'Enter reason for return...';
                 remarksField.required = true;
             } else if (action === 'request_resubmission') {
-                title = 'Request Resubmission for ' + uploadType.replace('-', ' ');
-                actionLabel = 'Request Resubmission (Required remarks)';
-                submitBtn.style.backgroundColor = '#b45309';
-                submitBtn.textContent = 'Request Resubmission';
-                remarksField.placeholder = 'Enter the reason for requesting resubmission...';
+                title = 'Request Deletion for ' + uploadType.replace('-', ' ');
+                actionLabel = 'Request Deletion (Required remarks)';
+                submitBtn.style.backgroundColor = '#dc2626';
+                submitBtn.textContent = 'Request Deletion';
+                remarksField.placeholder = 'Enter the reason for requesting deletion...';
                 remarksField.required = true;
             } else if (action === 'remark') {
                 title = 'Add Remarks for ' + uploadType.replace('-', ' ');
@@ -3113,7 +3016,7 @@
             const isApprove = decision === 'approve';
 
             openActionConfirmModal({
-                title: isApprove ? 'Approve resubmission request' : 'Reject resubmission request',
+                title: isApprove ? 'Approve deletion request' : 'Reject deletion request',
                 messageHtml: isApprove
                     ? '<div style="color: #475569; font-size: 13px; line-height: 1.7;">Approving this request will delete the approved document so a replacement can be uploaded.</div>'
                     : '<div style="color: #475569; font-size: 13px; line-height: 1.7;">Rejecting this request will keep the approved document in place.</div>',

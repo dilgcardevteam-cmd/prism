@@ -419,12 +419,22 @@ class FundUtilizationWorkflowServiceTest extends TestCase
         $service->approve($report, 'Q1', 'mov', $record->fresh(), $regional);
 
         $workflow = $service->requestResubmission($report, 'Q1', 'mov', $provincial, 'Please correct the attached file.');
-        $this->assertSame('Approved', $workflow->status);
+        $this->assertSame('Requested for Deletion', $workflow->status);
         $this->assertSame('Resubmission Requested', ApprovalLog::query()->latest('id')->first()->action);
 
+        // Test rejecting/declining deletion request restores Approved status
+        $workflow = $service->resolveResubmissionRequest($report, 'Q1', 'mov', $regional, false);
+        $this->assertSame('Resubmission Request Rejected', ApprovalLog::query()->latest('id')->first()->action);
+        $this->assertSame('Approved', $workflow->status);
+
+        // Re-request deletion
+        $workflow = $service->requestResubmission($report, 'Q1', 'mov', $provincial, 'Please correct the attached file.');
+        $this->assertSame('Requested for Deletion', $workflow->status);
+
+        // Test approving deletion request updates status to Returned for Resubmission
         $workflow = $service->resolveResubmissionRequest($report, 'Q1', 'mov', $regional, true);
         $this->assertSame('Resubmission Request Approved', ApprovalLog::query()->latest('id')->first()->action);
-        $this->assertSame('Approved', $workflow->status);
+        $this->assertSame('Returned for Resubmission', $workflow->status);
     }
 
     private function createWorkflowTestTables(): void

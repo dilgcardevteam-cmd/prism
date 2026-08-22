@@ -826,7 +826,7 @@ class PreImplementationDocumentController extends Controller
         $documentType = (string) $fileRecord->document_type;
         $action = $validated['action'];
         $remarks = trim((string) ($validated['remarks'] ?? ''));
-        $isRegionalOffice = strcasecmp(trim((string) ($user->province ?? '')), 'Regional Office') === 0;
+        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
         $now = now();
         $userId = $user->idno ?? null;
 

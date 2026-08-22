@@ -2511,6 +2511,48 @@
                     <span>Dashboard</span>
                 </a>
             </li>
+            <li>
+                @php
+                    $sidebarUser = Auth::user();
+                    $taskMgmtPendingCount = 0;
+                    $taskMgmtReturnedCount = 0;
+                    
+                    if ($sidebarUser) {
+                        $allNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
+                            ->where('user_id', $sidebarUser->getKey())
+                            ->whereNull('read_at')
+                            ->get();
+
+                        $notifications = \App\Support\NotificationCenter::presentMany($allNotificationRows)
+                            ->reject(fn ($n) => ($n['module_key'] ?? '') === 'locally-funded-projects');
+
+                        if ($sidebarUser->isSuperAdmin()) {
+                            $pendingTasks = $notifications->filter(fn ($n) => in_array($n['queue_key'], ['pending_provincial', 'pending_regional'], true));
+                        } elseif ($sidebarUser->isRegionalUser()) {
+                            $pendingTasks = $notifications->filter(fn ($n) => $n['queue_key'] === 'pending_regional');
+                        } elseif ($sidebarUser->isProvincialUser()) {
+                            $pendingTasks = $notifications->filter(fn ($n) => $n['queue_key'] === 'pending_provincial');
+                        } else {
+                            $pendingTasks = collect();
+                        }
+                        
+                        $taskMgmtPendingCount = $pendingTasks->count();
+                        $taskMgmtReturnedCount = $notifications->filter(fn ($n) => $n['queue_key'] === 'returned')->count();
+                    }
+                    
+                    $totalTaskMgmtCount = $taskMgmtPendingCount + $taskMgmtReturnedCount;
+                    $taskMgmtMenuActive = request()->routeIs('task-management.*');
+                @endphp
+                <a href="{{ route('task-management.index') }}" class="@if($taskMgmtMenuActive) active @endif">
+                    <i class="fas fa-list-check"></i>
+                    <span>Task Management</span>
+                    @if($totalTaskMgmtCount > 0)
+                        <span class="sidebar-menu-badge" style="background: #dc2626;">
+                            {{ $totalTaskMgmtCount }}
+                        </span>
+                    @endif
+                </a>
+            </li>
             @php
                 $canViewLocallyFundedProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
                 $canViewRssaProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
@@ -3263,11 +3305,13 @@
                         return in_array($notificationItem['queue_key'] ?? '', ['pending_provincial', 'pending_regional'], true);
                     })->count();
                     $notificationReturnedCount = $allNotifications->where('queue_key', 'returned')->count();
+                    $notificationApprovedCount = $allNotifications->where('queue_key', 'approved')->count();
 
                     $unreadNotificationApprovalCount = $allUnreadNotifications->filter(function (array $notificationItem) {
                         return in_array($notificationItem['queue_key'] ?? '', ['pending_provincial', 'pending_regional'], true);
                     })->count();
                     $unreadNotificationReturnedCount = $allUnreadNotifications->where('queue_key', 'returned')->count();
+                    $unreadNotificationApprovedCount = $allUnreadNotifications->where('queue_key', 'approved')->count();
 
                     $recentApprovalNotifications = $allUnreadNotifications->filter(function (array $notificationItem) {
                         return in_array($notificationItem['queue_key'] ?? '', ['pending_provincial', 'pending_regional'], true);
@@ -3383,7 +3427,6 @@
                                 <div class="notification-menu-stats">
                                     <button type="button" class="notification-menu-stat unread" data-open-notifications-view="unread" id="notificationMenuUnreadStat">Unread: {{ number_format($unreadNotifications) }}</button>
                                     <button type="button" class="notification-menu-stat read" data-open-notifications-view="read" id="notificationMenuReadStat">Read: {{ number_format($readNotificationCount) }}</button>
-                                    <button type="button" class="notification-menu-stat for-approval" data-open-notifications-view="approval" id="notificationMenuApprovalStat">For Approval: {{ number_format($notificationApprovalCount) }}</button>
                                     <button type="button" class="notification-menu-stat returned" data-open-notifications-view="returned" id="notificationMenuReturnedStat">Returned: {{ number_format($notificationReturnedCount) }}</button>
                                 </div>
                             </div>
@@ -3747,15 +3790,6 @@
                             <div class="notification-summary-card__copy">
                                 <strong>Read</strong>
                                 <span data-notification-summary-count>{{ number_format($readNotificationCount) }} items</span>
-                            </div>
-                        </button>
-                        <button type="button" class="notification-summary-card warning" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="approval">
-                            <span class="notification-summary-card__icon">
-                                <i class="fas fa-clipboard-check"></i>
-                            </span>
-                            <div class="notification-summary-card__copy">
-                                <strong>For Your Approval</strong>
-                                <span data-notification-summary-count>{{ number_format($notificationApprovalCount) }} items</span>
                             </div>
                         </button>
                         <button type="button" class="notification-summary-card danger" data-notification-summary-card data-summary-kind="queue-group" data-summary-value="returned">
@@ -4515,7 +4549,7 @@
             };
 
             const setActiveSummaryFilter = (nextSummaryFilter) => {
-                activeSummaryFilter = ['all', 'approval', 'returned'].includes(nextSummaryFilter) ? nextSummaryFilter : 'all';
+                activeSummaryFilter = ['all', 'approval', 'returned', 'approved'].includes(nextSummaryFilter) ? nextSummaryFilter : 'all';
                 summaryCards.forEach((summaryCard) => {
                     const summaryKind = String(summaryCard.dataset.summaryKind || '');
                     const summaryValue = String(summaryCard.dataset.summaryValue || '');
@@ -4620,7 +4654,8 @@
                         && matchesQueue;
                     const matchesSummaryFilter = activeSummaryFilter === 'all'
                         || (activeSummaryFilter === 'approval' && ['pending_provincial', 'pending_regional'].includes(itemQueueKey))
-                        || (activeSummaryFilter === 'returned' && itemQueueKey === 'returned');
+                        || (activeSummaryFilter === 'returned' && itemQueueKey === 'returned')
+                        || (activeSummaryFilter === 'approved' && itemQueueKey === 'approved');
                     const matchesReadState = activeReadState === 'all' || itemReadState === activeReadState;
 
                     if (matchesBaseFilters && matchesSummaryFilter) {
@@ -4676,6 +4711,8 @@
                                 + (filteredQueueCounts.get('pending_regional') || 0);
                         } else if (summaryValue === 'returned') {
                             summaryCount = filteredQueueCounts.get('returned') || 0;
+                        } else if (summaryValue === 'approved') {
+                            summaryCount = filteredQueueCounts.get('approved') || 0;
                         }
                     } else {
                         summaryCount = queueCounts.get(summaryValue) || 0;

@@ -42,6 +42,11 @@ class FundUtilizationApprovalWorkflow extends Model
         return $this->belongsTo(User::class, 'current_approver_id', 'idno');
     }
 
+    public function report(): BelongsTo
+    {
+        return $this->belongsTo(FundUtilizationReport::class, 'project_code', 'project_code');
+    }
+
     public function logs(): HasMany
     {
         return $this->hasMany(ApprovalLog::class, 'submission_id');

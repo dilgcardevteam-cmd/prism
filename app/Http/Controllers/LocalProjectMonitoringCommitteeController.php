@@ -1326,7 +1326,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
             return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
-        $isRegionalOffice = $user->province === 'Regional Office';
+        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
         $isProvincialOffice = !$isRegionalOffice;
 
         $updates = [
