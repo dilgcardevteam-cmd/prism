@@ -3530,59 +3530,7 @@
                     </div>
                 </div>
 
-                <!-- For Approval Notifications -->
-                <div class="notification-wrap">
-                    <button
-                        class="notification-bell"
-                        id="approvalBell"
-                        title="Awaiting Approval"
-                        aria-haspopup="true"
-                        aria-expanded="false"
-                        aria-controls="approvalMenu"
-                    >
-                        <i class="fas fa-clipboard-check"></i>
-                        @if($unreadNotificationApprovalCount > 0)
-                            <span class="notification-badge" id="approvalUnreadBadge">{{ $unreadNotificationApprovalCount }}</span>
-                        @endif
-                    </button>
-                    <div class="notification-menu" id="approvalMenu">
-                        <div class="notification-menu-header">
-                            <span class="notification-menu-title">Awaiting Approval</span>
-                        </div>
-                        @if($recentApprovalNotifications->isEmpty())
-                            <div class="notification-menu-empty">No notifications awaiting approval.</div>
-                        @else
-                            @foreach($recentApprovalNotifications as $notificationItem)
-                                <a
-                                    href="{{ route('notifications.read', ['id' => $notificationItem['id']]) }}"
-                                    class="notification-menu-item unread"
-                                >
-                                    <div class="notification-menu-message-row">
-                                        <span class="notification-unread-dot" aria-label="Unread notification"></span>
-                                        <div style="min-width: 0;">
-                                            <div class="notification-menu-message">{{ $notificationItem['message'] }}</div>
-                                            <div class="notification-menu-meta">
-                                                <span class="notification-status-badge {{ $notificationItem['queue_tone'] }}">
-                                                    {{ $notificationItem['queue_short_label'] }}
-                                                </span>
-                                                <span class="notification-menu-module">{{ $notificationItem['module_label'] }}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="notification-menu-time">
-                                        {{ \Illuminate\Support\Carbon::parse($notificationItem['created_at'])->format('M d, Y h:i A') }}
-                                    </div>
-                                </a>
-                            @endforeach
-                        @endif
-                        <div class="notification-menu-footer">
-                            <button type="button" class="notification-menu-view-all" id="openApprovalModalBtn">
-                                <i class="fas fa-envelope-open-text"></i>
-                                <span>Open Approval Center</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+
 
                 <div class="notification-wrap">
                     <button
@@ -4037,10 +3985,6 @@
         const openReturnedModalBtn = document.getElementById('openReturnedModalBtn');
         const returnedUnreadBadge = document.getElementById('returnedUnreadBadge');
 
-        const approvalBell = document.getElementById('approvalBell');
-        const approvalMenu = document.getElementById('approvalMenu');
-        const openApprovalModalBtn = document.getElementById('openApprovalModalBtn');
-        const approvalUnreadBadge = document.getElementById('approvalUnreadBadge');
         const NOTIFICATION_LOCATION_CONFIG = {
             provinces: @json($notificationFilterConfiguredProvinces ?? []),
             citiesByProvince: @json($notificationFilterConfiguredCitiesByProvince ?? []),
@@ -4276,12 +4220,7 @@
             if (returnedBell) {
                 returnedBell.setAttribute('aria-expanded', 'false');
             }
-            if (approvalMenu) {
-                approvalMenu.classList.remove('show');
-            }
-            if (approvalBell) {
-                approvalBell.setAttribute('aria-expanded', 'false');
-            }
+
 
             notificationsListModal.classList.add('is-open');
             notificationsListModal.setAttribute('aria-hidden', 'false');
@@ -4653,7 +4592,7 @@
                         && matchesModule
                         && matchesQueue;
                     const matchesSummaryFilter = activeSummaryFilter === 'all'
-                        || (activeSummaryFilter === 'approval' && ['pending_provincial', 'pending_regional'].includes(itemQueueKey))
+                        || (activeSummaryFilter === 'approval' && itemQueueKey === 'pending_provincial')
                         || (activeSummaryFilter === 'returned' && itemQueueKey === 'returned')
                         || (activeSummaryFilter === 'approved' && itemQueueKey === 'approved');
                     const matchesReadState = activeReadState === 'all' || itemReadState === activeReadState;
@@ -4707,8 +4646,7 @@
                         summaryCount = readStateCounts.get(summaryValue) || 0;
                     } else if (summaryKind === 'queue-group') {
                         if (summaryValue === 'approval') {
-                            summaryCount = (filteredQueueCounts.get('pending_provincial') || 0)
-                                + (filteredQueueCounts.get('pending_regional') || 0);
+                            summaryCount = filteredQueueCounts.get('pending_provincial') || 0;
                         } else if (summaryValue === 'returned') {
                             summaryCount = filteredQueueCounts.get('returned') || 0;
                         } else if (summaryValue === 'approved') {
@@ -4927,12 +4865,7 @@
                 if (returnedBell) {
                     returnedBell.setAttribute('aria-expanded', 'false');
                 }
-                if (approvalMenu) {
-                    approvalMenu.classList.remove('show');
-                }
-                if (approvalBell) {
-                    approvalBell.setAttribute('aria-expanded', 'false');
-                }
+
             });
         }
 
@@ -4962,12 +4895,7 @@
                 if (returnedBell) {
                     returnedBell.setAttribute('aria-expanded', 'false');
                 }
-                if (approvalMenu) {
-                    approvalMenu.classList.remove('show');
-                }
-                if (approvalBell) {
-                    approvalBell.setAttribute('aria-expanded', 'false');
-                }
+
             });
         }
 
@@ -4993,12 +4921,7 @@
                 if (returnedBell) {
                     returnedBell.setAttribute('aria-expanded', 'false');
                 }
-                if (approvalMenu) {
-                    approvalMenu.classList.remove('show');
-                }
-                if (approvalBell) {
-                    approvalBell.setAttribute('aria-expanded', 'false');
-                }
+
             });
         }
 
@@ -5024,45 +4947,10 @@
                 if (messageBell) {
                     messageBell.setAttribute('aria-expanded', 'false');
                 }
-                if (approvalMenu) {
-                    approvalMenu.classList.remove('show');
-                }
-                if (approvalBell) {
-                    approvalBell.setAttribute('aria-expanded', 'false');
-                }
+
             });
         }
 
-        if (approvalBell && approvalMenu) {
-            approvalBell.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                closeNotificationsListModal();
-                approvalMenu.classList.toggle('show');
-                this.setAttribute('aria-expanded', approvalMenu.classList.contains('show') ? 'true' : 'false');
-                if (profileMenu) {
-                    profileMenu.classList.remove('show');
-                }
-                if (notificationMenu) {
-                    notificationMenu.classList.remove('show');
-                }
-                if (notificationBell) {
-                    notificationBell.setAttribute('aria-expanded', 'false');
-                }
-                if (messageMenu) {
-                    messageMenu.classList.remove('show');
-                }
-                if (messageBell) {
-                    messageBell.setAttribute('aria-expanded', 'false');
-                }
-                if (returnedMenu) {
-                    returnedMenu.classList.remove('show');
-                }
-                if (returnedBell) {
-                    returnedBell.setAttribute('aria-expanded', 'false');
-                }
-            });
-        }
 
         if (openNotificationsModalBtn) {
             openNotificationsModalBtn.addEventListener('click', function (event) {
@@ -5080,13 +4968,6 @@
             });
         }
 
-        if (openApprovalModalBtn) {
-            openApprovalModalBtn.addEventListener('click', function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                openNotificationsListModal('approval');
-            });
-        }
 
         document.querySelectorAll('[data-open-notifications-view]').forEach((triggerButton) => {
             triggerButton.addEventListener('click', function (event) {
@@ -5125,10 +5006,7 @@
                 returnedMenu.classList.remove('show');
                 returnedBell.setAttribute('aria-expanded', 'false');
             }
-            if (approvalMenu && approvalBell && !approvalMenu.contains(e.target) && !approvalBell.contains(e.target)) {
-                approvalMenu.classList.remove('show');
-                approvalBell.setAttribute('aria-expanded', 'false');
-            }
+
         });
 
         document.addEventListener('keydown', function (event) {

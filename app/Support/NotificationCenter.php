@@ -78,12 +78,7 @@ class NotificationCenter
                 'tone' => 'warning',
                 'icon' => 'fa-building',
             ],
-            'pending_regional' => [
-                'label' => 'For Your Regional Approval',
-                'description' => 'Items awaiting regional review or validation.',
-                'tone' => 'info',
-                'icon' => 'fa-map',
-            ],
+
             'approved' => [
                 'label' => 'Approved Submissions',
                 'description' => 'Submissions that have been successfully validated and approved.',

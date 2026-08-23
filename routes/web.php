@@ -3314,14 +3314,27 @@ Route::middleware(['auth'])->group(function () {
         '/reports/one-time/project-completion-reports/sglgif/{projectCode}/validate-file/{fileId}',
         [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'validateDocumentFile']
     )->name('reports.one-time.project-completion-reports.sglgif.validate-file');
-    Route::view(
-        '/reports/one-time/pisat',
-        'reports.one-time.shared.show',
-        [
-            'pageTitle' => 'PISAT',
-            'pageSubtitle' => 'Dedicated one-time report page for PISAT.',
-        ]
-    )->middleware('crud_permission:pisat_reports,view')->name('reports.one-time.pisat');
+    Route::get('/reports/one-time/pisat', [App\Http\Controllers\PisatReportController::class, 'index'])
+        ->middleware('crud_permission:pisat_reports,view')
+        ->name('reports.one-time.pisat');
+    Route::get('/reports/one-time/pisat/create', [App\Http\Controllers\PisatReportController::class, 'create'])
+        ->middleware('crud_permission:pisat_reports,add')
+        ->name('reports.one-time.pisat.create');
+    Route::post('/reports/one-time/pisat', [App\Http\Controllers\PisatReportController::class, 'store'])
+        ->middleware('crud_permission:pisat_reports,add')
+        ->name('reports.one-time.pisat.store');
+    Route::get('/reports/one-time/pisat/{assessment}', [App\Http\Controllers\PisatReportController::class, 'show'])
+        ->middleware('crud_permission:pisat_reports,view')
+        ->name('reports.one-time.pisat.show');
+    Route::get('/reports/one-time/pisat/{assessment}/edit', [App\Http\Controllers\PisatReportController::class, 'edit'])
+        ->middleware('crud_permission:pisat_reports,update')
+        ->name('reports.one-time.pisat.edit');
+    Route::put('/reports/one-time/pisat/{assessment}', [App\Http\Controllers\PisatReportController::class, 'update'])
+        ->middleware('crud_permission:pisat_reports,update')
+        ->name('reports.one-time.pisat.update');
+    Route::post('/reports/one-time/pisat/{assessment}/validate', [App\Http\Controllers\PisatReportController::class, 'validateAssessment'])
+        ->middleware('crud_permission:pisat_reports,update')
+        ->name('reports.one-time.pisat.validate');
 
     Route::get('/reports/rbis-annual-certification', [App\Http\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');
