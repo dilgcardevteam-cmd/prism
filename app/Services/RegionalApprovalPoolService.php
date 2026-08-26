@@ -18,7 +18,7 @@ class RegionalApprovalPoolService
         $tasks = collect();
 
         $sources = [
-            ['table' => 'tblmonitoring_evaluation_monthly_documents', 'module_key' => 'monitoring-evaluation', 'module_label' => 'Monitoring Evaluation Monthly', 'url' => '/reports/dilg-deliverables/monitoring-evaluation', 'period' => 'month'],
+            ['table' => 'tblmonitoring_evaluation_monthly_documents', 'module_key' => 'monitoring-evaluation', 'module_label' => 'Monitoring Evaluation Monthly', 'url' => '/reports/dilg-deliverables/monitoring-and-evaluation-reports/lfp', 'period' => 'month'],
             ['table' => 'tblpd_no_pbbm_2025_1572_1573_documents', 'module_key' => 'pd-no-pbbm-2025-1572-1573', 'module_label' => 'PD No. PBBM-2025-1572-1573', 'url' => '/reports/monthly/pd-no-pbbm-2025-1572-1573', 'period' => 'month'],
             ['table' => 'tblpmc_documents', 'module_key' => 'local-project-monitoring-committee', 'module_label' => 'Local Project Monitoring Committee', 'url' => '/local-project-monitoring-committee', 'period' => 'quarter'],
             ['table' => 'tblroad_maintenance_status_documents', 'module_key' => 'road-maintenance-status', 'module_label' => 'Road Maintenance Status', 'url' => '/road-maintenance-status', 'period' => 'quarter'],
@@ -51,6 +51,24 @@ class RegionalApprovalPoolService
                 $taskUrl = $source['url'];
 
                 if ($source['table'] === 'pre_implementation_document_files' && $projectCode !== '') {
+                    $taskUrl .= '/' . rawurlencode($projectCode);
+                }
+
+                if (in_array($source['table'], [
+                    'tblmonitoring_evaluation_monthly_documents',
+                    'tblpd_no_pbbm_2025_1572_1573_documents',
+                ], true) && $projectCode !== '') {
+                    $taskUrl .= '/' . rawurlencode($projectCode) . '/edit';
+                }
+
+                if (in_array($source['table'], [
+                    'tblpmc_documents',
+                    'tblroad_maintenance_status_documents',
+                ], true)) {
+                    $taskUrl .= '/' . rawurlencode((string) $record->id) . '/edit';
+                }
+
+                if ($source['table'] === 'lgsf_project_completion_report_files' && $projectCode !== '') {
                     $taskUrl .= '/' . rawurlencode($projectCode);
                 }
 
