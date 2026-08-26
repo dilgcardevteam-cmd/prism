@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -47,7 +48,9 @@ class RegionalApprovalPoolService
             foreach ($query->get() as $record) {
                 $projectCode = trim((string) ($record->{$source['project'] ?? 'office'} ?? ''));
                 $period = $source['period'] ? trim((string) ($record->{$source['period']} ?? '')) : '';
+                $year = trim((string) ($record->year ?? ''));
                 $label = trim((string) ($record->{$source['document'] ?? 'doc_type'} ?? ''));
+                $uploader = $this->resolveUploader($record->uploaded_by ?? null);
                 $taskUrl = $source['url'];
 
                 if ($source['table'] === 'pre_implementation_document_files' && $projectCode !== '') {
@@ -74,11 +77,17 @@ class RegionalApprovalPoolService
 
                 $tasks->push([
                     'id' => 'status-' . $source['table'] . '-' . $record->id,
-                    'message' => ($label !== '' ? $label . ' - ' : '') . 'Awaiting DILG Regional Office validation.',
+                    'task_title' => $source['table'] === 'tblmonitoring_evaluation_monthly_documents'
+                        ? 'Monthly Monitoring and Evaluation Report - LFP'
+                        : ($label !== '' ? $label : $source['module_label']),
+                    'message' => 'Awaiting DILG Regional Office Validation',
                     'url' => $taskUrl,
                     'document_type' => $label,
                     'quarter' => $period,
-                    'sender_name' => 'Current approval status',
+                    'period' => $period,
+                    'year' => $year,
+                    'sender_name' => $uploader['name'],
+                    'uploader_province' => $uploader['province'],
                     'created_at' => $record->uploaded_at ?? $record->created_at,
                     'project_code' => $projectCode,
                     'province' => trim((string) ($record->province ?? '')),
@@ -103,14 +112,19 @@ class RegionalApprovalPoolService
                 $projectCode = trim((string) $workflow->project_code);
                 $quarter = trim((string) $workflow->quarter);
                 $documentType = trim((string) $workflow->document_type);
+                $uploader = $this->resolveUploader($workflow->uploader_id ?? null);
 
                 $tasks->push([
                     'id' => 'status-fund-utilization-' . $workflow->id,
+                    'task_title' => $documentType !== '' ? $documentType : 'Fund Utilization Report',
                     'message' => ($documentType !== '' ? $documentType . ' - ' : '') . 'Awaiting DILG Regional Office validation.',
                     'url' => '/fund-utilization/' . rawurlencode($projectCode) . '?quarter=' . rawurlencode($quarter) . '&document=' . rawurlencode($documentType),
                     'document_type' => $documentType,
                     'quarter' => $quarter,
-                    'sender_name' => 'Current approval status',
+                    'period' => $quarter,
+                    'year' => '',
+                    'sender_name' => $uploader['name'],
+                    'uploader_province' => $uploader['province'],
                     'created_at' => $workflow->updated_at,
                     'project_code' => $projectCode,
                     'province' => '',
@@ -130,5 +144,21 @@ class RegionalApprovalPoolService
             $task['document_type'],
             $task['quarter'],
         ]))->values();
+    }
+
+    /**
+     * @return array{name: string, province: string}
+     */
+    private function resolveUploader($userId): array
+    {
+        $user = User::query()
+            ->select(['idno', 'fname', 'lname', 'province'])
+            ->where('idno', $userId)
+            ->first();
+
+        return [
+            'name' => $user?->fullName() ?: 'Unknown uploader',
+            'province' => trim((string) ($user?->province ?? '')),
+        ];
     }
 }

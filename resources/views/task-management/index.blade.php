@@ -199,7 +199,7 @@
         background: #ffffff;
         border-radius: 20px;
         width: 100%;
-        max-width: 1000px;
+        max-width: min(1400px, 96vw);
         max-height: 85vh;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         display: flex;
@@ -301,7 +301,8 @@
     }
 
     .modal-select-filter {
-        padding: 9px 30px 9px 12px;
+        width: auto;
+        padding: 10px 30px 10px 36px;
         border-radius: 10px;
         border: 1px solid #cbd5e1;
         font-size: 13px;
@@ -312,8 +313,81 @@
         min-width: 160px;
     }
 
+    .modal-filter-field {
+        position: relative;
+        min-width: 170px;
+    }
+
+    .modal-filter-field > i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #2563eb;
+        font-size: 13px;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .modal-filter-field .modal-select-filter {
+        width: 100%;
+    }
+
     .modal-select-filter:focus {
         border-color: #1d4ed8;
+    }
+
+    .modal-filter-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .modal-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 38px;
+        padding: 9px 15px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .modal-filter-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .modal-filter-btn.apply {
+        background: #1d4ed8;
+        color: #fff;
+        box-shadow: 0 4px 10px rgba(29, 78, 216, 0.2);
+    }
+
+    .modal-filter-btn.reset {
+        background: #fff;
+        color: #475569;
+        border-color: #cbd5e1;
+    }
+
+    .modal-filter-btn.reset:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+    }
+
+    @media (max-width: 680px) {
+        .modal-filter-field,
+        .modal-filter-actions {
+            width: 100%;
+        }
+
+        .modal-filter-actions .modal-filter-btn {
+            flex: 1;
+        }
     }
 
     .task-modal-body {
@@ -329,6 +403,7 @@
 
     .task-table {
         width: 100%;
+        min-width: 1120px;
         border-collapse: collapse;
         text-align: left;
         font-size: 13px;
@@ -337,6 +412,7 @@
     .task-table th {
         background: #fff;
         padding: 12px 24px;
+        text-align: center;
         font-weight: 700;
         color: #64748b;
         text-transform: uppercase;
@@ -350,8 +426,41 @@
 
     .task-table td {
         padding: 14px 24px;
+        text-align: center;
         border-bottom: 1px solid #e2e8f0;
         vertical-align: middle;
+    }
+
+    .task-uploader-cell {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        justify-content: center;
+        text-align: center;
+        min-width: 150px;
+    }
+
+    .task-uploader-name {
+        color: #0f172a;
+        font-size: 12px;
+        font-weight: 750;
+        line-height: 1.3;
+    }
+
+    .task-uploader-province {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.2;
+    }
+
+    .task-uploader-province i {
+        color: #2563eb;
+        font-size: 10px;
     }
 
     .task-table tr:last-child td {
@@ -584,6 +693,8 @@
             $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
             $slug = 'modal-pending-' . Str::slug($moduleLabel);
             $provinces = $tasks->pluck('province')->filter()->unique()->sort();
+            $periods = $tasks->pluck('period')->filter()->unique()->sort();
+            $years = $tasks->pluck('year')->filter()->unique()->sortDesc();
         @endphp
         <div id="{{ $slug }}" class="task-modal-backdrop" onclick="closeTaskModalOnBackdrop(event, '{{ $slug }}')">
             <div class="task-modal">
@@ -600,18 +711,47 @@
                 
                 <!-- Filter Bar inside Modal -->
                 <div class="task-modal-filter-bar">
-                    <div class="filter-input-wrapper">
-                        <i class="fas fa-search"></i>
-                        <input type="text" class="modal-search-input" placeholder="Search project or details..." oninput="filterModalRows('{{ $slug }}')">
-                    </div>
                     @if($provinces->isNotEmpty())
-                        <select class="modal-select-filter" onchange="filterModalRows('{{ $slug }}')">
-                            <option value="">All Provinces</option>
-                            @foreach($provinces as $prov)
-                                <option value="{{ $prov }}">{{ $prov }}</option>
-                            @endforeach
-                        </select>
+                        <div class="modal-filter-field">
+                            <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="province" aria-label="Filter by province">
+                                <option value="">All Provinces</option>
+                                @foreach($provinces as $prov)
+                                    <option value="{{ $prov }}">{{ $prov }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                     @endif
+                    @if($periods->isNotEmpty())
+                        <div class="modal-filter-field">
+                            <i class="fas fa-calendar-days" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="period" aria-label="Filter by period">
+                                <option value="">All Periods</option>
+                                @foreach($periods as $period)
+                                    <option value="{{ $period }}">{{ $period }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                    @if($years->isNotEmpty())
+                        <div class="modal-filter-field">
+                            <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="year" aria-label="Filter by year">
+                                <option value="">All Years</option>
+                                @foreach($years as $year)
+                                    <option value="{{ $year }}">{{ $year }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                    <div class="modal-filter-actions">
+                        <button type="button" class="modal-filter-btn apply" onclick="filterModalRows('{{ $slug }}')">
+                            <i class="fas fa-filter"></i> Filter
+                        </button>
+                        <button type="button" class="modal-filter-btn reset" onclick="resetModalFilters('{{ $slug }}')">
+                            <i class="fas fa-rotate-left"></i> Reset
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Modal Body -->
@@ -620,7 +760,7 @@
                         <table class="task-table">
                             <thead>
                                 <tr>
-                                    <th>Project / Location</th>
+                                    <th>Office</th>
                                     <th>Period</th>
                                     <th>Task Details</th>
                                     <th>Submitted By</th>
@@ -630,27 +770,33 @@
                             </thead>
                             <tbody>
                                 @foreach($tasks as $task)
-                                    <tr data-province="{{ $task['province'] ?? '' }}">
+                                    <tr data-province="{{ $task['province'] ?? '' }}" data-period="{{ $task['period'] ?? $task['quarter'] ?? '' }}" data-year="{{ $task['year'] ?? '' }}">
                                         <td>
-                                            <div class="proj-title-cell" title="{{ $task['project_code'] }}">{{ $task['project_code'] }}</div>
-                                            <div class="proj-meta-cell">
-                                                @if(!empty($task['province']))
-                                                    <span><i class="fas fa-map-marker-alt"></i> {{ $task['province'] }}</span>
-                                                @endif
-                                                @if(!empty($task['city_municipality']))
-                                                    <span>&bull;</span>
-                                                    <span>{{ $task['city_municipality'] }}</span>
-                                                @endif
-                                            </div>
+                                            <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
                                         </td>
                                         <td>
                                             <strong>{{ strtoupper($task['quarter'] ?? 'N/A') }}</strong>
                                         </td>
                                         <td>
-                                            <div class="task-message-cell">{{ $task['message'] }}</div>
+                                            <div class="task-message-cell">
+                                                <div style="font-weight: 700; color: #1e293b;">{{ $task['task_title'] ?? $task['message'] }}</div>
+                                                @if(isset($task['task_title']))
+                                                    <div style="margin-top: 4px; color: #64748b;">{{ $task['message'] }}</div>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td>
-                                            <div style="font-weight: 600;">{{ $task['sender_name'] ?: 'System' }}</div>
+                                            @php
+                                                $uploaderName = $task['sender_name'] ?: 'Unknown uploader';
+                                            @endphp
+                                            <div class="task-uploader-cell">
+                                                <span>
+                                                    <span class="task-uploader-name">{{ $uploaderName }}</span>
+                                                    @if(!empty($task['uploader_province']))
+                                                        <span class="task-uploader-province"><i class="fas fa-map-marker-alt"></i> {{ $task['uploader_province'] }}</span>
+                                                    @endif
+                                                </span>
+                                            </div>
                                         </td>
                                         <td>
                                             {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
@@ -789,15 +935,18 @@
             modal.style.display = 'none';
             document.body.style.overflow = '';
 
-            const searchInput = modal.querySelector('.modal-search-input');
-            const selectEl = modal.querySelector('.modal-select-filter');
-            if (searchInput) searchInput.value = '';
-            if (selectEl) selectEl.value = '';
-
-            // Reset rows display
-            const rows = modal.querySelectorAll('.task-table tbody tr');
-            rows.forEach(row => row.style.display = '');
+            resetModalFilters(id);
         }
+    }
+
+    function resetModalFilters(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        const searchInput = modal.querySelector('.modal-search-input');
+        if (searchInput) searchInput.value = '';
+        modal.querySelectorAll('.modal-select-filter').forEach(select => select.value = '');
+        modal.querySelectorAll('.task-table tbody tr').forEach(row => row.style.display = '');
     }
 
     function closeTaskModalOnBackdrop(event, id) {
@@ -810,21 +959,31 @@
         const modal = document.getElementById(modalId);
         if (!modal) return;
 
-        const searchVal = modal.querySelector('.modal-search-input').value.toLowerCase();
-        const selectEl = modal.querySelector('.modal-select-filter');
-        const provinceVal = selectEl ? selectEl.value.toLowerCase() : '';
+        const searchInput = modal.querySelector('.modal-search-input');
+        const searchVal = searchInput ? searchInput.value.toLowerCase() : '';
+        const provinceSelect = modal.querySelector('[data-filter="province"]');
+        const periodSelect = modal.querySelector('[data-filter="period"]');
+        const yearSelect = modal.querySelector('[data-filter="year"]');
+        const provinceVal = provinceSelect ? provinceSelect.value.toLowerCase() : '';
+        const periodVal = periodSelect ? periodSelect.value.toLowerCase() : '';
+        const yearVal = yearSelect ? yearSelect.value.toLowerCase() : '';
         
         const rows = modal.querySelectorAll('.task-table tbody tr');
         rows.forEach(row => {
             const projCode = row.querySelector('.proj-title-cell').innerText.toLowerCase();
-            const projMeta = row.querySelector('.proj-meta-cell').innerText.toLowerCase();
+            const projMetaElement = row.querySelector('.proj-meta-cell');
+            const projMeta = projMetaElement ? projMetaElement.innerText.toLowerCase() : '';
             const details = row.querySelector('.task-message-cell').innerText.toLowerCase();
             const provinceText = row.dataset.province ? row.dataset.province.toLowerCase() : '';
+            const periodText = row.dataset.period ? row.dataset.period.toLowerCase() : '';
+            const yearText = row.dataset.year ? row.dataset.year.toLowerCase() : '';
             
             const matchesSearch = projCode.includes(searchVal) || projMeta.includes(searchVal) || details.includes(searchVal);
             const matchesProvince = provinceVal === '' || provinceText === provinceVal;
+            const matchesPeriod = periodVal === '' || periodText === periodVal;
+            const matchesYear = yearVal === '' || yearText === yearVal;
             
-            if (matchesSearch && matchesProvince) {
+            if (matchesSearch && matchesProvince && matchesPeriod && matchesYear) {
                 row.style.display = '';
             } else {
                 row.style.display = 'none';
