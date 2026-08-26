@@ -29,6 +29,11 @@ class RegionalTaskPoolTest extends TestCase
             'region' => 'Region I',
             'status' => 'active',
         ]);
+        User::factory()->create([
+            'role' => User::ROLE_REGIONAL,
+            'region' => 'Region II',
+            'status' => 'active',
+        ]);
 
         $url = '/fund-utilization/PROJECT-001/approve/mov/Q1';
         DB::table('tbnotifications')->insert([
@@ -54,7 +59,7 @@ class RegionalTaskPoolTest extends TestCase
             ],
         ]);
 
-        $this->assertCount(2, NotificationCenter::regionalPoolUserIds($regionalUserOne));
+        $this->assertCount(3, NotificationCenter::regionalPoolUserIds($regionalUserOne));
 
         $this->actingAs($regionalUserOne)->get('/notifications/1/read');
 
