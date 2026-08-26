@@ -18,13 +18,27 @@ use Illuminate\Support\Str;
 
 class MonitoringEvaluationMonthlyReportController extends Controller
 {
+    protected $currentDocType = 'monitoring_evaluation_monthly';
+
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:dilg_deliverables_monitoring_evaluation,view')->only(['index', 'edit', 'viewDocument']);
-        $this->middleware('crud_permission:dilg_deliverables_monitoring_evaluation,add')->only(['upload']);
-        $this->middleware('crud_permission:dilg_deliverables_monitoring_evaluation,update')->only(['approveDocument']);
-        $this->middleware('superadmin')->only(['deleteDocument']);
+        $this->middleware('crud_permission:dilg_deliverables_monitoring_evaluation,view')->only([
+            'index', 'indexLfp', 'indexRlipLime',
+            'edit', 'editLfp', 'editRlipLime',
+            'viewDocument', 'viewDocumentLfp', 'viewDocumentRlipLime'
+        ]);
+        $this->middleware('crud_permission:dilg_deliverables_monitoring_evaluation,add')->only([
+            'upload', 'uploadLfp', 'uploadRlipLime'
+        ]);
+        $this->middleware('crud_permission:dilg_deliverables_monitoring_evaluation,update')->only([
+            'approveDocument', 'approveDocumentLfp', 'approveDocumentRlipLime',
+            'requestDeletion', 'requestDeletionLfp', 'requestDeletionRlipLime',
+            'decideDeletion', 'decideDeletionLfp', 'decideDeletionRlipLime'
+        ]);
+        $this->middleware('superadmin')->only([
+            'deleteDocument', 'deleteDocumentLfp', 'deleteDocumentRlipLime'
+        ]);
     }
 
     private function getOffices(): array
@@ -74,7 +88,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
 
     private function reportDocType(): string
     {
-        return 'monitoring_evaluation_monthly';
+        return $this->currentDocType;
     }
 
     private function resolveReportingYear(Request $request): int
@@ -412,8 +426,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             }
 
             $url = $targetOffice !== ''
-                ? route('reports.dilg-deliverables.monitoring-evaluation.edit', ['office' => $targetOffice, 'year' => $document->year ?: now()->year])
-                : route('reports.dilg-deliverables.monitoring-evaluation');
+                ? route($this->getCategoryInfo()['editRoute'], ['office' => $targetOffice, 'year' => $document->year ?: now()->year])
+                : route($this->getCategoryInfo()['indexRoute']);
             $actorId = (int) auth()->id();
             $notificationService = app(InterventionNotificationService::class);
 
@@ -552,8 +566,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             }
 
             $url = $targetOffice !== ''
-                ? route('reports.dilg-deliverables.monitoring-evaluation.edit', ['office' => $targetOffice, 'year' => $document->year ?: now()->year])
-                : route('reports.dilg-deliverables.monitoring-evaluation');
+                ? route($this->getCategoryInfo()['editRoute'], ['office' => $targetOffice, 'year' => $document->year ?: now()->year])
+                : route($this->getCategoryInfo()['indexRoute']);
             $actorId = (int) auth()->id();
             $notificationService = app(InterventionNotificationService::class);
 
@@ -701,14 +715,17 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             }
         }
 
-        return view('reports.dilg-deliverables.monitoring-evaluation.index', compact(
-            'officeRows',
-            'documentsByOffice',
-            'reportingYear',
-            'months',
-            'perPage',
-            'filters',
-            'filterOptions'
+        return view('reports.dilg-deliverables.monitoring-evaluation.index', array_merge(
+            compact(
+                'officeRows',
+                'documentsByOffice',
+                'reportingYear',
+                'months',
+                'perPage',
+                'filters',
+                'filterOptions'
+            ),
+            $this->getCategoryInfo()
         ));
     }
 
@@ -748,15 +765,18 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             : collect();
         $configuredMonthlyDeadlines = $this->resolveMonthlyDeadlines($reportingYear);
 
-        return view('reports.dilg-deliverables.monitoring-evaluation.edit', compact(
-            'officeName',
-            'province',
-            'documentsByKey',
-            'usersById',
-            'activityLogs',
-            'reportingYear',
-            'months',
-            'configuredMonthlyDeadlines'
+        return view('reports.dilg-deliverables.monitoring-evaluation.edit', array_merge(
+            compact(
+                'officeName',
+                'province',
+                'documentsByKey',
+                'usersById',
+                'activityLogs',
+                'reportingYear',
+                'months',
+                'configuredMonthlyDeadlines'
+            ),
+            $this->getCategoryInfo()
         ));
     }
 
@@ -774,7 +794,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
 
         $document->delete();
 
-        return back()->with('success', 'Uploaded document deleted successfully.');
+        return redirect()->route($this->getCategoryInfo()['editRoute'], ['office' => $officeName, 'year' => $document->year])->with('success', 'Uploaded document deleted successfully.');
     }
 
     public function upload(Request $request, $office)
@@ -851,7 +871,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
         $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
         $this->notifyWorkflowUsersOnUpload($document);
 
-        return back()->with('success', 'Monthly report uploaded successfully.');
+        return redirect()->route($this->getCategoryInfo()['editRoute'], ['office' => $officeName, 'year' => $year])->with('success', 'Monthly report uploaded successfully.');
     }
 
     public function viewDocument($office, $docId)
@@ -965,7 +985,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
 
         $this->notifyLguUsersAfterRegionalApproval($document, $action, $isRegionalOffice, $remarks);
 
-        return back()->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
+        return redirect()->route($this->getCategoryInfo()['editRoute'], ['office' => $officeName, 'year' => $document->year])->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
     }
 
     public function requestDeletion(Request $request, $office, $docId)
@@ -1013,7 +1033,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                 $this->formatDocumentLabel($document),
                 $officeName
             );
-            $url = route('reports.dilg-deliverables.monitoring-evaluation.edit', [
+            $url = route($this->getCategoryInfo()['editRoute'], [
                 'office' => $officeName,
                 'year' => $document->year ?: now()->year
             ]);
@@ -1029,7 +1049,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             Log::warning('Failed to send deletion request notifications: ' . $e->getMessage());
         }
 
-        return back()->with('success', 'Deletion request submitted successfully.');
+        return redirect()->route($this->getCategoryInfo()['editRoute'], ['office' => $officeName, 'year' => $document->year])->with('success', 'Deletion request submitted successfully.');
     }
 
     public function decideDeletion(Request $request, $office, $docId)
@@ -1093,7 +1113,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                 if ($remarks) {
                     $message .= ' Remarks: ' . $remarks;
                 }
-                $url = route('reports.dilg-deliverables.monitoring-evaluation.edit', [
+                $url = route($this->getCategoryInfo()['editRoute'], [
                     'office' => $officeName,
                     'year' => $document->year ?: now()->year
                 ]);
@@ -1114,7 +1134,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
 
             $document->delete();
 
-            return back()->with('success', 'Document deletion request approved and file deleted.');
+            return redirect()->route($this->getCategoryInfo()['editRoute'], ['office' => $officeName, 'year' => $document->year])->with('success', 'Document deletion request approved and file deleted.');
         } else {
             $document->update([
                 'status' => 'approved',
@@ -1132,7 +1152,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                 if ($remarks) {
                     $message .= ' Remarks: ' . $remarks;
                 }
-                $url = route('reports.dilg-deliverables.monitoring-evaluation.edit', [
+                $url = route($this->getCategoryInfo()['editRoute'], [
                     'office' => $officeName,
                     'year' => $document->year ?: now()->year
                 ]);
@@ -1151,7 +1171,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                 Log::warning('Failed to send deletion rejection notification: ' . $e->getMessage());
             }
 
-            return back()->with('success', 'Document deletion request rejected.');
+            return redirect()->route($this->getCategoryInfo()['editRoute'], ['office' => $officeName, 'year' => $document->year])->with('success', 'Document deletion request rejected.');
         }
     }
 
@@ -1282,6 +1302,124 @@ class MonitoringEvaluationMonthlyReportController extends Controller
 
         $table .= '</tbody></table>';
         return $table;
+    }
+
+    private function getCategoryInfo(): array
+    {
+        $docType = $this->reportDocType();
+        $isLfp = ($docType === 'monitoring_evaluation_monthly_lfp');
+        $prefix = $isLfp ? 'lfp' : 'rlip-lime';
+        $categoryName = $isLfp ? 'LFP' : 'RLIP/LIME';
+
+        return [
+            'category' => $prefix,
+            'pageTitle' => $categoryName . ' Monitoring and Evaluation Monthly Reports',
+            'reportDocType' => $docType,
+            'baseRouteUrl' => url('/reports/dilg-deliverables/monitoring-and-evaluation-reports/' . $prefix),
+            'indexRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix,
+            'editRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.edit',
+            'uploadRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.upload',
+            'exportRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.export',
+            'approveRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.approve',
+            'viewDocumentRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.view-document',
+            'deleteRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.delete',
+            'requestDeletionRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.request-deletion',
+            'decideDeletionRoute' => 'reports.dilg-deliverables.monitoring-evaluation.' . $prefix . '.decide-deletion',
+        ];
+    }
+
+    // LFP Wrappers
+    public function indexLfp(Request $request)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->index($request);
+    }
+    public function exportLfp(Request $request)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->export($request);
+    }
+    public function editLfp(Request $request, $office)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->edit($request, $office);
+    }
+    public function uploadLfp(Request $request, $office)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->upload($request, $office);
+    }
+    public function approveDocumentLfp(Request $request, $office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->approveDocument($request, $office, $docId);
+    }
+    public function viewDocumentLfp($office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->viewDocument($office, $docId);
+    }
+    public function deleteDocumentLfp($office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->deleteDocument($office, $docId);
+    }
+    public function requestDeletionLfp(Request $request, $office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->requestDeletion($request, $office, $docId);
+    }
+    public function decideDeletionLfp(Request $request, $office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_lfp';
+        return $this->decideDeletion($request, $office, $docId);
+    }
+
+    // RLIP/LIME Wrappers
+    public function indexRlipLime(Request $request)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->index($request);
+    }
+    public function exportRlipLime(Request $request)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->export($request);
+    }
+    public function editRlipLime(Request $request, $office)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->edit($request, $office);
+    }
+    public function uploadRlipLime(Request $request, $office)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->upload($request, $office);
+    }
+    public function approveDocumentRlipLime(Request $request, $office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->approveDocument($request, $office, $docId);
+    }
+    public function viewDocumentRlipLime($office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->viewDocument($office, $docId);
+    }
+    public function deleteDocumentRlipLime($office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->deleteDocument($office, $docId);
+    }
+    public function requestDeletionRlipLime(Request $request, $office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->requestDeletion($request, $office, $docId);
+    }
+    public function decideDeletionRlipLime(Request $request, $office, $docId)
+    {
+        $this->currentDocType = 'monitoring_evaluation_monthly_rlip_lime';
+        return $this->decideDeletion($request, $office, $docId);
     }
 }
 

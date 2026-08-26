@@ -12,15 +12,22 @@
         'heroCopy' => 'Open a dedicated deliverables workspace for monitoring and evaluation, RLIP/LIME monthly reporting, or QAAR tracking. Each page can be extended with status boards, document actions, and compliance summaries.',
         'workspaceLinks' => [
             ['name' => 'reports.dilg-deliverables', 'label' => 'Overview', 'route' => route('reports.dilg-deliverables')],
-            ['name' => 'reports.dilg-deliverables.monitoring-evaluation', 'label' => 'Monitoring and Evaluation Reports', 'route' => route('reports.dilg-deliverables.monitoring-evaluation')],
+            ['name' => 'reports.dilg-deliverables.monitoring-evaluation.lfp', 'label' => 'LFP M&E Reports', 'route' => route('reports.dilg-deliverables.monitoring-evaluation.lfp')],
+            ['name' => 'reports.dilg-deliverables.monitoring-evaluation.rlip-lime', 'label' => 'RLIP/LIME M&E Reports', 'route' => route('reports.dilg-deliverables.monitoring-evaluation.rlip-lime')],
             ['name' => 'reports.dilg-deliverables.rlip-lime-monthly', 'label' => 'RLIP/LIME Monthly Reports', 'route' => route('reports.dilg-deliverables.rlip-lime-monthly')],
             ['name' => 'reports.dilg-deliverables.qaar-tool-monitoring', 'label' => 'QAAR Tool and Monitoring Report', 'route' => route('reports.dilg-deliverables.qaar-tool-monitoring')],
         ],
         'cards' => [
             [
-                'title' => 'Monitoring and Evaluation Reports',
-                'copy' => 'Use a dedicated page for monitoring status, evaluation notes, validation checkpoints, and follow-up actions for DILG deliverables.',
-                'href' => route('reports.dilg-deliverables.monitoring-evaluation'),
+                'title' => 'LFP Monitoring and Evaluation Reports',
+                'copy' => 'Use a dedicated page for monitoring status, evaluation notes, validation checkpoints, and follow-up actions for LFP deliverables.',
+                'href' => route('reports.dilg-deliverables.monitoring-evaluation.lfp'),
+                'cta' => 'Open page',
+            ],
+            [
+                'title' => 'RLIP/LIME Monitoring and Evaluation Reports',
+                'copy' => 'Use a dedicated page for monitoring status, evaluation notes, validation checkpoints, and follow-up actions for RLIP/LIME deliverables.',
+                'href' => route('reports.dilg-deliverables.monitoring-evaluation.rlip-lime'),
                 'cta' => 'Open page',
             ],
             [

@@ -2716,32 +2716,36 @@ Route::middleware(['auth'])->group(function () {
             return view('reports.dilg-deliverables.index');
         })->name('reports.dilg-deliverables');
 
-        Route::get('/monitoring-and-evaluation-reports', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'index'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation');
+        // Legacy Redirect
+        Route::get('/monitoring-and-evaluation-reports', function() {
+            return redirect()->route('reports.dilg-deliverables.monitoring-evaluation.lfp');
+        })->name('reports.dilg-deliverables.monitoring-evaluation');
 
-        Route::get('/monitoring-and-evaluation-reports/export', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'export'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.export');
+        // LFP M&E Reports
+        Route::prefix('monitoring-and-evaluation-reports/lfp')->group(function () {
+            Route::get('/', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'indexLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp');
+            Route::get('/export', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'exportLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.export');
+            Route::get('/{office}/edit', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'editLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.edit');
+            Route::post('/{office}/upload', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'uploadLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.upload');
+            Route::post('/{office}/approve/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'approveDocumentLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.approve');
+            Route::get('/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'viewDocumentLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.view-document');
+            Route::delete('/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'deleteDocumentLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.delete');
+            Route::post('/{office}/request-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'requestDeletionLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.request-deletion');
+            Route::post('/{office}/decide-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'decideDeletionLfp'])->name('reports.dilg-deliverables.monitoring-evaluation.lfp.decide-deletion');
+        });
 
-        Route::get('/monitoring-and-evaluation-reports/{office}/edit', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'edit'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.edit');
-
-        Route::post('/monitoring-and-evaluation-reports/{office}/upload', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'upload'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.upload');
-
-        Route::post('/monitoring-and-evaluation-reports/{office}/approve/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'approveDocument'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.approve');
-
-        Route::get('/monitoring-and-evaluation-reports/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'viewDocument'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.document');
-
-        Route::delete('/monitoring-and-evaluation-reports/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'deleteDocument'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.delete-document');
-
-        Route::post('/monitoring-and-evaluation-reports/{office}/request-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'requestDeletion'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.request-deletion');
-
-        Route::post('/monitoring-and-evaluation-reports/{office}/decide-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'decideDeletion'])
-            ->name('reports.dilg-deliverables.monitoring-evaluation.decide-deletion');
+        // RLIP/LIME M&E Reports
+        Route::prefix('monitoring-and-evaluation-reports/rlip-lime')->group(function () {
+            Route::get('/', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'indexRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime');
+            Route::get('/export', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'exportRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.export');
+            Route::get('/{office}/edit', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'editRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.edit');
+            Route::post('/{office}/upload', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'uploadRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.upload');
+            Route::post('/{office}/approve/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'approveDocumentRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.approve');
+            Route::get('/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'viewDocumentRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.view-document');
+            Route::delete('/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'deleteDocumentRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.delete');
+            Route::post('/{office}/request-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'requestDeletionRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.request-deletion');
+            Route::post('/{office}/decide-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'decideDeletionRlipLime'])->name('reports.dilg-deliverables.monitoring-evaluation.rlip-lime.decide-deletion');
+        });
 
         Route::get('/rlip-lime-monthly-reports', function () use ($assertDilgDeliverablesPermission) {
             $assertDilgDeliverablesPermission('dilg_deliverables_rlip_lime_monthly');
@@ -2900,6 +2904,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Projects routes
     Route::get('/projects/locally-funded', [App\Http\Controllers\LocallyFundedProjectController::class, 'index'])->name('projects.locally-funded');
+    Route::get('/projects/locally-funded/export', [App\Http\Controllers\LocallyFundedProjectController::class, 'export'])->name('projects.locally-funded.export');
     Route::get('/projects/locally-funded/subay/{projectCode}', [App\Http\Controllers\LocallyFundedProjectController::class, 'showSubaybayan'])->name('locally-funded-project.subay-show');
     Route::get('/projects/locally-funded/create', [App\Http\Controllers\LocallyFundedProjectController::class, 'create'])->name('locally-funded-project.create');
     Route::get('/projects/locally-funded/ensure/{projectCode}', [App\Http\Controllers\LocallyFundedProjectController::class, 'ensureFromSubay'])

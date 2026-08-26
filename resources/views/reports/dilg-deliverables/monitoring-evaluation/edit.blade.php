@@ -1,7 +1,7 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Monitoring and Evaluation Monthly Reports - Update')
-@section('page-title', 'Update Monitoring and Evaluation Monthly Reports')
+@section('title', $pageTitle . ' - Update')
+@section('page-title', 'Update ' . $pageTitle)
 
 @section('content')
     <div class="ops-detail-page">
@@ -11,7 +11,7 @@
             <p>Upload or update monthly submissions for this report.</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation', ['year' => $reportingYear]) }}" style="display: inline-flex; padding: 10px 18px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; align-items: center; gap: 6px; white-space: nowrap;">
+            <a href="{{ route($indexRoute, ['year' => $reportingYear]) }}" style="display: inline-flex; padding: 10px 18px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; text-decoration: none; align-items: center; gap: 6px; white-space: nowrap;">
                 <i class="fas fa-arrow-left"></i> Back to List
             </a>
         </div>
@@ -60,7 +60,7 @@
 
     <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
         <h2 style="color: #002C76; font-size: 18px; margin-bottom: 20px; font-weight: 600;">
-            Monthly Monitoring & Evaluation Report Uploads (CY {{ $reportingYear }})
+            {{ $pageTitle }} Uploads (CY {{ $reportingYear }})
         </h2>
 
         <div style="display: grid; gap: 12px;">
@@ -121,7 +121,7 @@
             @endphp
             @foreach ($months as $monthCode => $label)
                 @php
-                    $docKey = 'monitoring_evaluation_monthly|' . $reportingYear . '|' . $monthCode;
+                    $docKey = $reportDocType . '|' . $reportingYear . '|' . $monthCode;
                     $doc = $documentsByKey[$docKey] ?? null;
                     $inputId = 'me-monthly-input-' . $monthCode;
                     $buttonId = 'me-monthly-btn-' . $monthCode;
@@ -199,7 +199,7 @@
                         style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;"
                     >
                         <span style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
-                            <span>{{ $label }} - Monthly Monitoring & Evaluation Report</span>
+                            <span>{{ $label }} - {{ $pageTitle }}</span>
                             <span style="font-size: 11px; opacity: 0.95;">Deadline: {{ $monthDeadlineDisplay !== '' ? $monthDeadlineDisplay : 'No superadmin deadline set' }}</span>
                         </span>
                         <span style="display: inline-flex; align-items: center; gap: 10px;">
@@ -213,7 +213,7 @@
                         </span>
                     </button>
                     <div id="me-monthly-{{ $monthCode }}" style="display: {{ $isExpandedByDefault ? 'block' : 'none' }}; padding: 16px; background-color: #ffffff;">
-                        <form method="POST" action="{{ route('reports.dilg-deliverables.monitoring-evaluation.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 16px; border-radius: 8px; background-color: #f9fafb;">
+                        <form method="POST" action="{{ route($uploadRoute, $officeName) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 16px; border-radius: 8px; background-color: #f9fafb;">
                             @csrf
                             <input type="hidden" name="year" value="{{ $reportingYear }}">
                             <input type="hidden" name="month" value="{{ $monthCode }}">
@@ -315,7 +315,7 @@
                                     @if ($hasFile)
                                         <button
                                             type="button"
-                                            onclick="openMonitoringEvaluationDocumentViewerModal('{{ route('reports.dilg-deliverables.monitoring-evaluation.document', ['office' => $officeName, 'docId' => $doc->id]) }}', '{{ $label }} Monthly M&E Report')"
+                                            onclick="openMonitoringEvaluationDocumentViewerModal('{{ route($viewDocumentRoute, ['office' => $officeName, 'docId' => $doc->id]) }}', '{{ $label }} {{ $pageTitle }}')"
                                             style="padding: 8px 14px; background-color: #1e293b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;"
                                         >
                                             <i class="fas fa-eye"></i> View PDF
@@ -330,7 +330,7 @@
                                         </button>
 
                                         @if (Auth::user()->isSuperAdmin())
-                                            <form method="POST" action="{{ route('reports.dilg-deliverables.monitoring-evaluation.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Are you sure you want to delete this document?');" style="display: inline-block;">
+                                            <form method="POST" action="{{ route($deleteRoute, ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Are you sure you want to delete this document?');" style="display: inline-block;">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button
@@ -876,7 +876,7 @@
             const remarks = document.getElementById('monitoringEvaluationApprovalRemarks');
             const submitBtn = document.getElementById('monitoringEvaluationApprovalSubmit');
 
-            form.action = '{{ url('/reports/dilg-deliverables/monitoring-and-evaluation-reports') }}/' + encodeURIComponent('{{ $officeName }}') + '/approve/' + docId;
+            form.action = '{{ $baseRouteUrl }}/' + encodeURIComponent('{{ $officeName }}') + '/approve/' + docId;
             actionInput.value = action;
             remarks.value = '';
 
@@ -944,7 +944,7 @@
             const modal = document.getElementById('meDeletionRequestModal');
             const form = document.getElementById('meDeletionRequestForm');
             if (!modal || !form) return;
-            form.action = '{{ url('/reports/dilg-deliverables/monitoring-and-evaluation-reports') }}/' + encodeURIComponent('{{ $officeName }}') + '/request-deletion/' + docId;
+            form.action = '{{ $baseRouteUrl }}/' + encodeURIComponent('{{ $officeName }}') + '/request-deletion/' + docId;
             document.getElementById('meDeletionRequestRemarks').value = '';
             modal.style.display = 'block';
         }
@@ -962,7 +962,7 @@
             const submitBtn = document.getElementById('meDeletionDecisionSubmit');
             if (!modal || !form) return;
 
-            form.action = '{{ url('/reports/dilg-deliverables/monitoring-and-evaluation-reports') }}/' + encodeURIComponent('{{ $officeName }}') + '/decide-deletion/' + docId;
+            form.action = '{{ $baseRouteUrl }}/' + encodeURIComponent('{{ $officeName }}') + '/decide-deletion/' + docId;
             decisionInput.value = decision;
             document.getElementById('meDeletionDecisionRemarks').value = '';
 

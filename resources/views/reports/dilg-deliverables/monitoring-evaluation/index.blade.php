@@ -1,11 +1,11 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Monitoring and Evaluation Monthly Reports')
-@section('page-title', 'Monitoring and Evaluation Monthly Reports')
+@section('title', $pageTitle)
+@section('page-title', $pageTitle)
 
 @section('content')
 <div class="content-header">
-    <h1>Monitoring and Evaluation Monthly Reports</h1>
+    <h1>{{ $pageTitle }}</h1>
     <p>Monthly submission monitoring for all provinces, cities, and municipalities.</p>
 </div>
 
@@ -34,7 +34,7 @@
         <div class="card">
             <div class="card-body">
                 <div style="background: #ffffff; padding: 16px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); margin-bottom: 20px; border: 1px solid #e5e7eb;">
-                    <form id="me-monthly-filters-form" method="GET" action="{{ route('reports.dilg-deliverables.monitoring-evaluation') }}" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                    <form id="me-monthly-filters-form" method="GET" action="{{ route($indexRoute) }}" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
                         <input type="hidden" name="per_page" value="{{ $perPage ?? 15 }}">
                         <div style="flex: 0 0 120px; min-width: 120px;">
                             <label for="me-monthly-year" style="display: block; margin-bottom: 6px; color: #374151; font-size: 12px; font-weight: 600;">Year</label>
@@ -56,7 +56,7 @@
                         <button type="submit" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #2563eb; color: white; border: 1px solid #2563eb; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                             <i class="fas fa-filter"></i> Apply
                         </button>
-                        <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation', ['year' => $reportingYear, 'per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
+                        <a href="{{ route($indexRoute, ['year' => $reportingYear, 'per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
                             Clear
                         </a>
                         <button type="button" onclick="openMonitoringEvaluationExportModal()" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #10b981; color: white; border: 1px solid #10b981; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; margin-left: auto;">
@@ -102,12 +102,12 @@
                                     <td style="padding: 12px; color: #111827; font-size: 13px; white-space: nowrap;">{{ $row['city_municipality'] }}</td>
                                     @foreach ($months as $monthCode => $monthLabel)
                                         <td style="padding: 12px; text-align: center; color: #111827; font-size: 13px;">
-                                            {!! $statusIcon($officeDocs['monitoring_evaluation_monthly|' . $reportingYear . '|' . $monthCode] ?? null) !!}
+                                            {!! $statusIcon($officeDocs[$reportDocType . '|' . $reportingYear . '|' . $monthCode] ?? null) !!}
                                         </td>
                                     @endforeach
                                     <td style="padding: 12px; text-align: center; white-space: nowrap;">
                                         <a
-                                            href="{{ route('reports.dilg-deliverables.monitoring-evaluation.edit', ['office' => $row['city_municipality'], 'year' => $reportingYear]) }}"
+                                            href="{{ route($editRoute, ['office' => $row['city_municipality'], 'year' => $reportingYear]) }}"
                                             style="display: inline-block; padding: 8px 16px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-decoration: none;"
                                         >
                                             <i class="fas fa-eye" style="margin-right: 4px;"></i> View
@@ -205,7 +205,7 @@
             <h3 style="margin-top: 0; color: #0f172a; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
                 <i class="fas fa-file-excel" style="color: #10b981;"></i> Extract Excel Report
             </h3>
-            <form id="meExportForm" method="GET" action="{{ route('reports.dilg-deliverables.monitoring-evaluation.export') }}">
+            <form id="meExportForm" method="GET" action="{{ route($exportRoute) }}">
                 <div style="margin: 16px 0;">
                     <label for="export-year" style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Year</label>
                     <select id="export-year" name="year" style="width: 100%; height: 40px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">

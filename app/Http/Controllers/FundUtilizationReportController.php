@@ -3141,7 +3141,7 @@ class FundUtilizationReportController extends Controller
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
         if (!$this->canUploadFundUtilizationDocuments($user)) {
-            return back()->withErrors([
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'mov'])->withErrors([
                 'mov_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
         }
@@ -3187,7 +3187,7 @@ class FundUtilizationReportController extends Controller
                     Storage::disk('public')->delete($path);
                 }
 
-                return back()->withErrors([
+                return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'mov'])->withErrors([
                     'mov_file' => $exception->getMessage(),
                 ]);
             }
@@ -3197,7 +3197,7 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        return back()->with('success', 'MOV file uploaded successfully.');
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'mov'])->with('success', 'MOV file uploaded successfully.');
     }
 
     /**
@@ -3206,7 +3206,7 @@ class FundUtilizationReportController extends Controller
     public function uploadBatchDocument(FundUtilizationBatchDocumentUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
     {
         if (!$this->canUploadFundUtilizationDocuments(Auth::user())) {
-            return back()->withErrors([
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'batch-document'])->withErrors([
                 'batch_document_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
         }
@@ -3239,7 +3239,7 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        return back()->with('success', 'Batch Documents files uploaded successfully.');
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'batch-document'])->with('success', 'Batch Documents files uploaded successfully.');
     }
 
     public function uploadBatchDocumentsBulk(FundUtilizationBatchDocumentBulkUploadRequest $request, FundUtilizationWorkflowService $workflowService)
@@ -3805,7 +3805,7 @@ class FundUtilizationReportController extends Controller
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
         if (!$this->canUploadFundUtilizationDocuments($user)) {
-            return back()->withErrors([
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'written-notice-dbm'])->withErrors([
                 'written_notice' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
         }
@@ -3872,7 +3872,7 @@ class FundUtilizationReportController extends Controller
                     }
                 }
 
-                return back()->withErrors([
+                return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'written-notice-dbm'])->withErrors([
                     'written_notice' => $exception->getMessage(),
                 ]);
             }
@@ -3887,7 +3887,7 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        return back()->with('success', 'Written Notice files uploaded successfully.');
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'written-notice-dbm'])->with('success', 'Written Notice files uploaded successfully.');
     }
 
     /**
@@ -3898,7 +3898,7 @@ class FundUtilizationReportController extends Controller
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
         if (!$this->canUploadFundUtilizationDocuments($user)) {
-            return back()->withErrors([
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'fdp'])->withErrors([
                 'fdp_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
         }
@@ -3945,7 +3945,7 @@ class FundUtilizationReportController extends Controller
                     Storage::disk('public')->delete($path);
                 }
 
-                return back()->withErrors([
+                return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'fdp'])->withErrors([
                     'fdp_file' => $exception->getMessage(),
                 ]);
             }
@@ -3955,7 +3955,7 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        return back()->with('success', 'FDP document uploaded successfully.');
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'fdp'])->with('success', 'FDP document uploaded successfully.');
     }
 
     /**
@@ -3968,7 +3968,7 @@ class FundUtilizationReportController extends Controller
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
         if (!$this->canUploadFundUtilizationDocuments($user)) {
-            return back()
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $validated['quarter'], 'document' => 'posting-link'])
                 ->withInput()
                 ->withErrors(['posting_link' => 'Only LGU User and DILG Provincial Office users can upload documents.']);
         }
@@ -3977,7 +3977,7 @@ class FundUtilizationReportController extends Controller
 
         $postingLink = InputSanitizer::sanitizeHttpUrl($validated['posting_link']);
         if ($postingLink === null) {
-            return back()
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $validated['quarter'], 'document' => 'posting-link'])
                 ->withInput()
                 ->withErrors(['posting_link' => 'Please enter a valid http or https URL.']);
         }
@@ -3997,7 +3997,7 @@ class FundUtilizationReportController extends Controller
                 $workflowService->submitOrResubmit($report, $validated['quarter'], 'posting-link', $record, $user);
             });
         } catch (\Throwable $exception) {
-            return back()
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $validated['quarter'], 'document' => 'posting-link'])
                 ->withInput()
                 ->withErrors(['posting_link' => $exception->getMessage()]);
         }
@@ -4013,7 +4013,7 @@ class FundUtilizationReportController extends Controller
             'user_id' => auth()->id(),
         ]);
 
-        return back()->with('success', 'LGU posting link saved successfully.');
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $validated['quarter'], 'document' => 'posting-link'])->with('success', 'LGU posting link saved successfully.');
     }
 
     /**
@@ -4029,20 +4029,20 @@ class FundUtilizationReportController extends Controller
 
         $remarks = $this->sanitizeReportRemarks($validated['remarks'] ?? null);
         if ($remarks === null || trim((string) $remarks) === '') {
-            return back()->withErrors(['remarks' => 'Remarks must contain plain text.']);
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->withErrors(['remarks' => 'Remarks must contain plain text.']);
         }
 
         $report = $this->getReportOrLfpProject($projectCode);
         $record = $this->resolveFundUtilizationUploadRecord($uploadType, $projectCode, $quarter);
 
         if (!$record) {
-            return back()->withErrors(['document' => 'The selected document record was not found.']);
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->withErrors(['document' => 'The selected document record was not found.']);
         }
 
         try {
             $updatedWorkflow = $workflowService->requestResubmission($report, $quarter, $uploadType, $user, (string) $remarks);
         } catch (\Throwable $exception) {
-            return back()->withErrors(['document' => $exception->getMessage()]);
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->withErrors(['document' => $exception->getMessage()]);
         }
 
         $documentLabel = $this->resolveFundUtilizationDocumentLabel($uploadType);
@@ -4068,7 +4068,7 @@ class FundUtilizationReportController extends Controller
             ]);
         }
 
-        return back()->with('success', $documentLabel . ' resubmission request submitted successfully.');
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->with('success', $documentLabel . ' resubmission request submitted successfully.');
     }
 
     public function decideResubmissionRequest(Request $request, $projectCode, $uploadType, $quarter, FundUtilizationWorkflowService $workflowService)
@@ -4079,12 +4079,12 @@ class FundUtilizationReportController extends Controller
         ]);
 
         $expectsJson = $request->expectsJson() || $request->ajax();
-        $errorResponse = static function (string $message, int $status = 422) use ($expectsJson) {
+        $errorResponse = function (string $message, int $status = 422) use ($expectsJson, $projectCode, $quarter, $uploadType) {
             if ($expectsJson) {
                 return response()->json(['message' => $message], $status);
             }
 
-            return back()->withErrors(['document' => $message]);
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->withErrors(['document' => $message]);
         };
 
         $report = $this->getReportOrLfpProject($projectCode);
@@ -4136,7 +4136,7 @@ class FundUtilizationReportController extends Controller
             ]);
         }
 
-        return back()->with('success', $message);
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->with('success', $message);
     }
 
     public function approveUpload(FundUtilizationApprovalActionRequest $request, $projectCode, $uploadType, $quarter, FundUtilizationWorkflowService $workflowService)
@@ -4147,14 +4147,14 @@ class FundUtilizationReportController extends Controller
         $remarks = $this->sanitizeReportRemarks($validated['remarks'] ?? null);
         $report = $this->getReportOrLfpProject($projectCode);
         $expectsJson = $request->expectsJson() || $request->ajax();
-        $errorResponse = static function (string $message, int $status = 422) use ($expectsJson) {
+        $errorResponse = function (string $message, int $status = 422) use ($expectsJson, $projectCode, $quarter, $uploadType) {
             if ($expectsJson) {
                 return response()->json([
                     'message' => $message,
                 ], $status);
             }
 
-            return back()->withErrors([
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->withErrors([
                 'document' => $message,
             ]);
         };
@@ -4169,7 +4169,7 @@ class FundUtilizationReportController extends Controller
                 ], 422);
             }
 
-            return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
         $documentLabelMap = [
@@ -4305,7 +4305,7 @@ class FundUtilizationReportController extends Controller
             ]);
         }
 
-        return back()->with('success', $message);
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->with('success', $message);
     }
 
     /**
@@ -4401,7 +4401,7 @@ class FundUtilizationReportController extends Controller
             'user_id' => auth()->id(),
         ]);
 
-        return back()->with('success', 'Remarks saved successfully.');
+        return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $quarter, 'document' => $uploadType])->with('success', 'Remarks saved successfully.');
     }
 
     /**

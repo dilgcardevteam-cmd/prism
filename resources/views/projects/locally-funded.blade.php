@@ -275,6 +275,9 @@
                     <a href="{{ route($listRouteName, ['sort_by' => $sortBy ?? 'funding_year', 'sort_dir' => $sortDir ?? 'asc', 'per_page' => $perPage ?? 10]) }}" style="padding: 8px 12px; background-color: #6b7280; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">
                         Clear
                     </a>
+                    <button type="button" onclick="openLocallyFundedExportModal()" style="padding: 8px 12px; background-color: #10b981; color: white; border: 0; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; margin-left: auto;">
+                        <i class="fas fa-file-excel"></i> Extract Excel
+                    </button>
                 </form>
 
             </div>
@@ -1601,6 +1604,76 @@
             window.addEventListener('resize', function () {
                 applyFrozenColumnByKey(readFrozenColumnKey());
             });
+        });
+    </script>
+
+    <!-- Export Filter Modal -->
+    <div id="lfpExportModal" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); z-index: 1100; backdrop-filter: blur(4px);">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 440px; width: 90%;">
+            <h3 style="margin-top: 0; color: #0f172a; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-file-excel" style="color: #10b981;"></i> Extract Locally Funded Projects Excel
+            </h3>
+            <form id="lfpExportForm" method="GET" action="{{ route('projects.locally-funded.export') }}">
+                <div style="margin: 16px 0;">
+                    <label for="export-funding-year" style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Funding Year</label>
+                    <select id="export-funding-year" name="funding_year" style="width: 100%; height: 40px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        <option value="">All Years</option>
+                        @foreach($fundingYears as $year)
+                            <option value="{{ $year }}" {{ (string) $activeFilters['funding_year'] === (string) $year ? 'selected' : '' }}>{{ $year }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="margin: 16px 0;">
+                    <label for="export-province" style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Province</label>
+                    <select id="export-province" name="province" style="width: 100%; height: 40px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        <option value="">All Provinces</option>
+                        @foreach($provinces as $province)
+                            <option value="{{ $province }}" {{ (string) $activeFilters['province'] === (string) $province ? 'selected' : '' }}>{{ $province }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="margin: 16px 0;">
+                    <label for="export-fund-source" style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Fund Source</label>
+                    <select id="export-fund-source" name="fund_source" style="width: 100%; height: 40px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        <option value="">All Sources</option>
+                        @foreach($fundSources as $source)
+                            <option value="{{ $source }}" {{ (string) $activeFilters['fund_source'] === (string) $source ? 'selected' : '' }}>{{ $source }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="margin: 16px 0;">
+                    <label for="export-status" style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Status</label>
+                    <select id="export-status" name="status" style="width: 100%; height: 40px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        <option value="">All Statuses</option>
+                        @foreach($statusOptions as $status)
+                            <option value="{{ $status }}" {{ (string) $activeFilters['status'] === (string) $status ? 'selected' : '' }}>{{ $status }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+                    <button type="button" onclick="closeLocallyFundedExportModal()" style="padding: 8px 14px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Cancel</button>
+                    <button type="submit" style="padding: 8px 14px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Download Excel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openLocallyFundedExportModal() {
+            const modal = document.getElementById('lfpExportModal');
+            if (modal) modal.style.display = 'block';
+        }
+
+        function closeLocallyFundedExportModal() {
+            const modal = document.getElementById('lfpExportModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        window.addEventListener('click', function (event) {
+            const modal = document.getElementById('lfpExportModal');
+            if (event.target === modal) {
+                closeLocallyFundedExportModal();
+            }
         });
     </script>
 @endsection

@@ -1099,7 +1099,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         $document->delete();
 
-        return back()->with('success', 'Uploaded document deleted successfully.');
+        return redirect()
+            ->route('local-project-monitoring-committee.edit', $officeName)
+            ->with('success', 'Uploaded document deleted successfully.');
     }
 
     public function upload(Request $request, $id)
@@ -1220,7 +1222,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $this->notifyWorkflowUsersOnUpload($document);
 
         return redirect()
-            ->back()
+            ->route('local-project-monitoring-committee.edit', $officeName)
             ->with('success', 'Document uploaded successfully.');
     }
 
@@ -1277,7 +1279,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
             $document->update(['file_path' => null, 'original_filename' => null]);
         }
 
-        return back()->with('success', 'File deleted successfully.');
+        return redirect()
+            ->route('local-project-monitoring-committee.edit', $officeName)
+            ->with('success', 'File deleted successfully.');
     }
 
     public function viewDocument($id, $docId)
@@ -1372,7 +1376,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         $this->notifyLguUsersAfterRegionalApproval($document, $action, $isRegionalOffice, $remarks);
 
-        return back()->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
+        return redirect()
+            ->route('local-project-monitoring-committee.edit', $officeName)
+            ->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
     }
 
     public function export(Request $request)

@@ -2733,7 +2733,9 @@
                     $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
                     $reportsMonthlyRpmesActive = false;
                     $reportsDilgDeliverablesActive = request()->routeIs('reports.dilg-deliverables');
-                    $reportsDilgMonitoringEvaluationActive = request()->routeIs('reports.dilg-deliverables.monitoring-evaluation');
+                    $monitoringEvaluationLfpActive = request()->routeIs('reports.dilg-deliverables.monitoring-evaluation.lfp*');
+                    $monitoringEvaluationRlipLimeActive = request()->routeIs('reports.dilg-deliverables.monitoring-evaluation.rlip-lime*');
+                    $reportsDilgMonitoringEvaluationActive = $monitoringEvaluationLfpActive || $monitoringEvaluationRlipLimeActive;
                     $reportsDilgRlipLimeActive = request()->routeIs('reports.dilg-deliverables.rlip-lime-monthly');
                     $reportsDilgQaarActive = request()->routeIs('reports.dilg-deliverables.qaar-tool-monitoring');
                     $reportsDilgDeliverablesMenuActive = $reportsDilgDeliverablesActive
@@ -2759,20 +2761,28 @@
                         <ul id="reportsDilgDeliverablesMenu" class="submenu" style="display: {{ $reportsDilgDeliverablesMenuActive ? 'block' : 'none' }};">
                             @if($canViewDilgMonitoringEvaluation)
                                 <li>
-                                    <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation') }}" class="@if($reportsDilgMonitoringEvaluationActive) active @endif">
+                                    <a href="#" class="@if($reportsDilgMonitoringEvaluationActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'monitoringEvaluationSubmenu')">
                                         <i class="fas fa-file-lines"></i>
                                         <span>Monitoring and Evaluation Reports</span>
+                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 10px;"></i>
                                     </a>
+                                    <ul id="monitoringEvaluationSubmenu" class="submenu" style="display: {{ $reportsDilgMonitoringEvaluationActive ? 'block' : 'none' }}; padding-left: 15px;">
+                                        <li>
+                                            <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation.lfp') }}" class="@if($monitoringEvaluationLfpActive) active @endif">
+                                                <i class="fas fa-circle-dot" style="font-size: 8px;"></i>
+                                                <span>LFP</span>
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation.rlip-lime') }}" class="@if($monitoringEvaluationRlipLimeActive) active @endif">
+                                                <i class="fas fa-circle-dot" style="font-size: 8px;"></i>
+                                                <span>RLIP/LIME</span>
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </li>
                             @endif
-                            @if($canViewDilgRlipLimeMonthly)
-                                <li>
-                                    <a href="{{ route('reports.dilg-deliverables.rlip-lime-monthly') }}" class="@if($reportsDilgRlipLimeActive) active @endif">
-                                        <i class="fas fa-chart-column"></i>
-                                        <span>RLIP/LIME Monthly Reports</span>
-                                    </a>
-                                </li>
-                            @endif
+
                             @if($canViewDilgQaarTool)
                                 <li>
                                     <a href="{{ route('reports.dilg-deliverables.qaar-tool-monitoring') }}" class="@if($reportsDilgQaarActive) active @endif">

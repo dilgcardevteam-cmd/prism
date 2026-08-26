@@ -5705,14 +5705,450 @@ $url = route('locally-funded-project.show', $project, false);
             return $configuredDeadline->copy();
         }
 
-        if ($field === 'pcr_submission_deadline' && $project->target_date_completion instanceof Carbon) {
-            return $project->target_date_completion->copy()->addDays(30);
-        }
-
         if ($field === 'rssa_report_deadline' && $project->target_date_completion instanceof Carbon) {
             return $project->target_date_completion->copy()->addDays(395);
         }
 
         return null;
+    }
+
+    public function export(Request $request)
+    {
+        $currentYear = now()->year;
+        $currentMonth = now()->month;
+        $userId = Auth::id();
+
+        $hasSubayProjectCodeKeyColumn = $this->hasColumnCached('subay_project_profiles', 'project_code_key');
+        $hasSubayProvinceKeyColumn = $this->hasColumnCached('subay_project_profiles', 'province_key');
+        $hasSubayCityKeyColumn = $this->hasColumnCached('subay_project_profiles', 'city_municipality_key');
+        $hasSubayFundingYearKeyColumn = $this->hasColumnCached('subay_project_profiles', 'funding_year_key');
+        $hasSubayFundingYearNumColumn = $this->hasColumnCached('subay_project_profiles', 'funding_year_num');
+        $hasSubayFundSourceKeyColumn = $this->hasColumnCached('subay_project_profiles', 'fund_source_key');
+        $hasSubayProcurementKeyColumn = $this->hasColumnCached('subay_project_profiles', 'procurement_key');
+        $hasSubayStatusKeyColumn = $this->hasColumnCached('subay_project_profiles', 'status_key');
+        $hasSubayDateParsedColumn = $this->hasColumnCached('subay_project_profiles', 'date_parsed');
+        $hasSubayAllocationNumColumn = $this->hasColumnCached('subay_project_profiles', 'allocation_num');
+        $hasSubayObligationNumColumn = $this->hasColumnCached('subay_project_profiles', 'obligation_num');
+        $hasSubayDisbursementNumColumn = $this->hasColumnCached('subay_project_profiles', 'disbursement_num');
+        $hasSubayLiquidationsNumColumn = $this->hasColumnCached('subay_project_profiles', 'liquidations_num');
+        $hasSubayAccomplishmentNumColumn = $this->hasColumnCached('subay_project_profiles', 'accomplishment_num');
+
+        $subayParsedDateExpr = function (string $alias) use ($hasSubayDateParsedColumn): string {
+            if ($hasSubayDateParsedColumn) {
+                return "{$alias}.date_parsed";
+            }
+            $trimmed = "NULLIF(TRIM(COALESCE({$alias}.date, '')), '')";
+            return "
+                COALESCE(
+                    IF(
+                        TRIM(COALESCE({$alias}.date, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$',
+                        DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE({$alias}.date, '')) AS DECIMAL(12,4))) DAY),
+                        NULL
+                    ),
+                    STR_TO_DATE({$trimmed}, '%Y-%m-%d'),
+                    STR_TO_DATE({$trimmed}, '%Y-%m-%d %H:%i:%s'),
+                    STR_TO_DATE({$trimmed}, '%m/%d/%Y'),
+                    STR_TO_DATE({$trimmed}, '%m/%d/%Y %H:%i'),
+                    STR_TO_DATE({$trimmed}, '%m/%d/%Y %H:%i:%s'),
+                    STR_TO_DATE({$trimmed}, '%m/%d/%Y %h:%i:%s %p'),
+                    STR_TO_DATE({$trimmed}, '%m/%d/%y'),
+                    STR_TO_DATE({$trimmed}, '%d/%m/%Y'),
+                    STR_TO_DATE({$trimmed}, '%d-%m-%Y'),
+                    STR_TO_DATE({$trimmed}, '%d-%m-%Y %H:%i:%s'),
+                    STR_TO_DATE({$trimmed}, '%d-%b-%Y'),
+                    STR_TO_DATE({$trimmed}, '%b %e, %Y'),
+                    STR_TO_DATE({$trimmed}, '%M %e, %Y')
+                )
+            ";
+        };
+
+        $subayProjectCodeKeyExpr = fn (string $alias): string => $hasSubayProjectCodeKeyColumn
+            ? "{$alias}.project_code_key"
+            : "LOWER(TRIM(COALESCE({$alias}.project_code, '')))";
+        $subayProvinceKeyExpr = $hasSubayProvinceKeyColumn
+            ? 'spp.province_key'
+            : "LOWER(TRIM(COALESCE(spp.province, '')))";
+        $subayCityKeyExpr = $hasSubayCityKeyColumn
+            ? 'spp.city_municipality_key'
+            : "LOWER(TRIM(COALESCE(spp.city_municipality, '')))";
+        $subayFundingYearKeyExpr = $hasSubayFundingYearKeyColumn
+            ? 'spp.funding_year_key'
+            : "TRIM(COALESCE(spp.funding_year, ''))";
+        $subayFundingYearNumExpr = $hasSubayFundingYearNumColumn
+            ? 'spp.funding_year_num'
+            : "CASE WHEN TRIM(COALESCE(spp.funding_year, '')) REGEXP '^[0-9]+$' THEN CAST(TRIM(COALESCE(spp.funding_year, '')) AS UNSIGNED) ELSE NULL END";
+        $subayFundSourceKeyExpr = $hasSubayFundSourceKeyColumn
+            ? 'spp.fund_source_key'
+            : "
+                CASE
+                    WHEN UPPER(TRIM(COALESCE(spp.project_code, ''))) LIKE 'SBDP%' THEN 'SBDP'
+                    WHEN UPPER(TRIM(COALESCE(spp.project_code, ''))) LIKE 'FA-%' THEN 'FALGU'
+                    WHEN UPPER(TRIM(COALESCE(spp.project_code, ''))) LIKE 'FALGU%' THEN 'FALGU'
+                    WHEN UPPER(TRIM(COALESCE(spp.project_code, ''))) LIKE 'CMGP%' THEN 'CMGP'
+                    WHEN UPPER(TRIM(COALESCE(spp.project_code, ''))) LIKE 'GEF%' THEN 'GEF'
+                    WHEN UPPER(TRIM(COALESCE(spp.project_code, ''))) LIKE 'SAFPB%' THEN 'SAFPB'
+                    WHEN UPPER(TRIM(COALESCE(spp.project_code, ''))) LIKE 'SGLGIF%' THEN 'SGLGIF'
+                    WHEN UPPER(TRIM(COALESCE(spp.program, ''))) LIKE '%FALGU%' THEN 'FALGU'
+                    WHEN UPPER(TRIM(COALESCE(spp.program, ''))) IN ('GROWTH EQUITY FUND', 'GEF') THEN 'GEF'
+                    WHEN UPPER(TRIM(COALESCE(spp.program, ''))) IN ('SUPPORT TO THE BARANGAY DEVELOPMENT PROGRAM', 'SBDP') THEN 'SBDP'
+                    ELSE UPPER(TRIM(COALESCE(spp.program, '')))
+                END
+            ";
+        $subayProcurementKeyExpr = $hasSubayProcurementKeyColumn
+            ? 'spp.procurement_key'
+            : "LOWER(TRIM(COALESCE(spp.procurement_type, spp.procurement, '')))";
+        $subayStatusKeyExpr = $hasSubayStatusKeyColumn
+            ? 'spp.status_key'
+            : "LOWER(TRIM(COALESCE(spp.status, '')))";
+        $subayAllocationNumExpr = $hasSubayAllocationNumColumn
+            ? 'spp.allocation_num'
+            : "NULLIF(REPLACE(spp.national_subsidy_original_allocation, ',', ''), '')";
+        $subayObligationNumExpr = $hasSubayObligationNumColumn
+            ? 'spp.obligation_num'
+            : "NULLIF(REPLACE(spp.obligation, ',', ''), '')";
+        $subayDisbursementNumExpr = $hasSubayDisbursementNumColumn
+            ? 'spp.disbursement_num'
+            : "NULLIF(REPLACE(spp.disbursement, ',', ''), '')";
+        $subayLiquidationsNumExpr = $hasSubayLiquidationsNumColumn
+            ? 'spp.liquidations_num'
+            : "NULLIF(REPLACE(spp.liquidations, ',', ''), '')";
+        $subayAccomplishmentNumExpr = $hasSubayAccomplishmentNumColumn
+            ? 'spp.accomplishment_num'
+            : "NULLIF(REPLACE(spp.total_accomplishment, ',', ''), '')";
+
+        $latestSubayUpdateByProjectQuery = DB::table('subay_project_profiles as spp_date')
+            ->selectRaw($subayProjectCodeKeyExpr('spp_date') . ' as project_code_key')
+            ->selectRaw('MAX(' . $subayParsedDateExpr('spp_date') . ') as latest_update_date')
+            ->whereRaw($subayProjectCodeKeyExpr('spp_date') . " <> ''")
+            ->groupBy(DB::raw($subayProjectCodeKeyExpr('spp_date')));
+
+        $query = DB::table('subay_project_profiles as spp')
+            ->leftJoinSub($latestSubayUpdateByProjectQuery, 'spp_latest_update', function ($join) use ($subayProjectCodeKeyExpr) {
+                $join->on(DB::raw($subayProjectCodeKeyExpr('spp')), '=', 'spp_latest_update.project_code_key');
+            })
+            ->leftJoin('locally_funded_projects as lfp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
+            ->leftJoin('locally_funded_physical_updates as lpu', function ($join) use ($currentYear, $currentMonth) {
+                $join->on('lpu.project_id', '=', 'lfp.id')
+                    ->where('lpu.year', '=', $currentYear)
+                    ->where('lpu.month', '=', $currentMonth);
+            })
+            ->whereRaw("{$subayFundSourceKeyExpr} <> ?", ['SGLGIF']);
+
+        $hasFinancialUpdatesTable = $this->hasTableCached('locally_funded_financial_updates');
+        if ($hasFinancialUpdatesTable) {
+            $financialTotalsSubquery = DB::table('locally_funded_financial_updates as lffu')
+                ->select(
+                    'lffu.project_id',
+                    DB::raw('SUM(COALESCE(lffu.obligation, 0)) as lffu_obligation_total'),
+                    DB::raw('SUM(COALESCE(lffu.disbursed_amount, 0)) as lffu_disbursed_amount_total'),
+                    DB::raw('SUM(COALESCE(lffu.reverted_amount, 0)) as lffu_reverted_amount_total')
+                )
+                ->where('lffu.year', '=', $currentYear)
+                ->groupBy('lffu.project_id');
+
+            $query->leftJoinSub($financialTotalsSubquery, 'lffu_totals', function ($join) {
+                $join->on('lffu_totals.project_id', '=', 'lfp.id');
+            });
+        }
+
+        $projectProvinceExpression = 'COALESCE(lfp.province, spp.province)';
+        $projectCityExpression = 'COALESCE(lfp.city_municipality, spp.city_municipality)';
+        $projectRegionExpression = 'COALESCE(lfp.region, spp.region)';
+
+        $select = [
+            'spp.project_code',
+            'spp.project_title',
+            'spp.province',
+            'spp.city_municipality',
+            'spp.barangay',
+            'spp.funding_year',
+            'spp.program',
+            'spp.procurement_type',
+            'spp.procurement',
+            'spp.status',
+            'spp.total_accomplishment',
+            'spp.national_subsidy_original_allocation',
+            'spp.obligation as spp_obligation',
+            'spp.disbursement as spp_disbursed_amount',
+            'spp.liquidations as spp_reverted_amount',
+            'spp.updated_at as subay_updated_at',
+            'lfp.id as lfp_id',
+            'lfp.province as lfp_province',
+            'lfp.city_municipality as lfp_city_municipality',
+            'lfp.barangay as lfp_barangay',
+            'lfp.mode_of_procurement as lfp_mode_of_procurement',
+            'lfp.fund_source as lfp_fund_source',
+            'lfp.lgsf_allocation as lfp_lgsf_allocation',
+            'lfp.updated_at as lfp_updated_at',
+            'lpu.status_project_fou as lpu_status_actual',
+            'lpu.status_project_ro as lpu_status_subaybayan',
+            'lpu.accomplishment_pct_ro as lpu_accomplishment_pct_ro',
+        ];
+
+        $hasLfpObligationColumn = $this->hasColumnCached('locally_funded_projects', 'obligation');
+        $hasLfpDisbursedAmountColumn = $this->hasColumnCached('locally_funded_projects', 'disbursed_amount');
+        $hasLfpRevertedAmountColumn = $this->hasColumnCached('locally_funded_projects', 'reverted_amount');
+        $select[] = $hasLfpObligationColumn
+            ? 'lfp.obligation as lfp_obligation'
+            : DB::raw('NULL as lfp_obligation');
+        $select[] = $hasLfpDisbursedAmountColumn
+            ? 'lfp.disbursed_amount as lfp_disbursed_amount'
+            : DB::raw('NULL as lfp_disbursed_amount');
+        $select[] = $hasLfpRevertedAmountColumn
+            ? 'lfp.reverted_amount as lfp_reverted_amount'
+            : DB::raw('NULL as lfp_reverted_amount');
+        $select[] = $hasFinancialUpdatesTable
+            ? 'lffu_totals.lffu_obligation_total'
+            : DB::raw('NULL as lffu_obligation_total');
+        $select[] = $hasFinancialUpdatesTable
+            ? 'lffu_totals.lffu_disbursed_amount_total'
+            : DB::raw('NULL as lffu_disbursed_amount_total');
+        $select[] = $hasFinancialUpdatesTable
+            ? 'lffu_totals.lffu_reverted_amount_total'
+            : DB::raw('NULL as lffu_reverted_amount_total');
+
+        $hasUtilizationRateColumn = $this->hasColumnCached('locally_funded_projects', 'utilization_rate');
+        $select[] = $hasUtilizationRateColumn
+            ? 'lfp.utilization_rate as lfp_utilization_rate'
+            : DB::raw('NULL as lfp_utilization_rate');
+
+        $filters = [
+            'search' => trim((string) $request->query('search', '')),
+            'project_code' => trim((string) $request->query('project_code', '')),
+            'funding_year' => trim((string) $request->query('funding_year', '')),
+            'fund_source' => $this->normalizeLocallyFundedFundSourceFilter($request->query('fund_source', '')),
+            'province' => trim((string) $request->query('province', '')),
+            'city' => trim((string) $request->query('city', '')),
+            'barangay' => trim((string) $request->query('barangay', '')),
+            'procurement' => trim((string) $request->query('procurement', '')),
+            'status' => trim((string) $request->query('status', '')),
+            'project_update_status' => trim((string) $request->query('project_update_status', '')),
+        ];
+
+        $normalizedFundSourceExpression = "COALESCE(NULLIF(UPPER(TRIM(COALESCE(lfp.fund_source, ''))), ''), {$subayFundSourceKeyExpr})";
+        $normalizedProcurementExpression = "COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.mode_of_procurement, ''))), ''), {$subayProcurementKeyExpr})";
+        $normalizedStatusExpression = "COALESCE(NULLIF(LOWER(TRIM(COALESCE(lpu.status_project_ro, ''))), ''), {$subayStatusKeyExpr})";
+
+        if ($filters['project_code'] !== '') {
+            $projectCodeKeyword = '%' . strtolower($filters['project_code']) . '%';
+            $query->whereRaw($subayProjectCodeKeyExpr('spp') . ' LIKE ?', [$projectCodeKeyword]);
+        }
+
+        if ($filters['search'] !== '') {
+            $keyword = '%' . strtolower($filters['search']) . '%';
+            $query->where(function ($subQuery) use ($keyword, $subayProjectCodeKeyExpr, $subayProvinceKeyExpr, $subayCityKeyExpr, $normalizedFundSourceExpression, $normalizedProcurementExpression) {
+                $subQuery
+                    ->whereRaw($subayProjectCodeKeyExpr('spp') . ' LIKE ?', [$keyword])
+                    ->orWhereRaw('LOWER(spp.project_title) LIKE ?', [$keyword])
+                    ->orWhereRaw("COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.province, ''))), ''), {$subayProvinceKeyExpr}) LIKE ?", [$keyword])
+                    ->orWhereRaw("COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.city_municipality, ''))), ''), {$subayCityKeyExpr}) LIKE ?", [$keyword])
+                    ->orWhereRaw('LOWER(TRIM(COALESCE(lfp.barangay, spp.barangay, ""))) LIKE ?', [$keyword])
+                    ->orWhereRaw("LOWER({$normalizedFundSourceExpression}) LIKE ?", [$keyword])
+                    ->orWhereRaw("{$normalizedProcurementExpression} LIKE ?", [$keyword]);
+            });
+        }
+
+        if ($filters['funding_year'] !== '') {
+            $query->whereRaw("{$subayFundingYearKeyExpr} = ?", [$filters['funding_year']]);
+        }
+
+        if ($filters['fund_source'] !== '') {
+            $query->whereRaw(
+                "UPPER(TRIM({$normalizedFundSourceExpression})) = ?",
+                [strtoupper(trim($filters['fund_source']))]
+            );
+        }
+
+        if ($filters['province'] !== '') {
+            $query->whereRaw("COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.province, ''))), ''), {$subayProvinceKeyExpr}) = ?", [strtolower($filters['province'])]);
+        }
+
+        if ($filters['city'] !== '') {
+            $query->whereRaw("COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.city_municipality, ''))), ''), {$subayCityKeyExpr}) = ?", [strtolower($filters['city'])]);
+        }
+
+        if ($filters['barangay'] !== '') {
+            $query->where(function ($subQuery) use ($filters) {
+                $barangayKeyword = strtolower($filters['barangay']);
+                $subQuery
+                    ->whereRaw('LOWER(TRIM(COALESCE(lfp.barangay, spp.barangay, \'\'))) = ?', [$barangayKeyword])
+                    ->orWhereRaw('LOWER(COALESCE(lfp.barangay, spp.barangay, \'\')) LIKE ?', ['%' . $barangayKeyword . '%']);
+            });
+        }
+
+        if ($filters['procurement'] !== '') {
+            $query->whereRaw(
+                "{$normalizedProcurementExpression} = ?",
+                [strtolower($filters['procurement'])]
+            );
+        }
+
+        if ($filters['status'] !== '') {
+            $normalizedStatus = strtolower($filters['status']);
+            if ($normalizedStatus === 'pending') {
+                $query->where(function ($statusQuery) use ($normalizedStatusExpression) {
+                    $statusQuery
+                        ->whereRaw("COALESCE({$normalizedStatusExpression}, '') = ''")
+                        ->orWhereRaw("{$normalizedStatusExpression} = ?", ['pending']);
+                });
+            } else {
+                $query->whereRaw(
+                    "{$normalizedStatusExpression} = ?",
+                    [$normalizedStatus]
+                );
+            }
+        }
+
+        if ($filters['project_update_status'] !== '') {
+            $normalizedUpdateStatus = strtoupper(preg_replace('/[^A-Z]/', '', $filters['project_update_status']) ?? '');
+            if (in_array($normalizedUpdateStatus, ['HIGHRISK', 'LOWRISK', 'NORISK'], true)) {
+                $query->whereNotNull('spp_latest_update.latest_update_date');
+                $query->whereRaw("{$normalizedStatusExpression} <> 'completed'");
+
+                if ($normalizedUpdateStatus === 'HIGHRISK') {
+                    $query->whereRaw('DATEDIFF(CURDATE(), spp_latest_update.latest_update_date) >= 60');
+                } elseif ($normalizedUpdateStatus === 'LOWRISK') {
+                    $query->whereRaw('DATEDIFF(CURDATE(), spp_latest_update.latest_update_date) > 30 AND DATEDIFF(CURDATE(), spp_latest_update.latest_update_date) < 60');
+                } elseif ($normalizedUpdateStatus === 'NORISK') {
+                    $query->whereRaw('DATEDIFF(CURDATE(), spp_latest_update.latest_update_date) <= 30');
+                }
+            }
+        }
+
+        $query->select($select);
+
+        $allocationExpr = "COALESCE(lfp.lgsf_allocation, {$subayAllocationNumExpr})";
+        $obligationExpr = $hasFinancialUpdatesTable
+            ? ($hasLfpObligationColumn
+                ? "COALESCE(lffu_totals.lffu_obligation_total, lfp.obligation, {$subayObligationNumExpr})"
+                : "COALESCE(lffu_totals.lffu_obligation_total, {$subayObligationNumExpr})")
+            : ($hasLfpObligationColumn
+                ? "COALESCE(lfp.obligation, {$subayObligationNumExpr})"
+                : $subayObligationNumExpr);
+        $disbursedExpr = $hasFinancialUpdatesTable
+            ? ($hasLfpDisbursedAmountColumn
+                ? "COALESCE(lffu_totals.lffu_disbursed_amount_total, lfp.disbursed_amount, {$subayDisbursementNumExpr})"
+                : "COALESCE(lffu_totals.lffu_disbursed_amount_total, {$subayDisbursementNumExpr})")
+            : ($hasLfpDisbursedAmountColumn
+                ? "COALESCE(lfp.disbursed_amount, {$subayDisbursementNumExpr})"
+                : $subayDisbursementNumExpr);
+        $revertedExpr = $hasFinancialUpdatesTable
+            ? ($hasLfpRevertedAmountColumn
+                ? "COALESCE(lffu_totals.lffu_reverted_amount_total, lfp.reverted_amount, {$subayLiquidationsNumExpr})"
+                : "COALESCE(lffu_totals.lffu_reverted_amount_total, {$subayLiquidationsNumExpr})")
+            : ($hasLfpRevertedAmountColumn
+                ? "COALESCE(lfp.reverted_amount, {$subayLiquidationsNumExpr})"
+                : $subayLiquidationsNumExpr);
+        $utilizationExpr = "CASE WHEN ({$allocationExpr} + 0) = 0 THEN NULL ELSE ((COALESCE({$disbursedExpr}, 0) + COALESCE({$revertedExpr}, 0)) / ({$allocationExpr} + 0)) * 100 END";
+        $effectiveStatusExpr = $normalizedStatusExpression;
+
+        $query->orderByRaw("CASE WHEN {$effectiveStatusExpr} = 'completed' THEN 1 ELSE 0 END");
+        $query->orderBy('spp.project_code');
+
+        $projects = $query->get();
+
+        $headers = [
+            'Project Code',
+            'Project Title',
+            'Province',
+            'City / Municipality',
+            'Barangay',
+            'Funding Year',
+            'Fund Source',
+            'Procurement Type',
+            'LGSF Allocation',
+            'Obligation',
+            'Disbursement',
+            'Reverted Amount',
+            'Utilization Rate (%)',
+            'Physical Accomplishment (%)',
+            'Status (Actual)',
+            'Status (Subaybayan)',
+            'Last Updated At'
+        ];
+
+        $rows = [];
+        foreach ($projects as $project) {
+            $statusActual = !empty($project->lpu_status_actual)
+                ? $project->lpu_status_actual
+                : 'Pending';
+            $statusSubaybayan = !empty($project->lpu_status_subaybayan)
+                ? $project->lpu_status_subaybayan
+                : (!empty($project->status) ? $project->status : 'Pending');
+            $subayAccomplishment = !empty($project->lpu_accomplishment_pct_ro)
+                ? $project->lpu_accomplishment_pct_ro
+                : ($project->total_accomplishment ?? 0);
+
+            $allocation = $project->lfp_lgsf_allocation !== null ? (float) $project->lfp_lgsf_allocation : ($project->national_subsidy_original_allocation !== null ? (float) str_replace(',', '', $project->national_subsidy_original_allocation) : 0);
+            $obligation = $project->lfp_obligation !== null ? (float) $project->lfp_obligation : ($project->spp_obligation !== null ? (float) str_replace(',', '', $project->spp_obligation) : 0);
+            $disbursement = $project->lfp_disbursed_amount !== null ? (float) $project->lfp_disbursed_amount : ($project->spp_disbursed_amount !== null ? (float) str_replace(',', '', $project->spp_disbursed_amount) : 0);
+            $reverted = $project->lfp_reverted_amount !== null ? (float) $project->lfp_reverted_amount : ($project->spp_reverted_amount !== null ? (float) str_replace(',', '', $project->spp_reverted_amount) : 0);
+
+            $utilRate = $project->lfp_utilization_rate !== null ? (float) $project->lfp_utilization_rate : 0;
+            if ($allocation > 0 && $utilRate === 0.0) {
+                $utilRate = (($disbursement + $reverted) / $allocation) * 100;
+            }
+
+            $rows[] = [
+                $project->project_code,
+                $project->project_title,
+                $project->province,
+                $project->city_municipality,
+                $project->barangay,
+                $project->funding_year,
+                $project->lfp_fund_source ?: $project->program,
+                $project->lfp_mode_of_procurement ?: $project->procurement_type ?: $project->procurement,
+                $allocation,
+                $obligation,
+                $disbursement,
+                $reverted,
+                number_format($utilRate, 2),
+                number_format((float) $subayAccomplishment, 2),
+                $statusActual,
+                $statusSubaybayan,
+                $project->lfp_updated_at ?: $project->subay_updated_at ?: '-'
+            ];
+        }
+
+        $filename = 'locally_funded_projects_report_' . date('Ymd_His');
+        return $this->exportExcel($filename . '.xls', $headers, $rows);
+    }
+
+    private function exportExcel(string $filename, array $headers, array $rows)
+    {
+        $title = 'Locally Funded Projects Submissions Report';
+        $table = $this->buildHtmlTable($headers, $rows);
+        $html = '<html><head><meta charset="UTF-8"></head><body>';
+        $html .= '<table border="1" cellpadding="3" cellspacing="0">';
+        $html .= '<tr><td colspan="' . count($headers) . '"><h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2></td></tr>';
+        $html .= '<tr><td colspan="' . count($headers) . '">&nbsp;</td></tr>';
+        $html .= '</table>';
+        $html .= $table;
+        $html .= '</body></html>';
+
+        return response($html)
+            ->header('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
+            ->header('Content-Disposition', "attachment; filename=\"{$filename}\"");
+    }
+
+    private function buildHtmlTable(array $headers, array $rows): string
+    {
+        $table = '<table border="1" cellpadding="3" cellspacing="0" style="font-size: 10px; width: 100%; border-collapse: collapse;">';
+        $table .= '<thead><tr style="background-color:#f3f4f6;">';
+        foreach ($headers as $header) {
+            $table .= '<th style="font-weight:bold; border: 1px solid #d1d5db; text-align: center;">' . htmlspecialchars((string) $header, ENT_QUOTES, 'UTF-8') . '</th>';
+        }
+        $table .= '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            $table .= '<tr>';
+            foreach ($row as $cell) {
+                $table .= '<td style="border: 1px solid #e5e7eb;">' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
+            }
+            $table .= '</tr>';
+        }
+
+        $table .= '</tbody></table>';
+        return $table;
     }
 }
