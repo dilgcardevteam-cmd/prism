@@ -727,7 +727,7 @@
                         @if($movUploads[$quarter] && ($movUploads[$quarter]->mov_file_path || $isMovReturned))
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                 @if($movUploads[$quarter] && $movUploads[$quarter]->mov_file_path)
-                                    <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                    <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-eye"></i> View
                                     </a>
                                     <button type="button" onclick="openFieldHistoryModal('mov', '{{ $quarter }}', 'MOV', '{{ $movUploads[$quarter]->mov_file_path }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -751,7 +751,7 @@
                                 $shouldHideDeleteForDilgMov = $isDilgPOMov || $hasMovFile;
                             @endphp
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-                                <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
                                 <button type="button" onclick="openFieldHistoryModal('mov', '{{ $quarter }}', 'MOV', '{{ $movUploads[$quarter]->mov_file_path }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -931,7 +931,7 @@
 @if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-dbm', '{{ $quarter }}', 'Written Notice (DBM)', '{{ $writtenNotices[$quarter]->secretary_dbm_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -954,7 +954,7 @@
                                     @endphp
                                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dbm_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-dbm', '{{ $quarter }}', 'Written Notice (DBM)', '{{ $writtenNotices[$quarter]->secretary_dbm_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1088,7 +1088,7 @@
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && ($writtenNotices[$quarter]->secretary_dilg_path || $isDilgReturned))
             @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path)
-                <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                     <i class="fas fa-eye"></i> View
                 </a>
                 <button type="button" onclick="openFieldHistoryModal('written-notice-dilg', '{{ $quarter }}', 'Written Notice (DILG)', '{{ $writtenNotices[$quarter]->secretary_dilg_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1111,7 +1111,7 @@
                                     @endphp
                                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->secretary_dilg_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-dilg', '{{ $quarter }}', 'Written Notice (DILG)', '{{ $writtenNotices[$quarter]->secretary_dilg_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1238,7 +1238,7 @@
             @php
                 $speakerOriginalName = $writtenNotices[$quarter]->speaker_house_original_name ?? basename($writtenNotices[$quarter]->speaker_house_path);
             @endphp
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-speaker', '{{ $quarter }}', 'Written Notice (Speaker)', '{{ $writtenNotices[$quarter]->speaker_house_path }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1264,7 +1264,7 @@
             @php
                 $speakerOriginalName = $writtenNotices[$quarter]->speaker_house_original_name ?? basename($writtenNotices[$quarter]->speaker_house_path);
             @endphp
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-speaker', '{{ $quarter }}', 'Written Notice (Speaker)', '{{ $writtenNotices[$quarter]->speaker_house_path }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1385,7 +1385,7 @@
 @if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-president', '{{ $quarter }}', 'Written Notice (President)', '{{ $writtenNotices[$quarter]->president_senate_path }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1408,7 +1408,7 @@
                                     @endphp
                                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->president_senate_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-president', '{{ $quarter }}', 'Written Notice (President)', '{{ $writtenNotices[$quarter]->president_senate_path }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1528,7 +1528,7 @@
 @if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-house', '{{ $quarter }}', 'Written Notice (House)', '{{ $writtenNotices[$quarter]->house_committee_path }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1551,7 +1551,7 @@
                                     @endphp
                                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->house_committee_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-house', '{{ $quarter }}', 'Written Notice (House)', '{{ $writtenNotices[$quarter]->house_committee_path }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1672,7 +1672,7 @@
 @if($isLguWorkflowUser)
     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-senate', '{{ $quarter }}', 'Written Notice (Senate)', '{{ $writtenNotices[$quarter]->senate_committee_path }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1695,7 +1695,7 @@
                                     @endphp
                                     <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
                                         @if($writtenNotices[$quarter] && $writtenNotices[$quarter]->senate_committee_path)
-            <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+            <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
             <button type="button" onclick="openFieldHistoryModal('written-notice-senate', '{{ $quarter }}', 'Written Notice (Senate)', '{{ $writtenNotices[$quarter]->senate_committee_path }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1864,7 +1864,7 @@
                     @if($isLguWorkflowUser)
                         @if($fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_file_path)
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-                                <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
                                 <button type="button" onclick="openFieldHistoryModal('fdp', '{{ $quarter }}', 'FDP', '{{ $fdpDocuments[$quarter]->fdp_file_path }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -1887,7 +1887,7 @@
                                 $shouldHideDeleteForDilgFdp = $isDilgPOFdp || $hasFdpFile;
                             @endphp
                             <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
-                                <a href="{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}" target="_blank" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
+                                <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
                                 <button type="button" onclick="openFieldHistoryModal('fdp', '{{ $quarter }}', 'FDP', '{{ $fdpDocuments[$quarter]->fdp_file_path }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
@@ -3199,7 +3199,7 @@
             }
 
             title.textContent = documentTitle || 'View Document';
-            subtitle.textContent = 'Previewing the selected batch document inside the page.';
+            subtitle.textContent = 'Previewing the selected document inside the page.';
             frame.src = documentUrl;
             modal.style.display = 'flex';
             modal.style.justifyContent = 'center';

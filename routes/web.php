@@ -2716,11 +2716,29 @@ Route::middleware(['auth'])->group(function () {
             return view('reports.dilg-deliverables.index');
         })->name('reports.dilg-deliverables');
 
-        Route::get('/monitoring-and-evaluation-reports', function () use ($assertDilgDeliverablesPermission) {
-            $assertDilgDeliverablesPermission('dilg_deliverables_monitoring_evaluation');
+        Route::get('/monitoring-and-evaluation-reports', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'index'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation');
 
-            return view('reports.dilg-deliverables.monitoring-evaluation-reports');
-        })->name('reports.dilg-deliverables.monitoring-evaluation');
+        Route::get('/monitoring-and-evaluation-reports/{office}/edit', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'edit'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.edit');
+
+        Route::post('/monitoring-and-evaluation-reports/{office}/upload', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'upload'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.upload');
+
+        Route::post('/monitoring-and-evaluation-reports/{office}/approve/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'approveDocument'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.approve');
+
+        Route::get('/monitoring-and-evaluation-reports/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'viewDocument'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.document');
+
+        Route::delete('/monitoring-and-evaluation-reports/{office}/document/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'deleteDocument'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.delete-document');
+
+        Route::post('/monitoring-and-evaluation-reports/{office}/request-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'requestDeletion'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.request-deletion');
+
+        Route::post('/monitoring-and-evaluation-reports/{office}/decide-deletion/{docId}', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'decideDeletion'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.decide-deletion');
 
         Route::get('/rlip-lime-monthly-reports', function () use ($assertDilgDeliverablesPermission) {
             $assertDilgDeliverablesPermission('dilg_deliverables_rlip_lime_monthly');

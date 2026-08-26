@@ -571,6 +571,10 @@ class DatabaseUtilityController extends Controller
                 'route' => route('reports.monthly.swa-annex-f'),
                 'icon' => 'fas fa-award',
             ],
+            'dilg_deliverables_monitoring_evaluation' => [
+                'route' => route('reports.dilg-deliverables.monitoring-evaluation'),
+                'icon' => 'fas fa-file-lines',
+            ],
         ];
 
         return collect($module['items'] ?? [])
