@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\NotificationCenter;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,17 +23,35 @@ class TaskManagementController extends Controller
      */
     public function index(Request $request)
     {
+        /** @var User|null $user */
         $user = Auth::user();
 
-        // Retrieve all unread notifications for the user
-        $allNotificationRows = DB::table('tbnotifications')
-            ->where('user_id', $user->getKey())
-            ->whereNull('read_at')
+        // Regional approval notifications are a shared queue, not personal inbox items.
+        $notificationQuery = DB::table('tbnotifications')
+            ->whereNull('read_at');
+
+        if ($user instanceof User && $user->isRegionalUser()) {
+            $notificationQuery->whereIn('user_id', NotificationCenter::regionalPoolUserIds($user));
+        } else {
+            $notificationQuery->where('user_id', $user->getKey());
+        }
+
+        $allNotificationRows = $notificationQuery
             ->orderByDesc('created_at')
             ->get();
 
         $notifications = NotificationCenter::presentMany($allNotificationRows)
             ->reject(fn ($n) => ($n['module_key'] ?? '') === 'locally-funded-projects');
+
+        if ($user instanceof User && $user->isRegionalUser()) {
+            $notifications = $notifications
+                ->unique(fn (array $notification): string => implode('|', [
+                    (string) ($notification['url'] ?? ''),
+                    (string) ($notification['quarter'] ?? ''),
+                    (string) ($notification['document_type'] ?? ''),
+                ]))
+                ->values();
+        }
 
         // 1. Pending Approvals Pool (for Validators - Regional, Provincial, Superadmin)
         $pendingApprovals = collect();

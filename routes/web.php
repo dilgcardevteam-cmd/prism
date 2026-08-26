@@ -487,18 +487,38 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/pagasa-time/current', [App\Http\Controllers\PagasaTimeController::class, 'current'])->name('pagasa-time.current');
 
     Route::get('/notifications/{id}/read', function ($id) {
-        $notification = \Illuminate\Support\Facades\DB::table('tbnotifications')
-            ->where('id', $id)
-            ->where('user_id', \Illuminate\Support\Facades\Auth::id())
-            ->first();
+        $notificationQuery = \Illuminate\Support\Facades\DB::table('tbnotifications')->where('id', $id);
+        $authUser = \Illuminate\Support\Facades\Auth::user();
+
+        if ($authUser instanceof \App\Models\User && $authUser->isRegionalUser()) {
+            $notificationQuery->whereIn('user_id', \App\Support\NotificationCenter::regionalPoolUserIds($authUser));
+        } else {
+            $notificationQuery->where('user_id', \Illuminate\Support\Facades\Auth::id());
+        }
+
+        $notification = $notificationQuery->first();
 
         if (!$notification) {
             return redirect()->back();
         }
 
-        \Illuminate\Support\Facades\DB::table('tbnotifications')
-            ->where('id', $id)
-            ->update(['read_at' => now(), 'updated_at' => now()]);
+        $sharedReadQuery = \Illuminate\Support\Facades\DB::table('tbnotifications')
+            ->where('url', $notification->url)
+            ->where('document_type', $notification->document_type);
+
+        if ($notification->quarter === null) {
+            $sharedReadQuery->whereNull('quarter');
+        } else {
+            $sharedReadQuery->where('quarter', $notification->quarter);
+        }
+
+        if ($authUser instanceof \App\Models\User && $authUser->isRegionalUser()) {
+            $sharedReadQuery->whereIn('user_id', \App\Support\NotificationCenter::regionalPoolUserIds($authUser));
+        } else {
+            $sharedReadQuery->where('user_id', \Illuminate\Support\Facades\Auth::id());
+        }
+
+        $sharedReadQuery->update(['read_at' => now(), 'updated_at' => now()]);
 
         $notificationUrl = \App\Support\NotificationUrl::normalizeForRedirect($notification->url);
         $documentType = trim((string) ($notification->document_type ?? ''));

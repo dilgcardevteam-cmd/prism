@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -409,6 +410,28 @@ class NotificationCenter
                 'error' => $exception->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Return the active regional users who share the current user's regional pool.
+     *
+     * @return Collection<int, int>
+     */
+    public static function regionalPoolUserIds(User $user): Collection
+    {
+        $query = User::query()
+            ->where('status', 'active')
+            ->where('role', User::ROLE_REGIONAL);
+        $region = $user->normalizedRegionComparable();
+
+        if ($region !== '') {
+            return $query->get()
+                ->filter(fn (User $regionalUser): bool => $regionalUser->normalizedRegionComparable() === $region)
+                ->pluck('idno')
+                ->values();
+        }
+
+        return $query->pluck('idno')->values();
     }
 }
 
