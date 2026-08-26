@@ -1056,7 +1056,7 @@ class QuarterlyDilgMc201819Controller extends Controller
                 'Kiangan', 'Lagawe', 'Lamut', 'Mayoyao', 'Tinoc',
             ],
             'Kalinga' => [
-                'PLGU Kalinga', 'Balbalan', 'Lubuagan', 'Pasil', 'Pinukpuk', 'Rizal', 'Tabuk', 'Tanudan',
+                'PLGU Kalinga', 'Balbalan', 'Lubuagan', 'Pasil', 'Pinukpuk', 'Rizal', 'Tabuk', 'Tanudan', 'Tinglayan',
             ],
             'Mountain Province' => [
                 'PLGU Mountain Province', 'Barlig', 'Bauko', 'Besao', 'Bontoc', 'Natonin', 'Paracelis',
