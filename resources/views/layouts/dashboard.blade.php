@@ -2518,9 +2518,9 @@
                     $taskMgmtReturnedCount = 0;
                     
                     if ($sidebarUser) {
-                        if ($sidebarUser instanceof \App\Models\User && $sidebarUser->isRegionalUser()) {
+                        if ($sidebarUser instanceof \App\Models\User && ($sidebarUser->isRegionalUser() || $sidebarUser->isSuperAdmin())) {
                             $taskMgmtPendingCount = app(\App\Services\RegionalApprovalPoolService::class)
-                                ->pendingTasks()
+                                ->pendingTasks($sidebarUser->isSuperAdmin())
                                 ->count();
                             $taskMgmtReturnedCount = \App\Support\NotificationCenter::presentMany(
                                 \Illuminate\Support\Facades\DB::table('tbnotifications')

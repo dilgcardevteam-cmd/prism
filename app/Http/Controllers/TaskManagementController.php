@@ -27,6 +27,22 @@ class TaskManagementController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
 
+        if ($user instanceof User && $user->isSuperAdmin()) {
+            $pendingApprovals = app(RegionalApprovalPoolService::class)->pendingTasks(true);
+            $pendingByModule = $pendingApprovals->groupBy('module_label');
+
+            $allNotificationRows = DB::table('tbnotifications')
+                ->where('user_id', $user->getKey())
+                ->whereNull('read_at')
+                ->get();
+            $returnedByModule = NotificationCenter::presentMany($allNotificationRows)
+                ->reject(fn ($n) => ($n['module_key'] ?? '') === 'locally-funded-projects')
+                ->filter(fn ($n) => $n['queue_key'] === 'returned')
+                ->groupBy('module_label');
+
+            return view('task-management.index', compact('pendingByModule', 'returnedByModule'));
+        }
+
         if ($user instanceof User && $user->isRegionalUser()) {
             $pendingApprovals = app(RegionalApprovalPoolService::class)->pendingTasks();
             $pendingByModule = $pendingApprovals->groupBy('module_label');

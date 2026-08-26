@@ -13,7 +13,7 @@ class RegionalApprovalPoolService
      *
      * @return Collection<int, array<string, mixed>>
      */
-    public function pendingTasks(): Collection
+    public function pendingTasks(bool $includeProvincial = false): Collection
     {
         $tasks = collect();
 
@@ -32,9 +32,16 @@ class RegionalApprovalPoolService
             }
 
             $query = DB::table($source['table'])
-                ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_ro'")
+                ->where(function ($statusQuery) use ($includeProvincial): void {
+                    $statusQuery->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_ro'");
+
+                    if ($includeProvincial) {
+                        $statusQuery->orWhereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending'");
+                    }
+                })
                 ->whereNotNull('file_path')
                 ->where('file_path', '<>', '')
+                ->whereNull('approved_at_dilg_ro')
                 ->orderByDesc('uploaded_at');
 
             foreach ($query->get() as $record) {
@@ -60,14 +67,16 @@ class RegionalApprovalPoolService
                     'city_municipality' => trim((string) ($record->office ?? '')),
                     'module_key' => $source['module_key'],
                     'module_label' => $source['module_label'],
-                    'queue_key' => 'pending_regional',
+                    'queue_key' => $includeProvincial && strtolower(trim((string) ($record->status ?? ''))) === 'pending'
+                        ? 'pending_provincial'
+                        : 'pending_regional',
                 ]);
             }
         }
 
         if (Schema::hasTable('fund_utilization_approval_workflows')) {
             $workflows = DB::table('fund_utilization_approval_workflows')
-                ->where('current_approval_level', '>=', 2)
+                ->where('current_approval_level', '>=', $includeProvincial ? 1 : 2)
                 ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'pending level %'")
                 ->orderByDesc('updated_at')
                 ->get();
@@ -90,7 +99,9 @@ class RegionalApprovalPoolService
                     'city_municipality' => '',
                     'module_key' => 'fund-utilization',
                     'module_label' => 'Fund Utilization Report',
-                    'queue_key' => 'pending_regional',
+                    'queue_key' => $includeProvincial && (int) $workflow->current_approval_level < 2
+                        ? 'pending_provincial'
+                        : 'pending_regional',
                 ]);
             }
         }
