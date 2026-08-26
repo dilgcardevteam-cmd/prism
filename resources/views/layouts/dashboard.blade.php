@@ -2518,13 +2518,32 @@
                     $taskMgmtReturnedCount = 0;
                     
                     if ($sidebarUser) {
-                        $allNotificationRows = \Illuminate\Support\Facades\DB::table('tbnotifications')
-                            ->where('user_id', $sidebarUser->getKey())
-                            ->whereNull('read_at')
-                            ->get();
+                        $notificationQuery = \Illuminate\Support\Facades\DB::table('tbnotifications')
+                            ->whereNull('read_at');
+
+                        if ($sidebarUser instanceof \App\Models\User && $sidebarUser->isRegionalUser()) {
+                            $notificationQuery->whereIn(
+                                'user_id',
+                                \App\Support\NotificationCenter::regionalPoolUserIds($sidebarUser)
+                            );
+                        } else {
+                            $notificationQuery->where('user_id', $sidebarUser->getKey());
+                        }
+
+                        $allNotificationRows = $notificationQuery->get();
 
                         $notifications = \App\Support\NotificationCenter::presentMany($allNotificationRows)
                             ->reject(fn ($n) => ($n['module_key'] ?? '') === 'locally-funded-projects');
+
+                        if ($sidebarUser instanceof \App\Models\User && $sidebarUser->isRegionalUser()) {
+                            $notifications = $notifications
+                                ->unique(fn (array $notification): string => implode('|', [
+                                    (string) ($notification['url'] ?? ''),
+                                    (string) ($notification['quarter'] ?? ''),
+                                    (string) ($notification['document_type'] ?? ''),
+                                ]))
+                                ->values();
+                        }
 
                         if ($sidebarUser->isSuperAdmin()) {
                             $pendingTasks = $notifications->filter(fn ($n) => in_array($n['queue_key'], ['pending_provincial', 'pending_regional'], true));
