@@ -525,9 +525,13 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function effectiveCrudPermissions(): array
     {
-        return $this->usesScopedCrudAccess()
-            ? $this->grantedCrudPermissions()
-            : $this->defaultCrudPermissions();
+        if (!RolePermissionSetting::tableAvailable()) {
+            return $this->usesScopedCrudAccess()
+                ? $this->grantedCrudPermissions()
+                : $this->defaultCrudPermissions();
+        }
+
+        return $this->defaultCrudPermissions();
     }
 
     public function effectiveConcreteCrudPermissions(): array
