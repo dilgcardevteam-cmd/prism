@@ -40,6 +40,9 @@ class SystemDatabaseNotificationChannel
         }
 
         try {
+            if (!empty($row['url'])) {
+                \App\Support\NotificationCenter::syncRelatedNotifications($row['url'], $row['quarter'] ?? null);
+            }
             DB::table('tbnotifications')->insert($row);
         } catch (\Throwable $exception) {
             Log::warning('Failed to store Fund Utilization workflow notification.', [

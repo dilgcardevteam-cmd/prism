@@ -4899,6 +4899,7 @@ class FundUtilizationReportController extends Controller
                 ? route('fund-utilization.show', ['projectCode' => $report->project_code], false)
                 : route('fund-utilization.index', [], false)
         );
+        \App\Support\NotificationCenter::syncRelatedNotifications($url, $quarter);
         $now = now();
 
         $rows = $dilgUsers->map(function ($dilgUser) use ($message, $url, $documentType, $quarter, $now) {
@@ -5006,6 +5007,7 @@ class FundUtilizationReportController extends Controller
                     ? route('fund-utilization.show', ['projectCode' => $report->project_code], false)
                     : route('fund-utilization.index', [], false)
             );
+            \App\Support\NotificationCenter::syncRelatedNotifications($url, $quarter);
             $actorId = (int) Auth::id();
 
             $rows = $recipients
@@ -5080,6 +5082,7 @@ class FundUtilizationReportController extends Controller
                 ? route('fund-utilization.show', ['projectCode' => $report->project_code], false)
                 : route('fund-utilization.index', [], false)
         );
+        \App\Support\NotificationCenter::syncRelatedNotifications($url, $quarter);
         $now = now();
 
         $rows = $regionalUsers->map(function ($regionalUser) use ($message, $url, $documentType, $quarter, $now) {

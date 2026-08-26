@@ -368,4 +368,47 @@ class NotificationCenter
             'barangay' => $barangay,
         ];
     }
+
+    /**
+     * Mark all existing unread notifications for a specific URL (and optionally quarter) as read.
+     * This is used to sync tasks across users so that when a task is acted upon, it is removed
+     * from the pool of tasks for other regional/provincial users.
+     */
+    public static function syncRelatedNotifications(?string $url, ?string $quarter = null): void
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return;
+        }
+
+        // Normalize the URL path for DB matching
+        $url = \App\Support\NotificationUrl::normalizeForStorage($url);
+
+        if (!\Illuminate\Support\Facades\Schema::hasTable('tbnotifications')) {
+            return;
+        }
+
+        $query = \Illuminate\Support\Facades\DB::table('tbnotifications')
+            ->where('url', $url)
+            ->whereNull('read_at');
+
+        $quarter = trim((string) $quarter);
+        if ($quarter !== '') {
+            $query->where('quarter', $quarter);
+        }
+
+        try {
+            $query->update([
+                'read_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Failed to sync related notifications.', [
+                'url' => $url,
+                'quarter' => $quarter,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
 }
+

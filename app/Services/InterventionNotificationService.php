@@ -123,6 +123,7 @@ class InterventionNotificationService
         }
 
         $url = NotificationUrl::normalizeForStorage($url);
+        \App\Support\NotificationCenter::syncRelatedNotifications($url, $quarter);
         $now = now();
         $rows = collect($recipientIds)
             ->map(function ($recipientId) {

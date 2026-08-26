@@ -76,6 +76,7 @@ class TicketNotificationService
         }
 
         $url = NotificationUrl::normalizeForStorage($url);
+        \App\Support\NotificationCenter::syncRelatedNotifications($url);
         $senderId = (int) $sender->getKey();
         $senderName = $this->resolveActorName($sender);
         $now = now();
