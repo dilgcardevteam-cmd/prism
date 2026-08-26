@@ -2719,6 +2719,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/monitoring-and-evaluation-reports', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'index'])
             ->name('reports.dilg-deliverables.monitoring-evaluation');
 
+        Route::get('/monitoring-and-evaluation-reports/export', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'export'])
+            ->name('reports.dilg-deliverables.monitoring-evaluation.export');
+
         Route::get('/monitoring-and-evaluation-reports/{office}/edit', [App\Http\Controllers\MonitoringEvaluationMonthlyReportController::class, 'edit'])
             ->name('reports.dilg-deliverables.monitoring-evaluation.edit');
 

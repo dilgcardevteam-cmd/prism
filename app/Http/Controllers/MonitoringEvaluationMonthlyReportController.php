@@ -1154,5 +1154,134 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             return back()->with('success', 'Document deletion request rejected.');
         }
     }
+
+    public function export(Request $request)
+    {
+        $reportingYear = $this->resolveReportingYear($request);
+        $months = $this->monthOptions();
+        $officeRows = $this->buildOfficeRows($this->getOffices());
+
+        $filters = [
+            'province' => trim((string) $request->query('province', '')),
+        ];
+
+        $user = auth()->user();
+        if ($user && $user->isLguScopedUser() && $user->normalizedOffice() !== '') {
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
+                return $user->matchesAssignedOffice((string) ($row['city_municipality'] ?? ''));
+            }));
+        } elseif ($user && $user->isDilgUser() && !empty($user->province)) {
+            if ($user->province !== 'Regional Office') {
+                $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
+                    return $row['province'] === $user->province;
+                }));
+            }
+        }
+
+        if ($filters['province'] !== '') {
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($filters) {
+                return (string) ($row['province'] ?? '') === $filters['province'];
+            }));
+        }
+
+        $officeRowsCollection = collect($officeRows);
+        $officeNames = $officeRowsCollection
+            ->pluck('city_municipality')
+            ->unique()
+            ->values()
+            ->all();
+
+        $documentsByOffice = [];
+        if (!empty($officeNames)) {
+            $documents = MonitoringEvaluationMonthlyDocument::query()
+                ->whereIn('office', $officeNames)
+                ->where('doc_type', $this->reportDocType())
+                ->where('year', $reportingYear)
+                ->get();
+
+            foreach ($documents as $doc) {
+                $key = $doc->doc_type . '|' . ($doc->year ?? '') . '|' . ($doc->month ?? '');
+                $documentsByOffice[$doc->office][$key] = $doc;
+            }
+        }
+
+        $headers = [
+            'Province / Office',
+            'January',
+            'February',
+            'March',
+            'April',
+            'May',
+            'June',
+            'July',
+            'August',
+            'September',
+            'October',
+            'November',
+            'December',
+        ];
+
+        $getDocStatusText = function ($doc) {
+            if ($doc && $doc->status === 'approved') {
+                return '✓';
+            }
+            return '✗';
+        };
+
+        $rows = [];
+        foreach ($officeRowsCollection as $row) {
+            $officeName = $row['city_municipality'];
+            $officeDocs = $documentsByOffice[$officeName] ?? [];
+
+            $rowData = [
+                $officeName,
+            ];
+            foreach (array_keys($months) as $monthCode) {
+                $rowData[] = $getDocStatusText($officeDocs[$this->reportDocType() . '|' . $reportingYear . '|' . $monthCode] ?? null);
+            }
+            $rows[] = $rowData;
+        }
+
+        $filename = 'monitoring_evaluation_submissions_report_' . $reportingYear . '_' . date('Ymd_His');
+        return $this->exportExcel($filename . '.xls', $headers, $rows, $reportingYear);
+    }
+
+    private function exportExcel(string $filename, array $headers, array $rows, int $year)
+    {
+        $title = 'Monthly Monitoring and Evaluation Reports Submissions - CY ' . $year;
+        $table = $this->buildHtmlTable($headers, $rows);
+        $html = '<html><head><meta charset="UTF-8"></head><body>';
+        $html .= '<table border="1" cellpadding="3" cellspacing="0">';
+        $html .= '<tr><td colspan="' . count($headers) . '"><h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2></td></tr>';
+        $html .= '<tr><td colspan="' . count($headers) . '">&nbsp;</td></tr>';
+        $html .= '</table>';
+        $html .= $table;
+        $html .= '</body></html>';
+
+        return response($html)
+            ->header('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
+            ->header('Content-Disposition', "attachment; filename=\"{$filename}\"");
+    }
+
+    private function buildHtmlTable(array $headers, array $rows): string
+    {
+        $table = '<table border="1" cellpadding="3" cellspacing="0" style="font-size: 10px; width: 100%; border-collapse: collapse;">';
+        $table .= '<thead><tr style="background-color:#f3f4f6;">';
+        foreach ($headers as $header) {
+            $table .= '<th style="font-weight:bold; border: 1px solid #d1d5db; text-align: center;">' . htmlspecialchars((string) $header, ENT_QUOTES, 'UTF-8') . '</th>';
+        }
+        $table .= '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            $table .= '<tr>';
+            foreach ($row as $cell) {
+                $table .= '<td style="border: 1px solid #e5e7eb;">' . htmlspecialchars((string) $cell, ENT_QUOTES, 'UTF-8') . '</td>';
+            }
+            $table .= '</tr>';
+        }
+
+        $table .= '</tbody></table>';
+        return $table;
+    }
 }
 

@@ -313,13 +313,13 @@
                                 <div id="{{ $filenameId }}" style="display: none; font-size: 11px; color: #6b7280; font-weight: 600;"></div>
                                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                                     @if ($hasFile)
-                                        <a
-                                            href="{{ route('reports.dilg-deliverables.monitoring-evaluation.document', ['office' => $officeName, 'docId' => $doc->id]) }}"
-                                            target="_blank"
-                                            style="padding: 8px 14px; background-color: #1e293b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;"
+                                        <button
+                                            type="button"
+                                            onclick="openMonitoringEvaluationDocumentViewerModal('{{ route('reports.dilg-deliverables.monitoring-evaluation.document', ['office' => $officeName, 'docId' => $doc->id]) }}', '{{ $label }} Monthly M&E Report')"
+                                            style="padding: 8px 14px; background-color: #1e293b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;"
                                         >
                                             <i class="fas fa-eye"></i> View PDF
-                                        </a>
+                                        </button>
 
                                         <button
                                             type="button"
@@ -914,7 +914,31 @@
             if (event.target === delDecisionModal) {
                 closeMonitoringEvaluationDeletionDecisionModal();
             }
+            const docViewerModal = document.getElementById('meDocumentViewerModal');
+            if (event.target === docViewerModal) {
+                closeMonitoringEvaluationDocumentViewerModal();
+            }
         });
+
+        function openMonitoringEvaluationDocumentViewerModal(docUrl, docTitle) {
+            const modal = document.getElementById('meDocumentViewerModal');
+            const frame = document.getElementById('meDocumentViewerFrame');
+            const title = document.getElementById('meDocumentViewerTitle');
+            if (!modal || !frame || !title) return;
+
+            title.textContent = docTitle || 'View Document';
+            frame.src = docUrl;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMonitoringEvaluationDocumentViewerModal() {
+            const modal = document.getElementById('meDocumentViewerModal');
+            const frame = document.getElementById('meDocumentViewerFrame');
+            if (frame) frame.src = 'about:blank';
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
 
         function openMonitoringEvaluationDeletionRequestModal(docId) {
             const modal = document.getElementById('meDeletionRequestModal');
@@ -1319,6 +1343,29 @@
             document.getElementById('meHistoryModal').style.display = 'none';
         }
     </script>
+
+    <!-- Document Viewer Modal -->
+    <div id="meDocumentViewerModal" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); z-index: 1200; backdrop-filter: blur(4px); justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); width: 95%; max-width: 1200px; height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.15); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-file-pdf" style="color: white; font-size: 14px;"></i>
+                    </div>
+                    <div>
+                        <h3 id="meDocumentViewerTitle" style="color: white; font-size: 16px; font-weight: 700; margin: 0;">View Document</h3>
+                        <div style="color: rgba(255,255,255,0.78); font-size: 11px; margin-top: 2px;">Previewing document inside the page</div>
+                    </div>
+                </div>
+                <button type="button" onclick="closeMonitoringEvaluationDocumentViewerModal()" style="border: none; background: rgba(255,255,255,0.15); color: white; width: 30px; height: 30px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; transition: background 0.2s;">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div style="flex: 1; background: #f8fafc; padding: 0; position: relative;">
+                <iframe id="meDocumentViewerFrame" title="Document Viewer" src="about:blank" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
     </div>
 @endsection
 

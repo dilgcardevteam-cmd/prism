@@ -59,6 +59,9 @@
                         <a href="{{ route('reports.dilg-deliverables.monitoring-evaluation', ['year' => $reportingYear, 'per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
                             Clear
                         </a>
+                        <button type="button" onclick="openMonitoringEvaluationExportModal()" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #10b981; color: white; border: 1px solid #10b981; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; margin-left: auto;">
+                            <i class="fas fa-file-excel"></i> Extract Excel
+                        </button>
                     </form>
                 </div>
 
@@ -196,5 +199,55 @@
     }
 </style>
 
+    <!-- Export Filter Modal -->
+    <div id="meExportModal" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); z-index: 1100; backdrop-filter: blur(4px);">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 400px; width: 90%;">
+            <h3 style="margin-top: 0; color: #0f172a; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-file-excel" style="color: #10b981;"></i> Extract Excel Report
+            </h3>
+            <form id="meExportForm" method="GET" action="{{ route('reports.dilg-deliverables.monitoring-evaluation.export') }}">
+                <div style="margin: 16px 0;">
+                    <label for="export-year" style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Year</label>
+                    <select id="export-year" name="year" style="width: 100%; height: 40px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        @for ($yearOption = now()->year + 1; $yearOption >= now()->year - 5; $yearOption--)
+                            <option value="{{ $yearOption }}" @selected($reportingYear === $yearOption)>{{ $yearOption }}</option>
+                        @endfor
+                    </select>
+                </div>
+                <div style="margin: 16px 0;">
+                    <label for="export-province" style="display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px;">Province / Office</label>
+                    <select id="export-province" name="province" style="width: 100%; height: 40px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        <option value="">All Provinces / Offices</option>
+                        @foreach(($filterOptions['provinces'] ?? []) as $option)
+                            <option value="{{ $option }}" @selected((string) $activeFilters['province'] === (string) $option)>{{ $option }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+                    <button type="button" onclick="closeMonitoringEvaluationExportModal()" style="padding: 8px 14px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Cancel</button>
+                    <button type="submit" style="padding: 8px 14px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Download Excel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openMonitoringEvaluationExportModal() {
+            const modal = document.getElementById('meExportModal');
+            if (modal) modal.style.display = 'block';
+        }
+
+        function closeMonitoringEvaluationExportModal() {
+            const modal = document.getElementById('meExportModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        window.addEventListener('click', function (event) {
+            const modal = document.getElementById('meExportModal');
+            if (event.target === modal) {
+                closeMonitoringEvaluationExportModal();
+            }
+        });
+    </script>
 @endsection
 
