@@ -656,7 +656,7 @@
                                             {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
                                         </td>
                                         <td>
-                                            <a href="{{ url('/notifications/' . $task['id'] . '/read') }}" class="task-action-btn">
+                                            <a href="{{ $task['url'] }}" class="task-action-btn">
                                                 <i class="fas fa-clipboard-check"></i>
                                                 Review & Validate
                                             </a>

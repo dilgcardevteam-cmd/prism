@@ -2518,6 +2518,17 @@
                     $taskMgmtReturnedCount = 0;
                     
                     if ($sidebarUser) {
+                        if ($sidebarUser instanceof \App\Models\User && $sidebarUser->isRegionalUser()) {
+                            $taskMgmtPendingCount = app(\App\Services\RegionalApprovalPoolService::class)
+                                ->pendingTasks()
+                                ->count();
+                            $taskMgmtReturnedCount = \App\Support\NotificationCenter::presentMany(
+                                \Illuminate\Support\Facades\DB::table('tbnotifications')
+                                    ->where('user_id', $sidebarUser->getKey())
+                                    ->whereNull('read_at')
+                                    ->get()
+                            )->filter(fn ($n) => $n['queue_key'] === 'returned')->count();
+                        } else {
                         $notificationQuery = \Illuminate\Support\Facades\DB::table('tbnotifications')
                             ->whereNull('read_at');
 
@@ -2557,6 +2568,7 @@
                         
                         $taskMgmtPendingCount = $pendingTasks->count();
                         $taskMgmtReturnedCount = $notifications->filter(fn ($n) => $n['queue_key'] === 'returned')->count();
+                        }
                     }
                     
                     $totalTaskMgmtCount = $taskMgmtPendingCount + $taskMgmtReturnedCount;

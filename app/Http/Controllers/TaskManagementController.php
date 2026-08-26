@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\NotificationCenter;
 use App\Models\User;
+use App\Services\RegionalApprovalPoolService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,23 @@ class TaskManagementController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
 
-        // Regional approval notifications are a shared queue, not personal inbox items.
+        if ($user instanceof User && $user->isRegionalUser()) {
+            $pendingApprovals = app(RegionalApprovalPoolService::class)->pendingTasks();
+            $pendingByModule = $pendingApprovals->groupBy('module_label');
+
+            $allNotificationRows = DB::table('tbnotifications')
+                ->where('user_id', $user->getKey())
+                ->whereNull('read_at')
+                ->get();
+            $returnedByModule = NotificationCenter::presentMany($allNotificationRows)
+                ->reject(fn ($n) => ($n['module_key'] ?? '') === 'locally-funded-projects')
+                ->filter(fn ($n) => $n['queue_key'] === 'returned')
+                ->groupBy('module_label');
+
+            return view('task-management.index', compact('pendingByModule', 'returnedByModule'));
+        }
+
+        // Non-regional task lists continue to use personal notifications.
         $notificationQuery = DB::table('tbnotifications')
             ->whereNull('read_at');
 
@@ -42,16 +59,6 @@ class TaskManagementController extends Controller
 
         $notifications = NotificationCenter::presentMany($allNotificationRows)
             ->reject(fn ($n) => ($n['module_key'] ?? '') === 'locally-funded-projects');
-
-        if ($user instanceof User && $user->isRegionalUser()) {
-            $notifications = $notifications
-                ->unique(fn (array $notification): string => implode('|', [
-                    (string) ($notification['url'] ?? ''),
-                    (string) ($notification['quarter'] ?? ''),
-                    (string) ($notification['document_type'] ?? ''),
-                ]))
-                ->values();
-        }
 
         // 1. Pending Approvals Pool (for Validators - Regional, Provincial, Superadmin)
         $pendingApprovals = collect();
