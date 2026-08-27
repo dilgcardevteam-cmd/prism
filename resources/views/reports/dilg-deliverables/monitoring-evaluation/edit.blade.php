@@ -135,7 +135,10 @@
                     $isApprovedRo = $doc && $doc->status === 'approved';
                     $isPendingRo = $doc && $doc->status === 'pending_ro';
                     $isPendingDeletion = $doc && $doc->status === 'pending_deletion';
-                    $isExpandedByDefault = $loop->first;
+                    $requestedMonth = strtoupper(trim((string) request()->query('month', '')));
+                    $isExpandedByDefault = $requestedMonth !== ''
+                        ? $requestedMonth === $monthCode
+                        : $loop->first;
                     $statusLabel = 'Pending Upload';
                     $statusColor = '#f59e0b';
                     if ($hasFile) {
@@ -190,7 +193,7 @@
                         }
                     }
                 @endphp
-                <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                <div id="me-monthly-card-{{ $monthCode }}" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; scroll-margin-top: 96px;">
                     <button
                         type="button"
                         class="me-monthly-accordion-toggle"
@@ -212,7 +215,7 @@
                             <i class="fas fa-chevron-down" style="transition: transform 0.3s; transform: {{ $isExpandedByDefault ? 'rotate(180deg)' : 'rotate(0deg)' }};"></i>
                         </span>
                     </button>
-                    <div id="me-monthly-{{ $monthCode }}" style="display: {{ $isExpandedByDefault ? 'block' : 'none' }}; padding: 16px; background-color: #ffffff;">
+                    <div id="me-monthly-{{ $monthCode }}" style="display: {{ $isExpandedByDefault ? 'block' : 'none' }}; padding: 16px; background-color: #ffffff; scroll-margin-top: 96px;">
                         <form method="POST" action="{{ route($uploadRoute, $officeName) }}" enctype="multipart/form-data" style="border: 1px dashed #cbd5f5; padding: 16px; border-radius: 8px; background-color: #f9fafb;">
                             @csrf
                             <input type="hidden" name="year" value="{{ $reportingYear }}">
@@ -811,6 +814,38 @@
                     icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
                 }
             });
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const requestedMonth = new URLSearchParams(window.location.search).get('month')
+                || window.location.hash.replace('#me-monthly-card-', '');
+            if (!requestedMonth) return;
+
+            const normalizedMonth = requestedMonth.toUpperCase();
+            const target = document.getElementById('me-monthly-card-' + normalizedMonth);
+            const panel = document.getElementById('me-monthly-' + normalizedMonth);
+            const button = document.querySelector('[data-target="me-monthly-' + normalizedMonth + '"]');
+
+            if (target && panel && button) {
+                document.querySelectorAll('.me-monthly-accordion-toggle').forEach(function (otherButton) {
+                    const otherPanel = document.getElementById(otherButton.getAttribute('data-target'));
+                    if (otherPanel && otherPanel !== panel) {
+                        otherPanel.style.display = 'none';
+                        otherButton.setAttribute('aria-expanded', 'false');
+                        const otherIcon = otherButton.querySelector('.fa-chevron-down');
+                        if (otherIcon) otherIcon.style.transform = 'rotate(0deg)';
+                    }
+                });
+
+                panel.style.display = 'block';
+                button.setAttribute('aria-expanded', 'true');
+                const icon = button.querySelector('.fa-chevron-down');
+                if (icon) icon.style.transform = 'rotate(180deg)';
+
+                window.setTimeout(function () {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+            }
         });
 
         function showMonitoringEvaluationSaveButton(fileInput, buttonId, filenameId) {

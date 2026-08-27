@@ -19,7 +19,8 @@ class RegionalApprovalPoolService
         $tasks = collect();
 
         $sources = [
-            ['table' => 'tblmonitoring_evaluation_monthly_documents', 'module_key' => 'monitoring-evaluation', 'module_label' => 'Monitoring Evaluation Monthly', 'url' => '/reports/dilg-deliverables/monitoring-and-evaluation-reports/lfp', 'period' => 'month'],
+            ['table' => 'tblmonitoring_evaluation_monthly_documents', 'doc_types' => ['monitoring_evaluation_monthly', 'monitoring_evaluation_monthly_lfp'], 'module_key' => 'monitoring-evaluation-lfp', 'module_label' => 'Monitoring Evaluation Monthly', 'task_title' => 'Monthly Monitoring and Evaluation Report - LFP', 'url' => '/reports/dilg-deliverables/monitoring-and-evaluation-reports/lfp', 'period' => 'month'],
+            ['table' => 'tblmonitoring_evaluation_monthly_documents', 'doc_types' => ['monitoring_evaluation_monthly_rlip_lime'], 'module_key' => 'monitoring-evaluation-lfp', 'module_label' => 'Monitoring Evaluation Monthly', 'task_title' => 'Monthly Monitoring and Evaluation Report - RLIP/LIME', 'url' => '/reports/dilg-deliverables/monitoring-and-evaluation-reports/rlip-lime', 'period' => 'month'],
             ['table' => 'tblpd_no_pbbm_2025_1572_1573_documents', 'module_key' => 'pd-no-pbbm-2025-1572-1573', 'module_label' => 'PD No. PBBM-2025-1572-1573', 'url' => '/reports/monthly/pd-no-pbbm-2025-1572-1573', 'period' => 'month'],
             ['table' => 'tblpmc_documents', 'module_key' => 'local-project-monitoring-committee', 'module_label' => 'Local Project Monitoring Committee', 'url' => '/local-project-monitoring-committee', 'period' => 'quarter'],
             ['table' => 'tblroad_maintenance_status_documents', 'module_key' => 'road-maintenance-status', 'module_label' => 'Road Maintenance Status', 'url' => '/road-maintenance-status', 'period' => 'quarter'],
@@ -45,6 +46,10 @@ class RegionalApprovalPoolService
                 ->whereNull('approved_at_dilg_ro')
                 ->orderByDesc('uploaded_at');
 
+            if (!empty($source['doc_types'])) {
+                $query->whereIn('doc_type', $source['doc_types']);
+            }
+
             foreach ($query->get() as $record) {
                 $projectCode = trim((string) ($record->{$source['project'] ?? 'office'} ?? ''));
                 $period = $source['period'] ? trim((string) ($record->{$source['period']} ?? '')) : '';
@@ -62,6 +67,18 @@ class RegionalApprovalPoolService
                     'tblpd_no_pbbm_2025_1572_1573_documents',
                 ], true) && $projectCode !== '') {
                     $taskUrl .= '/' . rawurlencode($projectCode) . '/edit';
+
+                    if ($year !== '') {
+                        $taskUrl .= '?year=' . rawurlencode($year);
+                    }
+
+                    if ($source['table'] === 'tblmonitoring_evaluation_monthly_documents' && $period !== '') {
+                        $taskUrl .= '&month=' . rawurlencode($period) . '#me-monthly-card-' . rawurlencode($period);
+                    }
+
+                    if ($source['table'] === 'tblpd_no_pbbm_2025_1572_1573_documents' && $period !== '') {
+                        $taskUrl .= '&month=' . rawurlencode($period);
+                    }
                 }
 
                 if (in_array($source['table'], [
@@ -77,9 +94,7 @@ class RegionalApprovalPoolService
 
                 $tasks->push([
                     'id' => 'status-' . $source['table'] . '-' . $record->id,
-                    'task_title' => $source['table'] === 'tblmonitoring_evaluation_monthly_documents'
-                        ? 'Monthly Monitoring and Evaluation Report - LFP'
-                        : ($label !== '' ? $label : $source['module_label']),
+                    'task_title' => $source['task_title'] ?? ($label !== '' ? $label : $source['module_label']),
                     'message' => 'Awaiting DILG Regional Office Validation',
                     'url' => $taskUrl,
                     'document_type' => $label,

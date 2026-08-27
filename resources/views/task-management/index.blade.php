@@ -570,6 +570,8 @@
         'sglgif-pcr' => 'fas fa-file-invoice-dollar',
         'annual-maintenance-work-program' => 'fas fa-calendar-alt',
         'pd-no-pbbm-2025-1572-1573' => 'fas fa-file-invoice',
+        'monitoring-evaluation-lfp' => 'fas fa-file-lines',
+        'monitoring-evaluation-rlip-lime' => 'fas fa-chart-line',
         'swa-annex-f' => 'fas fa-file-invoice',
     ];
 @endphp
