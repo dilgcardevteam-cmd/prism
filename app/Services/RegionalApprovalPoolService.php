@@ -55,7 +55,14 @@ class RegionalApprovalPoolService
                 $period = $source['period'] ? trim((string) ($record->{$source['period']} ?? '')) : '';
                 $year = trim((string) ($record->year ?? ''));
                 $label = trim((string) ($record->{$source['document'] ?? 'doc_type'} ?? ''));
+                $displayLabel = $this->documentDisplayLabel($label);
                 $uploader = $this->resolveUploader($record->uploaded_by ?? null);
+                $projectLocation = in_array($source['table'], [
+                    'pre_implementation_document_files',
+                    'lgsf_project_completion_report_files',
+                ], true)
+                    ? $this->resolveProjectLocation($projectCode)
+                    : null;
                 $taskUrl = $source['url'];
 
                 if ($source['table'] === 'pre_implementation_document_files' && $projectCode !== '') {
@@ -77,7 +84,7 @@ class RegionalApprovalPoolService
                     }
 
                     if ($source['table'] === 'tblpd_no_pbbm_2025_1572_1573_documents' && $period !== '') {
-                        $taskUrl .= '&month=' . rawurlencode($period);
+                        $taskUrl .= '&month=' . rawurlencode($period) . '#road-maintenance-' . rawurlencode($period);
                     }
                 }
 
@@ -85,7 +92,25 @@ class RegionalApprovalPoolService
                     'tblpmc_documents',
                     'tblroad_maintenance_status_documents',
                 ], true)) {
-                    $taskUrl .= '/' . rawurlencode((string) $record->id) . '/edit';
+                    $taskUrl .= '/' . rawurlencode($projectCode) . '/edit';
+
+                    if ($year !== '') {
+                        $taskUrl .= '?year=' . rawurlencode($year);
+                    }
+
+                    if ($source['period'] === 'quarter' && $period !== '') {
+                        $taskUrl .= '&quarter=' . rawurlencode($period) . '#road-maintenance-' . rawurlencode($period);
+                    }
+
+                    if ($source['table'] === 'tblpmc_documents') {
+                        if ($period !== '') {
+                            $taskUrl .= '#lpmc-quarter-' . rawurlencode($period);
+                        } elseif ($label !== '') {
+                            $taskUrl .= ($year === '' ? '?' : '&')
+                                . 'document=' . rawurlencode($label)
+                                . '#lpmc-document-' . rawurlencode($label) . '-' . rawurlencode($year);
+                        }
+                    }
                 }
 
                 if ($source['table'] === 'lgsf_project_completion_report_files' && $projectCode !== '') {
@@ -94,10 +119,11 @@ class RegionalApprovalPoolService
 
                 $tasks->push([
                     'id' => 'status-' . $source['table'] . '-' . $record->id,
-                    'task_title' => $source['task_title'] ?? ($label !== '' ? $label : $source['module_label']),
+                    'task_title' => $source['task_title'] ?? ($displayLabel !== '' ? $displayLabel : $source['module_label']),
                     'message' => 'Awaiting DILG Regional Office Validation',
                     'url' => $taskUrl,
                     'document_type' => $label,
+                    'document_label' => $displayLabel,
                     'quarter' => $period,
                     'period' => $period,
                     'year' => $year,
@@ -105,8 +131,8 @@ class RegionalApprovalPoolService
                     'uploader_province' => $uploader['province'],
                     'created_at' => $record->uploaded_at ?? $record->created_at,
                     'project_code' => $projectCode,
-                    'province' => trim((string) ($record->province ?? '')),
-                    'city_municipality' => trim((string) ($record->office ?? '')),
+                    'province' => trim((string) ($projectLocation['province'] ?? $record->province ?? '')),
+                    'city_municipality' => trim((string) ($projectLocation['city_municipality'] ?? $record->office ?? '')),
                     'module_key' => $source['module_key'],
                     'module_label' => $source['module_label'],
                     'queue_key' => $includeProvincial && strtolower(trim((string) ($record->status ?? ''))) === 'pending'
@@ -128,10 +154,11 @@ class RegionalApprovalPoolService
                 $quarter = trim((string) $workflow->quarter);
                 $documentType = trim((string) $workflow->document_type);
                 $uploader = $this->resolveUploader($workflow->uploader_id ?? null);
+                $displayDocumentType = $this->documentDisplayLabel($documentType);
 
                 $tasks->push([
                     'id' => 'status-fund-utilization-' . $workflow->id,
-                    'task_title' => $documentType !== '' ? $documentType : 'Fund Utilization Report',
+                    'task_title' => $displayDocumentType !== '' ? $displayDocumentType : 'Fund Utilization Report',
                     'message' => ($documentType !== '' ? $documentType . ' - ' : '') . 'Awaiting DILG Regional Office validation.',
                     'url' => '/fund-utilization/' . rawurlencode($projectCode) . '?quarter=' . rawurlencode($quarter) . '&document=' . rawurlencode($documentType),
                     'document_type' => $documentType,
@@ -174,6 +201,62 @@ class RegionalApprovalPoolService
         return [
             'name' => $user?->fullName() ?: 'Unknown uploader',
             'province' => trim((string) ($user?->province ?? '')),
+        ];
+    }
+
+    private function documentDisplayLabel(string $documentType): string
+    {
+        $labels = [
+            'mep' => 'Monitoring and Evaluation Plan',
+            'eo' => 'Executive Order',
+            'awfp' => 'Annual Work and Financial Plan',
+            'signed_lgu_letter_path' => 'Signed LGU Letter',
+            'variation_orders_path' => 'Variation Orders',
+            'noa_path' => 'Notice of Award',
+            'itb_posting_philgeps_path' => 'Invitation to Bid Posting on PhilGEPS',
+            'proof_transfer_trust_fund_path' => 'Proof of Transfer of Trust Fund',
+        ];
+        $normalizedType = strtolower(trim($documentType));
+
+        if (isset($labels[$normalizedType])) {
+            return $labels[$normalizedType];
+        }
+
+        $displayType = preg_replace('/_path$/i', '', $normalizedType) ?? $normalizedType;
+
+        return $displayType !== ''
+            ? ucwords(str_replace(['_', '-'], ' ', $displayType))
+            : 'Document';
+    }
+
+    /**
+     * @return array{province: string, city_municipality: string}
+     */
+    private function resolveProjectLocation(string $projectCode): array
+    {
+        if ($projectCode === '' || !Schema::hasTable('subay_project_profiles')) {
+            return ['province' => '', 'city_municipality' => ''];
+        }
+
+        $profile = DB::table('subay_project_profiles')
+            ->where('project_code', $projectCode)
+            ->first(['province', 'city_municipality', 'project_owner']);
+
+        if (!$profile) {
+            return ['province' => '', 'city_municipality' => ''];
+        }
+
+        $province = trim((string) ($profile->province ?? ''));
+        $cityMunicipality = trim((string) ($profile->city_municipality ?? ''));
+        $projectOwner = trim((string) ($profile->project_owner ?? ''));
+
+        if ($cityMunicipality === '' && ($province !== '' || strtolower($projectOwner) === 'province')) {
+            $cityMunicipality = 'Province';
+        }
+
+        return [
+            'province' => $province,
+            'city_municipality' => $cityMunicipality,
         ];
     }
 }

@@ -762,7 +762,18 @@
                         <table class="task-table">
                             <thead>
                                 <tr>
-                                    <th>Office</th>
+                                    @if($moduleKey === 'pre-implementation')
+                                        <th>Project Code</th>
+                                        <th>Province</th>
+                                        <th>City/Municipality</th>
+                                    @elseif($moduleKey === 'monitoring-evaluation-lfp')
+                                        <th>Province</th>
+                                    @elseif($moduleKey === 'local-project-monitoring-committee')
+                                        <th>Province</th>
+                                        <th>City/Municipality</th>
+                                    @else
+                                        <th>Office</th>
+                                    @endif
                                     <th>Period</th>
                                     <th>Task Details</th>
                                     <th>Submitted By</th>
@@ -773,15 +784,38 @@
                             <tbody>
                                 @foreach($tasks as $task)
                                     <tr data-province="{{ $task['province'] ?? '' }}" data-period="{{ $task['period'] ?? $task['quarter'] ?? '' }}" data-year="{{ $task['year'] ?? '' }}">
-                                        <td>
-                                            <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
-                                        </td>
+                                        @if($moduleKey === 'pre-implementation')
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['project_code'] ?? '' }}">{{ $task['project_code'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['province'] ?? '' }}">{{ $task['province'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
+                                            </td>
+                                        @elseif($moduleKey === 'monitoring-evaluation-lfp')
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['province'] ?? '' }}">{{ $task['province'] ?: 'N/A' }}</div>
+                                            </td>
+                                        @elseif($moduleKey === 'local-project-monitoring-committee')
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['province'] ?? '' }}">{{ $task['province'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
+                                            </td>
+                                        @else
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
+                                            </td>
+                                        @endif
                                         <td>
                                             <strong>{{ strtoupper($task['quarter'] ?? 'N/A') }}</strong>
                                         </td>
                                         <td>
                                             <div class="task-message-cell">
-                                                <div style="font-weight: 700; color: #1e293b;">{{ $task['task_title'] ?? $task['message'] }}</div>
+                                                <div style="font-weight: 700; color: #1e293b;">{{ $task['task_title'] ?? ($task['document_label'] ?? $task['message']) }}</div>
                                                 @if(isset($task['task_title']))
                                                     <div style="margin-top: 4px; color: #64748b;">{{ $task['message'] }}</div>
                                                 @endif

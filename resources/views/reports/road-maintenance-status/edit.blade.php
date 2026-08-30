@@ -130,7 +130,10 @@
                     $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                    $isExpandedByDefault = $loop->first;
+                    $requestedQuarter = strtoupper(trim((string) request()->query('quarter', '')));
+                    $isExpandedByDefault = $requestedQuarter !== ''
+                        ? $requestedQuarter === $quarter
+                        : $loop->first;
                     $statusLabel = 'Pending Upload';
                     $statusColor = '#f59e0b';
                     if ($hasFile) {
@@ -560,6 +563,16 @@
                     icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
                 }
             });
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const targetId = window.location.hash.replace('#', '');
+            const target = targetId ? document.getElementById(targetId) : null;
+            if (target) {
+                window.setTimeout(function () {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+            }
         });
 
         function showRoadMaintenanceSaveButton(fileInput, buttonId, filenameId) {

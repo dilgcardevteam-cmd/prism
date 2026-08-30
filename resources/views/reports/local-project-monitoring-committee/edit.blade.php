@@ -238,7 +238,7 @@
                         }
                     }
                 @endphp
-                <form method="POST" action="{{ route('local-project-monitoring-committee.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1.5px solid {{ $statusTheme['cardBorder'] }}; padding: 18px; border-radius: 10px; background-color: {{ $statusTheme['cardBg'] }}; transition: all 0.2s ease;">
+                <form id="lpmc-document-{{ $docBlock['doc_type'] }}-{{ $docBlock['year'] }}" method="POST" action="{{ route('local-project-monitoring-committee.upload', $officeName) }}" enctype="multipart/form-data" style="border: 1.5px solid {{ $statusTheme['cardBorder'] }}; padding: 18px; border-radius: 10px; background-color: {{ $statusTheme['cardBg'] }}; transition: all 0.2s ease; scroll-margin-top: 96px;">
                     @csrf
                     <input type="hidden" name="doc_type" value="{{ $docBlock['doc_type'] }}">
                     <input type="hidden" name="year" value="{{ $docBlock['year'] }}">
@@ -467,7 +467,7 @@
                     $configuredQuarterDeadline = $configuredQuarterDeadlines[$quarter] ?? null;
                     $quarterDeadlineDisplay = is_array($configuredQuarterDeadline) ? (string) ($configuredQuarterDeadline['display'] ?? '') : '';
                 @endphp
-                <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                <div id="lpmc-quarter-{{ $quarter }}" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; scroll-margin-top: 96px;">
                     <button type="button" class="lpmc-accordion-toggle" data-target="lpmc-{{ $quarter }}" style="width: 100%; padding: 14px 16px; background-color: #002C76; color: white; border: none; text-align: left; cursor: pointer; font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; align-items: center;">
                         <span>
                             {{ $label }}
@@ -903,6 +903,36 @@
                     icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
                 }
             });
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const params = new URLSearchParams(window.location.search);
+            const requestedQuarter = (params.get('quarter') || '').toUpperCase();
+            const requestedDocument = (params.get('document') || '').toLowerCase();
+            const requestedYear = params.get('year') || '';
+
+            if (requestedQuarter) {
+                const card = document.getElementById('lpmc-quarter-' + requestedQuarter);
+                const panel = document.getElementById('lpmc-' + requestedQuarter);
+                const button = document.querySelector('[data-target="lpmc-' + requestedQuarter + '"]');
+                if (card && panel && button) {
+                    panel.style.display = 'block';
+                    button.setAttribute('aria-expanded', 'true');
+                    window.setTimeout(function () {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
+                }
+                return;
+            }
+
+            if (requestedDocument && requestedYear) {
+                const documentCard = document.getElementById('lpmc-document-' + requestedDocument + '-' + requestedYear);
+                if (documentCard) {
+                    window.setTimeout(function () {
+                        documentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
+                }
+            }
         });
     </script>
 
