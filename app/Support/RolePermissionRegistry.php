@@ -517,6 +517,7 @@ class RolePermissionRegistry
             ],
             User::ROLE_PROVINCIAL => [
                 'ticketing_system.view',
+                'ticketing_system.add',
                 'ticketing_system.update',
             ],
             User::ROLE_LGU => [

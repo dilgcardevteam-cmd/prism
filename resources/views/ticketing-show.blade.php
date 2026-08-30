@@ -171,7 +171,9 @@
                     </div>
                     @if ($ticket->subcategory)
                         <div class="ticketing-meta-item">
-                            <div class="ticketing-meta-label">Please Specify</div>
+                            <div class="ticketing-meta-label">
+                                {{ $ticket->category?->isProgramRelated() ? 'Program' : 'Please Specify' }}
+                            </div>
                             <div class="ticketing-meta-value">{{ $ticket->subcategory }}</div>
                         </div>
                     @endif
@@ -255,10 +257,23 @@
                                         • {{ number_format($attachment->file_size / 1024, 1) }} KB
                                     @endif
                                 </div>
-                                <a href="{{ route('ticketing.attachments.download', [$ticket, $attachment]) }}" class="ticketing-btn ticketing-btn--secondary">
-                                    <i class="fas fa-download"></i>
-                                    Download Attachment
-                                </a>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <button 
+                                        type="button" 
+                                        class="ticketing-btn ticketing-btn--primary ticketing-view-trigger"
+                                        data-file-url="{{ route('ticketing.attachments.view', [$ticket, $attachment]) }}"
+                                        data-download-url="{{ route('ticketing.attachments.download', [$ticket, $attachment]) }}"
+                                        data-filename="{{ $attachment->original_name }}"
+                                        data-mime-type="{{ $attachment->mime_type }}"
+                                    >
+                                        <i class="fas fa-eye"></i>
+                                        View Proof
+                                    </button>
+                                    <a href="{{ route('ticketing.attachments.download', [$ticket, $attachment]) }}" class="ticketing-btn ticketing-btn--secondary">
+                                        <i class="fas fa-download"></i>
+                                        Download
+                                    </a>
+                                </div>
                             </div>
                         @endforeach
                     </div>
@@ -426,6 +441,21 @@
             </form>
         </div>
     </div>
+
+    <!-- View Attachment Preview Modal -->
+    <div class="ticketing-modal" id="viewAttachmentModal" aria-hidden="true">
+        <div class="ticketing-modal-dialog" style="width: min(900px, 95%); max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="ticketing-modal-header">
+                <h3 class="ticketing-card-title" id="viewAttachmentModalTitle">Proof / MOV / Sample Preview</h3>
+                <button type="button" class="ticketing-modal-close" data-ticketing-close="viewAttachmentModal">&times;</button>
+            </div>
+            <div class="ticketing-modal-body" style="flex-grow: 1; padding: 20px; overflow-y: auto; background: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 450px;">
+                <div id="viewAttachmentModalContent" style="width: 100%; display: flex; align-items: center; justify-content: center;">
+                    <!-- Content will be injected dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('scripts')
@@ -495,6 +525,89 @@
                     modal.setAttribute('aria-hidden', 'true');
                 });
             });
+
+            // View attachment preview handler
+            const viewTriggers = document.querySelectorAll('.ticketing-view-trigger');
+            const previewModal = document.getElementById('viewAttachmentModal');
+            const previewContent = document.getElementById('viewAttachmentModalContent');
+            const previewTitle = document.getElementById('viewAttachmentModalTitle');
+
+            if (previewModal && previewContent && previewTitle) {
+                const closePreviewModal = () => {
+                    previewModal.classList.remove('is-open');
+                    previewModal.setAttribute('aria-hidden', 'true');
+                    previewContent.innerHTML = '';
+                };
+
+                viewTriggers.forEach((trigger) => {
+                    trigger.addEventListener('click', () => {
+                        const fileUrl = trigger.getAttribute('data-file-url');
+                        const downloadUrl = trigger.getAttribute('data-download-url');
+                        const filename = trigger.getAttribute('data-filename');
+                        const mimeType = (trigger.getAttribute('data-mime-type') || '').toLowerCase();
+
+                        previewTitle.textContent = filename;
+                        previewContent.innerHTML = '';
+
+                        let previewEl = null;
+
+                        if (mimeType.startsWith('image/')) {
+                            previewEl = document.createElement('img');
+                            previewEl.src = fileUrl;
+                            previewEl.className = 'ticketing-modal-preview';
+                            previewEl.alt = filename;
+                        } else if (mimeType === 'application/pdf') {
+                            previewEl = document.createElement('iframe');
+                            previewEl.src = fileUrl;
+                            previewEl.className = 'ticketing-modal-preview-pdf';
+                        } else if (mimeType.startsWith('video/')) {
+                            previewEl = document.createElement('video');
+                            previewEl.src = fileUrl;
+                            previewEl.controls = true;
+                            previewEl.className = 'ticketing-modal-preview-video';
+                        } else {
+                            const fallbackContainer = document.createElement('div');
+                            fallbackContainer.className = 'ticketing-modal-fallback';
+                            fallbackContainer.innerHTML = `
+                                <div class="ticketing-modal-fallback-icon">
+                                    <i class="fas fa-file-arrow-down"></i>
+                                </div>
+                                <h4 style="margin: 0 0 8px; color: #0f172a; font-weight: 700;">No Preview Available</h4>
+                                <p style="margin: 0 0 16px; color: #64748b; font-size: 13px;">This file format (${mimeType || 'unknown'}) cannot be previewed directly in the browser.</p>
+                                <a href="${downloadUrl}" class="ticketing-btn ticketing-btn--primary">
+                                    <i class="fas fa-download"></i>
+                                    Download to View
+                                </a>
+                            `;
+                            previewEl = fallbackContainer;
+                        }
+
+                        previewContent.appendChild(previewEl);
+                        previewModal.classList.add('is-open');
+                        previewModal.setAttribute('aria-hidden', 'false');
+                    });
+                });
+
+                // Clear/Stop video when closing preview modal
+                previewModal.querySelectorAll('[data-ticketing-close]').forEach((closer) => {
+                    closer.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closePreviewModal();
+                    });
+                });
+
+                previewModal.addEventListener('click', (event) => {
+                    if (event.target === previewModal) {
+                        closePreviewModal();
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && previewModal.classList.contains('is-open')) {
+                        closePreviewModal();
+                    }
+                });
+            }
         })();
     </script>
 @endsection

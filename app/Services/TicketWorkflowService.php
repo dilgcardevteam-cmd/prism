@@ -21,20 +21,22 @@ class TicketWorkflowService
 
     public function submit(User $submitter, array $payload, ?UploadedFile $attachment = null): Ticket
     {
-        if (!$this->routingService->hasProvincialHandlers($submitter)) {
+        $isProvincialSubmitter = $submitter->isProvincialUser();
+
+        if (!$isProvincialSubmitter && !$this->routingService->hasProvincialHandlers($submitter)) {
             throw new RuntimeException('No active Provincial User is configured for the submitter province yet.');
         }
 
-        return DB::transaction(function () use ($submitter, $payload, $attachment): Ticket {
+        return DB::transaction(function () use ($submitter, $payload, $attachment, $isProvincialSubmitter): Ticket {
             $ticket = Ticket::create([
                 'title' => $payload['title'],
                 'description' => $payload['description'],
                 'category_id' => $payload['category_id'],
                 'subcategory' => $payload['subcategory'] ?? null,
                 'priority' => $payload['priority'],
-                'status' => Ticket::STATUS_SUBMITTED,
-                'current_level' => Ticket::LEVEL_PROVINCIAL,
-                'assigned_role' => User::ROLE_PROVINCIAL,
+                'status' => $isProvincialSubmitter ? Ticket::STATUS_ESCALATED_TO_REGION : Ticket::STATUS_SUBMITTED,
+                'current_level' => $isProvincialSubmitter ? Ticket::LEVEL_REGIONAL : Ticket::LEVEL_PROVINCIAL,
+                'assigned_role' => $isProvincialSubmitter ? User::ROLE_REGIONAL : User::ROLE_PROVINCIAL,
                 'contact_information' => $payload['contact_information'],
                 'region_scope' => $submitter->region,
                 'province_scope' => $submitter->province,
@@ -49,23 +51,43 @@ class TicketWorkflowService
                 $this->storeAttachment($ticket, $submitter, $attachment);
             }
 
-            $this->recordHistory(
-                ticket: $ticket,
-                actor: $submitter,
-                action: 'ticket_created',
-                description: 'Ticket submitted and routed to the provincial queue.',
-                fromStatus: null,
-                toStatus: Ticket::STATUS_SUBMITTED,
-                fromLevel: null,
-                toLevel: Ticket::LEVEL_PROVINCIAL,
-                metadata: [
-                    'assigned_role' => User::ROLE_PROVINCIAL,
-                    'queue' => 'provincial',
-                    'province_scope' => $submitter->province,
-                ],
-            );
+            if ($isProvincialSubmitter) {
+                $this->recordHistory(
+                    ticket: $ticket,
+                    actor: $submitter,
+                    action: 'ticket_created',
+                    description: 'Ticket submitted and routed to the regional queue.',
+                    fromStatus: null,
+                    toStatus: Ticket::STATUS_ESCALATED_TO_REGION,
+                    fromLevel: null,
+                    toLevel: Ticket::LEVEL_REGIONAL,
+                    metadata: [
+                        'assigned_role' => User::ROLE_REGIONAL,
+                        'queue' => 'regional',
+                        'region_scope' => $submitter->region,
+                    ],
+                );
 
-            $this->notificationService->notifyProvincialQueue($ticket, $submitter);
+                $this->notificationService->notifyRegionalQueue($ticket, $submitter);
+            } else {
+                $this->recordHistory(
+                    ticket: $ticket,
+                    actor: $submitter,
+                    action: 'ticket_created',
+                    description: 'Ticket submitted and routed to the provincial queue.',
+                    fromStatus: null,
+                    toStatus: Ticket::STATUS_SUBMITTED,
+                    fromLevel: null,
+                    toLevel: Ticket::LEVEL_PROVINCIAL,
+                    metadata: [
+                        'assigned_role' => User::ROLE_PROVINCIAL,
+                        'queue' => 'provincial',
+                        'province_scope' => $submitter->province,
+                    ],
+                );
+
+                $this->notificationService->notifyProvincialQueue($ticket, $submitter);
+            }
 
             return $ticket->fresh(['category', 'submitter', 'assignee', 'attachments', 'histories', 'comments']);
         });

@@ -11,6 +11,7 @@ class TicketCategory extends Model
     use HasFactory;
 
     public const NAME_OTHERS = 'Others';
+    public const NAME_PROGRAM_RELATED = 'Program Related';
 
     protected $fillable = [
         'name',
@@ -70,9 +71,14 @@ class TicketCategory extends Model
                 'sort_order' => 7,
             ],
             [
+                'name' => 'Program Related',
+                'description' => 'Issues or concerns related to specific programs.',
+                'sort_order' => 8,
+            ],
+            [
                 'name' => self::NAME_OTHERS,
                 'description' => 'Anything not covered by the other ticket categories.',
-                'sort_order' => 8,
+                'sort_order' => 9,
             ],
         ];
     }
@@ -80,6 +86,11 @@ class TicketCategory extends Model
     public function isOthers(): bool
     {
         return strcasecmp((string) $this->name, self::NAME_OTHERS) === 0;
+    }
+
+    public function isProgramRelated(): bool
+    {
+        return strcasecmp((string) $this->name, self::NAME_PROGRAM_RELATED) === 0;
     }
 
     public function scopeActive($query)

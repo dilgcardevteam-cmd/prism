@@ -12,7 +12,7 @@ class TicketStoreRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return (bool) $this->user()?->isLguUser();
+        return $this->user() && $this->user()->hasCrudPermission('ticketing_system', 'add');
     }
 
     protected function prepareForValidation(): void
@@ -31,7 +31,7 @@ class TicketStoreRequest extends FormRequest
 
         $selectedCategory = $this->resolveSelectedCategory($all['category_id'] ?? null);
 
-        if (!$selectedCategory?->isOthers()) {
+        if ($selectedCategory && !$selectedCategory->isOthers() && !$selectedCategory->isProgramRelated()) {
             $all['subcategory'] = null;
         }
 
@@ -41,22 +41,32 @@ class TicketStoreRequest extends FormRequest
     public function rules(): array
     {
         $requiresSpecify = $this->selectedCategory()?->isOthers() ?? false;
+        $isProgramRelated = $this->selectedCategory()?->isProgramRelated() ?? false;
 
         return [
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:5000'],
             'category_id' => ['required', 'integer', Rule::exists('ticket_categories', 'id')->where('is_active', true)],
-            'subcategory' => [Rule::requiredIf($requiresSpecify), 'nullable', 'string', 'max:255'],
+            'subcategory' => [
+                Rule::requiredIf($requiresSpecify || $isProgramRelated),
+                'nullable',
+                'string',
+                Rule::when($isProgramRelated, Rule::in(['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB', 'SGLGIF', 'RLIP/LIME'])),
+                'max:255'
+            ],
             'priority' => ['required', 'string', Rule::in(Ticket::priorityOptions())],
             'contact_information' => ['required', 'string', 'max:255'],
-            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx', 'max:10240'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,mp4,mov,avi,webm,wmv,flv,mkv,3gp', 'max:10240'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'subcategory.required' => 'Please specify the concern when the category is Others.',
+            'subcategory.required' => $this->selectedCategory()?->isProgramRelated()
+                ? 'Please select a program.'
+                : 'Please specify the concern when the category is Others.',
+            'subcategory.in' => 'The selected program is invalid.',
         ];
     }
 

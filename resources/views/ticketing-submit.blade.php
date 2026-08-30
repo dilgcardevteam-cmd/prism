@@ -11,6 +11,7 @@
     @php
         $selectedCategory = $categories->firstWhere('id', (int) old('category_id'));
         $showSpecifyField = $selectedCategory?->isOthers() ?? false;
+        $showProgramField = $selectedCategory?->isProgramRelated() ?? false;
     @endphp
 
     <div class="content-header">
@@ -49,6 +50,7 @@
                             <option
                                 value="{{ $category->id }}"
                                 data-requires-specify="{{ $category->isOthers() ? 'true' : 'false' }}"
+                                data-is-program-related="{{ $category->isProgramRelated() ? 'true' : 'false' }}"
                                 @selected((string) old('category_id') === (string) $category->id)
                             >
                                 {{ $category->name }}
@@ -70,18 +72,36 @@
                 <div
                     class="ticketing-field"
                     id="subcategory_wrapper"
-                    @if (! $showSpecifyField) style="display: none;" @endif
+                    @if (! $showSpecifyField && ! $showProgramField) style="display: none;" @endif
                 >
-                    <label for="subcategory" id="subcategory_label">Please Specify</label>
+                    <label for="subcategory" id="subcategory_label">
+                        @if ($showSpecifyField) Please Specify * @elseif ($showProgramField) Select Program * @else Please Specify @endif
+                    </label>
                     <input
                         id="subcategory"
                         type="text"
-                        name="subcategory"
+                        name="@if ($showSpecifyField) subcategory @endif"
                         value="{{ old('subcategory') }}"
                         placeholder="Required when category is Others"
-                        @if ($showSpecifyField) required @endif
+                        @if ($showSpecifyField) required style="display: block;" @else style="display: none;" @endif
                     >
-                    <div class="ticketing-kicker" id="subcategory_help">Provide more details because the selected category is <strong>Others</strong>.</div>
+                    <select
+                        id="subcategory_select"
+                        name="@if ($showProgramField) subcategory @endif"
+                        @if ($showProgramField) required style="display: block;" @else style="display: none;" @endif
+                    >
+                        <option value="">Select program</option>
+                        @foreach (['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB', 'SGLGIF', 'RLIP/LIME'] as $program)
+                            <option value="{{ $program }}" @selected((string) old('subcategory') === (string) $program)>{{ $program }}</option>
+                        @endforeach
+                    </select>
+                    <div class="ticketing-kicker" id="subcategory_help">
+                        @if ($showSpecifyField)
+                            Provide more details because the selected category is <strong>Others</strong>.
+                        @elseif ($showProgramField)
+                            Select the specific program related to this issue.
+                        @endif
+                    </div>
                 </div>
 
                 <div class="ticketing-field" style="grid-column: 1 / -1;">
@@ -95,8 +115,8 @@
                 </div>
 
                 <div class="ticketing-field">
-                    <label for="attachment">Attachment</label>
-                    <input id="attachment" type="file" name="attachment" class="dashboard-file-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" data-max-size-kb="10240">
+                    <label for="attachment">Proof / MOV / Sample</label>
+                    <input id="attachment" type="file" name="attachment" class="dashboard-file-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.mp4,.mov,.avi,.webm,.wmv,.flv,.mkv,.3gp" data-max-size-kb="10240">
                 </div>
             </div>
 
@@ -120,24 +140,51 @@
             const categorySelect = document.getElementById('category_id');
             const specifyWrapper = document.getElementById('subcategory_wrapper');
             const specifyInput = document.getElementById('subcategory');
+            const specifySelect = document.getElementById('subcategory_select');
             const specifyLabel = document.getElementById('subcategory_label');
             const specifyHelp = document.getElementById('subcategory_help');
 
-            if (!categorySelect || !specifyWrapper || !specifyInput || !specifyLabel || !specifyHelp) {
+            if (!categorySelect || !specifyWrapper || !specifyInput || !specifySelect || !specifyLabel || !specifyHelp) {
                 return;
             }
 
             const syncSpecifyField = () => {
                 const selectedOption = categorySelect.options[categorySelect.selectedIndex];
                 const requiresSpecify = selectedOption?.dataset?.requiresSpecify === 'true';
+                const isProgramRelated = selectedOption?.dataset?.isProgramRelated === 'true';
 
-                specifyWrapper.style.display = requiresSpecify ? '' : 'none';
-                specifyInput.required = requiresSpecify;
-                specifyLabel.textContent = requiresSpecify ? 'Please Specify *' : 'Please Specify';
-                specifyHelp.innerHTML = 'Provide more details because the selected category is <strong>Others</strong>.';
-
-                if (!requiresSpecify) {
+                if (requiresSpecify) {
+                    specifyWrapper.style.display = '';
+                    specifyInput.style.display = '';
+                    specifyInput.name = 'subcategory';
+                    specifyInput.required = true;
+                    specifySelect.style.display = 'none';
+                    specifySelect.name = '';
+                    specifySelect.required = false;
+                    specifyLabel.textContent = 'Please Specify *';
+                    specifyHelp.innerHTML = 'Provide more details because the selected category is <strong>Others</strong>.';
+                } else if (isProgramRelated) {
+                    specifyWrapper.style.display = '';
+                    specifyInput.style.display = 'none';
+                    specifyInput.name = '';
+                    specifyInput.required = false;
+                    specifySelect.style.display = '';
+                    specifySelect.name = 'subcategory';
+                    specifySelect.required = true;
+                    specifyLabel.textContent = 'Select Program *';
+                    specifyHelp.innerHTML = 'Select the specific program related to this issue.';
+                } else {
+                    specifyWrapper.style.display = 'none';
+                    specifyInput.style.display = 'none';
+                    specifyInput.name = 'subcategory';
+                    specifyInput.required = false;
                     specifyInput.value = '';
+                    specifySelect.style.display = 'none';
+                    specifySelect.name = '';
+                    specifySelect.required = false;
+                    specifySelect.value = '';
+                    specifyLabel.textContent = 'Please Specify';
+                    specifyHelp.innerHTML = '';
                 }
             };
 

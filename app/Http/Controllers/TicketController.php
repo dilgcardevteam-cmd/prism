@@ -186,13 +186,30 @@ class TicketController extends Controller
         ]);
     }
 
-    public function downloadAttachment(Request $request, Ticket $ticket, TicketAttachment $attachment): BinaryFileResponse|Response
+    public function downloadAttachment(Request $request, Ticket $ticket, TicketAttachment $attachment)
     {
         if ((int) $attachment->ticket_id !== (int) $ticket->id || !Gate::forUser($request->user())->allows('ticketing.view', $ticket)) {
             return $this->restricted();
         }
 
+        if (!Storage::disk($attachment->disk)->exists($attachment->file_path)) {
+            abort(404, 'File not found on storage.');
+        }
+
         return Storage::disk($attachment->disk)->download($attachment->file_path, $attachment->original_name);
+    }
+
+    public function viewAttachment(Request $request, Ticket $ticket, TicketAttachment $attachment)
+    {
+        if ((int) $attachment->ticket_id !== (int) $ticket->id || !Gate::forUser($request->user())->allows('ticketing.view', $ticket)) {
+            return $this->restricted();
+        }
+
+        if (!Storage::disk($attachment->disk)->exists($attachment->file_path)) {
+            abort(404, 'File not found on storage.');
+        }
+
+        return Storage::disk($attachment->disk)->response($attachment->file_path, $attachment->original_name);
     }
 
     public function provinceStartReview(Request $request, Ticket $ticket, TicketWorkflowService $workflowService): RedirectResponse|Response

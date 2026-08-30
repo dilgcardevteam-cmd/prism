@@ -2561,6 +2561,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard', [App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
         Route::get('/tickets/{ticket}', [App\Http\Controllers\TicketController::class, 'show'])->name('show');
         Route::get('/tickets/{ticket}/attachments/{attachment}', [App\Http\Controllers\TicketController::class, 'downloadAttachment'])->name('attachments.download');
+        Route::get('/tickets/{ticket}/attachments/{attachment}/view', [App\Http\Controllers\TicketController::class, 'viewAttachment'])->name('attachments.view');
         Route::get('/tickets/{ticket}/history', [App\Http\Controllers\TicketHistoryController::class, 'index'])->name('history.index');
         Route::post('/tickets/{ticket}/comments', [App\Http\Controllers\TicketCommentController::class, 'store'])->name('comments.store');
 

@@ -802,4 +802,35 @@
             align-items: flex-start;
         }
     }
+
+    /* Preview Modal additions */
+    .ticketing-modal-preview {
+        max-width: 100%;
+        max-height: 70vh;
+        object-fit: contain;
+    }
+
+    .ticketing-modal-preview-pdf {
+        width: 100%;
+        height: 70vh;
+        border: none;
+    }
+
+    .ticketing-modal-preview-video {
+        width: 100%;
+        max-height: 70vh;
+        outline: none;
+    }
+
+    .ticketing-modal-fallback {
+        text-align: center;
+        padding: 40px;
+        width: 100%;
+    }
+
+    .ticketing-modal-fallback-icon {
+        font-size: 48px;
+        color: #94a3b8;
+        margin-bottom: 16px;
+    }
 </style>
