@@ -295,6 +295,7 @@ class TicketWorkflowService
             $lockedTicket->fill([
                 'assigned_to' => $actor->getKey(),
                 'assigned_role' => User::ROLE_REGIONAL,
+                'status' => Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                 'last_status_changed_at' => now(),
             ]);
             $lockedTicket->save();
@@ -303,9 +304,9 @@ class TicketWorkflowService
                 ticket: $lockedTicket,
                 actor: $actor,
                 action: 'ticket_accepted_by_region',
-                description: 'Ticket accepted from the regional queue by a Regional User.',
-                fromStatus: $lockedTicket->status,
-                toStatus: $lockedTicket->status,
+                description: 'Ticket accepted from the regional queue by a Regional User and marked under review.',
+                fromStatus: Ticket::STATUS_ESCALATED_TO_REGION,
+                toStatus: Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                 fromLevel: $lockedTicket->current_level,
                 toLevel: $lockedTicket->current_level,
                 metadata: [

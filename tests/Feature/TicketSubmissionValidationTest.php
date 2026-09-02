@@ -258,4 +258,39 @@ class TicketSubmissionValidationTest extends TestCase
             'assigned_role' => User::ROLE_REGIONAL,
         ]);
     }
+
+    public function test_regional_user_accepts_ticket_automatically_starts_review(): void
+    {
+        $province = 'Benguet';
+
+        $regionalUser = User::factory()->create([
+            'role' => User::ROLE_REGIONAL,
+            'status' => 'active',
+        ]);
+
+        $ticket = Ticket::create([
+            'title' => 'Regional Escalated Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_ESCALATED_TO_REGION,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_REGIONAL,
+            'contact_information' => 'test@example.com',
+            'region_scope' => $regionalUser->region,
+            'province_scope' => $province,
+            'submitted_by' => User::factory()->create()->idno,
+            'date_submitted' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($regionalUser)->post(route('ticketing.region.accept', $ticket));
+        $response->assertRedirect(route('ticketing.show', $ticket));
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'assigned_to' => $regionalUser->getKey(),
+            'status' => Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+        ]);
+    }
 }

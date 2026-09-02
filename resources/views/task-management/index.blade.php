@@ -641,6 +641,46 @@
             </div>
         @endif
 
+        <!-- Pool Section 3: UNASSIGNED TICKETS POOL (Visible to validators/agents) -->
+        @if(($user->isSuperAdmin() || $user->isRegionalUser() || $user->isProvincialUser()))
+            <div class="task-pool-section" style="margin-top: 14px;">
+                <h2 class="task-pool-section-title">
+                    <i class="fas fa-ticket"></i>
+                    <span>Unassigned Tickets Pool</span>
+                </h2>
+                
+                @if($ticketsByCategory->isNotEmpty())
+                    <div class="menu-cards-grid">
+                        @foreach($ticketsByCategory as $categoryName => $categoryTickets)
+                            @php
+                                $slug = 'modal-ticket-' . Str::slug($categoryName);
+                            @endphp
+                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
+                                <div class="menu-card-top">
+                                    <div class="menu-card-icon-wrapper info" style="background: #e0f2fe; color: #0284c7;">
+                                        <i class="fas fa-ticket"></i>
+                                    </div>
+                                    <span class="menu-card-badge info" style="background: #0284c7; color: #fff;">{{ $categoryTickets->count() }}</span>
+                                </div>
+                                <div>
+                                    <h3 class="menu-card-title">{{ $categoryName }}</h3>
+                                    <div class="menu-card-footer info" style="color: #0284c7;">
+                                        Open Pool <i class="fas fa-arrow-right"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="empty-state" style="border: 1px solid #e2e8f0; border-radius: 16px;">
+                        <div class="empty-icon"><i class="fas fa-circle-check" style="color: #10b981;"></i></div>
+                        <div class="empty-title">All Caught Up!</div>
+                        <p class="empty-desc">There are no unassigned tickets waiting in your queue.</p>
+                    </div>
+                @endif
+            </div>
+        @endif
+
         <!-- Pool Section 2: RETURNED DOCUMENTS (Visible to all uploaders, e.g., LGUs) -->
         <div class="task-pool-section" style="margin-top: 14px;">
             <h2 class="task-pool-section-title">
@@ -951,6 +991,143 @@
     @endforeach
 @endif
 
+<!-- C. Ticket Modals -->
+@if(($user->isSuperAdmin() || $user->isRegionalUser() || $user->isProvincialUser()) && $ticketsByCategory->isNotEmpty())
+    @foreach($ticketsByCategory as $categoryName => $categoryTickets)
+        @php
+            $slug = 'modal-ticket-' . Str::slug($categoryName);
+            $priorities = $categoryTickets->pluck('priority')->filter()->unique()->sort();
+            $provinces = $categoryTickets->pluck('province_scope')->filter()->unique()->sort();
+        @endphp
+        <div id="{{ $slug }}" class="task-modal-backdrop" onclick="closeTaskModalOnBackdrop(event, '{{ $slug }}')">
+            <div class="task-modal" style="max-width: 900px; width: 90%;">
+                <!-- Modal Header -->
+                <div class="task-modal-header">
+                    <h3 class="task-modal-title">
+                        <i class="fas fa-ticket"></i>
+                        <span>{{ $categoryName }} - Ticket Pool</span>
+                    </h3>
+                    <button class="task-modal-close" onclick="closeTaskModal('{{ $slug }}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- Filter Bar inside Modal -->
+                <div class="task-modal-filter-bar">
+                    @if($provinces->isNotEmpty())
+                        <div class="modal-filter-field">
+                            <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="province" aria-label="Filter by province">
+                                <option value="">All Provinces</option>
+                                @foreach($provinces as $prov)
+                                    <option value="{{ $prov }}">{{ $prov }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                    @if($priorities->isNotEmpty())
+                        <div class="modal-filter-field">
+                            <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="priority" aria-label="Filter by priority">
+                                <option value="">All Priorities</option>
+                                @foreach($priorities as $priority)
+                                    <option value="{{ $priority }}">{{ $priority }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                    <div class="modal-filter-actions">
+                        <button type="button" class="modal-filter-btn apply" onclick="filterModalRows('{{ $slug }}')">
+                            <i class="fas fa-filter"></i> Filter
+                        </button>
+                        <button type="button" class="modal-filter-btn reset" onclick="resetModalFilters('{{ $slug }}')">
+                            <i class="fas fa-rotate-left"></i> Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="task-modal-body">
+                    <div class="table-container">
+                        <table class="task-table">
+                            <thead>
+                                <tr>
+                                    <th>Ticket No.</th>
+                                    <th>Title</th>
+                                    <th>Priority</th>
+                                    <th>Submitted By</th>
+                                    <th>Date Submitted</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($categoryTickets as $ticket)
+                                    <tr data-province="{{ $ticket->province_scope ?? '' }}" data-priority="{{ $ticket->priority ?? '' }}">
+                                        <td>
+                                            <div class="proj-title-cell">
+                                                <a href="{{ route('ticketing.show', $ticket) }}" style="font-weight: 700; color: #1e3a8a; text-decoration: underline;">
+                                                    {{ $ticket->ticket_number }}
+                                                </a>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="task-message-cell">
+                                                <div style="font-weight: 700; color: #1e293b;">{{ $ticket->title }}</div>
+                                                <div style="margin-top: 4px; color: #64748b; font-size: 12px;">{{ \Illuminate\Support\Str::limit($ticket->description, 80) }}</div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="ticketing-badge" style="background: {{ $ticket->priority_color }}; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+                                                {{ $ticket->priority }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="task-uploader-cell">
+                                                <span>
+                                                    <span class="task-uploader-name">{{ $ticket->submitter?->fullName() ?? 'N/A' }}</span>
+                                                    @if($ticket->province_scope)
+                                                        <span class="task-uploader-province"><i class="fas fa-map-marker-alt"></i> {{ $ticket->province_scope }}</span>
+                                                    @endif
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {{ optional($ticket->date_submitted ?? $ticket->created_at)->format('M d, Y h:i A') }}
+                                        </td>
+                                        <td>
+                                            <div style="display: flex; gap: 8px;">
+                                                @php
+                                                    $acceptRoute = '';
+                                                    if ($ticket->current_level === \App\Models\Ticket::LEVEL_PROVINCIAL) {
+                                                        $acceptRoute = route('ticketing.province.accept', $ticket);
+                                                    } elseif ($ticket->current_level === \App\Models\Ticket::LEVEL_REGIONAL) {
+                                                        $acceptRoute = route('ticketing.region.accept', $ticket);
+                                                    }
+                                                @endphp
+                                                @if($acceptRoute)
+                                                    <form method="POST" action="{{ $acceptRoute }}" style="margin: 0;">
+                                                        @csrf
+                                                        <button type="submit" class="task-action-btn" style="background: #10b981; border: none; cursor: pointer; color: #fff;">
+                                                            <i class="fas fa-hand"></i> Accept
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                                <a href="{{ route('ticketing.show', $ticket) }}" class="task-action-btn" style="background: #64748b; color: #fff;">
+                                                    <i class="fas fa-eye"></i> View
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endforeach
+@endif
+
 <script>
     function openTaskModal(id) {
         const modal = document.getElementById(id);
@@ -1000,26 +1177,34 @@
         const provinceSelect = modal.querySelector('[data-filter="province"]');
         const periodSelect = modal.querySelector('[data-filter="period"]');
         const yearSelect = modal.querySelector('[data-filter="year"]');
+        const prioritySelect = modal.querySelector('[data-filter="priority"]');
+        
         const provinceVal = provinceSelect ? provinceSelect.value.toLowerCase() : '';
         const periodVal = periodSelect ? periodSelect.value.toLowerCase() : '';
         const yearVal = yearSelect ? yearSelect.value.toLowerCase() : '';
+        const priorityVal = prioritySelect ? prioritySelect.value.toLowerCase() : '';
         
         const rows = modal.querySelectorAll('.task-table tbody tr');
         rows.forEach(row => {
-            const projCode = row.querySelector('.proj-title-cell').innerText.toLowerCase();
+            const projTitleEl = row.querySelector('.proj-title-cell');
+            const projCode = projTitleEl ? projTitleEl.innerText.toLowerCase() : '';
             const projMetaElement = row.querySelector('.proj-meta-cell');
             const projMeta = projMetaElement ? projMetaElement.innerText.toLowerCase() : '';
-            const details = row.querySelector('.task-message-cell').innerText.toLowerCase();
+            const messageEl = row.querySelector('.task-message-cell');
+            const details = messageEl ? messageEl.innerText.toLowerCase() : '';
+            
             const provinceText = row.dataset.province ? row.dataset.province.toLowerCase() : '';
             const periodText = row.dataset.period ? row.dataset.period.toLowerCase() : '';
             const yearText = row.dataset.year ? row.dataset.year.toLowerCase() : '';
+            const priorityText = row.dataset.priority ? row.dataset.priority.toLowerCase() : '';
             
             const matchesSearch = projCode.includes(searchVal) || projMeta.includes(searchVal) || details.includes(searchVal);
             const matchesProvince = provinceVal === '' || provinceText === provinceVal;
             const matchesPeriod = periodVal === '' || periodText === periodVal;
             const matchesYear = yearVal === '' || yearText === yearVal;
+            const matchesPriority = priorityVal === '' || priorityText === priorityVal;
             
-            if (matchesSearch && matchesProvince && matchesPeriod && matchesYear) {
+            if (matchesSearch && matchesProvince && matchesPeriod && matchesYear && matchesPriority) {
                 row.style.display = '';
             } else {
                 row.style.display = 'none';

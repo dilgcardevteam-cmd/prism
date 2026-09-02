@@ -134,15 +134,6 @@
                         </button>
                     @endif
 
-                    @if (in_array($ticket->status, [
-                        \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
-                        \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
-                    ], true))
-                        <button type="button" class="ticketing-btn ticketing-btn--warning" data-ticketing-open="forwardRegionModal">
-                            <i class="fas fa-building-columns"></i>
-                            Forward to Central Office
-                        </button>
-                    @endif
                 @endif
 
                 @if ($canManageAdmin && in_array($ticket->status, [
@@ -402,25 +393,6 @@
         </div>
     </div>
 
-    <div class="ticketing-modal" id="forwardRegionModal" aria-hidden="true">
-        <div class="ticketing-modal-dialog">
-            <div class="ticketing-modal-header">
-                <h3 class="ticketing-card-title">Forward to Central Office</h3>
-                <button type="button" class="ticketing-modal-close" data-ticketing-close="forwardRegionModal">&times;</button>
-            </div>
-            <form method="POST" action="{{ route('ticketing.region.forward', $ticket) }}" class="ticketing-grid">
-                @csrf
-                <div class="ticketing-field">
-                    <label for="forward_note">Forwarding Note</label>
-                    <textarea id="forward_note" name="forward_note" placeholder="Optional note for Central Office / Admin.">{{ old('forward_note') }}</textarea>
-                </div>
-                <button type="submit" class="ticketing-btn ticketing-btn--warning">
-                    <i class="fas fa-building-columns"></i>
-                    Mark as Forwarded to Central Office
-                </button>
-            </form>
-        </div>
-    </div>
 
     <div class="ticketing-modal" id="closeTicketModal" aria-hidden="true">
         <div class="ticketing-modal-dialog">
