@@ -64,6 +64,26 @@ class TicketNotificationService
         );
     }
 
+    public function notifyCentralOffice(Ticket $ticket, User $actor): void
+    {
+        $recipient = $this->routingService->resolveCentralOfficeAssignee();
+        $recipients = $recipient ? collect([$recipient]) : collect();
+
+        $message = sprintf(
+            'Ticket %s was submitted by %s and routed to the Central Office.',
+            $ticket->ticket_number,
+            $this->resolveActorName($actor),
+        );
+
+        $this->insertNotifications(
+            recipients: $recipients,
+            sender: $actor,
+            message: $message,
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
     protected function insertNotifications(
         Collection $recipients,
         User $sender,

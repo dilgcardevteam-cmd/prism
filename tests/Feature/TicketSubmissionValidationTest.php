@@ -293,4 +293,37 @@ class TicketSubmissionValidationTest extends TestCase
             'status' => Ticket::STATUS_UNDER_REVIEW_BY_REGION,
         ]);
     }
+
+    public function test_regional_user_submits_ticket_to_superadmin(): void
+    {
+        $regionalUser = User::factory()->create([
+            'role' => User::ROLE_REGIONAL,
+            'status' => 'active',
+        ]);
+        $superadmin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+
+        $category = TicketCategory::where('name', 'System Issue')->first();
+
+        $response = $this->actingAs($regionalUser)->post(route('ticketing.store'), [
+            'title' => 'Regional Submitter Ticket',
+            'description' => 'This should go to the superadmin.',
+            'category_id' => $category->id,
+            'priority' => Ticket::PRIORITY_MEDIUM,
+            'contact_information' => 'regional@example.com',
+        ]);
+
+        $response->assertRedirect(route('ticketing.show', 1));
+
+        $this->assertDatabaseHas('tickets', [
+            'title' => 'Regional Submitter Ticket',
+            'submitted_by' => $regionalUser->getKey(),
+            'current_level' => Ticket::LEVEL_CENTRAL_OFFICE,
+            'status' => Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
+            'assigned_role' => User::ROLE_SUPERADMIN,
+            'assigned_to' => $superadmin->getKey(),
+        ]);
+    }
 }

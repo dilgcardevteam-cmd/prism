@@ -22,27 +22,38 @@ class TicketWorkflowService
     public function submit(User $submitter, array $payload, ?UploadedFile $attachment = null): Ticket
     {
         $isProvincialSubmitter = $submitter->isProvincialUser();
+        $isRegionalSubmitter = $submitter->isRegionalUser();
 
-        if (!$isProvincialSubmitter && !$this->routingService->hasProvincialHandlers($submitter)) {
+        if (!$isProvincialSubmitter && !$isRegionalSubmitter && !$this->routingService->hasProvincialHandlers($submitter)) {
             throw new RuntimeException('No active Provincial User is configured for the submitter province yet.');
         }
 
-        return DB::transaction(function () use ($submitter, $payload, $attachment, $isProvincialSubmitter): Ticket {
+        return DB::transaction(function () use ($submitter, $payload, $attachment, $isProvincialSubmitter, $isRegionalSubmitter): Ticket {
+            $centralOfficeAssignee = $isRegionalSubmitter
+                ? $this->routingService->resolveCentralOfficeAssignee()
+                : null;
+
             $ticket = Ticket::create([
                 'title' => $payload['title'],
                 'description' => $payload['description'],
                 'category_id' => $payload['category_id'],
                 'subcategory' => $payload['subcategory'] ?? null,
                 'priority' => $payload['priority'],
-                'status' => $isProvincialSubmitter ? Ticket::STATUS_ESCALATED_TO_REGION : Ticket::STATUS_SUBMITTED,
-                'current_level' => $isProvincialSubmitter ? Ticket::LEVEL_REGIONAL : Ticket::LEVEL_PROVINCIAL,
-                'assigned_role' => $isProvincialSubmitter ? User::ROLE_REGIONAL : User::ROLE_PROVINCIAL,
+                'status' => $isRegionalSubmitter
+                    ? Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE
+                    : ($isProvincialSubmitter ? Ticket::STATUS_ESCALATED_TO_REGION : Ticket::STATUS_SUBMITTED),
+                'current_level' => $isRegionalSubmitter
+                    ? Ticket::LEVEL_CENTRAL_OFFICE
+                    : ($isProvincialSubmitter ? Ticket::LEVEL_REGIONAL : Ticket::LEVEL_PROVINCIAL),
+                'assigned_role' => $isRegionalSubmitter
+                    ? User::ROLE_SUPERADMIN
+                    : ($isProvincialSubmitter ? User::ROLE_REGIONAL : User::ROLE_PROVINCIAL),
                 'contact_information' => $payload['contact_information'],
                 'region_scope' => $submitter->region,
                 'province_scope' => $submitter->province,
                 'office_scope' => $submitter->office,
                 'submitted_by' => $submitter->getKey(),
-                'assigned_to' => null,
+                'assigned_to' => $centralOfficeAssignee?->getKey(),
                 'date_submitted' => now(),
                 'last_status_changed_at' => now(),
             ]);
@@ -51,7 +62,25 @@ class TicketWorkflowService
                 $this->storeAttachment($ticket, $submitter, $attachment);
             }
 
-            if ($isProvincialSubmitter) {
+            if ($isRegionalSubmitter) {
+                $this->recordHistory(
+                    ticket: $ticket,
+                    actor: $submitter,
+                    action: 'ticket_created',
+                    description: 'Ticket submitted and routed to the Central Office.',
+                    fromStatus: null,
+                    toStatus: Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
+                    fromLevel: null,
+                    toLevel: Ticket::LEVEL_CENTRAL_OFFICE,
+                    metadata: [
+                        'assigned_role' => User::ROLE_SUPERADMIN,
+                        'assigned_to' => $centralOfficeAssignee?->fullName(),
+                        'queue' => 'central_office',
+                    ],
+                );
+
+                $this->notificationService->notifyCentralOffice($ticket, $submitter);
+            } elseif ($isProvincialSubmitter) {
                 $this->recordHistory(
                     ticket: $ticket,
                     actor: $submitter,
