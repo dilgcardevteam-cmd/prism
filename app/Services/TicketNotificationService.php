@@ -84,6 +84,40 @@ class TicketNotificationService
         );
     }
 
+    public function notifyTicketComment(Ticket $ticket, User $actor, string $comment): void
+    {
+        $recipientIds = collect([$ticket->submitted_by, $ticket->assigned_to])
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->reject(fn (int $id): bool => $id === (int) $actor->getKey())
+            ->unique()
+            ->values();
+
+        if ($recipientIds->isEmpty()) {
+            return;
+        }
+
+        $recipients = User::query()
+            ->whereIn('idno', $recipientIds->all())
+            ->where('status', 'active')
+            ->get();
+
+        $message = sprintf(
+            '%s added a remark to ticket %s: %s',
+            $this->resolveActorName($actor),
+            $ticket->ticket_number,
+            Str::limit(trim($comment), 300, '...'),
+        );
+
+        $this->insertNotifications(
+            recipients: $recipients,
+            sender: $actor,
+            message: $message,
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
     protected function insertNotifications(
         Collection $recipients,
         User $sender,

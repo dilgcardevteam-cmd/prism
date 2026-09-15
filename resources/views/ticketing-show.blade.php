@@ -136,6 +136,28 @@
                         Close Ticket
                     </button>
                 @endif
+
+                @if ($canManageAdminTicket)
+                    @if ($ticket->status === \App\Models\Ticket::STATUS_ESCALATED_TO_REGION)
+                        <form method="POST" action="{{ route('ticketing.admin.start-review', $ticket) }}">
+                            @csrf
+                            <button type="submit" class="ticketing-btn ticketing-btn--primary">
+                                <i class="fas fa-play"></i>
+                                Start Superadmin Review
+                            </button>
+                        </form>
+                    @endif
+
+                    @if (in_array($ticket->status, [
+                        \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
+                        \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+                    ], true))
+                        <button type="button" class="ticketing-btn ticketing-btn--success" data-ticketing-open="resolveAdminModal">
+                            <i class="fas fa-circle-check"></i>
+                            Resolve Ticket
+                        </button>
+                    @endif
+                @endif
             </div>
         </div>
 
@@ -398,6 +420,26 @@
                 <button type="submit" class="ticketing-btn ticketing-btn--dark">
                     <i class="fas fa-box-archive"></i>
                     Close Ticket
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="ticketing-modal" id="resolveAdminModal" aria-hidden="true">
+        <div class="ticketing-modal-dialog">
+            <div class="ticketing-modal-header">
+                <h3 class="ticketing-card-title">Resolve Ticket as Superadmin</h3>
+                <button type="button" class="ticketing-modal-close" data-ticketing-close="resolveAdminModal">&times;</button>
+            </div>
+            <form method="POST" action="{{ route('ticketing.admin.resolve', $ticket) }}" class="ticketing-grid">
+                @csrf
+                <div class="ticketing-field">
+                    <label for="resolution_note_admin">Resolution Note</label>
+                    <textarea id="resolution_note_admin" name="resolution_note" placeholder="Optional note describing the applied resolution.">{{ old('resolution_note') }}</textarea>
+                </div>
+                <button type="submit" class="ticketing-btn ticketing-btn--success">
+                    <i class="fas fa-circle-check"></i>
+                    Confirm Resolution
                 </button>
             </form>
         </div>

@@ -180,6 +180,7 @@ class TicketController extends Controller
             'canManageProvince' => Gate::forUser($request->user())->allows('ticketing.manageProvince', $ticket),
             'canManageRegion' => Gate::forUser($request->user())->allows('ticketing.manageRegion', $ticket),
             'canManageAdmin' => Gate::forUser($request->user())->allows('ticketing.manageAdmin'),
+            'canManageAdminTicket' => Gate::forUser($request->user())->allows('ticketing.manageAdminTicket', $ticket),
         ]);
     }
 

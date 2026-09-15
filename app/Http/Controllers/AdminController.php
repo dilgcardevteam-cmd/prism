@@ -84,6 +84,36 @@ class AdminController extends Controller
         return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket closed successfully.');
     }
 
+    public function startTicketReview(Request $request, Ticket $ticket, TicketWorkflowService $workflowService): RedirectResponse|Response
+    {
+        if (!\Illuminate\Support\Facades\Gate::forUser($request->user())->allows('ticketing.manageAdminTicket', $ticket)) {
+            return response()->view('errors.restricted', [], 403);
+        }
+
+        try {
+            $workflowService->markRegionUnderReview($ticket, $request->user());
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['ticket_status' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket is now under Superadmin review.');
+    }
+
+    public function resolveAssignedTicket(TicketResolveRequest $request, Ticket $ticket, TicketWorkflowService $workflowService): RedirectResponse|Response
+    {
+        if (!\Illuminate\Support\Facades\Gate::forUser($request->user())->allows('ticketing.manageAdminTicket', $ticket)) {
+            return response()->view('errors.restricted', [], 403);
+        }
+
+        try {
+            $workflowService->resolveByRegion($ticket, $request->user(), $request->validated('resolution_note'));
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['ticket_resolution' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket resolved by Superadmin.');
+    }
+
     protected function applyFilters(Request $request, Builder $query): Builder
     {
         return $query

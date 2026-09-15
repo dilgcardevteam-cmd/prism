@@ -359,7 +359,7 @@ class TicketWorkflowService
             ticket: $ticket,
             actor: $actor,
             action: 'region_review_started',
-            description: 'Regional review started.',
+            description: $actor->isSuperAdmin() ? 'Superadmin review started.' : 'Regional review started.',
             updates: [
                 'status' => Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                 'last_status_changed_at' => now(),
@@ -393,12 +393,14 @@ class TicketWorkflowService
             return $this->updateTicketState(
                 ticket: $ticket,
                 actor: $actor,
-                action: 'region_resolved',
-                description: 'Ticket resolved by the Regional User.',
+                action: $actor->isSuperAdmin() ? 'superadmin_resolved' : 'region_resolved',
+                description: $actor->isSuperAdmin()
+                    ? 'Ticket resolved by the Superadmin.'
+                    : 'Ticket resolved by the Regional User.',
                 updates: [
                     'status' => Ticket::STATUS_RESOLVED_BY_REGION,
                     'current_level' => Ticket::LEVEL_REGIONAL,
-                    'assigned_role' => User::ROLE_REGIONAL,
+                    'assigned_role' => $actor->isSuperAdmin() ? User::ROLE_SUPERADMIN : User::ROLE_REGIONAL,
                     'assigned_to' => $actor->getKey(),
                     'forwarded_to_central_office' => false,
                     'resolved_by' => $actor->getKey(),
@@ -444,6 +446,31 @@ class TicketWorkflowService
                 toLevel: $ticket->current_level,
             );
         });
+    }
+
+    public function addComment(Ticket $ticket, User $actor, string $comment): TicketComment
+    {
+        $ticketComment = $ticket->comments()->create([
+            'user_id' => $actor->getKey(),
+            'comment' => $comment,
+        ]);
+
+        $ticket->histories()->create([
+            'actor_id' => $actor->getKey(),
+            'action' => 'ticket_commented',
+            'description' => $actor->isSuperAdmin()
+                ? 'Superadmin added a ticket remark.'
+                : 'Regional User added a ticket remark.',
+            'from_status' => $ticket->status,
+            'to_status' => $ticket->status,
+            'from_level' => $ticket->current_level,
+            'to_level' => $ticket->current_level,
+            'metadata' => ['comment_id' => $ticketComment->getKey()],
+        ]);
+
+        $this->notificationService->notifyTicketComment($ticket, $actor, $comment);
+
+        return $ticketComment->load('user');
     }
 
     protected function updateTicketState(

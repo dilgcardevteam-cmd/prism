@@ -326,4 +326,84 @@ class TicketSubmissionValidationTest extends TestCase
             'assigned_to' => $superadmin->getKey(),
         ]);
     }
+
+    public function test_superadmin_can_review_and_resolve_regional_ticket(): void
+    {
+        $superadmin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $ticket = Ticket::create([
+            'title' => 'Assigned Superadmin Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_ESCALATED_TO_REGION,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_SUPERADMIN,
+            'assigned_to' => $superadmin->getKey(),
+            'contact_information' => 'admin@example.com',
+            'region_scope' => $superadmin->region,
+            'submitted_by' => User::factory()->create()->idno,
+            'date_submitted' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($superadmin)->post(route('ticketing.admin.start-review', $ticket));
+        $response->assertRedirect(route('ticketing.show', $ticket));
+
+        $response = $this->actingAs($superadmin)->post(route('ticketing.admin.resolve', $ticket), [
+            'resolution_note' => 'Resolved by superadmin.',
+        ]);
+        $response->assertRedirect(route('ticketing.show', $ticket));
+
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'status' => Ticket::STATUS_RESOLVED_BY_REGION,
+            'assigned_role' => User::ROLE_SUPERADMIN,
+            'assigned_to' => $superadmin->getKey(),
+        ]);
+    }
+
+    public function test_superadmin_remark_is_saved_and_reflected_on_ticket(): void
+    {
+        $superadmin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $regionalUser = User::factory()->create([
+            'role' => User::ROLE_REGIONAL,
+            'status' => 'active',
+        ]);
+        $ticket = Ticket::create([
+            'title' => 'Remark Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_ESCALATED_TO_REGION,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_SUPERADMIN,
+            'assigned_to' => $superadmin->getKey(),
+            'contact_information' => 'admin@example.com',
+            'region_scope' => $regionalUser->region,
+            'submitted_by' => $regionalUser->getKey(),
+            'date_submitted' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($superadmin)->post(route('ticketing.comments.store', $ticket), [
+            'comment' => 'Please review the attached details.',
+        ]);
+
+        $response->assertRedirect(route('ticketing.show', $ticket));
+        $this->assertDatabaseHas('ticket_comments', [
+            'ticket_id' => $ticket->id,
+            'user_id' => $superadmin->getKey(),
+            'comment' => 'Please review the attached details.',
+        ]);
+        $this->assertDatabaseHas('ticket_histories', [
+            'ticket_id' => $ticket->id,
+            'action' => 'ticket_commented',
+        ]);
+    }
 }

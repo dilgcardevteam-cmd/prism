@@ -2589,6 +2589,8 @@ Route::middleware(['auth'])->group(function () {
 
         Route::prefix('admin')->name('admin.')->middleware('role:admin')->group(function () {
             Route::get('/tickets', [App\Http\Controllers\AdminController::class, 'index'])->name('index');
+            Route::post('/tickets/{ticket}/start-review', [App\Http\Controllers\AdminController::class, 'startTicketReview'])->name('start-review');
+            Route::post('/tickets/{ticket}/resolve', [App\Http\Controllers\AdminController::class, 'resolveAssignedTicket'])->name('resolve');
             Route::post('/categories', [App\Http\Controllers\AdminController::class, 'storeCategory'])->name('categories.store');
             Route::put('/categories/{category}', [App\Http\Controllers\AdminController::class, 'updateCategory'])->name('categories.update');
             Route::delete('/categories/{category}', [App\Http\Controllers\AdminController::class, 'destroyCategory'])->name('categories.destroy');

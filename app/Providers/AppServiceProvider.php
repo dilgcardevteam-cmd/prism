@@ -174,6 +174,16 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('ticketing.manageAdmin', fn ($user) => $user->isSuperAdmin());
 
+        Gate::define('ticketing.manageAdminTicket', function ($user, Ticket $ticket): bool {
+            return $user->isSuperAdmin()
+                && (int) $ticket->assigned_to === (int) $user->getKey()
+                && $ticket->current_level === Ticket::LEVEL_REGIONAL
+                && in_array($ticket->status, [
+                    Ticket::STATUS_ESCALATED_TO_REGION,
+                    Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+                ], true);
+        });
+
         Gate::define('fund-utilization.validateWorkflow', function ($user, FundUtilizationApprovalWorkflow $workflow): bool {
             if (!$user instanceof User) {
                 return false;
