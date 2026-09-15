@@ -28,6 +28,15 @@ class DashboardController extends Controller
             ->orderByDesc('created_at')
             ->limit(8)
             ->get();
+        $resolvedTickets = (clone $baseQuery)
+            ->whereIn('status', [
+                Ticket::STATUS_RESOLVED_BY_PROVINCE,
+                Ticket::STATUS_RESOLVED_BY_REGION,
+            ])
+            ->orderByDesc('last_status_changed_at')
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get();
 
         $visibleTicketIds = (clone $baseQuery)->select('id');
         $recentActivity = TicketHistory::query()
@@ -40,6 +49,7 @@ class DashboardController extends Controller
         return view('ticketing-dashboard', [
             'cards' => $cards,
             'recentTickets' => $recentTickets,
+            'resolvedTickets' => $resolvedTickets,
             'recentActivity' => $recentActivity,
             'ticketStatuses' => Ticket::statusOptions(),
             'userRoleLabel' => $user->roleLabel(),
@@ -61,6 +71,10 @@ class DashboardController extends Controller
                     'count' => (clone $baseQuery)->whereIn('status', [
                         Ticket::STATUS_SUBMITTED,
                         Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE,
+                        Ticket::STATUS_PENDING,
+                        Ticket::STATUS_REOPENED,
+                        Ticket::STATUS_PENDING,
+                        Ticket::STATUS_REOPENED,
                         Ticket::STATUS_ESCALATED_TO_REGION,
                         Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                     ])->count(),
@@ -120,6 +134,15 @@ class DashboardController extends Controller
                     'icon' => 'fa-arrow-up-right-dots',
                     'color' => '#b45309',
                 ],
+                [
+                    'label' => 'Resolved Tasks',
+                    'count' => (clone $baseQuery)->whereIn('status', [
+                        Ticket::STATUS_RESOLVED_BY_PROVINCE,
+                        Ticket::STATUS_RESOLVED_BY_REGION,
+                    ])->count(),
+                    'icon' => 'fa-circle-check',
+                    'color' => '#15803d',
+                ],
             ];
         }
 
@@ -161,6 +184,15 @@ class DashboardController extends Controller
                     'icon' => 'fa-user-shield',
                     'color' => '#be123c',
                 ],
+                [
+                    'label' => 'Resolved Tasks',
+                    'count' => (clone $baseQuery)->whereIn('status', [
+                        Ticket::STATUS_RESOLVED_BY_PROVINCE,
+                        Ticket::STATUS_RESOLVED_BY_REGION,
+                    ])->count(),
+                    'icon' => 'fa-circle-check',
+                    'color' => '#15803d',
+                ],
             ];
         }
 
@@ -185,6 +217,15 @@ class DashboardController extends Controller
                     ->count(),
                 'icon' => 'fa-user-shield',
                 'color' => '#be123c',
+            ],
+            [
+                'label' => 'Resolved Tasks',
+                'count' => (clone $baseQuery)->whereIn('status', [
+                    Ticket::STATUS_RESOLVED_BY_PROVINCE,
+                    Ticket::STATUS_RESOLVED_BY_REGION,
+                ])->count(),
+                'icon' => 'fa-circle-check',
+                'color' => '#15803d',
             ],
             [
                 'label' => 'Closed Tickets',

@@ -8,30 +8,22 @@
 @endsection
 
 @section('content')
-    <div class="content-header">
-        <h1>My Tickets</h1>
-        <p>Review every ticket you submitted and open the full audit trail for each item.</p>
-    </div>
-
     <div class="ticketing-shell">
         @include('partials.ticketing-flash')
 
-        <div class="ticketing-toolbar">
-            <div class="ticketing-card" style="flex: 1;">
-                <h3 class="ticketing-card-title">LGU Ticket Workspace</h3>
-                <p class="ticketing-card-subtitle">New tickets route first to the Provincial User, then to the Regional User if escalation is needed.</p>
-            </div>
-            <div class="ticketing-toolbar-actions">
+        <header class="ticketing-command-header">
+            <div><div class="ticketing-eyebrow">Requester portal / Work history</div><h1 class="ticketing-page-title">My tickets</h1><p class="ticketing-page-subtitle">Track requests, read remarks, and follow each resolution through its audit trail.</p></div>
+            <div class="ticketing-command-actions">
                 <a href="{{ route('ticketing.create') }}" class="ticketing-btn ticketing-btn--primary">
                     <i class="fas fa-plus"></i>
-                    Submit Ticket
+                    New ticket
                 </a>
                 <a href="{{ route('ticketing.track') }}" class="ticketing-btn ticketing-btn--secondary">
                     <i class="fas fa-route"></i>
-                    Track Status
+                    Track status
                 </a>
             </div>
-        </div>
+        </header>
 
         @include('partials.ticketing-filters', [
             'categories' => $categories,

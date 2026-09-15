@@ -14,6 +14,8 @@
             ['label' => 'Submitted', 'done' => true, 'active' => $status === \App\Models\Ticket::STATUS_SUBMITTED],
             ['label' => 'Provincial Review', 'done' => in_array($status, [
                 \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE,
+                \App\Models\Ticket::STATUS_PENDING,
+                \App\Models\Ticket::STATUS_REOPENED,
                 \App\Models\Ticket::STATUS_RESOLVED_BY_PROVINCE,
                 \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                 \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
@@ -26,6 +28,8 @@
             ], true), 'active' => in_array($status, [
                 \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                 \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+                \App\Models\Ticket::STATUS_PENDING,
+                \App\Models\Ticket::STATUS_REOPENED,
             ], true)],
             ['label' => 'Closed', 'done' => $status === \App\Models\Ticket::STATUS_CLOSED, 'active' => $status === \App\Models\Ticket::STATUS_CLOSED],
         ];
@@ -44,7 +48,7 @@
                 <div>
                     <span class="ticketing-ticket-link">{{ $ticket->ticket_number }}</span>
                     <h2 class="ticketing-card-title" style="margin-top: 10px;">{{ $ticket->title }}</h2>
-                    <p class="ticketing-card-subtitle">{{ $ticket->description }}</p>
+                    <p class="ticketing-card-subtitle">Ticket summary and current workflow status.</p>
                 </div>
                 <div class="ticketing-toolbar-actions">
                     <span class="ticketing-badge" style="background: {{ $ticket->status_color }};">{{ $ticket->status }}</span>
@@ -158,7 +162,37 @@
                         </button>
                     @endif
                 @endif
+
+                @if ($canMarkPending)
+                    <button type="button" class="ticketing-btn ticketing-btn--warning" data-ticketing-open="pendingTicketModal">
+                        <i class="fas fa-pause"></i>
+                        Put on Hold
+                    </button>
+                @endif
+
+                @if ($canResume)
+                    <form method="POST" action="{{ route('ticketing.resume', $ticket) }}">
+                        @csrf
+                        <button type="submit" class="ticketing-btn ticketing-btn--primary">
+                            <i class="fas fa-play"></i>
+                            Resume Ticket
+                        </button>
+                    </form>
+                @endif
+
+                @if ($canReopen)
+                    <button type="button" class="ticketing-btn ticketing-btn--primary" data-ticketing-open="reopenTicketModal">
+                        <i class="fas fa-rotate-left"></i>
+                        Reopen Ticket
+                    </button>
+                @endif
             </div>
+        </div>
+
+        <div class="ticketing-card ticketing-description-panel">
+            <div class="ticketing-eyebrow">Request description</div>
+            <h3 class="ticketing-card-title">What the requester reported</h3>
+            <div class="ticketing-description-body">{{ $ticket->description }}</div>
         </div>
 
         <div class="ticketing-grid ticketing-grid--2">
@@ -285,24 +319,29 @@
 
         <div class="ticketing-grid ticketing-grid--2">
             <div class="ticketing-card">
-                <div class="ticketing-toolbar" style="margin-bottom: 16px;">
+                <div class="ticketing-chat-header">
                     <div>
-                        <h3 class="ticketing-card-title">Comments / Remarks</h3>
-                        <p class="ticketing-card-subtitle">Visible updates and remarks saved by the users handling this ticket.</p>
+                        <div class="ticketing-eyebrow">Ticket-only conversation · {{ $ticket->ticket_number }}</div>
+                        <h3 class="ticketing-card-title">Ticket chat</h3>
+                        <p class="ticketing-card-subtitle">This conversation belongs only to this ticket and is separate from general Messages.</p>
                     </div>
+                    <span class="ticketing-chat-count"><i class="fas fa-comments"></i> {{ $ticket->comments->count() }} replies</span>
                 </div>
 
                 @if ($ticket->comments->isEmpty())
-                    <div class="ticketing-empty" style="margin-bottom: 16px;">No remarks saved yet.</div>
+                    <div class="ticketing-chat-empty"><i class="fas fa-message"></i><strong>No messages yet</strong><span>Start the conversation by sharing an update or question about this ticket.</span></div>
                 @else
-                    <div class="ticketing-comment-list" style="margin-bottom: 16px;">
+                    <div class="ticketing-chat-thread" aria-label="Ticket conversation">
                         @foreach ($ticket->comments as $comment)
-                            <div class="ticketing-comment-item">
-                                <div class="ticketing-comment-author">
-                                    <strong>{{ $comment->user?->fullName() ?? 'System User' }}</strong>
-                                    <span class="ticketing-comment-time">{{ optional($comment->created_at)->format('M d, Y h:i A') }}</span>
+                            @php($isOwnMessage = (int) ($comment->user_id ?? 0) === (int) auth()->id())
+                            <div class="ticketing-chat-message @if($isOwnMessage) is-own @endif">
+                                <div class="ticketing-chat-avatar" aria-hidden="true">
+                                    {{ strtoupper(substr($comment->user?->fname ?? 'S', 0, 1) . substr($comment->user?->lname ?? 'U', 0, 1)) }}
                                 </div>
-                                <div class="ticketing-comment-body">{{ $comment->comment }}</div>
+                                <div class="ticketing-chat-content">
+                                    <div class="ticketing-chat-meta"><strong>{{ $comment->user?->fullName() ?? 'System User' }}</strong><time datetime="{{ optional($comment->created_at)->toIso8601String() }}">{{ optional($comment->created_at)->format('M d, Y h:i A') }}</time></div>
+                                    <div class="ticketing-chat-bubble">{{ $comment->comment }}</div>
+                                </div>
                             </div>
                         @endforeach
                     </div>
@@ -312,12 +351,12 @@
                     <form method="POST" action="{{ route('ticketing.comments.store', $ticket) }}" class="ticketing-grid">
                         @csrf
                         <div class="ticketing-field">
-                            <label for="comment">Add Remark / Comment</label>
-                            <textarea id="comment" name="comment" placeholder="Add a visible update or remark for this ticket.">{{ old('comment') }}</textarea>
+                            <label for="comment">Write a message</label>
+                            <textarea id="comment" name="comment" maxlength="5000" placeholder="Type your message about this ticket...">{{ old('comment') }}</textarea>
                         </div>
-                        <button type="submit" class="ticketing-btn ticketing-btn--primary">
-                            <i class="fas fa-comment-dots"></i>
-                            Save Comment
+                        <button type="submit" class="ticketing-btn ticketing-btn--primary" style="justify-self: start;">
+                            <i class="fas fa-paper-plane"></i>
+                            Send message
                         </button>
                     </form>
                 @elseif (auth()->user()?->isProvincialUser() && $ticket->current_level === \App\Models\Ticket::LEVEL_PROVINCIAL)
@@ -440,6 +479,46 @@
                 <button type="submit" class="ticketing-btn ticketing-btn--success">
                     <i class="fas fa-circle-check"></i>
                     Confirm Resolution
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="ticketing-modal" id="pendingTicketModal" aria-hidden="true">
+        <div class="ticketing-modal-dialog">
+            <div class="ticketing-modal-header">
+                <h3 class="ticketing-card-title">Put Ticket on Hold</h3>
+                <button type="button" class="ticketing-modal-close" data-ticketing-close="pendingTicketModal">&times;</button>
+            </div>
+            <form method="POST" action="{{ route('ticketing.pending', $ticket) }}" class="ticketing-grid">
+                @csrf
+                <div class="ticketing-field">
+                    <label for="pending_note">Hold Reason</label>
+                    <textarea id="pending_note" name="resolution_note" required placeholder="Explain what information or action is pending.">{{ old('resolution_note') }}</textarea>
+                </div>
+                <button type="submit" class="ticketing-btn ticketing-btn--warning">
+                    <i class="fas fa-pause"></i>
+                    Put on Hold
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="ticketing-modal" id="reopenTicketModal" aria-hidden="true">
+        <div class="ticketing-modal-dialog">
+            <div class="ticketing-modal-header">
+                <h3 class="ticketing-card-title">Reopen Ticket</h3>
+                <button type="button" class="ticketing-modal-close" data-ticketing-close="reopenTicketModal">&times;</button>
+            </div>
+            <form method="POST" action="{{ route('ticketing.reopen', $ticket) }}" class="ticketing-grid">
+                @csrf
+                <div class="ticketing-field">
+                    <label for="reopen_note">Reopen Reason</label>
+                    <textarea id="reopen_note" name="resolution_note" required placeholder="Explain why this ticket needs follow-up.">{{ old('resolution_note') }}</textarea>
+                </div>
+                <button type="submit" class="ticketing-btn ticketing-btn--primary">
+                    <i class="fas fa-rotate-left"></i>
+                    Reopen Ticket
                 </button>
             </form>
         </div>

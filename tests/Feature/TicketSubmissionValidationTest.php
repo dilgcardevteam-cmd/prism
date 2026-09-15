@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\User;
+use App\Services\TicketWorkflowService;
 use Database\Seeders\TicketCategorySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use RuntimeException;
 use Tests\TestCase;
 
 class TicketSubmissionValidationTest extends TestCase
@@ -45,6 +47,7 @@ class TicketSubmissionValidationTest extends TestCase
             'subcategory' => 'RLIP/LIME',
             'priority' => Ticket::PRIORITY_LOW,
             'contact_information' => 'test@example.com',
+            'attachment' => \Illuminate\Http\UploadedFile::fake()->create('proof.pdf', 100, 'application/pdf'),
         ]);
 
         $response->assertRedirect(route('ticketing.show', 1));
@@ -115,6 +118,31 @@ class TicketSubmissionValidationTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors(['subcategory']);
+    }
+
+    public function test_ticket_submission_requires_attachment(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_LGU,
+            'province' => 'Benguet',
+            'access' => 'crud:ticketing_system.view,ticketing_system.add',
+            'status' => 'active',
+        ]);
+        User::factory()->create([
+            'role' => User::ROLE_PROVINCIAL,
+            'province' => 'Benguet',
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($user)->post(route('ticketing.store'), [
+            'title' => 'Missing Attachment Ticket',
+            'description' => 'This should require proof.',
+            'category_id' => TicketCategory::where('name', 'System Issue')->firstOrFail()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'contact_information' => 'test@example.com',
+        ]);
+
+        $response->assertSessionHasErrors(['attachment']);
     }
 
     public function test_can_view_and_download_attachment(): void
@@ -246,6 +274,7 @@ class TicketSubmissionValidationTest extends TestCase
             'category_id' => $category->id,
             'priority' => Ticket::PRIORITY_MEDIUM,
             'contact_information' => 'provincial@example.com',
+            'attachment' => \Illuminate\Http\UploadedFile::fake()->create('proof.pdf', 100, 'application/pdf'),
         ]);
 
         $response->assertRedirect(route('ticketing.show', 1));
@@ -313,6 +342,7 @@ class TicketSubmissionValidationTest extends TestCase
             'category_id' => $category->id,
             'priority' => Ticket::PRIORITY_MEDIUM,
             'contact_information' => 'regional@example.com',
+            'attachment' => \Illuminate\Http\UploadedFile::fake()->create('proof.pdf', 100, 'application/pdf'),
         ]);
 
         $response->assertRedirect(route('ticketing.show', 1));
@@ -362,6 +392,170 @@ class TicketSubmissionValidationTest extends TestCase
             'status' => Ticket::STATUS_RESOLVED_BY_REGION,
             'assigned_role' => User::ROLE_SUPERADMIN,
             'assigned_to' => $superadmin->getKey(),
+        ]);
+    }
+
+    public function test_non_superadmin_cannot_close_a_resolved_ticket(): void
+    {
+        $regionalUser = User::factory()->create([
+            'role' => User::ROLE_REGIONAL,
+            'status' => 'active',
+        ]);
+        $ticket = Ticket::create([
+            'title' => 'Resolved Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_RESOLVED_BY_REGION,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_REGIONAL,
+            'assigned_to' => $regionalUser->getKey(),
+            'contact_information' => 'regional@example.com',
+            'region_scope' => $regionalUser->region,
+            'submitted_by' => User::factory()->create()->idno,
+            'date_submitted' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Only a Superadmin can close tickets.');
+
+        app(TicketWorkflowService::class)->close($ticket, $regionalUser);
+    }
+
+    public function test_assigned_superadmin_can_place_ticket_on_hold(): void
+    {
+        $superadmin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $ticket = Ticket::create([
+            'title' => 'Pending Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_ESCALATED_TO_REGION,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_SUPERADMIN,
+            'assigned_to' => $superadmin->getKey(),
+            'contact_information' => 'admin@example.com',
+            'region_scope' => $superadmin->region,
+            'submitted_by' => User::factory()->create()->idno,
+            'date_submitted' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($superadmin)->post(route('ticketing.pending', $ticket), [
+            'resolution_note' => 'Waiting for additional information.',
+        ]);
+
+        $response->assertRedirect(route('ticketing.show', $ticket));
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'status' => Ticket::STATUS_PENDING,
+        ]);
+    }
+
+    public function test_regional_action_notifies_superadmin(): void
+    {
+        $regionalUser = User::factory()->create([
+            'role' => User::ROLE_REGIONAL,
+            'status' => 'active',
+        ]);
+        $superadmin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $ticket = Ticket::create([
+            'title' => 'Regional Notification Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_ESCALATED_TO_REGION,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_REGIONAL,
+            'assigned_to' => $regionalUser->getKey(),
+            'contact_information' => 'regional@example.com',
+            'region_scope' => $regionalUser->region,
+            'submitted_by' => User::factory()->create()->idno,
+            'date_submitted' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $this->actingAs($regionalUser)->post(route('ticketing.region.start-review', $ticket));
+
+        $this->assertDatabaseHas('tbnotifications', [
+            'user_id' => $superadmin->getKey(),
+            'document_type' => 'ticketing-system',
+        ]);
+    }
+
+    public function test_requester_can_reopen_a_resolved_ticket(): void
+    {
+        $requester = User::factory()->create([
+            'role' => User::ROLE_LGU,
+            'access' => 'crud:ticketing_system.view,ticketing_system.add',
+            'status' => 'active',
+        ]);
+        User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $ticket = Ticket::create([
+            'title' => 'Reopen Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_RESOLVED_BY_REGION,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_SUPERADMIN,
+            'contact_information' => 'requester@example.com',
+            'region_scope' => $requester->region,
+            'submitted_by' => $requester->getKey(),
+            'date_submitted' => now(),
+            'resolved_at' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($requester)->post(route('ticketing.reopen', $ticket), [
+            'resolution_note' => 'The issue is still present.',
+        ]);
+
+        $response->assertRedirect(route('ticketing.show', $ticket));
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'status' => Ticket::STATUS_REOPENED,
+        ]);
+    }
+
+    public function test_assigned_superadmin_can_resume_a_pending_ticket(): void
+    {
+        $superadmin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $ticket = Ticket::create([
+            'title' => 'Pending Ticket',
+            'description' => 'Test',
+            'category_id' => TicketCategory::first()->id,
+            'priority' => Ticket::PRIORITY_LOW,
+            'status' => Ticket::STATUS_PENDING,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'assigned_role' => User::ROLE_SUPERADMIN,
+            'assigned_to' => $superadmin->getKey(),
+            'contact_information' => 'admin@example.com',
+            'region_scope' => $superadmin->region,
+            'submitted_by' => User::factory()->create()->idno,
+            'date_submitted' => now(),
+            'last_status_changed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($superadmin)->post(route('ticketing.resume', $ticket));
+
+        $response->assertRedirect(route('ticketing.show', $ticket));
+        $this->assertDatabaseHas('tickets', [
+            'id' => $ticket->id,
+            'status' => Ticket::STATUS_UNDER_REVIEW_BY_REGION,
         ]);
     }
 

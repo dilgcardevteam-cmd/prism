@@ -9,6 +9,7 @@ use App\Models\TicketHistory;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class TicketWorkflowService
@@ -29,6 +30,7 @@ class TicketWorkflowService
         }
 
         return DB::transaction(function () use ($submitter, $payload, $attachment, $isProvincialSubmitter, $isRegionalSubmitter): Ticket {
+            $submittedAt = now();
             $superadminAssignee = $isRegionalSubmitter
                 ? $this->routingService->resolveSuperadminAssignee()
                 : null;
@@ -54,8 +56,8 @@ class TicketWorkflowService
                 'office_scope' => $submitter->office,
                 'submitted_by' => $submitter->getKey(),
                 'assigned_to' => $superadminAssignee?->getKey(),
-                'date_submitted' => now(),
-                'last_status_changed_at' => now(),
+                'date_submitted' => $submittedAt,
+                'last_status_changed_at' => $submittedAt,
             ]);
 
             if ($attachment) {
@@ -180,13 +182,17 @@ class TicketWorkflowService
             $this->recordHistory(
                 ticket: $ticket,
                 actor: $actor,
-                action: 'comment_added',
-                description: 'Added a ticket remark/comment.',
+                action: 'ticket_commented',
+                description: $actor->isSuperAdmin()
+                    ? 'Superadmin added a ticket remark.'
+                    : 'Regional User added a ticket remark.',
                 fromStatus: $ticket->status,
                 toStatus: $ticket->status,
                 fromLevel: $ticket->current_level,
                 toLevel: $ticket->current_level,
             );
+
+            $this->notificationService->notifyTicketComment($ticket, $actor, $comment);
 
             return $ticketComment;
         });
@@ -233,7 +239,7 @@ class TicketWorkflowService
                 ]);
             }
 
-            return $this->updateTicketState(
+            $updatedTicket = $this->updateTicketState(
                 ticket: $ticket,
                 actor: $actor,
                 action: 'province_resolved',
@@ -246,6 +252,125 @@ class TicketWorkflowService
                 ],
                 toStatus: Ticket::STATUS_RESOLVED_BY_PROVINCE,
                 toLevel: Ticket::LEVEL_PROVINCIAL,
+            );
+        });
+    }
+
+    public function markPending(Ticket $ticket, User $actor, ?string $note = null): Ticket
+    {
+        if (!in_array($ticket->status, [
+            Ticket::STATUS_SUBMITTED,
+            Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE,
+            Ticket::STATUS_REOPENED,
+            Ticket::STATUS_ESCALATED_TO_REGION,
+            Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+        ], true)) {
+            throw new RuntimeException('Only active tickets can be placed on hold.');
+        }
+
+        $this->ensureActorCanManageTicket($ticket, $actor);
+
+        return DB::transaction(function () use ($ticket, $actor, $note): Ticket {
+            if ($note) {
+                $ticket->comments()->create([
+                    'user_id' => $actor->getKey(),
+                    'comment' => $note,
+                ]);
+            }
+
+            $updatedTicket = $this->updateTicketState(
+                ticket: $ticket,
+                actor: $actor,
+                action: 'ticket_pending',
+                description: 'Ticket placed on hold pending additional information or action.',
+                updates: [
+                    'status' => Ticket::STATUS_PENDING,
+                    'last_status_changed_at' => now(),
+                ],
+                toStatus: Ticket::STATUS_PENDING,
+                toLevel: $ticket->current_level,
+            );
+
+            $this->notificationService->notifySuperadminOfRegionalAction($updatedTicket, $actor, 'placed the ticket on hold');
+
+            return $updatedTicket;
+        });
+    }
+
+    public function resumeFromPending(Ticket $ticket, User $actor): Ticket
+    {
+        if ($ticket->status !== Ticket::STATUS_PENDING) {
+            throw new RuntimeException('Only tickets on hold can be resumed.');
+        }
+
+        $this->ensureActorCanManageTicket($ticket, $actor);
+
+        $resumeStatus = $ticket->current_level === Ticket::LEVEL_PROVINCIAL
+            ? Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE
+            : Ticket::STATUS_UNDER_REVIEW_BY_REGION;
+
+        $updatedTicket = $this->updateTicketState(
+            ticket: $ticket,
+            actor: $actor,
+            action: 'ticket_resumed',
+            description: 'Ticket resumed from hold and returned to active review.',
+            updates: [
+                'status' => $resumeStatus,
+                'last_status_changed_at' => now(),
+            ],
+            toStatus: $resumeStatus,
+            toLevel: $ticket->current_level,
+        );
+
+        $this->notificationService->notifySuperadminOfRegionalAction($updatedTicket, $actor, 'resumed the ticket from hold');
+
+        return $updatedTicket;
+    }
+
+    public function reopen(Ticket $ticket, User $actor, ?string $note = null): Ticket
+    {
+        if (!in_array($ticket->status, [
+            Ticket::STATUS_RESOLVED_BY_PROVINCE,
+            Ticket::STATUS_RESOLVED_BY_REGION,
+            Ticket::STATUS_CLOSED,
+        ], true)) {
+            throw new RuntimeException('Only resolved or closed tickets can be reopened.');
+        }
+
+        if (!$actor->isSuperAdmin() && (int) $ticket->submitted_by !== (int) $actor->getKey()) {
+            throw new RuntimeException('Only the requester or a Superadmin can reopen this ticket.');
+        }
+
+        return DB::transaction(function () use ($ticket, $actor, $note): Ticket {
+            if ($note) {
+                $ticket->comments()->create([
+                    'user_id' => $actor->getKey(),
+                    'comment' => $note,
+                ]);
+            }
+
+            $assignedTo = $ticket->current_level === Ticket::LEVEL_REGIONAL
+                ? $this->routingService->resolveSuperadminAssignee()?->getKey()
+                : null;
+
+            return $this->updateTicketState(
+                ticket: $ticket,
+                actor: $actor,
+                action: 'ticket_reopened',
+                description: 'Ticket reopened and returned for follow-up.',
+                updates: [
+                    'status' => Ticket::STATUS_REOPENED,
+                    'assigned_to' => $assignedTo,
+                    'assigned_role' => $ticket->current_level === Ticket::LEVEL_REGIONAL
+                        ? User::ROLE_SUPERADMIN
+                        : User::ROLE_PROVINCIAL,
+                    'resolved_by' => null,
+                    'resolved_at' => null,
+                    'closed_at' => null,
+                    'last_status_changed_at' => now(),
+                ],
+                toStatus: Ticket::STATUS_REOPENED,
+                toLevel: $ticket->current_level,
             );
         });
     }
@@ -343,7 +468,10 @@ class TicketWorkflowService
                 ],
             );
 
-            return $lockedTicket->fresh(['category', 'submitter', 'assignee', 'attachments', 'histories', 'comments']);
+            $updatedTicket = $lockedTicket->fresh(['category', 'submitter', 'assignee', 'attachments', 'histories', 'comments']);
+            $this->notificationService->notifySuperadminOfRegionalAction($updatedTicket, $actor, 'accepted the ticket');
+
+            return $updatedTicket;
         });
     }
 
@@ -355,7 +483,7 @@ class TicketWorkflowService
 
         $this->ensureRegionTicketAssignedToActor($ticket, $actor);
 
-        return $this->updateTicketState(
+        $updatedTicket = $this->updateTicketState(
             ticket: $ticket,
             actor: $actor,
             action: 'region_review_started',
@@ -367,6 +495,10 @@ class TicketWorkflowService
             toStatus: Ticket::STATUS_UNDER_REVIEW_BY_REGION,
             toLevel: Ticket::LEVEL_REGIONAL,
         );
+
+        $this->notificationService->notifySuperadminOfRegionalAction($updatedTicket, $actor, 'started regional review');
+
+        return $updatedTicket;
     }
 
     public function resolveByRegion(Ticket $ticket, User $actor, ?string $resolutionNote = null): Ticket
@@ -382,7 +514,7 @@ class TicketWorkflowService
 
         $this->ensureRegionTicketAssignedToActor($ticket, $actor);
 
-        return DB::transaction(function () use ($ticket, $actor, $resolutionNote): Ticket {
+        $updatedTicket = DB::transaction(function () use ($ticket, $actor, $resolutionNote): Ticket {
             if ($resolutionNote) {
                 $ticket->comments()->create([
                     'user_id' => $actor->getKey(),
@@ -411,10 +543,18 @@ class TicketWorkflowService
                 toLevel: Ticket::LEVEL_REGIONAL,
             );
         });
+
+        $this->notificationService->notifySuperadminOfRegionalAction($updatedTicket, $actor, 'resolved the ticket');
+
+        return $updatedTicket;
     }
 
     public function close(Ticket $ticket, User $actor, ?string $closeNote = null): Ticket
     {
+        if (!$actor->isSuperAdmin()) {
+            throw new RuntimeException('Only a Superadmin can close tickets.');
+        }
+
         if (!in_array($ticket->status, [
             Ticket::STATUS_RESOLVED_BY_PROVINCE,
             Ticket::STATUS_RESOLVED_BY_REGION,
@@ -423,15 +563,29 @@ class TicketWorkflowService
         }
 
         return DB::transaction(function () use ($ticket, $actor, $closeNote): Ticket {
+            /** @var Ticket|null $lockedTicket */
+            $lockedTicket = Ticket::query()->lockForUpdate()->find($ticket->getKey());
+
+            if (!$lockedTicket) {
+                throw new RuntimeException('The selected ticket could not be found anymore.');
+            }
+
+            if (!in_array($lockedTicket->status, [
+                Ticket::STATUS_RESOLVED_BY_PROVINCE,
+                Ticket::STATUS_RESOLVED_BY_REGION,
+            ], true)) {
+                throw new RuntimeException('Only resolved tickets can be closed.');
+            }
+
             if ($closeNote) {
-                $ticket->comments()->create([
+                $lockedTicket->comments()->create([
                     'user_id' => $actor->getKey(),
                     'comment' => $closeNote,
                 ]);
             }
 
             return $this->updateTicketState(
-                ticket: $ticket,
+                ticket: $lockedTicket,
                 actor: $actor,
                 action: 'ticket_closed',
                 description: 'Ticket closed by Superadmin.',
@@ -443,34 +597,9 @@ class TicketWorkflowService
                     'last_status_changed_at' => now(),
                 ],
                 toStatus: Ticket::STATUS_CLOSED,
-                toLevel: $ticket->current_level,
+                toLevel: $lockedTicket->current_level,
             );
         });
-    }
-
-    public function addComment(Ticket $ticket, User $actor, string $comment): TicketComment
-    {
-        $ticketComment = $ticket->comments()->create([
-            'user_id' => $actor->getKey(),
-            'comment' => $comment,
-        ]);
-
-        $ticket->histories()->create([
-            'actor_id' => $actor->getKey(),
-            'action' => 'ticket_commented',
-            'description' => $actor->isSuperAdmin()
-                ? 'Superadmin added a ticket remark.'
-                : 'Regional User added a ticket remark.',
-            'from_status' => $ticket->status,
-            'to_status' => $ticket->status,
-            'from_level' => $ticket->current_level,
-            'to_level' => $ticket->current_level,
-            'metadata' => ['comment_id' => $ticketComment->getKey()],
-        ]);
-
-        $this->notificationService->notifyTicketComment($ticket, $actor, $comment);
-
-        return $ticketComment->load('user');
     }
 
     protected function updateTicketState(
@@ -508,14 +637,15 @@ class TicketWorkflowService
 
     protected function storeAttachment(Ticket $ticket, User $actor, UploadedFile $attachment): TicketAttachment
     {
-        $storedPath = $attachment->store('ticket-attachments/' . $ticket->id, 'public');
+        $disk = 'local';
+        $storedPath = $attachment->store('ticket-attachments/' . $ticket->id, $disk);
 
         return $ticket->attachments()->create([
             'uploaded_by' => $actor->getKey(),
-            'disk' => 'public',
+            'disk' => $disk,
             'file_path' => $storedPath,
             'original_name' => $attachment->getClientOriginalName(),
-            'mime_type' => $attachment->getClientMimeType(),
+            'mime_type' => $attachment->getMimeType() ?: $attachment->getClientMimeType(),
             'file_size' => $attachment->getSize(),
         ]);
     }
@@ -554,6 +684,31 @@ class TicketWorkflowService
         }
 
         throw new RuntimeException('This ticket is currently assigned to another Provincial User.');
+    }
+
+    protected function ensureActorCanManageTicket(Ticket $ticket, User $actor): void
+    {
+        if ($actor->isSuperAdmin()) {
+            if ((int) $ticket->assigned_to !== (int) $actor->getKey()) {
+                throw new RuntimeException('This ticket is assigned to another user.');
+            }
+
+            return;
+        }
+
+        if ($ticket->current_level === Ticket::LEVEL_PROVINCIAL) {
+            $this->ensureProvinceTicketAssignedToActor($ticket, $actor);
+
+            return;
+        }
+
+        if ($ticket->current_level === Ticket::LEVEL_REGIONAL) {
+            $this->ensureRegionTicketAssignedToActor($ticket, $actor);
+
+            return;
+        }
+
+        throw new RuntimeException('This ticket cannot be managed from its current level.');
     }
 
     protected function ensureRegionTicketAssignedToActor(Ticket $ticket, User $actor): void

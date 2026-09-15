@@ -14,37 +14,44 @@
         $showProgramField = $selectedCategory?->isProgramRelated() ?? false;
     @endphp
 
-    <div class="content-header">
-        <h1>Submit Ticket</h1>
-        <p>Create a new ticket or query for system or business process concerns.</p>
-    </div>
-
     <div class="ticketing-shell">
         @include('partials.ticketing-flash')
+
+        <header class="ticketing-command-header">
+            <div>
+                <div class="ticketing-eyebrow">Requester portal / New request</div>
+                <h1 class="ticketing-page-title">Submit a ticket</h1>
+                <p class="ticketing-page-subtitle">Tell us what happened and the support team will route it to the right level.</p>
+            </div>
+            <a href="{{ route('ticketing.my-tickets') }}" class="ticketing-btn ticketing-btn--secondary"><i class="fas fa-arrow-left"></i> Back to my tickets</a>
+        </header>
+
+        <div class="ticketing-process-strip" aria-label="Ticket submission process">
+            <div class="is-active"><span>1</span><strong>Describe</strong><small>Explain the request</small></div>
+            <div><span>2</span><strong>Route</strong><small>Support reviews it</small></div>
+            <div><span>3</span><strong>Resolve</strong><small>Track the outcome</small></div>
+        </div>
 
         <form method="POST" action="{{ route('ticketing.store') }}" enctype="multipart/form-data" class="ticketing-card">
             @csrf
 
-            <div class="ticketing-toolbar" style="margin-bottom: 18px;">
+            <div class="ticketing-section-heading">
                 <div>
-                    <h3 class="ticketing-card-title">Ticket Details</h3>
-                    <p class="ticketing-card-subtitle">All new tickets are routed first to the provincial queue for your province, where a Provincial User must accept them before review.</p>
+                    <div class="ticketing-eyebrow">Request details</div>
+                    <h2 class="ticketing-card-title">What can we help with?</h2>
+                    <p class="ticketing-card-subtitle">Use a short subject and include enough detail for the support team to act without follow-up.</p>
                 </div>
-                <a href="{{ route('ticketing.my-tickets') }}" class="ticketing-btn ticketing-btn--secondary">
-                    <i class="fas fa-arrow-left"></i>
-                    Back to My Tickets
-                </a>
             </div>
 
             <div class="ticketing-grid ticketing-grid--2">
                 <div class="ticketing-field">
                     <label for="title">Subject / Title</label>
-                    <input id="title" type="text" name="title" value="{{ old('title') }}" placeholder="Enter a concise ticket subject">
+                    <input id="title" type="text" name="title" value="{{ old('title') }}" placeholder="Enter a concise ticket subject" required>
                 </div>
 
                 <div class="ticketing-field">
                     <label for="category_id">Category</label>
-                    <select id="category_id" name="category_id">
+                    <select id="category_id" name="category_id" required>
                         <option value="">Select category</option>
                         @foreach ($categories as $category)
                             <option
@@ -61,12 +68,17 @@
 
                 <div class="ticketing-field">
                     <label for="priority">Priority</label>
-                    <select id="priority" name="priority">
+                    <select id="priority" name="priority" required>
                         <option value="">Select priority</option>
                         @foreach ($priorities as $priority)
                             <option value="{{ $priority }}" @selected(old('priority') === $priority)>{{ $priority }}</option>
                         @endforeach
                     </select>
+                </div>
+
+                <div class="ticketing-field">
+                    <label>Routing</label>
+                    <div class="ticketing-form-note"><i class="fas fa-shield-halved"></i><span>Your request will be routed to the appropriate Provincial, Regional, or Superadmin support queue.</span></div>
                 </div>
 
                 <div
@@ -106,17 +118,17 @@
 
                 <div class="ticketing-field" style="grid-column: 1 / -1;">
                     <label for="description">Description</label>
-                    <textarea id="description" name="description" placeholder="Explain the issue, question, or process concern in detail.">{{ old('description') }}</textarea>
+                    <textarea id="description" name="description" placeholder="Explain the issue, question, or process concern in detail." required>{{ old('description') }}</textarea>
                 </div>
 
                 <div class="ticketing-field">
                     <label for="contact_information">Contact Information</label>
-                    <input id="contact_information" type="text" name="contact_information" value="{{ old('contact_information', $defaultContactInformation) }}" placeholder="Email, mobile number, or preferred contact">
+                    <input id="contact_information" type="text" name="contact_information" value="{{ old('contact_information', $defaultContactInformation) }}" placeholder="Email, mobile number, or preferred contact" required>
                 </div>
 
                 <div class="ticketing-field">
                     <label for="attachment">Proof / MOV / Sample</label>
-                    <input id="attachment" type="file" name="attachment" class="dashboard-file-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.mp4,.mov,.avi,.webm,.wmv,.flv,.mkv,.3gp" data-max-size-kb="10240">
+                    <input id="attachment" type="file" name="attachment" class="dashboard-file-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.mp4,.mov,.avi,.webm,.wmv,.flv,.mkv,.3gp" data-max-size-kb="10240" required>
                 </div>
             </div>
 

@@ -8,13 +8,13 @@
 @endsection
 
 @section('content')
-    <div class="content-header">
-        <h1>Admin Ticket Monitoring</h1>
-        <p>Monitor all tickets assigned to the Superadmin and manage the ticket category list.</p>
-    </div>
-
     <div class="ticketing-shell">
         @include('partials.ticketing-flash')
+
+        <header class="ticketing-command-header">
+            <div><div class="ticketing-eyebrow">Administration / Operations</div><h1 class="ticketing-page-title">Ticket monitoring</h1><p class="ticketing-page-subtitle">Review workload, manage categories, and close completed support requests.</p></div>
+            <a href="{{ route('ticketing.dashboard') }}" class="ticketing-btn ticketing-btn--secondary"><i class="fas fa-chart-line"></i> Overview</a>
+        </header>
 
         @include('partials.ticketing-filters', [
             'categories' => $categories,

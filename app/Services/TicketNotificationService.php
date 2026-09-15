@@ -93,6 +93,17 @@ class TicketNotificationService
             ->unique()
             ->values();
 
+        if ($actor->isRegionalUser()) {
+            $superadmin = $this->routingService->resolveSuperadminAssignee();
+            if ($superadmin) {
+                $recipientIds = $recipientIds
+                    ->push((int) $superadmin->getKey())
+                    ->reject(fn (int $id): bool => $id === (int) $actor->getKey())
+                    ->unique()
+                    ->values();
+            }
+        }
+
         if ($recipientIds->isEmpty()) {
             return;
         }
@@ -113,6 +124,31 @@ class TicketNotificationService
             recipients: $recipients,
             sender: $actor,
             message: $message,
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
+    public function notifySuperadminOfRegionalAction(Ticket $ticket, User $actor, string $action): void
+    {
+        if (!$actor->isRegionalUser()) {
+            return;
+        }
+
+        $superadmin = $this->routingService->resolveSuperadminAssignee();
+        if (!$superadmin || (int) $superadmin->getKey() === (int) $actor->getKey()) {
+            return;
+        }
+
+        $this->insertNotifications(
+            recipients: collect([$superadmin]),
+            sender: $actor,
+            message: sprintf(
+                '%s performed "%s" on ticket %s in the Regional Office workflow.',
+                $this->resolveActorName($actor),
+                $action,
+                $ticket->ticket_number,
+            ),
             url: route('ticketing.show', $ticket, false),
             documentType: 'ticketing-system',
         );

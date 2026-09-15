@@ -56,7 +56,7 @@ class TicketStoreRequest extends FormRequest
             ],
             'priority' => ['required', 'string', Rule::in(Ticket::priorityOptions())],
             'contact_information' => ['required', 'string', 'max:255'],
-            'attachment' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,mp4,mov,avi,webm,wmv,flv,mkv,3gp', 'max:10240'],
+            'attachment' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx,mp4,mov,avi,webm,wmv,flv,mkv,3gp', 'max:10240'],
         ];
     }
 

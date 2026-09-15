@@ -24,6 +24,8 @@ class Ticket extends Model
 
     public const STATUS_SUBMITTED = 'Submitted';
     public const STATUS_UNDER_REVIEW_BY_PROVINCE = 'Under Review by Province';
+    public const STATUS_PENDING = 'Pending';
+    public const STATUS_REOPENED = 'Reopened';
     public const STATUS_RESOLVED_BY_PROVINCE = 'Resolved by Province';
     public const STATUS_ESCALATED_TO_REGION = 'Escalated to Region';
     public const STATUS_UNDER_REVIEW_BY_REGION = 'Under Review by Region';
@@ -112,9 +114,13 @@ class Ticket extends Model
         return [
             self::STATUS_SUBMITTED,
             self::STATUS_UNDER_REVIEW_BY_PROVINCE,
+            self::STATUS_PENDING,
+            self::STATUS_REOPENED,
             self::STATUS_RESOLVED_BY_PROVINCE,
             self::STATUS_ESCALATED_TO_REGION,
             self::STATUS_UNDER_REVIEW_BY_REGION,
+                        self::STATUS_PENDING,
+                        self::STATUS_REOPENED,
             self::STATUS_RESOLVED_BY_REGION,
             self::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
             self::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
@@ -136,6 +142,8 @@ class Ticket extends Model
         return [
             self::STATUS_SUBMITTED => '#1d4ed8',
             self::STATUS_UNDER_REVIEW_BY_PROVINCE => '#7c3aed',
+            self::STATUS_PENDING => '#a16207',
+            self::STATUS_REOPENED => '#2563eb',
             self::STATUS_RESOLVED_BY_PROVINCE => '#15803d',
             self::STATUS_ESCALATED_TO_REGION => '#b45309',
             self::STATUS_UNDER_REVIEW_BY_REGION => '#0f766e',
@@ -257,6 +265,8 @@ class Ticket extends Model
                     ])->orWhereIn('status', [
                         self::STATUS_ESCALATED_TO_REGION,
                         self::STATUS_UNDER_REVIEW_BY_REGION,
+                        self::STATUS_PENDING,
+                        self::STATUS_REOPENED,
                         self::STATUS_RESOLVED_BY_REGION,
                         self::STATUS_CLOSED,
                     ]);

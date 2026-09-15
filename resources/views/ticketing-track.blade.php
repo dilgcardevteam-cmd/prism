@@ -8,13 +8,13 @@
 @endsection
 
 @section('content')
-    <div class="content-header">
-        <h1>Track Ticket Status</h1>
-        <p>Follow where each ticket currently sits in the LGU → Province → Region workflow.</p>
-    </div>
-
     <div class="ticketing-shell">
         @include('partials.ticketing-flash')
+
+        <header class="ticketing-command-header">
+            <div><div class="ticketing-eyebrow">Requester portal / Status</div><h1 class="ticketing-page-title">Track ticket status</h1><p class="ticketing-page-subtitle">Follow routing, review progress, resolution, and closure in one place.</p></div>
+            <a href="{{ route('ticketing.my-tickets') }}" class="ticketing-btn ticketing-btn--secondary"><i class="fas fa-arrow-left"></i> My tickets</a>
+        </header>
 
         @include('partials.ticketing-filters', [
             'categories' => $categories,
@@ -28,6 +28,8 @@
                     ['label' => 'Submitted', 'done' => true, 'active' => $ticket->status === \App\Models\Ticket::STATUS_SUBMITTED],
                     ['label' => 'Provincial Review', 'done' => in_array($ticket->status, [
                         \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE,
+                        \App\Models\Ticket::STATUS_PENDING,
+                        \App\Models\Ticket::STATUS_REOPENED,
                         \App\Models\Ticket::STATUS_RESOLVED_BY_PROVINCE,
                         \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                         \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
@@ -40,6 +42,8 @@
                     ], true), 'active' => in_array($ticket->status, [
                         \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                         \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+                        \App\Models\Ticket::STATUS_PENDING,
+                        \App\Models\Ticket::STATUS_REOPENED,
                     ], true)],
                     ['label' => 'Closed', 'done' => $ticket->status === \App\Models\Ticket::STATUS_CLOSED, 'active' => $ticket->status === \App\Models\Ticket::STATUS_CLOSED],
                 ];

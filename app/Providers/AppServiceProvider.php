@@ -106,6 +106,8 @@ class AppServiceProvider extends ServiceProvider
                     && in_array($ticket->status, [
                         Ticket::STATUS_ESCALATED_TO_REGION,
                         Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+                        Ticket::STATUS_PENDING,
+                        Ticket::STATUS_REOPENED,
                         Ticket::STATUS_RESOLVED_BY_REGION,
                         Ticket::STATUS_CLOSED,
                     ], true);
@@ -183,6 +185,60 @@ class AppServiceProvider extends ServiceProvider
                     Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                 ], true);
         });
+
+        Gate::define('ticketing.pending', function ($user, Ticket $ticket): bool {
+            if (!in_array($ticket->status, [
+                Ticket::STATUS_SUBMITTED,
+                Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE,
+                Ticket::STATUS_REOPENED,
+                Ticket::STATUS_ESCALATED_TO_REGION,
+                Ticket::STATUS_UNDER_REVIEW_BY_REGION,
+            ], true)) {
+                return false;
+            }
+
+            if ($user->isSuperAdmin()) {
+                return (int) $ticket->assigned_to === (int) $user->getKey();
+            }
+
+            if ($user->isProvincialUser()) {
+                return $ticket->current_level === Ticket::LEVEL_PROVINCIAL
+                    && (int) $ticket->assigned_to === (int) $user->getKey();
+            }
+
+            if ($user->isRegionalUser()) {
+                return Gate::forUser($user)->allows('ticketing.manageRegion', $ticket);
+            }
+
+            return false;
+        });
+
+        Gate::define('ticketing.reopen', function ($user, Ticket $ticket): bool {
+            return ($user->isSuperAdmin() || (int) $ticket->submitted_by === (int) $user->getKey())
+                && in_array($ticket->status, [
+                    Ticket::STATUS_RESOLVED_BY_PROVINCE,
+                    Ticket::STATUS_RESOLVED_BY_REGION,
+                    Ticket::STATUS_CLOSED,
+                ], true);
+        });
+
+            Gate::define('ticketing.resume', function ($user, Ticket $ticket): bool {
+                if ($ticket->status !== Ticket::STATUS_PENDING) {
+                    return false;
+                }
+
+                if ($user->isSuperAdmin()) {
+                    return (int) $ticket->assigned_to === (int) $user->getKey();
+                }
+
+                if ($user->isProvincialUser()) {
+                    return $ticket->current_level === Ticket::LEVEL_PROVINCIAL
+                        && (int) $ticket->assigned_to === (int) $user->getKey();
+                }
+
+                return $user->isRegionalUser()
+                    && Gate::forUser($user)->allows('ticketing.manageRegion', $ticket);
+            });
 
         Gate::define('fund-utilization.validateWorkflow', function ($user, FundUtilizationApprovalWorkflow $workflow): bool {
             if (!$user instanceof User) {

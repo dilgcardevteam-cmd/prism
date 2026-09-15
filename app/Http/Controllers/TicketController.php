@@ -181,6 +181,9 @@ class TicketController extends Controller
             'canManageRegion' => Gate::forUser($request->user())->allows('ticketing.manageRegion', $ticket),
             'canManageAdmin' => Gate::forUser($request->user())->allows('ticketing.manageAdmin'),
             'canManageAdminTicket' => Gate::forUser($request->user())->allows('ticketing.manageAdminTicket', $ticket),
+            'canMarkPending' => Gate::forUser($request->user())->allows('ticketing.pending', $ticket),
+            'canResume' => Gate::forUser($request->user())->allows('ticketing.resume', $ticket),
+            'canReopen' => Gate::forUser($request->user())->allows('ticketing.reopen', $ticket),
         ]);
     }
 
@@ -318,6 +321,51 @@ class TicketController extends Controller
         }
 
         return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket resolved.');
+    }
+
+    public function markPending(TicketResolveRequest $request, Ticket $ticket, TicketWorkflowService $workflowService): RedirectResponse|Response
+    {
+        if (!Gate::forUser($request->user())->allows('ticketing.pending', $ticket)) {
+            return $this->restricted();
+        }
+
+        try {
+            $workflowService->markPending($ticket, $request->user(), $request->validated('resolution_note'));
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['ticket_status' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket placed on hold.');
+    }
+
+    public function reopen(TicketResolveRequest $request, Ticket $ticket, TicketWorkflowService $workflowService): RedirectResponse|Response
+    {
+        if (!Gate::forUser($request->user())->allows('ticketing.reopen', $ticket)) {
+            return $this->restricted();
+        }
+
+        try {
+            $workflowService->reopen($ticket, $request->user(), $request->validated('resolution_note'));
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['ticket_status' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket reopened successfully.');
+    }
+
+    public function resume(Ticket $ticket, TicketWorkflowService $workflowService): RedirectResponse|Response
+    {
+        if (!Gate::forUser(request()->user())->allows('ticketing.resume', $ticket)) {
+            return $this->restricted();
+        }
+
+        try {
+            $workflowService->resumeFromPending($ticket, request()->user());
+        } catch (RuntimeException $exception) {
+            return back()->withErrors(['ticket_status' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket resumed from hold.');
     }
 
     protected function activeCategories()

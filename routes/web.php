@@ -2564,6 +2564,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/tickets/{ticket}/attachments/{attachment}/view', [App\Http\Controllers\TicketController::class, 'viewAttachment'])->name('attachments.view');
         Route::get('/tickets/{ticket}/history', [App\Http\Controllers\TicketHistoryController::class, 'index'])->name('history.index');
         Route::post('/tickets/{ticket}/comments', [App\Http\Controllers\TicketCommentController::class, 'store'])->name('comments.store');
+        Route::post('/tickets/{ticket}/pending', [App\Http\Controllers\TicketController::class, 'markPending'])->name('pending');
+        Route::post('/tickets/{ticket}/resume', [App\Http\Controllers\TicketController::class, 'resume'])->name('resume');
+        Route::post('/tickets/{ticket}/reopen', [App\Http\Controllers\TicketController::class, 'reopen'])->name('reopen');
 
         Route::middleware('crud_permission:ticketing_system,add')->group(function () {
             Route::get('/submit', [App\Http\Controllers\TicketController::class, 'create'])->name('create');
