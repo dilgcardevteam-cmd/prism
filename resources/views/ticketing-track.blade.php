@@ -10,7 +10,7 @@
 @section('content')
     <div class="content-header">
         <h1>Track Ticket Status</h1>
-        <p>Follow where each ticket currently sits in the LGU → Province → Region → Central Office workflow.</p>
+        <p>Follow where each ticket currently sits in the LGU → Province → Region workflow.</p>
     </div>
 
     <div class="ticketing-shell">
@@ -32,23 +32,15 @@
                         \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                         \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                         \App\Models\Ticket::STATUS_RESOLVED_BY_REGION,
-                        \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                        \App\Models\Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                         \App\Models\Ticket::STATUS_CLOSED,
                     ], true), 'active' => $ticket->status === \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE],
                     ['label' => 'Regional Review', 'done' => in_array($ticket->status, [
                         \App\Models\Ticket::STATUS_RESOLVED_BY_REGION,
-                        \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                        \App\Models\Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                         \App\Models\Ticket::STATUS_CLOSED,
                     ], true), 'active' => in_array($ticket->status, [
                         \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                         \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                     ], true)],
-                    ['label' => 'Central Office', 'done' => in_array($ticket->status, [
-                        \App\Models\Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
-                        \App\Models\Ticket::STATUS_CLOSED,
-                    ], true), 'active' => $ticket->status === \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE],
                     ['label' => 'Closed', 'done' => $ticket->status === \App\Models\Ticket::STATUS_CLOSED, 'active' => $ticket->status === \App\Models\Ticket::STATUS_CLOSED],
                 ];
             @endphp

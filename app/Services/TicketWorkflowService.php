@@ -29,8 +29,8 @@ class TicketWorkflowService
         }
 
         return DB::transaction(function () use ($submitter, $payload, $attachment, $isProvincialSubmitter, $isRegionalSubmitter): Ticket {
-            $centralOfficeAssignee = $isRegionalSubmitter
-                ? $this->routingService->resolveCentralOfficeAssignee()
+            $superadminAssignee = $isRegionalSubmitter
+                ? $this->routingService->resolveSuperadminAssignee()
                 : null;
 
             $ticket = Ticket::create([
@@ -40,10 +40,10 @@ class TicketWorkflowService
                 'subcategory' => $payload['subcategory'] ?? null,
                 'priority' => $payload['priority'],
                 'status' => $isRegionalSubmitter
-                    ? Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE
+                    ? Ticket::STATUS_ESCALATED_TO_REGION
                     : ($isProvincialSubmitter ? Ticket::STATUS_ESCALATED_TO_REGION : Ticket::STATUS_SUBMITTED),
                 'current_level' => $isRegionalSubmitter
-                    ? Ticket::LEVEL_CENTRAL_OFFICE
+                    ? Ticket::LEVEL_REGIONAL
                     : ($isProvincialSubmitter ? Ticket::LEVEL_REGIONAL : Ticket::LEVEL_PROVINCIAL),
                 'assigned_role' => $isRegionalSubmitter
                     ? User::ROLE_SUPERADMIN
@@ -53,7 +53,7 @@ class TicketWorkflowService
                 'province_scope' => $submitter->province,
                 'office_scope' => $submitter->office,
                 'submitted_by' => $submitter->getKey(),
-                'assigned_to' => $centralOfficeAssignee?->getKey(),
+                'assigned_to' => $superadminAssignee?->getKey(),
                 'date_submitted' => now(),
                 'last_status_changed_at' => now(),
             ]);
@@ -67,19 +67,19 @@ class TicketWorkflowService
                     ticket: $ticket,
                     actor: $submitter,
                     action: 'ticket_created',
-                    description: 'Ticket submitted and routed to the Central Office.',
+                    description: 'Ticket submitted and assigned to the Superadmin.',
                     fromStatus: null,
-                    toStatus: Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
+                    toStatus: Ticket::STATUS_ESCALATED_TO_REGION,
                     fromLevel: null,
-                    toLevel: Ticket::LEVEL_CENTRAL_OFFICE,
+                    toLevel: Ticket::LEVEL_REGIONAL,
                     metadata: [
                         'assigned_role' => User::ROLE_SUPERADMIN,
-                        'assigned_to' => $centralOfficeAssignee?->fullName(),
-                        'queue' => 'central_office',
+                        'assigned_to' => $superadminAssignee?->fullName(),
+                        'queue' => 'superadmin',
                     ],
                 );
 
-                $this->notificationService->notifyCentralOffice($ticket, $submitter);
+                $this->notificationService->notifySuperadmin($ticket, $submitter);
             } elseif ($isProvincialSubmitter) {
                 $this->recordHistory(
                     ticket: $ticket,
@@ -376,11 +376,8 @@ class TicketWorkflowService
                 Ticket::STATUS_ESCALATED_TO_REGION,
                 Ticket::STATUS_UNDER_REVIEW_BY_REGION,
             ], true);
-        $isForwardedByActor = $ticket->status === Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE
-            && (int) $ticket->forwarded_by === (int) $actor->getKey();
-
-        if (!$isRegionalQueueTicket && !$isForwardedByActor) {
-            throw new RuntimeException('Only active or previously forwarded regional tickets can be resolved at the regional level.');
+        if (!$isRegionalQueueTicket) {
+            throw new RuntimeException('Only active regional tickets can be resolved at the regional level.');
         }
 
         $this->ensureRegionTicketAssignedToActor($ticket, $actor);
@@ -393,88 +390,23 @@ class TicketWorkflowService
                 ]);
             }
 
-            $resolvingForwardedTicket = $ticket->status === Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE;
-
-            $action = $resolvingForwardedTicket ? 'central_office_resolved' : 'region_resolved';
-            $description = $resolvingForwardedTicket
-                ? 'Ticket marked as resolved by Central Office after forwarding.'
-                : 'Ticket resolved by the Regional User.';
-            $status = $resolvingForwardedTicket
-                ? Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE
-                : Ticket::STATUS_RESOLVED_BY_REGION;
-            $level = $resolvingForwardedTicket
-                ? Ticket::LEVEL_CENTRAL_OFFICE
-                : Ticket::LEVEL_REGIONAL;
-            $assignedRole = $resolvingForwardedTicket
-                ? User::ROLE_SUPERADMIN
-                : User::ROLE_REGIONAL;
-            $assignedTo = $resolvingForwardedTicket
-                ? null
-                : $actor->getKey();
-
             return $this->updateTicketState(
                 ticket: $ticket,
                 actor: $actor,
-                action: $action,
-                description: $description,
+                action: 'region_resolved',
+                description: 'Ticket resolved by the Regional User.',
                 updates: [
-                    'status' => $status,
-                    'current_level' => $level,
-                    'assigned_role' => $assignedRole,
-                    'assigned_to' => $assignedTo,
-                    'forwarded_to_central_office' => $resolvingForwardedTicket ? true : false,
+                    'status' => Ticket::STATUS_RESOLVED_BY_REGION,
+                    'current_level' => Ticket::LEVEL_REGIONAL,
+                    'assigned_role' => User::ROLE_REGIONAL,
+                    'assigned_to' => $actor->getKey(),
+                    'forwarded_to_central_office' => false,
                     'resolved_by' => $actor->getKey(),
                     'resolved_at' => now(),
                     'last_status_changed_at' => now(),
                 ],
-                toStatus: $status,
-                toLevel: $level,
-            );
-        });
-    }
-
-    public function forwardToCentralOffice(Ticket $ticket, User $actor, ?string $forwardNote = null): Ticket
-    {
-        if ($ticket->current_level !== Ticket::LEVEL_REGIONAL || !in_array($ticket->status, [
-            Ticket::STATUS_ESCALATED_TO_REGION,
-            Ticket::STATUS_UNDER_REVIEW_BY_REGION,
-        ], true)) {
-            throw new RuntimeException('Only Regional Users can forward tickets to Central Office from the regional queue.');
-        }
-
-        $this->ensureRegionTicketAssignedToActor($ticket, $actor);
-
-        $centralOfficeAssignee = $this->routingService->resolveCentralOfficeAssignee();
-
-        return DB::transaction(function () use ($ticket, $actor, $forwardNote, $centralOfficeAssignee): Ticket {
-            if ($forwardNote) {
-                $ticket->comments()->create([
-                    'user_id' => $actor->getKey(),
-                    'comment' => $forwardNote,
-                ]);
-            }
-
-            return $this->updateTicketState(
-                ticket: $ticket,
-                actor: $actor,
-                action: 'forwarded_to_central_office',
-                description: 'Ticket marked as Forwarded to Central Office.',
-                updates: [
-                    'status' => Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                    'current_level' => Ticket::LEVEL_CENTRAL_OFFICE,
-                    'assigned_role' => User::ROLE_SUPERADMIN,
-                    'assigned_to' => $centralOfficeAssignee?->getKey(),
-                    'forwarded_to_central_office' => true,
-                    'forwarded_by' => $actor->getKey(),
-                    'forwarded_at' => now(),
-                    'last_status_changed_at' => now(),
-                ],
-                toStatus: Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                toLevel: Ticket::LEVEL_CENTRAL_OFFICE,
-                metadata: [
-                    'assigned_to' => $centralOfficeAssignee?->fullName(),
-                    'note' => $forwardNote,
-                ],
+                toStatus: Ticket::STATUS_RESOLVED_BY_REGION,
+                toLevel: Ticket::LEVEL_REGIONAL,
             );
         });
     }
@@ -484,8 +416,6 @@ class TicketWorkflowService
         if (!in_array($ticket->status, [
             Ticket::STATUS_RESOLVED_BY_PROVINCE,
             Ticket::STATUS_RESOLVED_BY_REGION,
-            Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-            Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
         ], true)) {
             throw new RuntimeException('Only resolved or forwarded tickets can be closed.');
         }
@@ -502,7 +432,7 @@ class TicketWorkflowService
                 ticket: $ticket,
                 actor: $actor,
                 action: 'ticket_closed',
-                description: 'Ticket closed by Central Office/Admin.',
+                description: 'Ticket closed by Superadmin.',
                 updates: [
                     'status' => Ticket::STATUS_CLOSED,
                     'assigned_role' => User::ROLE_SUPERADMIN,

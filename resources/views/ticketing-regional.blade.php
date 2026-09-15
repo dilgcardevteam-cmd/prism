@@ -10,7 +10,7 @@
 @section('content')
     <div class="content-header">
         <h1>Regional Ticket List</h1>
-        <p>Handle the regional queue, accept escalated tickets into your name, then resolve them or forward them to Central Office.</p>
+        <p>Handle the regional queue and accept escalated tickets into your name before resolving them.</p>
     </div>
 
     <div class="ticketing-shell">
@@ -20,7 +20,7 @@
             <div class="ticketing-toolbar">
                 <div>
                     <h3 class="ticketing-card-title">Regional Workflow Rules</h3>
-                    <p class="ticketing-card-subtitle">Escalated tickets enter a shared regional queue first. A Regional User must accept the ticket before review, resolution, forwarding, or remarks at the regional level.</p>
+                    <p class="ticketing-card-subtitle">Escalated tickets enter a shared regional queue first. A Regional User must accept the ticket before review, resolution, or remarks at the regional level.</p>
                 </div>
                 <a href="{{ route('ticketing.dashboard') }}" class="ticketing-btn ticketing-btn--secondary">
                     <i class="fas fa-chart-line"></i>

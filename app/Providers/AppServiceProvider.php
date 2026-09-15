@@ -107,8 +107,6 @@ class AppServiceProvider extends ServiceProvider
                         Ticket::STATUS_ESCALATED_TO_REGION,
                         Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                         Ticket::STATUS_RESOLVED_BY_REGION,
-                        Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                        Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                         Ticket::STATUS_CLOSED,
                     ], true);
             }
@@ -168,13 +166,6 @@ class AppServiceProvider extends ServiceProvider
 
             if (!$user->isRegionalUser() || $ticketRegionComparable !== $userRegionComparable) {
                 return false;
-            }
-
-            if (
-                $ticket->status === Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE
-                && (int) $ticket->forwarded_by === (int) $user->getKey()
-            ) {
-                return true;
             }
 
             return $ticket->current_level === Ticket::LEVEL_REGIONAL

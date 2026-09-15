@@ -254,13 +254,10 @@ class Ticket extends Model
                 ->where(function (Builder $builder): void {
                     $builder->whereIn('current_level', [
                         self::LEVEL_REGIONAL,
-                        self::LEVEL_CENTRAL_OFFICE,
                     ])->orWhereIn('status', [
                         self::STATUS_ESCALATED_TO_REGION,
                         self::STATUS_UNDER_REVIEW_BY_REGION,
                         self::STATUS_RESOLVED_BY_REGION,
-                        self::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                        self::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                         self::STATUS_CLOSED,
                     ]);
                 });

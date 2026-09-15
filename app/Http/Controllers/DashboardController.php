@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use App\Models\TicketHistory;
+use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
@@ -62,7 +63,6 @@ class DashboardController extends Controller
                         Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE,
                         Ticket::STATUS_ESCALATED_TO_REGION,
                         Ticket::STATUS_UNDER_REVIEW_BY_REGION,
-                        Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
                     ])->count(),
                     'icon' => 'fa-spinner',
                     'color' => '#7c3aed',
@@ -72,7 +72,6 @@ class DashboardController extends Controller
                     'count' => (clone $baseQuery)->whereIn('status', [
                         Ticket::STATUS_RESOLVED_BY_PROVINCE,
                         Ticket::STATUS_RESOLVED_BY_REGION,
-                        Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                     ])->count(),
                     'icon' => 'fa-circle-check',
                     'color' => '#15803d',
@@ -154,9 +153,12 @@ class DashboardController extends Controller
                     'color' => '#0f766e',
                 ],
                 [
-                    'label' => 'Forwarded to Central Office',
-                    'count' => (clone $baseQuery)->where('status', Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE)->count(),
-                    'icon' => 'fa-building-columns',
+                    'label' => 'Assigned to Superadmin',
+                    'count' => (clone $baseQuery)
+                        ->where('assigned_role', User::ROLE_SUPERADMIN)
+                        ->where('status', '!=', Ticket::STATUS_CLOSED)
+                        ->count(),
+                    'icon' => 'fa-user-shield',
                     'color' => '#be123c',
                 ],
             ];
@@ -176,9 +178,12 @@ class DashboardController extends Controller
                 'color' => '#7c3aed',
             ],
             [
-                'label' => 'Forwarded Tickets',
-                'count' => (clone $baseQuery)->where('status', Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE)->count(),
-                'icon' => 'fa-building-columns',
+                'label' => 'Assigned to Superadmin',
+                'count' => (clone $baseQuery)
+                    ->where('assigned_role', User::ROLE_SUPERADMIN)
+                    ->where('status', '!=', Ticket::STATUS_CLOSED)
+                    ->count(),
+                'icon' => 'fa-user-shield',
                 'color' => '#be123c',
             ],
             [

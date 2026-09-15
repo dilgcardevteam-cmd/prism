@@ -6,7 +6,6 @@ use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\TicketCategory;
 use App\Services\TicketEscalateRequest;
-use App\Services\TicketForwardRequest;
 use App\Services\TicketResolveRequest;
 use App\Services\TicketStoreRequest;
 use App\Services\TicketWorkflowService;
@@ -146,9 +145,7 @@ class TicketController extends Controller
                     CASE status
                         WHEN '" . Ticket::STATUS_ESCALATED_TO_REGION . "' THEN 1
                         WHEN '" . Ticket::STATUS_UNDER_REVIEW_BY_REGION . "' THEN 2
-                        WHEN '" . Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE . "' THEN 3
-                        WHEN '" . Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE . "' THEN 4
-                        WHEN '" . Ticket::STATUS_RESOLVED_BY_REGION . "' THEN 5
+                        WHEN '" . Ticket::STATUS_RESOLVED_BY_REGION . "' THEN 3
                         ELSE 6
                     END
                 ")
@@ -320,21 +317,6 @@ class TicketController extends Controller
         }
 
         return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket resolved.');
-    }
-
-    public function regionForward(TicketForwardRequest $request, Ticket $ticket, TicketWorkflowService $workflowService): RedirectResponse|Response
-    {
-        if (!Gate::forUser($request->user())->allows('ticketing.manageRegion', $ticket)) {
-            return $this->restricted();
-        }
-
-        try {
-            $workflowService->forwardToCentralOffice($ticket, $request->user(), $request->validated('forward_note'));
-        } catch (RuntimeException $exception) {
-            return back()->withErrors(['ticket_forward' => $exception->getMessage()]);
-        }
-
-        return redirect()->route('ticketing.show', $ticket)->with('success', 'Ticket forwarded to Central Office.');
     }
 
     protected function activeCategories()

@@ -64,13 +64,13 @@ class TicketNotificationService
         );
     }
 
-    public function notifyCentralOffice(Ticket $ticket, User $actor): void
+    public function notifySuperadmin(Ticket $ticket, User $actor): void
     {
-        $recipient = $this->routingService->resolveCentralOfficeAssignee();
+        $recipient = $this->routingService->resolveSuperadminAssignee();
         $recipients = $recipient ? collect([$recipient]) : collect();
 
         $message = sprintf(
-            'Ticket %s was submitted by %s and routed to the Central Office.',
+            'Ticket %s was submitted by %s and assigned to the Superadmin.',
             $ticket->ticket_number,
             $this->resolveActorName($actor),
         );

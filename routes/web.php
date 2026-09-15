@@ -2585,7 +2585,6 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/tickets/{ticket}/accept', [App\Http\Controllers\TicketController::class, 'regionAccept'])->name('accept');
             Route::post('/tickets/{ticket}/start-review', [App\Http\Controllers\TicketController::class, 'regionStartReview'])->name('start-review');
             Route::post('/tickets/{ticket}/resolve', [App\Http\Controllers\TicketController::class, 'regionResolve'])->name('resolve');
-            Route::post('/tickets/{ticket}/forward', [App\Http\Controllers\TicketController::class, 'regionForward'])->name('forward');
         });
 
         Route::prefix('admin')->name('admin.')->middleware('role:admin')->group(function () {

@@ -38,7 +38,7 @@ class TicketRoutingService
         return $this->regionalRecipientsForTicket($ticket)->first();
     }
 
-    public function resolveCentralOfficeAssignee(): ?User
+    public function resolveSuperadminAssignee(): ?User
     {
         return User::query()
             ->where('status', 'active')

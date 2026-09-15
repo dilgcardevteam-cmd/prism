@@ -10,7 +10,7 @@
 @section('content')
     <div class="content-header">
         <h1>Admin Ticket Monitoring</h1>
-        <p>Monitor all tickets, review Central Office-forwarded items, and manage the ticket category list.</p>
+        <p>Monitor all tickets assigned to the Superadmin and manage the ticket category list.</p>
     </div>
 
     <div class="ticketing-shell">

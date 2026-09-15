@@ -18,23 +18,15 @@
                 \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                 \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
                 \App\Models\Ticket::STATUS_RESOLVED_BY_REGION,
-                \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                \App\Models\Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                 \App\Models\Ticket::STATUS_CLOSED,
             ], true), 'active' => $status === \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_PROVINCE],
             ['label' => 'Regional Review', 'done' => in_array($status, [
                 \App\Models\Ticket::STATUS_RESOLVED_BY_REGION,
-                \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                \App\Models\Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                 \App\Models\Ticket::STATUS_CLOSED,
             ], true), 'active' => in_array($status, [
                 \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                 \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
             ], true)],
-            ['label' => 'Central Office', 'done' => in_array($status, [
-                \App\Models\Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
-                \App\Models\Ticket::STATUS_CLOSED,
-            ], true), 'active' => $status === \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE],
             ['label' => 'Closed', 'done' => $status === \App\Models\Ticket::STATUS_CLOSED, 'active' => $status === \App\Models\Ticket::STATUS_CLOSED],
         ];
     @endphp
@@ -126,7 +118,6 @@
                     @if (in_array($ticket->status, [
                         \App\Models\Ticket::STATUS_ESCALATED_TO_REGION,
                         \App\Models\Ticket::STATUS_UNDER_REVIEW_BY_REGION,
-                        \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
                     ], true))
                         <button type="button" class="ticketing-btn ticketing-btn--success" data-ticketing-open="resolveRegionModal">
                             <i class="fas fa-circle-check"></i>
@@ -139,8 +130,6 @@
                 @if ($canManageAdmin && in_array($ticket->status, [
                     \App\Models\Ticket::STATUS_RESOLVED_BY_PROVINCE,
                     \App\Models\Ticket::STATUS_RESOLVED_BY_REGION,
-                    \App\Models\Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
-                    \App\Models\Ticket::STATUS_RESOLVED_BY_CENTRAL_OFFICE,
                 ], true))
                     <button type="button" class="ticketing-btn ticketing-btn--dark" data-ticketing-open="closeTicketModal">
                         <i class="fas fa-box-archive"></i>

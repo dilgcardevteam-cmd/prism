@@ -320,8 +320,8 @@ class TicketSubmissionValidationTest extends TestCase
         $this->assertDatabaseHas('tickets', [
             'title' => 'Regional Submitter Ticket',
             'submitted_by' => $regionalUser->getKey(),
-            'current_level' => Ticket::LEVEL_CENTRAL_OFFICE,
-            'status' => Ticket::STATUS_FORWARDED_TO_CENTRAL_OFFICE,
+            'current_level' => Ticket::LEVEL_REGIONAL,
+            'status' => Ticket::STATUS_ESCALATED_TO_REGION,
             'assigned_role' => User::ROLE_SUPERADMIN,
             'assigned_to' => $superadmin->getKey(),
         ]);
