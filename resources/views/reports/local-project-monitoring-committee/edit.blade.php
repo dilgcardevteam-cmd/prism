@@ -1503,7 +1503,8 @@
             const remarks = document.getElementById('lpmcApprovalRemarks');
             const submitBtn = document.getElementById('lpmcApprovalSubmit');
 
-            form.action = '{{ url("/local-project-monitoring-committee") }}/{{ $officeName }}/approve/' + docId;
+            const approvalUrlTemplate = @json(route('local-project-monitoring-committee.approve', ['lpmc' => $officeName, 'docId' => '__LPMC_DOC_ID__']));
+            form.action = approvalUrlTemplate.replace('__LPMC_DOC_ID__', encodeURIComponent(String(docId)));
             actionInput.value = action;
             remarks.value = '';
 
