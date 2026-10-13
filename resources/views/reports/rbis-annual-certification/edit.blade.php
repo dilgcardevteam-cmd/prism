@@ -103,36 +103,22 @@
 
         <div style="display: grid; gap: 12px;">
             @php
+                $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+                $canUploadForLgu = Auth::user()->canSubmitForLgu($province, $officeName);
                 $doc = $documents->first();
                 $inputId = 'rbis-input-annual';
                 $buttonId = 'rbis-btn-annual';
                 $filenameId = 'rbis-file-annual';
                 $deadlineDisplay = is_array($configuredDeadline ?? null) ? (string) ($configuredDeadline['display'] ?? '') : '';
                 $isProvincialDilgViewer = Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office';
-                $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
                 $hasFile = $doc && $doc->file_path;
                 $isReturned = $doc && $doc->status === 'returned';
-                $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
+                $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned);
                 $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                 $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                $statusLabel = 'Pending Upload';
-                $statusColor = '#f59e0b';
-                if ($hasFile) {
-                    $statusLabel = 'For DILG Provincial Office Validation';
-                    $statusColor = '#3b82f6';
-                }
-                if ($isPendingRo) {
-                    $statusLabel = 'For DILG Regional Office Validation';
-                    $statusColor = '#3b82f6';
-                }
-                if ($isApprovedRo) {
-                    $statusLabel = 'Approved';
-                    $statusColor = '#059669';
-                }
-                if ($isReturned) {
-                    $statusLabel = 'Returned';
-                    $statusColor = '#dc2626';
-                }
+                $badge = $workflowService->resolveStatusBadge($doc, $officeName);
+                $statusLabel = $badge['label'];
+                $statusColor = $badge['color'];
                 $resolveUploaderMeta = function ($record) use ($isProvincialDilgViewer, $usersById) {
                     if (!$record) {
                         return ['time' => null, 'name' => 'Unknown'];
@@ -404,25 +390,26 @@
                         >
                         @if ($disableUploadInput)
                             <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                                @if ($isRegionalOfficeUserForUpload)
-                                    Regional Office cannot upload files. Choose file is disabled.
+                                @if (!$canUploadForLgu)
+                                    You are not authorized to upload documents for this LGU.
                                 @else
                                     File already uploaded for this year. Choose file is disabled.
                                 @endif
                             </div>
                         @endif
-                        @if ($showApprovalButtons)
+                        @php
+                            $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
+                        @endphp
+                        @if ($canValidateDoc)
                             <div style="display: flex; gap: 6px; margin-top: 8px; margin-bottom: 8px; justify-content: flex-start; align-items: center;">
                                 <button type="button" onclick="openRbisApprovalModal({{ $doc->id }}, 'approve')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
                                     <i class="fas fa-check"></i>
                                     <span>Approve</span>
                                 </button>
-                                @if (!$hideReturnButton)
-                                    <button type="button" onclick="openRbisApprovalModal({{ $doc->id }}, 'return')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
-                                        <i class="fas fa-undo"></i>
-                                        <span>Return</span>
-                                    </button>
-                                @endif
+                                <button type="button" onclick="openRbisApprovalModal({{ $doc->id }}, 'return')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                    <i class="fas fa-undo"></i>
+                                    <span>Return</span>
+                                </button>
                             </div>
                         @endif
                         <div id="{{ $filenameId }}" style="display: none; margin-bottom: 8px; font-size: 12px; color: #6b7280;"></div>

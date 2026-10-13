@@ -616,21 +616,7 @@ class RoadMaintenanceStatusReportController extends Controller
             return 'no_upload';
         }
 
-        $status = trim(Str::lower((string) ($document->status ?? '')));
-
-        if ($status === 'approved') {
-            return 'approved';
-        }
-
-        if ($status === 'returned') {
-            return 'returned';
-        }
-
-        if ($status === 'pending_ro') {
-            return 'pending_ro';
-        }
-
-        return 'pending_po';
+        return app(\App\Services\LguReportorialWorkflowService::class)->currentStage($document, $document->office);
     }
 
     private function resolveRoadMaintenanceValidationPriority(?RoadMaintenanceStatusDocument $document): int
@@ -638,7 +624,7 @@ class RoadMaintenanceStatusReportController extends Controller
         $status = $this->normalizeRoadMaintenanceDocumentStatus($document);
 
         return match ($status) {
-            'pending_po', 'pending_ro' => 0,
+            'pending_mlgoo', 'pending_po', 'pending_ro' => 0,
             'returned' => 1,
             'approved' => 2,
             default => 3,
@@ -732,6 +718,19 @@ class RoadMaintenanceStatusReportController extends Controller
             return $summary;
         }
 
+        if ($status === 'pending_mlgoo') {
+            $summary['approval_status_label'] = 'For C/MLGOO Validation';
+            $summary['approval_status_text_color'] = '#6b21a8';
+            $summary['approval_status_background_color'] = '#faf5ff';
+            $summary['approval_status_border_color'] = '#e9d5ff';
+            $summary['validation_level_label'] = 'C/MLGOO';
+            $summary['validation_level_text_color'] = '#6b21a8';
+            $summary['validation_level_background_color'] = '#faf5ff';
+            $summary['validation_level_border_color'] = '#e9d5ff';
+
+            return $summary;
+        }
+
         if ($status === 'approved') {
             $summary['approval_status_label'] = 'Approved';
             $summary['approval_status_text_color'] = '#047857';
@@ -765,12 +764,11 @@ class RoadMaintenanceStatusReportController extends Controller
             $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
                 return $user->matchesAssignedOffice((string) ($row['city_municipality'] ?? ''));
             }));
-        } elseif ($user && $user->isDilgUser() && !empty($user->province)) {
-            if ($user->province !== 'Regional Office') {
-                $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
-                    return $row['province'] === $user->province;
-                }));
-            }
+        } elseif ($user && ($user->isProvincialUser() || ($user->isDilgUser() && !$user->isRegionalUser() && !$user->isSuperAdmin() && !empty($user->province) && $user->province !== 'Regional Office'))) {
+            $userProvince = $user->province;
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
+                return strcasecmp($row['province'], $userProvince) === 0;
+            }));
         }
 
         $scopedOfficeRows = collect($officeRows);
@@ -888,6 +886,9 @@ class RoadMaintenanceStatusReportController extends Controller
         $reportingYear = $this->resolveReportingYear($request);
         $officeName = $id;
         $province = $this->findProvinceByOffice($officeName);
+        $user = auth()->user();
+        abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
+
         $documents = RoadMaintenanceStatusDocument::where('office', $officeName)
             ->where('doc_type', $this->quarterlyDocType())
             ->where('year', $reportingYear)
@@ -903,6 +904,8 @@ class RoadMaintenanceStatusReportController extends Controller
         $reportingYear = $this->resolveReportingYear($request);
         $officeName = $id;
         $province = $this->findProvinceByOffice($officeName);
+        $user = auth()->user();
+        abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
         $documents = RoadMaintenanceStatusDocument::where('office', $officeName)
             ->where('doc_type', $this->quarterlyDocType())
             ->where('year', $reportingYear)
@@ -965,13 +968,19 @@ class RoadMaintenanceStatusReportController extends Controller
     public function upload(Request $request, $id)
     {
         $officeName = $id;
+        $province = $this->findProvinceByOffice($officeName) ?? 'Unknown';
+        $user = auth()->user();
+        abort_unless($user && $user->canSubmitForLgu($province, $officeName), 403);
+
         $request->validate([
             'document' => ['required', 'file', 'mimes:pdf', 'max:10240'],
             'year' => ['required', 'integer', 'between:2000,2100'],
             'quarter' => ['required', 'in:Q1,Q2,Q3,Q4'],
         ]);
 
-        $province = $this->findProvinceByOffice($officeName) ?? 'Unknown';
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $initialStatus = $workflowService->initialStatusForUpload($officeName);
+
         $year = (int) $request->input('year');
         $quarter = $request->input('quarter');
         $docType = $this->quarterlyDocType();
@@ -986,8 +995,6 @@ class RoadMaintenanceStatusReportController extends Controller
         $officeSlug = Str::slug($officeName, '_');
         $path = $file->store('road-maintenance-status/' . $officeSlug, 'public');
         $uploadedAt = now();
-        $user = auth()->user();
-        $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
 
         $document = RoadMaintenanceStatusDocument::updateOrCreate(
             [
@@ -1001,11 +1008,13 @@ class RoadMaintenanceStatusReportController extends Controller
                 'file_path' => $path,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
-                'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
-                'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
-                'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
+                'status' => $initialStatus,
+                'approved_at' => null,
+                'approved_at_c_mlgoo' => null,
+                'approved_by_c_mlgoo' => null,
+                'approved_at_dilg_po' => null,
+                'approved_by_dilg_po' => null,
                 'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
                 'approved_by_dilg_ro' => null,
                 'approval_remarks' => null,
                 'user_remarks' => null,
@@ -1017,10 +1026,6 @@ class RoadMaintenanceStatusReportController extends Controller
         }
 
         $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
-        if ($isProvincialDilgUploader) {
-            $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $uploadedAt);
-        }
-
         $this->notifyWorkflowUsersOnUpload($document);
 
         return redirect()
@@ -1031,6 +1036,10 @@ class RoadMaintenanceStatusReportController extends Controller
     public function viewDocument($id, $docId)
     {
         $officeName = $id;
+        $user = auth()->user();
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
+
         $document = RoadMaintenanceStatusDocument::where('office', $officeName)
             ->where('id', $docId)
             ->where('doc_type', $this->quarterlyDocType())
@@ -1061,9 +1070,12 @@ class RoadMaintenanceStatusReportController extends Controller
     {
         $officeName = $id;
         $user = auth()->user();
-        if (!$user || $user->agency !== 'DILG') {
+        if (!$user) {
             abort(403);
         }
+
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($user->canAccessLguScope($province, $officeName), 403);
 
         $validated = $request->validate([
             'action' => ['required', 'in:approve,return'],
@@ -1075,7 +1087,6 @@ class RoadMaintenanceStatusReportController extends Controller
             ->where('doc_type', $this->quarterlyDocType())
             ->firstOrFail();
 
-        $now = now();
         $action = $validated['action'];
         $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
 
@@ -1083,53 +1094,32 @@ class RoadMaintenanceStatusReportController extends Controller
             return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
-        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
-        $isProvincialOffice = !$isRegionalOffice;
-
-        $updates = [
-            'approved_at' => $now,
-        ];
-
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $updates['approved_at_dilg_po'] = $now;
-                $updates['approved_by_dilg_po'] = $user->idno;
-                $updates['status'] = 'pending_ro';
-                $updates['approval_remarks'] = null;
-            } else {
-                $updates['approved_at_dilg_ro'] = $now;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-                $updates['status'] = 'approved';
-                $updates['approval_remarks'] = null;
-            }
-        } else {
-            if ($isRegionalOffice) {
-                $updates['approved_at_dilg_ro'] = null;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-            } else {
-                $updates['approved_by_dilg_po'] = $user->idno;
-            }
-            $updates['status'] = 'returned';
-            $updates['approval_remarks'] = $remarks;
-            $updates['user_remarks'] = $remarks;
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $check = $workflowService->canUserValidate($user, $document, $officeName, $province);
+        if (!$check['allowed']) {
+            abort(403, $check['reason'] ?? 'Unauthorized validation action.');
         }
 
-        $document->update($updates);
-
+        $now = now();
+        $result = $workflowService->processValidation($user, $document, $action, $remarks, $officeName, $province);
         $document->refresh();
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $now);
-            } else {
-                $this->logActivity($officeName, 'validate_ro', 'Validated (DILG RO)', $document, null, $now);
-            }
-        } else {
-            $this->logActivity($officeName, 'return', 'Returned', $document, $remarks, $now);
-        }
 
-        $this->notifyLguUsersAfterRegionalApproval($document, $action, $isRegionalOffice, $remarks);
+        $logAction = match ($check['current_stage']) {
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'validate_mlgoo' : 'return'),
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'validate_po' : 'return'),
+            default => ($action === 'approve' ? 'validate_ro' : 'return'),
+        };
 
-        return back()->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
+        $logDesc = match ($check['current_stage']) {
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'Validated (C/MLGOO)' : 'Returned (C/MLGOO)'),
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'Validated (DILG PO)' : 'Returned (DILG PO)'),
+            default => ($action === 'approve' ? 'Validated (DILG RO)' : 'Returned (DILG RO)'),
+        };
+
+        $this->logActivity($officeName, $logAction, $logDesc, $document, $action === 'return' ? $remarks : null, $now);
+        $this->notifyLguUsersAfterRegionalApproval($document, $action, $user->isRegionalUser(), $remarks);
+
+        return back()->with('success', $result['message']);
     }
 
     public function destroy($id)

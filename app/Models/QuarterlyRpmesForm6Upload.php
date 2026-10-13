@@ -18,6 +18,8 @@ class QuarterlyRpmesForm6Upload extends Model
         'status',
         'approved_by',
         'approved_at',
+        'approved_at_c_mlgoo',
+        'approved_by_c_mlgoo',
         'approved_at_dilg_po',
         'approved_at_dilg_ro',
         'approved_by_dilg_po',
@@ -29,6 +31,7 @@ class QuarterlyRpmesForm6Upload extends Model
     protected $casts = [
         'uploaded_at' => 'datetime',
         'approved_at' => 'datetime',
+        'approved_at_c_mlgoo' => 'datetime',
         'approved_at_dilg_po' => 'datetime',
         'approved_at_dilg_ro' => 'datetime',
         'created_at' => 'datetime',
@@ -43,6 +46,11 @@ class QuarterlyRpmesForm6Upload extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by', 'idno');
+    }
+
+    public function cMlgooApprover()
+    {
+        return $this->belongsTo(User::class, 'approved_by_c_mlgoo', 'idno');
     }
 
     public function dilgPoApprover()

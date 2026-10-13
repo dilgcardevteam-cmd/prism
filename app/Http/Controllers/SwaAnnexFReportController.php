@@ -150,21 +150,7 @@ class SwaAnnexFReportController extends Controller
             return false;
         }
 
-        $userProvince = trim((string) $user->province);
-
-        if ($user->isLguScopedUser()) {
-            return $user->matchesAssignedOffice($officeName);
-        }
-
-        if ($user->isDilgUser()) {
-            if ($userProvince === '' || $userProvince === 'Regional Office') {
-                return true;
-            }
-
-            return $userProvince === $province;
-        }
-
-        return true;
+        return $user->canAccessLguScope($province, $officeName);
     }
 
     private function indexDocumentsByKey($documents): array
@@ -182,9 +168,15 @@ class SwaAnnexFReportController extends Controller
     public function index(Request $request)
     {
         $reportingYear = $this->resolveReportingYear($request);
+        $user = auth()->user();
+        $requestedProvince = trim((string) $request->query('province', ''));
+        if ($user && ($user->isProvincialUser() || ($user->isDilgUser() && !$user->isRegionalUser() && !$user->isSuperAdmin() && !empty($user->province) && $user->province !== 'Regional Office'))) {
+            $requestedProvince = (string) $user->province;
+        }
+
         $filters = [
             'search' => trim((string) $request->query('search', '')),
-            'province' => trim((string) $request->query('province', '')),
+            'province' => $requestedProvince,
             'city' => trim((string) $request->query('city', '')),
             'funding_year' => trim((string) $request->query('funding_year', '')),
             'level' => trim((string) $request->query('level', '')),
@@ -610,6 +602,7 @@ class SwaAnnexFReportController extends Controller
 
         $documentsByKey = $this->indexDocumentsByKey($documents);
         $userIds = $documents->pluck('uploaded_by')
+            ->merge($documents->pluck('approved_by_c_mlgoo'))
             ->merge($documents->pluck('approved_by_dilg_po'))
             ->merge($documents->pluck('approved_by_dilg_ro'))
             ->filter()
@@ -663,11 +656,7 @@ class SwaAnnexFReportController extends Controller
         }
 
         $user = auth()->user();
-        if ($user && strtoupper(trim((string) $user->agency)) === 'DILG' && trim((string) $user->province) === 'Regional Office') {
-            return back()->withErrors([
-                'document' => 'Regional Office cannot upload files.',
-            ]);
-        }
+        abort_unless($user && $user->canSubmitForLgu($province, $officeName), 403);
 
         $validMonths = implode(',', array_keys($this->monthOptions()));
         $request->validate([
@@ -675,6 +664,9 @@ class SwaAnnexFReportController extends Controller
             'year' => ['required', 'integer', 'between:2000,2100'],
             'month' => ['required', 'in:' . $validMonths],
         ]);
+
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $initialStatus = $workflowService->initialStatusForUpload($officeName);
 
         $year = (int) $request->input('year');
         $month = (string) $request->input('month');
@@ -692,7 +684,6 @@ class SwaAnnexFReportController extends Controller
         $officeSlug = Str::slug($officeName, '_');
         $path = $file->store('swa-annex-f/' . $officeSlug, 'public');
         $uploadedAt = now();
-        $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
 
         SwaAnnexFDocument::updateOrCreate(
             [
@@ -706,11 +697,13 @@ class SwaAnnexFReportController extends Controller
                 'file_path' => $path,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
-                'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
-                'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
-                'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
+                'status' => $initialStatus,
+                'approved_at' => null,
+                'approved_at_c_mlgoo' => null,
+                'approved_by_c_mlgoo' => null,
+                'approved_at_dilg_po' => null,
+                'approved_by_dilg_po' => null,
                 'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
                 'approved_by_dilg_ro' => null,
                 'approval_remarks' => null,
                 'user_remarks' => null,
@@ -763,9 +756,12 @@ class SwaAnnexFReportController extends Controller
         $officeName = (string) $office;
         $user = auth()->user();
 
-        if (!$user || strtoupper(trim((string) $user->agency)) !== 'DILG') {
+        if (!$user) {
             abort(403);
         }
+
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($province && $this->canAccessOffice($officeName, $province), 403);
 
         $validated = $request->validate([
             'action' => ['required', 'in:approve,return'],
@@ -778,11 +774,6 @@ class SwaAnnexFReportController extends Controller
             ->where('doc_type', $this->reportDocType())
             ->firstOrFail();
 
-        if (!$this->canAccessOffice($officeName, (string) $document->province)) {
-            abort(403);
-        }
-
-        $now = now();
         $action = $validated['action'];
         $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
 
@@ -790,40 +781,14 @@ class SwaAnnexFReportController extends Controller
             return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
-        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
-        $isProvincialOffice = !$isRegionalOffice;
-
-        $updates = [
-            'approved_at' => $now,
-        ];
-
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $updates['approved_at_dilg_po'] = $now;
-                $updates['approved_by_dilg_po'] = $user->idno;
-                $updates['status'] = 'pending_ro';
-                $updates['approval_remarks'] = null;
-            } else {
-                $updates['approved_at_dilg_ro'] = $now;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-                $updates['status'] = 'approved';
-                $updates['approval_remarks'] = null;
-            }
-        } else {
-            if ($isRegionalOffice) {
-                $updates['approved_at_dilg_ro'] = null;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-            } else {
-                $updates['approved_by_dilg_po'] = $user->idno;
-            }
-
-            $updates['status'] = 'returned';
-            $updates['approval_remarks'] = $remarks;
-            $updates['user_remarks'] = $remarks;
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $check = $workflowService->canUserValidate($user, $document, $officeName, $province);
+        if (!$check['allowed']) {
+            abort(403, $check['reason'] ?? 'Unauthorized validation action.');
         }
 
-        $document->update($updates);
+        $result = $workflowService->processValidation($user, $document, $action, $remarks, $officeName, $province);
 
-        return back()->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
+        return back()->with('success', $result['message']);
     }
 }

@@ -64,6 +64,10 @@
             </h2>
 
             <div style="display: grid; gap: 12px;">
+                @php
+                    $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+                    $canUploadForLgu = Auth::user()->canSubmitForLgu($province, $officeName);
+                @endphp
                 @foreach ($months as $monthCode => $label)
                     @php
                         $docKey = 'swa_annex_f|' . $reportingYear . '|' . $monthCode;
@@ -71,42 +75,22 @@
                         $inputId = 'swa-annex-f-input-' . $monthCode;
                         $buttonId = 'swa-annex-f-btn-' . $monthCode;
                         $filenameId = 'swa-annex-f-file-' . $monthCode;
-                        $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
                         $hasFile = $doc && $doc->file_path;
                         $isReturned = $doc && $doc->status === 'returned';
                         $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
                         $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
-                        $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
-                        $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
-                        $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
+                        $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned);
                         $isExpandedByDefault = $loop->first;
-                        $statusLabel = 'Pending Upload';
-                        $statusColor = '#f59e0b';
-
-                        if ($hasFile) {
-                            $statusLabel = 'For DILG Provincial Office Validation';
-                            $statusColor = '#3b82f6';
-                        }
-
-                        if ($isPendingRo) {
-                            $statusLabel = 'For DILG Regional Office Validation';
-                            $statusColor = '#3b82f6';
-                        }
-
-                        if ($isApprovedRo) {
-                            $statusLabel = 'Approved';
-                            $statusColor = '#059669';
-                        }
-
-                        if ($isReturned) {
-                            $statusLabel = 'Returned';
-                            $statusColor = '#dc2626';
-                        }
+                        $badge = $workflowService->resolveStatusBadge($doc, $officeName);
+                        $statusLabel = $badge['label'];
+                        $statusColor = $badge['color'];
 
                         $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
+                        $mlgooApprover = $doc && $doc->approved_by_c_mlgoo && isset($usersById[$doc->approved_by_c_mlgoo]) ? $usersById[$doc->approved_by_c_mlgoo] : null;
                         $poApprover = $doc && $doc->approved_by_dilg_po && isset($usersById[$doc->approved_by_dilg_po]) ? $usersById[$doc->approved_by_dilg_po] : null;
                         $roApprover = $doc && $doc->approved_by_dilg_ro && isset($usersById[$doc->approved_by_dilg_ro]) ? $usersById[$doc->approved_by_dilg_ro] : null;
                         $uploaderName = $uploaderUser ? trim($uploaderUser->fname . ' ' . $uploaderUser->lname) : 'Unknown';
+                        $mlgooApproverName = $mlgooApprover ? trim($mlgooApprover->fname . ' ' . $mlgooApprover->lname) : 'Unknown';
                         $poApproverName = $poApprover ? trim($poApprover->fname . ' ' . $poApprover->lname) : 'Unknown';
                         $roApproverName = $roApprover ? trim($roApprover->fname . ' ' . $roApprover->lname) : 'Unknown';
                         $uploadedTime = $doc && $doc->uploaded_at ? $doc->uploaded_at->copy()->setTimezone(config('app.timezone')) : null;
@@ -140,11 +124,19 @@
                             ];
                         };
                         $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredMonthDeadline);
+                        $mlgooValidatedAt = $doc && $doc->approved_at_c_mlgoo ? $doc->approved_at_c_mlgoo->copy()->setTimezone(config('app.timezone')) : null;
                         $poValidatedAt = $doc && $doc->approved_at_dilg_po ? $doc->approved_at_dilg_po->copy()->setTimezone(config('app.timezone')) : null;
                         $roValidatedAt = $doc && $doc->approved_at_dilg_ro ? $doc->approved_at_dilg_ro->copy()->setTimezone(config('app.timezone')) : null;
                         $returnedAt = $doc && $doc->status === 'returned' && $doc->approved_at ? $doc->approved_at->copy()->setTimezone(config('app.timezone')) : null;
-                        $returnedByName = $roApproverName !== 'Unknown' ? $roApproverName : $poApproverName;
-                        $returnedByLevel = $doc && $doc->approved_by_dilg_ro ? 'DILG Regional Office' : ($doc && $doc->approved_by_dilg_po ? 'DILG Provincial Office' : null);
+                        $returnedByName = $roApproverName !== 'Unknown' ? $roApproverName : ($poApproverName !== 'Unknown' ? $poApproverName : $mlgooApproverName);
+                        $returnedByLevel = null;
+                        if ($doc && !empty($doc->approved_by_dilg_ro)) {
+                            $returnedByLevel = 'DILG Regional Office';
+                        } elseif ($doc && !empty($doc->approved_by_dilg_po)) {
+                            $returnedByLevel = 'DILG Provincial Office';
+                        } elseif ($doc && !empty($doc->approved_by_c_mlgoo)) {
+                            $returnedByLevel = 'C/MLGOO';
+                        }
                         $returnedRemarks = trim((string) ($doc->approval_remarks ?? '')) ?: null;
                         $timelineEvents = [];
 
@@ -152,6 +144,13 @@
                             $timelineEvents[] = [
                                 'message' => 'Uploaded at: ' . $uploadedTime->format('M d, Y h:i A') . ' by ' . $uploaderName,
                                 'color' => '#6b7280',
+                            ];
+                        }
+
+                        if ($mlgooValidatedAt) {
+                            $timelineEvents[] = [
+                                'message' => 'C/MLGOO Validated at: ' . $mlgooValidatedAt->format('M d, Y h:i A') . ' by ' . $mlgooApproverName,
+                                'color' => '#10b981',
                             ];
                         }
 
@@ -183,6 +182,8 @@
                                 'color' => '#dc2626',
                             ];
                         }
+
+                        $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                     @endphp
                     <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
                         <button
@@ -246,19 +247,6 @@
                                         @endif
                                     </div>
                                 @endif
-                                @php
-                                    $isRegionalOfficeUser = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
-                                    $isProvincialDilgUser = Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office';
-                                    $isForRegionalValidation = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                                    $isApproved = $doc && $doc->status === 'approved';
-                                    $hideReturnButton = $isProvincialDilgUser && $isReturned;
-                                    $showApprovalButtons = $doc
-                                        && Auth::user()->agency === 'DILG'
-                                        && !($isProvincialDilgUser && $isForRegionalValidation)
-                                        && !($isRegionalOfficeUser && $isReturned)
-                                        && !($isRegionalOfficeUser && $isApproved)
-                                        && !($isProvincialDilgUser && $isApproved);
-                                @endphp
                                 <input
                                     id="{{ $inputId }}"
                                     type="file"
@@ -276,25 +264,23 @@
                                 </div>
                                 @if ($disableUploadInput)
                                     <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                                        @if ($isRegionalOfficeUserForUpload)
-                                            Regional Office cannot upload files. Choose file is disabled.
+                                        @if (!$canUploadForLgu)
+                                            You are not authorized to upload documents for this LGU.
                                         @else
                                             File already uploaded for this month. Choose file is disabled.
                                         @endif
                                     </div>
                                 @endif
-                                @if ($showApprovalButtons)
+                                @if ($canValidateDoc)
                                     <div style="display: flex; gap: 6px; margin-top: 8px; margin-bottom: 8px; justify-content: flex-start; align-items: center;">
                                         <button type="button" onclick="openSwaAnnexFApprovalModal({{ $doc->id }}, 'approve')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
                                             <i class="fas fa-check"></i>
                                             <span>Approve</span>
                                         </button>
-                                        @if (!$hideReturnButton)
-                                            <button type="button" onclick="openSwaAnnexFApprovalModal({{ $doc->id }}, 'return')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
-                                                <i class="fas fa-undo"></i>
-                                                <span>Return</span>
-                                            </button>
-                                        @endif
+                                        <button type="button" onclick="openSwaAnnexFApprovalModal({{ $doc->id }}, 'return')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                            <i class="fas fa-undo"></i>
+                                            <span>Return</span>
+                                        </button>
                                     </div>
                                 @endif
                                 <div id="{{ $filenameId }}" class="ops-upload-filename" style="display: none; margin-bottom: 8px; font-size: 12px; color: #6b7280;"></div>

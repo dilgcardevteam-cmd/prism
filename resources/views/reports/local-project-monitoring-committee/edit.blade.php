@@ -52,6 +52,8 @@
 
         <div style="display: grid; grid-template-columns: repeat(3, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px;">
             @php
+                $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+                $canUploadForLgu = Auth::user()->canSubmitForLgu($province, $officeName);
                 $docBlocks = [
                     ['label' => 'Executive Order for CY 2025 (MOV)', 'doc_type' => 'eo', 'year' => 2025],
                     ['label' => 'Annual Work and Financial Plan (AWFP) for CY 2025', 'doc_type' => 'awfp', 'year' => 2025],
@@ -113,79 +115,35 @@
                             : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
                     ];
                 };
-                $resolveStatusTheme = function ($doc) {
+                $resolveStatusTheme = function ($doc) use ($officeName) {
                     $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
-                    $isReturned = $doc && $doc->status === 'returned';
-                    $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
-                    $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-
-                    if ($isApprovedRo) {
+                    if (!$hasFile) {
                         return [
-                            'label' => 'Approved',
-                            'icon' => 'fa-check-circle',
-                            'badgeBg' => '#059669',
+                            'label' => 'Pending Upload',
+                            'icon' => 'fa-hourglass-start',
+                            'badgeBg' => '#9ca3af',
                             'badgeColor' => '#ffffff',
-                            'cardBg' => '#f0fdf4',
-                            'cardBorder' => '#a7f3d0',
-                            'fileBg' => '#ecfdf5',
-                            'fileBorder' => '#a7f3d0',
-                            'fileColor' => '#047857',
+                            'cardBg' => '#ffffff',
+                            'cardBorder' => '#e5e7eb',
+                            'fileBg' => '#f9fafb',
+                            'fileBorder' => '#e5e7eb',
+                            'fileColor' => '#374151',
                         ];
                     }
 
-                    if ($isReturned) {
-                        return [
-                            'label' => 'Returned',
-                            'icon' => 'fa-undo',
-                            'badgeBg' => '#dc2626',
-                            'badgeColor' => '#ffffff',
-                            'cardBg' => '#fef2f2',
-                            'cardBorder' => '#fecaca',
-                            'fileBg' => '#fff1f1',
-                            'fileBorder' => '#fca5a5',
-                            'fileColor' => '#991b1b',
-                        ];
-                    }
+                    $badge = app(\App\Services\LguReportorialWorkflowService::class)->resolveStatusBadge($doc, $officeName);
 
-                    if ($isPendingRo) {
-                        return [
-                            'label' => 'For DILG Regional Office Validation',
-                            'icon' => 'fa-clock',
-                            'badgeBg' => '#eab308',
-                            'badgeColor' => '#ffffff',
-                            'cardBg' => '#fefce8',
-                            'cardBorder' => '#fef08a',
-                            'fileBg' => '#fef9c3',
-                            'fileBorder' => '#fde047',
-                            'fileColor' => '#713f12',
-                        ];
-                    }
-
-                    if ($hasFile) {
-                        return [
-                            'label' => 'For DILG Provincial Office Validation',
-                            'icon' => 'fa-clock',
-                            'badgeBg' => '#eab308',
-                            'badgeColor' => '#ffffff',
-                            'cardBg' => '#fefce8',
-                            'cardBorder' => '#fef08a',
-                            'fileBg' => '#fef9c3',
-                            'fileBorder' => '#fde047',
-                            'fileColor' => '#713f12',
-                        ];
-                    }
-
-                    return [
-                        'label' => 'Pending Upload',
-                        'icon' => 'fa-hourglass-start',
-                        'badgeBg' => '#6b7280',
-                        'badgeColor' => '#ffffff',
-                        'cardBg' => '#f8fafc',
-                        'cardBorder' => '#e2e8f0',
-                        'fileBg' => '#f1f5f9',
-                        'fileBorder' => '#cbd5e1',
-                        'fileColor' => '#334155',
+                    $colorMap = [
+                        'approved' => ['cardBg' => '#f0fdf4', 'cardBorder' => '#a7f3d0', 'fileBg' => '#ecfdf5', 'fileBorder' => '#a7f3d0', 'fileColor' => '#047857'],
+                        'returned' => ['cardBg' => '#fef2f2', 'cardBorder' => '#fecaca', 'fileBg' => '#fff1f1', 'fileBorder' => '#fca5a5', 'fileColor' => '#991b1b'],
+                        'pending_ro' => ['cardBg' => '#fefce8', 'cardBorder' => '#fef08a', 'fileBg' => '#fef9c3', 'fileBorder' => '#fde047', 'fileColor' => '#713f12'],
+                        'pending_po' => ['cardBg' => '#eff6ff', 'cardBorder' => '#bfdbfe', 'fileBg' => '#dbeafe', 'fileBorder' => '#93c5fd', 'fileColor' => '#1e40af'],
+                        'pending_mlgoo' => ['cardBg' => '#faf5ff', 'cardBorder' => '#e9d5ff', 'fileBg' => '#f3e8ff', 'fileBorder' => '#d8b4fe', 'fileColor' => '#6b21a8'],
                     ];
+
+                    $theme = $colorMap[$badge['stage']] ?? $colorMap['pending_mlgoo'];
+
+                    return array_merge($badge, $theme);
                 };
             @endphp
             @foreach ($docBlocks as $docBlock)
@@ -195,10 +153,9 @@
                     $inputId = 'lpmc-doc-input-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
                     $buttonId = 'lpmc-doc-btn-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
                     $filenameId = 'lpmc-doc-file-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
-                    $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
                     $hasFile = $doc && $doc->file_path;
                     $isReturned = $doc && $doc->status === 'returned';
-                    $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
+                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned);
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
                     $statusTheme = $resolveStatusTheme($doc);
@@ -398,8 +355,8 @@
                     >
                     @if ($disableUploadInput)
                         <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                            @if ($isRegionalOfficeUserForUpload)
-                                Regional Office cannot upload files. Choose file is disabled.
+                            @if (!$canUploadForLgu)
+                                You are not authorized to upload documents for this LGU.
                             @else
                                 File already submitted. Choose file is disabled until the current file is returned.
                             @endif
@@ -416,28 +373,16 @@
                         Upload
                     </button>
                     @php
-                        $isRegionalOfficeUser = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
-                        $isProvincialDilgUser = Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office';
-                        $isForRegionalValidation = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                        $isApproved = $doc && $doc->status === 'approved';
-                        $hideReturnButton = $isProvincialDilgUser && $isReturned;
-                        $showApprovalButtons = $doc
-                            && Auth::user()->agency === 'DILG'
-                            && !($isProvincialDilgUser && $isForRegionalValidation)
-                            && !($isRegionalOfficeUser && $isReturned)
-                            && !($isRegionalOfficeUser && $isApproved)
-                            && !($isProvincialDilgUser && $isApproved);
+                        $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                     @endphp
-                    @if ($showApprovalButtons)
+                    @if ($canValidateDoc)
                         <div style="display: flex; gap: 8px; margin-top: 8px;">
                             <button type="button" onclick="openLpmcApprovalModal({{ $doc->id }}, 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                 Approve
                             </button>
-                            @if (!$hideReturnButton)
-                                <button type="button" onclick="openLpmcApprovalModal({{ $doc->id }}, 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
-                                    Return
-                                </button>
-                            @endif
+                            <button type="button" onclick="openLpmcApprovalModal({{ $doc->id }}, 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                                Return
+                            </button>
                         </div>
                     @endif
                 </form>
@@ -500,13 +445,12 @@
                                     $inputId = 'lpmc-q-input-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $buttonId = 'lpmc-q-btn-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $filenameId = 'lpmc-q-file-' . $qDoc['doc_type'] . '-' . $quarter;
-                                    $isRegionalOfficeUserForUpload = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
                                     $disableQuarterUpload = is_array($configuredQuarterDeadline)
                                         && !empty($configuredQuarterDeadline['is_closed']);
                                     $hasFile = $doc && $doc->file_path;
                                     $isReturned = $doc && $doc->status === 'returned';
-                                    $disableUploadInput = ($hasFile && !$isReturned)
-                                        || $isRegionalOfficeUserForUpload
+                                    $disableUploadInput = !$canUploadForLgu
+                                        || ($hasFile && !$isReturned)
                                         || $disableQuarterUpload;
                                     
                                     $statusTheme = $resolveStatusTheme($doc);
@@ -716,8 +660,8 @@
                                         <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
                                             @if ($disableQuarterUpload)
                                                 Uploads are closed for {{ $label }} based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
-                                            @elseif ($isRegionalOfficeUserForUpload)
-                                                Regional Office cannot upload files. Choose file is disabled.
+                                            @elseif (!$canUploadForLgu)
+                                                You are not authorized to upload documents for this LGU.
                                             @else
                                                 File already submitted. Choose file is disabled until the current file is returned.
                                             @endif
@@ -733,28 +677,16 @@
                                         Upload
                                     </button>
                                     @php
-                                        $isRegionalOfficeUser = Auth::user()->agency === 'DILG' && Auth::user()->province === 'Regional Office';
-                                        $isProvincialDilgUser = Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office';
-                                        $isForRegionalValidation = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                                        $isApproved = $doc && $doc->status === 'approved';
-                                        $hideReturnButton = $isProvincialDilgUser && $isReturned;
-                                        $showApprovalButtons = $doc
-                                            && Auth::user()->agency === 'DILG'
-                                            && !($isProvincialDilgUser && $isForRegionalValidation)
-                                            && !($isRegionalOfficeUser && $isReturned)
-                                            && !($isRegionalOfficeUser && $isApproved)
-                                            && !($isProvincialDilgUser && $isApproved);
+                                        $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                                     @endphp
-                                    @if ($showApprovalButtons)
+                                    @if ($canValidateDoc)
                                         <div style="display: flex; gap: 8px; margin-top: 8px;">
                                             <button type="button" onclick="openLpmcApprovalModal({{ $doc->id }}, 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                                 Approve
                                             </button>
-                                            @if (!$hideReturnButton)
-                                                <button type="button" onclick="openLpmcApprovalModal({{ $doc->id }}, 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
-                                                    Return
-                                                </button>
-                                            @endif
+                                            <button type="button" onclick="openLpmcApprovalModal({{ $doc->id }}, 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                                                Return
+                                            </button>
                                         </div>
                                     @endif
                                 </form>

@@ -119,6 +119,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             $uploads = $modelClass::with([
                     'uploader:idno,fname,lname',
                     'approver:idno,fname,lname',
+                    'cMlgooApprover:idno,fname,lname',
                     'dilgPoApprover:idno,fname,lname',
                     'dilgRoApprover:idno,fname,lname',
                 ])
@@ -155,15 +156,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
 
         abort_unless(Schema::hasTable($this->uploadTable()), 500, $this->reportShortName() . ' uploads table is not available.');
 
-        if ($user && $user->isRegionalOfficeAssignment()) {
-            $defaultPeriod = array_key_first($this->quarters()) ?? 'Q1';
-            return redirect()
-                ->route($this->showRouteName(), [
-                    'projectCode' => $project->project_code,
-                    'quarter' => $this->normalizeQuarter($request->input('quarter', $defaultPeriod), $defaultPeriod),
-                ])
-                ->withErrors(['report_file' => 'DILG Regional Office cannot upload ' . $this->reportShortName() . ' reports.']);
-        }
+        abort_unless($user && $user->canSubmitForLgu($project->province, $project->city_municipality), 403);
 
         $validated = $request->validate([
             'quarter' => ['required', Rule::in(array_keys($this->quarters()))],
@@ -171,7 +164,6 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         ]);
 
         $quarter = $validated['quarter'];
-        $autoElevateToRegional = $this->isProvincialDilgUser($user);
         $modelClass = $this->uploadModelClass();
         $existingUpload = $modelClass::query()
             ->where('project_code', $project->project_code)
@@ -193,6 +185,9 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         $secureTimestamp = SecureTimestampService::getUploadTimestamp();
         $actorId = $user->idno ?? auth()->id();
 
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $initialStatus = $workflowService->initialStatusForUpload($user, $project->city_municipality, $project->province);
+
         $upload = $existingUpload ?? new $modelClass();
         $upload->timestamps = false;
 
@@ -206,12 +201,14 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         $upload->original_name = $file->getClientOriginalName();
         $upload->uploaded_by = $actorId;
         $upload->uploaded_at = $secureTimestamp;
-        $upload->status = $autoElevateToRegional ? 'pending_ro' : 'pending';
-        $upload->approved_by = $autoElevateToRegional ? $actorId : null;
-        $upload->approved_at = $autoElevateToRegional ? $secureTimestamp : null;
-        $upload->approved_at_dilg_po = $autoElevateToRegional ? $secureTimestamp : null;
+        $upload->status = $initialStatus;
+        $upload->approved_by = null;
+        $upload->approved_at = null;
+        $upload->approved_at_c_mlgoo = null;
+        $upload->approved_by_c_mlgoo = null;
+        $upload->approved_at_dilg_po = null;
         $upload->approved_at_dilg_ro = null;
-        $upload->approved_by_dilg_po = $autoElevateToRegional ? $actorId : null;
+        $upload->approved_by_dilg_po = null;
         $upload->approved_by_dilg_ro = null;
         $upload->approval_remarks = null;
         $upload->user_remarks = null;
@@ -224,9 +221,8 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
 
         SecureTimestampService::logUploadTimestamp($this->timestampLogKey(), $project->project_code, $quarter, $secureTimestamp);
 
-        $message = $autoElevateToRegional
-            ? $this->reportShortName() . ' uploaded and validated by DILG Provincial Office. It is now pending DILG Regional Office validation.'
-            : $this->reportShortName() . ' report uploaded successfully.';
+        $statusBadge = $workflowService->resolveStatusBadge($upload, $project->city_municipality);
+        $message = $this->reportShortName() . ' report uploaded successfully. Current status: ' . $statusBadge['label'] . '.';
 
         return redirect()
             ->route($this->showRouteName(), [
@@ -239,7 +235,9 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
     public function approveDocument(Request $request, string $projectCode, string $quarter)
     {
         $user = Auth::user();
-        abort_unless($this->userCanApproveReport($user), 403);
+        if (!$user) {
+            abort(403);
+        }
 
         $project = $this->resolveProjectForUser($projectCode, $user);
         abort_if(!$project, 404);
@@ -279,79 +277,25 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 ->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
-        $isProvincialOffice = $this->isProvincialDilgUser($user);
-        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
-
-        if (!$isProvincialOffice && !$isRegionalOffice) {
-            abort(403);
-        }
-
-        if ($isProvincialOffice && $upload->status !== 'pending') {
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $check = $workflowService->canUserValidate($user, $upload, $project->city_municipality, $project->province);
+        if (!$check['allowed']) {
             return redirect()
                 ->route($this->showRouteName(), [
                     'projectCode' => $project->project_code,
                     'quarter' => $quarter,
                 ])
-                ->withErrors(['approval' => 'This submission period is not awaiting DILG Provincial Office validation.']);
+                ->withErrors(['approval' => $check['reason'] ?? 'Unauthorized validation action.']);
         }
 
-        if ($isRegionalOffice && $upload->status !== 'pending_ro') {
-            return redirect()
-                ->route($this->showRouteName(), [
-                    'projectCode' => $project->project_code,
-                    'quarter' => $quarter,
-                ])
-                ->withErrors(['approval' => 'This submission period is not awaiting DILG Regional Office validation.']);
-        }
-
-        $now = SecureTimestampService::getUploadTimestamp();
-        $actorId = $user->idno ?? auth()->id();
-
-        $upload->timestamps = false;
-        $upload->approved_at = $now;
-        $upload->approved_by = $actorId;
-        $upload->updated_at = $now;
-
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $upload->approved_at_dilg_po = $now;
-                $upload->approved_by_dilg_po = $actorId;
-                $upload->approved_at_dilg_ro = null;
-                $upload->approved_by_dilg_ro = null;
-                $upload->status = 'pending_ro';
-                $upload->approval_remarks = null;
-                $upload->user_remarks = null;
-                $message = $this->reportShortName() . ' validated by DILG Provincial Office and elevated for DILG Regional Office validation.';
-            } else {
-                $upload->approved_at_dilg_ro = $now;
-                $upload->approved_by_dilg_ro = $actorId;
-                $upload->status = 'approved';
-                $upload->approval_remarks = null;
-                $upload->user_remarks = null;
-                $message = $this->reportShortName() . ' approved by DILG Regional Office.';
-            }
-        } else {
-            if ($isRegionalOffice) {
-                $upload->approved_at_dilg_ro = null;
-                $upload->approved_by_dilg_ro = $actorId;
-            } else {
-                $upload->approved_by_dilg_po = $actorId;
-            }
-
-            $upload->status = 'returned';
-            $upload->approval_remarks = $remarks;
-            $upload->user_remarks = $remarks;
-            $message = $this->reportShortName() . ' returned with remarks.';
-        }
-
-        $upload->save();
+        $result = $workflowService->processValidation($user, $upload, $action, $remarks, $project->city_municipality, $project->province);
 
         return redirect()
             ->route($this->showRouteName(), [
                 'projectCode' => $project->project_code,
                 'quarter' => $quarter,
             ])
-            ->with('success', $message);
+            ->with('success', $result['message']);
     }
 
     public function viewDocument(string $projectCode, string $quarter)
@@ -452,11 +396,11 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
 
     protected function userCanApproveReport($user): bool
     {
-        if (!$this->userCanAccessReport($user) || !$user || !$user->isDilgUser()) {
+        if (!$this->userCanAccessReport($user) || !$user) {
             return false;
         }
 
-        return $this->isProvincialDilgUser($user) || $user->isRegionalOfficeAssignment();
+        return $user->isSuperAdmin() || $user->isMlgooUser() || $user->isProvincialUser() || $user->isRegionalUser() || $user->isDilgUser();
     }
 
     protected function isProvincialDilgUser($user): bool
@@ -595,8 +539,14 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
 
     protected function resolveProjectFilters(Request $request): array
     {
+        $user = Auth::user();
+        $provinceFilter = $this->normalizeProjectFilterValues($request->input('province', []));
+        if ($user && ($user->isProvincialUser() || ($user->isDilgUser() && !$user->isRegionalUser() && !$user->isSuperAdmin() && !empty($user->province) && $user->province !== 'Regional Office'))) {
+            $provinceFilter = [$user->province];
+        }
+
         $filters = [
-            'province' => $this->normalizeProjectFilterValues($request->input('province', [])),
+            'province' => $provinceFilter,
             'city_municipality' => $this->normalizeProjectFilterValues($request->input('city_municipality', [])),
             'barangay' => $this->normalizeProjectFilterValues($request->input('barangay', [])),
             'program' => $this->normalizeProjectFilterValues($request->input('program', [])),

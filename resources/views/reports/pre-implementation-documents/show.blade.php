@@ -193,38 +193,34 @@
                         ? 'Document was returned. Delete the current file, then upload and submit a replacement.'
                         : null;
 
-                    $statusLabel = 'Pending Upload';
-                    $statusBg = '#ffffff';
-                    $statusTextColor = '#475569';
-                    $cardBg = '#f9fafb';
-                    $cardBorder = '#cbd5f5';
-                    if ($hasFile) {
-                        $statusLabel = 'For DILG Provincial Office Validation';
+                    $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+                    if ($hasFile && $fileRecord) {
+                        $badge = $workflowService->resolveStatusBadge($fileRecord, $project->city_municipality);
+                        $statusLabel = $badge['label'];
                         $statusBg = '#ffffff';
-                        $statusTextColor = '#075985';
-                        $cardBg = '#f0f9ff';
-                        $cardBorder = '#bae6fd';
-                    }
-                    if ($isPendingRo) {
-                        $statusLabel = 'For DILG Regional Office Validation';
+                        $statusTextColor = $badge['badgeBg'];
+                        $cardBg = match ($badge['stage']) {
+                            'approved' => '#f0fdf4',
+                            'returned' => '#fef2f2',
+                            'pending_ro' => '#fff7ed',
+                            'pending_po' => '#f0f9ff',
+                            'pending_mlgoo' => '#faf5ff',
+                            default => '#f9fafb',
+                        };
+                        $cardBorder = match ($badge['stage']) {
+                            'approved' => '#a7f3d0',
+                            'returned' => '#fecaca',
+                            'pending_ro' => '#fed7aa',
+                            'pending_po' => '#bae6fd',
+                            'pending_mlgoo' => '#ddd6fe',
+                            default => '#cbd5f5',
+                        };
+                    } else {
+                        $statusLabel = 'Pending Upload';
                         $statusBg = '#ffffff';
-                        $statusTextColor = '#c2410c';
-                        $cardBg = '#fff7ed';
-                        $cardBorder = '#fed7aa';
-                    }
-                    if ($isApprovedRo) {
-                        $statusLabel = 'Approved';
-                        $statusBg = '#ffffff';
-                        $statusTextColor = '#065f46';
-                        $cardBg = '#f0fdf4';
-                        $cardBorder = '#a7f3d0';
-                    }
-                    if ($isReturned) {
-                        $statusLabel = 'Returned';
-                        $statusBg = '#ffffff';
-                        $statusTextColor = '#991b1b';
-                        $cardBg = '#fef2f2';
-                        $cardBorder = '#fecaca';
+                        $statusTextColor = '#475569';
+                        $cardBg = '#f9fafb';
+                        $cardBorder = '#cbd5f5';
                     }
 
                     $inputId = 'pre-impl-doc-input-' . $field;
@@ -235,6 +231,8 @@
 
                     $uploadedTime = $asLocalTime($fileRecord->uploaded_at ?? $fileRecord->created_at ?? $fileRecord->updated_at ?? null);
                     $uploaderName = $resolveUserName($fileRecord->uploaded_by ?? null);
+                    $cMlgooValidatedAt = $asLocalTime($fileRecord->approved_at_c_mlgoo ?? null);
+                    $cMlgooApproverName = $resolveUserName($fileRecord->approved_by_c_mlgoo ?? null);
                     $poValidatedAt = $asLocalTime($fileRecord->approved_at_dilg_po ?? null);
                     $poApproverName = $resolveUserName($fileRecord->approved_by_dilg_po ?? null);
                     $roValidatedAt = $asLocalTime($fileRecord->approved_at_dilg_ro ?? null);
@@ -259,12 +257,14 @@
                         && $uploadedTime->getTimestamp() === $poValidatedAt->getTimestamp();
 
                     $returnedAt = $asLocalTime($fileRecord->approved_at ?? null);
-                    $returnedByName = $resolveUserName($fileRecord?->approved_by_dilg_ro ?: $fileRecord?->approved_by_dilg_po ?: $fileRecord?->approved_by);
+                    $returnedByName = $resolveUserName($fileRecord?->approved_by_dilg_ro ?: $fileRecord?->approved_by_dilg_po ?: $fileRecord?->approved_by_c_mlgoo ?: $fileRecord?->approved_by);
                     $returnedByLevel = null;
                     if (!empty($fileRecord?->approved_by_dilg_ro)) {
                         $returnedByLevel = 'DILG Regional Office';
                     } elseif (!empty($fileRecord?->approved_by_dilg_po)) {
                         $returnedByLevel = 'DILG Provincial Office';
+                    } elseif (!empty($fileRecord?->approved_by_c_mlgoo)) {
+                        $returnedByLevel = 'C/MLGOO';
                     }
                     $returnedRemarks = trim((string) ($fileRecord->approval_remarks ?? ''));
                     $returnedRemarks = $returnedRemarks !== '' ? $returnedRemarks : null;
@@ -279,6 +279,17 @@
                                 : 'Uploaded at: ' . $uploadedTime->format('M d, Y h:i A') . ' by ' . $uploaderName,
                             'color' => '#6b7280',
                             'font_size' => '11px',
+                            'font_weight' => 'normal',
+                        ];
+                    }
+
+                    if ($cMlgooValidatedAt) {
+                        $timelineEvents[] = [
+                            'timestamp' => $cMlgooValidatedAt,
+                            'priority' => 15,
+                            'message' => 'C/MLGOO Validated at: ' . $cMlgooValidatedAt->format('M d, Y h:i A') . ' by ' . $cMlgooApproverName,
+                            'color' => '#8b5cf6',
+                            'font_size' => '10px',
                             'font_weight' => 'normal',
                         ];
                     }
@@ -335,7 +346,10 @@
                         return $aTime <=> $bTime;
                     });
 
-                    $showApprovalButtons = $isDilg && $hasFile && in_array($fileRecord?->status, ['uploaded', 'pending_ro', 'returned'], true);
+                    $validationCheck = ($hasFile && $fileRecord && $currentUser)
+                        ? $workflowService->canUserValidate($currentUser, $fileRecord, $project->city_municipality, $project->province)
+                        : ['allowed' => false];
+                    $showApprovalButtons = $validationCheck['allowed'];
                 @endphp
 
                 @if ($isMultiUpload)
@@ -663,28 +677,23 @@
                                     @php
                                         $uploadedAt = $asLocalTime($multiFile->uploaded_at ?? $multiFile->created_at ?? null);
                                         $uploadedBy = $resolveUserName($multiFile->uploaded_by ?? null);
-                                        $multiStatus = $multiFile->status ?? 'pending';
+                                        $multiWorkflow = app(\App\Services\LguReportorialWorkflowService::class);
+                                        $multiBadge = $multiWorkflow->resolveStatusBadge($multiFile, $project->city_municipality);
                                         $canDeleteReturnedMultiFile = $multiFile->status === 'returned'
                                             && !$isRegionalDilg
                                             && $currentUser
                                             && $currentUser->hasCrudPermission('pre_implementation_documents', 'add');
-                                        $statusMeta = ['label' => 'Pending', 'bg' => '#fef3c7', 'color' => '#92400e'];
-                                        if (($multiFile->status ?? null) === 'approved' || $multiFile->approved_at_dilg_ro) {
-                                            $statusMeta = ['label' => 'Approved', 'bg' => '#d1fae5', 'color' => '#065f46'];
-                                        } elseif ($multiFile->status === 'returned') {
-                                            $statusMeta = ['label' => 'Returned', 'bg' => '#fee2e2', 'color' => '#991b1b'];
-                                        } elseif ($multiFile->approved_at_dilg_po) {
-                                            $statusMeta = ['label' => 'For DILG RO Validation', 'bg' => '#ffedd5', 'color' => '#c2410c'];
-                                        } elseif ($multiStatus === 'pending') {
-                                            $statusMeta = ['label' => 'For DILG PO Validation', 'bg' => '#e0f2fe', 'color' => '#075985'];
-                                        }
+                                        $multiValidationCheck = $currentUser
+                                            ? $multiWorkflow->canUserValidate($currentUser, $multiFile, $project->city_municipality, $project->province)
+                                            : ['allowed' => false];
+                                        $canValidateMulti = $multiValidationCheck['allowed'];
                                     @endphp
                                     <tr style="border-top: 1px solid #e5e7eb; background-color: {{ $loop->odd ? '#ffffff' : '#f8fafc' }};">
                                         <td style="padding: 12px 14px; font-size: 12px; color: #374151; white-space: nowrap;">{{ $uploadedAt ? $uploadedAt->format('M d, Y h:i A') : '-' }}</td>
                                         <td style="padding: 12px 14px; font-size: 12px; color: #111827; font-weight: 600;">{{ basename($multiFile->file_path ?? ('File #' . $multiFile->id)) }}</td>
                                         <td style="padding: 12px 14px;">
-                                            <span style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; background-color: {{ $statusMeta['bg'] }}; color: {{ $statusMeta['color'] }}; font-size: 11px; font-weight: 700;">
-                                                {{ $statusMeta['label'] }}
+                                            <span style="display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; background-color: {{ $multiBadge['badgeBg'] }}; color: {{ $multiBadge['badgeColor'] }}; font-size: 11px; font-weight: 700;">
+                                                {{ $multiBadge['label'] }}
                                             </span>
                                         </td>
                                         <td style="padding: 12px 14px; font-size: 12px; color: #374151;">{{ $uploadedBy }}</td>
@@ -697,7 +706,7 @@
                                                 <i class="fas fa-clock-rotate-left"></i>
                                                 History
                                             </button>
-                                            @if ($isDilg && in_array($multiFile->status, ['uploaded', 'pending_ro', 'returned'], true))
+                                            @if ($canValidateMulti)
                                                 @if ($multiFile->status !== 'returned')
                                                     <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'approve')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
                                                         <i class="fas fa-check"></i>

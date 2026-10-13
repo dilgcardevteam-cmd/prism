@@ -448,6 +448,8 @@ class FundUtilizationReportController extends Controller
         $report = FundUtilizationReport::where('project_code', $projectCode)->first();
         if ($report) {
             $this->ensureFundUtilizationSourceAllowed($report->fund_source, $report->project_code);
+            $user = Auth::user();
+            abort_unless(!$user || $user->canAccessLguScope($report->province, $report->implementing_unit), 403);
             $report->is_lfp = false;
             return $report;
         }
@@ -470,6 +472,9 @@ class FundUtilizationReportController extends Controller
                 'project_status' => 'Ongoing',
             ]
         );
+
+        $user = Auth::user();
+        abort_unless(!$user || $user->canAccessLguScope($report->province, $report->implementing_unit), 403);
 
         $report->is_lfp = true;
         $report->lfp_id = $lfpProject->id;
@@ -658,32 +663,15 @@ class FundUtilizationReportController extends Controller
             return false;
         }
 
-        $baseAllowed = $user->isLguScopedUser() || $user->isProvincialDilgAssignment() || $user->isSuperAdmin();
-        if (!$baseAllowed) {
-            return false;
-        }
-
         if ($user->isSuperAdmin()) {
             return true;
         }
 
         if ($report) {
-            $userProvince = strtolower(trim((string) $user->province));
-            $reportProvince = strtolower(trim((string) $report->province));
-
-            if ($user->isProvincialDilgAssignment()) {
-                return $userProvince === $reportProvince;
-            }
-
-            if ($user->isLguScopedUser()) {
-                $userOffice = strtolower(trim((string) $user->office));
-                $reportUnit = strtolower(trim((string) $report->implementing_unit));
-                return $userProvince === $reportProvince 
-                    && ($userOffice === '' || str_contains($reportUnit, $userOffice) || str_contains($userOffice, $reportUnit));
-            }
+            return $user->canSubmitForLgu($report->province, $report->implementing_unit);
         }
 
-        return true;
+        return $user->isLguScopedUser() || $user->isProvincialDilgAssignment() || $user->isRegionalUser();
     }
 
     private function isFundUtilizationProvincialValidator(?User $user): bool
@@ -3022,6 +3010,9 @@ class FundUtilizationReportController extends Controller
             $this->ensureFundUtilizationSourceAllowed($report->fund_source);
             $report->is_lfp = false;
         }
+
+        $user = Auth::user();
+        abort_unless(!$user || $user->canAccessLguScope($report->province, $report->implementing_unit), 403);
         
         $quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
         $deadlineReportingYear = $this->fundUtilizationDeadlineReportingYear();
@@ -4142,6 +4133,9 @@ class FundUtilizationReportController extends Controller
     public function approveUpload(FundUtilizationApprovalActionRequest $request, $projectCode, $uploadType, $quarter, FundUtilizationWorkflowService $workflowService)
     {
         $user = Auth::user();
+        if ($user && $user->isLguUser()) {
+            abort(403, 'LGU users cannot validate or approve submissions.');
+        }
         $validated = $request->validated();
         $action = $validated['action'];
         $remarks = $this->sanitizeReportRemarks($validated['remarks'] ?? null);
@@ -4409,8 +4403,18 @@ class FundUtilizationReportController extends Controller
      */
     public function viewDocument($projectCode, $docType, $quarter)
     {
-        $report = FundUtilizationReport::findOrFail($projectCode);
+        $report = FundUtilizationReport::find($projectCode);
+        if (!$report) {
+            $lfp = LocallyFundedProject::where('subaybayan_project_code', $projectCode)->firstOrFail();
+            $report = (object) [
+                'fund_source' => $lfp->fund_source,
+                'province' => $lfp->province,
+                'implementing_unit' => $lfp->implementing_unit,
+            ];
+        }
         $this->ensureFundUtilizationSourceAllowed($report->fund_source);
+        $user = Auth::user();
+        abort_unless(!$user || $user->canAccessLguScope($report->province, $report->implementing_unit), 403);
         
         $docTypeMap = [
             'mov' => ['table' => 'tbfur_mov_uploads', 'column' => 'mov_file_path'],
@@ -4481,6 +4485,7 @@ class FundUtilizationReportController extends Controller
      */
     public function deleteDocument($projectCode, $docType, $quarter, bool $force = false)
     {
+        $report = $this->getReportOrLfpProject($projectCode);
         $docTypeMap = [
             'mov' => ['table' => 'tbfur_mov_uploads', 'column' => 'mov_file_path', 'filePath' => 'mov_file_path', 'has_file' => true, 'statusField' => 'status', 'encoderField' => 'mov_encoder_id'],
             'batch-document' => ['table' => 'tbfur_batch_documents', 'column' => 'batch_document_file_path', 'filePath' => 'batch_document_file_path', 'has_file' => true, 'statusField' => 'status', 'encoderField' => 'batch_document_encoder_id'],

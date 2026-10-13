@@ -163,25 +163,21 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             return false;
         }
 
+        if (!$user->canAccessDilgDeliverables()) {
+            return false;
+        }
+
         if ($user->isSuperAdmin() || $user->isRegionalUser() || $user->isRegionalOfficeAssignment()) {
             return true;
         }
 
         $userProvince = trim((string) $user->province);
 
-        if ($user->isLguScopedUser()) {
-            return $user->matchesAssignedOffice($officeName);
+        if ($userProvince === '' || $userProvince === 'Regional Office') {
+            return true;
         }
 
-        if ($user->isDilgUser()) {
-            if ($userProvince === '' || $userProvince === 'Regional Office') {
-                return true;
-            }
-
-            return $userProvince === $province;
-        }
-
-        return true;
+        return strcasecmp($userProvince, $province) === 0;
     }
 
     private function indexDocumentsByKey($documents): array
@@ -810,10 +806,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
         }
 
         $user = auth()->user();
-        if ($user && strtoupper(trim((string) $user->agency)) === 'DILG' && trim((string) $user->province) === 'Regional Office') {
-            return back()->withErrors([
-                'document' => 'Regional Office cannot upload files.',
-            ]);
+        if (!$user || !$user->canAccessDilgDeliverables()) {
+            abort(403);
         }
 
         $validMonths = implode(',', array_keys($this->monthOptions()));
@@ -912,7 +906,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
     {
         $officeName = (string) $office;
         $user = auth()->user();
-        if (!$user || strtoupper(trim((string) $user->agency)) !== 'DILG') {
+        if (!$user || (!$user->isSuperAdmin() && !$user->canAccessDilgDeliverables())) {
             abort(403);
         }
 

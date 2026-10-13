@@ -2704,10 +2704,7 @@ Route::middleware(['auth'])->group(function () {
     $assertDilgDeliverablesAccess = function (): void {
         $user = Auth::user();
 
-        $canAccessDilgDeliverables = $user
-            && $user->isDilgUser()
-            && !$user->isLguScopedUser()
-            && ($user->isRegionalOfficeAssignment() || $user->normalizedProvince() !== '');
+        $canAccessDilgDeliverables = $user && $user->canAccessDilgDeliverables();
 
         abort_unless($canAccessDilgDeliverables, 403);
     };

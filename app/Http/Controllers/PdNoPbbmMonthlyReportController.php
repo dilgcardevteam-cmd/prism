@@ -151,21 +151,7 @@ class PdNoPbbmMonthlyReportController extends Controller
             return false;
         }
 
-        $userProvince = trim((string) $user->province);
-
-        if ($user->isLguScopedUser()) {
-            return $user->matchesAssignedOffice($officeName);
-        }
-
-        if ($user->isDilgUser()) {
-            if ($userProvince === '' || $userProvince === 'Regional Office') {
-                return true;
-            }
-
-            return $userProvince === $province;
-        }
-
-        return true;
+        return $user->canAccessLguScope($province, $officeName);
     }
 
     private function indexDocumentsByKey($documents): array
@@ -633,12 +619,11 @@ class PdNoPbbmMonthlyReportController extends Controller
             $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
                 return $user->matchesAssignedOffice((string) ($row['city_municipality'] ?? ''));
             }));
-        } elseif ($user && $user->isDilgUser() && !empty($user->province)) {
-            if ($user->province !== 'Regional Office') {
-                $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
-                    return $row['province'] === $user->province;
-                }));
-            }
+        } elseif ($user && ($user->isProvincialUser() || ($user->isDilgUser() && !$user->isRegionalUser() && !$user->isSuperAdmin() && !empty($user->province) && $user->province !== 'Regional Office'))) {
+            $userProvince = $user->province;
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
+                return strcasecmp($row['province'], $userProvince) === 0;
+            }));
         }
 
         $scopedOfficeRows = collect($officeRows);
@@ -790,11 +775,7 @@ class PdNoPbbmMonthlyReportController extends Controller
         }
 
         $user = auth()->user();
-        if ($user && strtoupper(trim((string) $user->agency)) === 'DILG' && trim((string) $user->province) === 'Regional Office') {
-            return back()->withErrors([
-                'document' => 'Regional Office cannot upload files.',
-            ]);
-        }
+        abort_unless($user && $user->canSubmitForLgu($province, $officeName), 403);
 
         $validMonths = implode(',', array_keys($this->monthOptions()));
         $request->validate([
@@ -802,6 +783,9 @@ class PdNoPbbmMonthlyReportController extends Controller
             'year' => ['required', 'integer', 'between:2000,2100'],
             'month' => ['required', 'in:' . $validMonths],
         ]);
+
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $initialStatus = $workflowService->initialStatusForUpload($officeName);
 
         $year = (int) $request->input('year');
         $month = (string) $request->input('month');
@@ -819,7 +803,6 @@ class PdNoPbbmMonthlyReportController extends Controller
         $officeSlug = Str::slug($officeName, '_');
         $path = $file->store('pd-no-pbbm-2025-1572-1573/' . $officeSlug, 'public');
         $uploadedAt = now();
-        $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
 
         $document = PdNoPbbmMonthlyDocument::updateOrCreate(
             [
@@ -833,11 +816,13 @@ class PdNoPbbmMonthlyReportController extends Controller
                 'file_path' => $path,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
-                'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
-                'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
-                'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
+                'status' => $initialStatus,
+                'approved_at' => null,
+                'approved_at_c_mlgoo' => null,
+                'approved_by_c_mlgoo' => null,
+                'approved_at_dilg_po' => null,
+                'approved_by_dilg_po' => null,
                 'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
                 'approved_by_dilg_ro' => null,
                 'approval_remarks' => null,
                 'user_remarks' => null,
@@ -850,9 +835,6 @@ class PdNoPbbmMonthlyReportController extends Controller
 
         $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
         $this->notifyWorkflowUsersOnUpload($document);
-        if ($isProvincialDilgUploader) {
-            $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $uploadedAt);
-        }
 
         return back()->with('success', 'Monthly report uploaded successfully.');
     }
@@ -895,9 +877,12 @@ class PdNoPbbmMonthlyReportController extends Controller
     {
         $officeName = (string) $office;
         $user = auth()->user();
-        if (!$user || strtoupper(trim((string) $user->agency)) !== 'DILG') {
+        if (!$user) {
             abort(403);
         }
+
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($province && $this->canAccessOffice($officeName, $province), 403);
 
         $validated = $request->validate([
             'action' => ['required', 'in:approve,return'],
@@ -910,11 +895,6 @@ class PdNoPbbmMonthlyReportController extends Controller
             ->where('doc_type', $this->reportDocType())
             ->firstOrFail();
 
-        if (!$this->canAccessOffice($officeName, (string) $document->province)) {
-            abort(403);
-        }
-
-        $now = now();
         $action = $validated['action'];
         $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
 
@@ -922,52 +902,31 @@ class PdNoPbbmMonthlyReportController extends Controller
             return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
-        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
-        $isProvincialOffice = !$isRegionalOffice;
-
-        $updates = [
-            'approved_at' => $now,
-        ];
-
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $updates['approved_at_dilg_po'] = $now;
-                $updates['approved_by_dilg_po'] = $user->idno;
-                $updates['status'] = 'pending_ro';
-                $updates['approval_remarks'] = null;
-            } else {
-                $updates['approved_at_dilg_ro'] = $now;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-                $updates['status'] = 'approved';
-                $updates['approval_remarks'] = null;
-            }
-        } else {
-            if ($isRegionalOffice) {
-                $updates['approved_at_dilg_ro'] = null;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-            } else {
-                $updates['approved_by_dilg_po'] = $user->idno;
-            }
-            $updates['status'] = 'returned';
-            $updates['approval_remarks'] = $remarks;
-            $updates['user_remarks'] = $remarks;
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $check = $workflowService->canUserValidate($user, $document, $officeName, $province);
+        if (!$check['allowed']) {
+            abort(403, $check['reason'] ?? 'Unauthorized validation action.');
         }
 
-        $document->update($updates);
+        $now = now();
+        $result = $workflowService->processValidation($user, $document, $action, $remarks, $officeName, $province);
         $document->refresh();
 
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $now);
-            } else {
-                $this->logActivity($officeName, 'validate_ro', 'Validated (DILG RO)', $document, null, $now);
-            }
-        } else {
-            $this->logActivity($officeName, 'return', 'Returned', $document, $remarks, $now);
-        }
+        $logAction = match ($check['current_stage']) {
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'validate_mlgoo' : 'return'),
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'validate_po' : 'return'),
+            default => ($action === 'approve' ? 'validate_ro' : 'return'),
+        };
 
-        $this->notifyLguUsersAfterRegionalApproval($document, $action, $isRegionalOffice, $remarks);
+        $logDesc = match ($check['current_stage']) {
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'Validated (C/MLGOO)' : 'Returned (C/MLGOO)'),
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'Validated (DILG PO)' : 'Returned (DILG PO)'),
+            default => ($action === 'approve' ? 'Validated (DILG RO)' : 'Returned (DILG RO)'),
+        };
 
-        return back()->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
+        $this->logActivity($officeName, $logAction, $logDesc, $document, $action === 'return' ? $remarks : null, $now);
+        $this->notifyLguUsersAfterRegionalApproval($document, $action, $user->isRegionalUser(), $remarks);
+
+        return back()->with('success', $result['message']);
     }
 }

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\SglgifProjectCompletionReport;
 use App\Models\SglgifProjectCompletionReportFile;
 use App\Services\InterventionNotificationService;
+use App\Services\LguReportorialWorkflowService;
+use App\Support\InputSanitizer;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -292,10 +294,18 @@ class SglgifProjectCompletionReportController extends Controller
         $document->funding_year = $project->funding_year;
         $document->updated_by = Auth::user()->idno ?? null;
 
+        $currentUser = Auth::user();
+        if (!$currentUser || !$currentUser->canSubmitForLgu($project->province, $project->city_municipality)) {
+            abort(403, 'Unauthorized to upload documents for this LGU.');
+        }
+
         $folder = 'project-completion-reports/sglgif/' . Str::slug((string) $project->project_code, '_');
         $now = now();
-        $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
+        $workflowService = app(LguReportorialWorkflowService::class);
+        $initialStatus = $workflowService->initialStatusForUpload($currentUser, $project->city_municipality, $project->province);
+        $isProvincialDilgUploader = ($initialStatus === LguReportorialWorkflowService::STATUS_PENDING_RO);
+        $isMlgooUploader = ($initialStatus === LguReportorialWorkflowService::STATUS_PENDING_PO && $currentUser->isMlgooUser());
         $uploadedDocumentTypes = [];
 
         foreach ($this->singleUploadDocumentTypes() as $field) {
@@ -323,13 +333,15 @@ class SglgifProjectCompletionReportController extends Controller
             $fileRecord->file_path = $path;
             $fileRecord->uploaded_at = $now;
             $fileRecord->uploaded_by = $userId;
-            $fileRecord->status = 'approved';
-            $fileRecord->approved_at = $now;
-            $fileRecord->approved_by = $userId;
-            $fileRecord->approved_at_dilg_po = null;
-            $fileRecord->approved_by_dilg_po = null;
+            $fileRecord->status = $initialStatus;
+            $fileRecord->approved_at_c_mlgoo = $isMlgooUploader ? $now : null;
+            $fileRecord->approved_by_c_mlgoo = $isMlgooUploader ? $userId : null;
+            $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
+            $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
             $fileRecord->approved_at_dilg_ro = null;
             $fileRecord->approved_by_dilg_ro = null;
+            $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
+            $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
             $fileRecord->approval_remarks = null;
             $fileRecord->user_remarks = null;
             $fileRecord->save();
@@ -370,6 +382,11 @@ class SglgifProjectCompletionReportController extends Controller
             abort(404);
         }
 
+        $currentUser = Auth::user();
+        if (!$currentUser || !$currentUser->canSubmitForLgu($project->province, $project->city_municipality)) {
+            abort(403, 'Unauthorized to upload documents for this LGU.');
+        }
+
         $validated = $request->validate([
             'document_file' => $this->multiUploadValidationRules($documentType),
         ]);
@@ -383,8 +400,11 @@ class SglgifProjectCompletionReportController extends Controller
 
         $folder = 'project-completion-reports/sglgif/' . Str::slug((string) $project->project_code, '_') . '/' . Str::slug($documentType, '_');
         $now = now();
-        $currentUser = Auth::user();
         $userId = $currentUser->idno ?? null;
+        $workflowService = app(LguReportorialWorkflowService::class);
+        $initialStatus = $workflowService->initialStatusForUpload($currentUser, $project->city_municipality, $project->province);
+        $isProvincialDilgUploader = ($initialStatus === LguReportorialWorkflowService::STATUS_PENDING_RO);
+        $isMlgooUploader = ($initialStatus === LguReportorialWorkflowService::STATUS_PENDING_PO && $currentUser->isMlgooUser());
         $path = $validated['document_file']->store($folder, 'public');
 
         $fileRecord = new SglgifProjectCompletionReportFile();
@@ -393,13 +413,15 @@ class SglgifProjectCompletionReportController extends Controller
         $fileRecord->file_path = $path;
         $fileRecord->uploaded_at = $now;
         $fileRecord->uploaded_by = $userId;
-        $fileRecord->status = 'approved';
-        $fileRecord->approved_at = $now;
-        $fileRecord->approved_by = $userId;
-        $fileRecord->approved_at_dilg_po = null;
-        $fileRecord->approved_by_dilg_po = null;
+        $fileRecord->status = $initialStatus;
+        $fileRecord->approved_at_c_mlgoo = $isMlgooUploader ? $now : null;
+        $fileRecord->approved_by_c_mlgoo = $isMlgooUploader ? $userId : null;
+        $fileRecord->approved_at_dilg_po = $isProvincialDilgUploader ? $now : null;
+        $fileRecord->approved_by_dilg_po = $isProvincialDilgUploader ? $userId : null;
         $fileRecord->approved_at_dilg_ro = null;
         $fileRecord->approved_by_dilg_ro = null;
+        $fileRecord->approved_at = $isProvincialDilgUploader ? $now : null;
+        $fileRecord->approved_by = $isProvincialDilgUploader ? $userId : null;
         $fileRecord->approval_remarks = null;
         $fileRecord->user_remarks = null;
         $fileRecord->save();
@@ -510,6 +532,9 @@ class SglgifProjectCompletionReportController extends Controller
             abort(404);
         }
 
+        $user = Auth::user();
+        abort_unless($user && $user->canAccessLguScope($project->province, $project->city_municipality), 403);
+
         if (!array_key_exists($documentType, $this->documentFieldMap())) {
             abort(404);
         }
@@ -549,6 +574,9 @@ class SglgifProjectCompletionReportController extends Controller
         if (!$project) {
             abort(404);
         }
+
+        $user = Auth::user();
+        abort_unless($user && $user->canAccessLguScope($project->province, $project->city_municipality), 403);
 
         $fileRecord = SglgifProjectCompletionReportFile::where('project_code', $project->project_code)
             ->where('id', $fileId)
@@ -590,10 +618,10 @@ class SglgifProjectCompletionReportController extends Controller
         }
 
         $user = Auth::user();
-        $isDilg = strtoupper(trim((string) ($user->agency ?? ''))) === 'DILG';
-        if (!$isDilg) {
+        if (!$user) {
             abort(403);
         }
+        abort_unless($user->canAccessLguScope($project->province, $project->city_municipality), 403);
 
         $validated = $request->validate([
             'action' => ['required', 'in:approve,return'],
@@ -618,6 +646,12 @@ class SglgifProjectCompletionReportController extends Controller
             abort(404);
         }
 
+        $user = Auth::user();
+        if (!$user) {
+            abort(403);
+        }
+        abort_unless($user->canAccessLguScope($project->province, $project->city_municipality), 403);
+
         $fileRecord = SglgifProjectCompletionReportFile::where('project_code', $project->project_code)
             ->where('id', $fileId)
             ->firstOrFail();
@@ -628,10 +662,11 @@ class SglgifProjectCompletionReportController extends Controller
     private function handleDocumentValidation(Request $request, object $project, SglgifProjectCompletionReportFile $fileRecord, array $routeConfig, array $scopeQuery)
     {
         $user = Auth::user();
-        $isDilg = strtoupper(trim((string) ($user->agency ?? ''))) === 'DILG';
-        if (!$isDilg) {
+        if (!$user) {
             abort(403);
         }
+
+        abort_unless($user->canAccessLguScope($project->province, $project->city_municipality), 403);
 
         $validated = $request->validate([
             'action' => ['required', 'in:approve,return'],
@@ -639,88 +674,45 @@ class SglgifProjectCompletionReportController extends Controller
         ]);
 
         if (empty($fileRecord->file_path)) {
-        return back()->with('error', 'No file uploaded for this document yet.');
+            return back()->with('error', 'No file uploaded for this document yet.');
         }
 
         $documentType = (string) $fileRecord->document_type;
         $action = $validated['action'];
-        $remarks = trim((string) ($validated['remarks'] ?? ''));
-        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
+        $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
+
+        if ($action === 'return' && $remarks === null) {
+            return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
+        }
+
+        $workflowService = app(LguReportorialWorkflowService::class);
+        $check = $workflowService->canUserValidate($user, $fileRecord, $project->city_municipality, $project->province);
+        if (!$check['allowed']) {
+            abort(403, $check['reason'] ?? 'Unauthorized validation action.');
+        }
+
         $now = now();
-        $userId = $user->idno ?? null;
-
-        if ($action === 'approve') {
-            if ($isRegionalOffice) {
-                if (!$fileRecord->approved_at_dilg_po) {
-                    return back()->with('error', 'Regional validation requires DILG Provincial validation first.');
-                }
-
-                $fileRecord->approved_at_dilg_ro = $now;
-                $fileRecord->approved_by_dilg_ro = $userId;
-                $fileRecord->status = 'approved';
-            } else {
-                $fileRecord->approved_at_dilg_po = $now;
-                $fileRecord->approved_by_dilg_po = $userId;
-                $fileRecord->approved_at_dilg_ro = null;
-                $fileRecord->approved_by_dilg_ro = null;
-                $fileRecord->status = 'pending_ro';
-            }
-
-            $fileRecord->approved_at = $now;
-            $fileRecord->approved_by = $userId;
-            $fileRecord->approval_remarks = null;
-            $fileRecord->user_remarks = null;
-            $fileRecord->save();
-
-            $fileRecord->refresh();
-            $this->logActivity(
-                $project->project_code,
-                $isRegionalOffice ? 'validate_ro' : 'validate_po',
-                $isRegionalOffice ? 'Validated (DILG RO)' : 'Validated (DILG PO)',
-                $fileRecord,
-                null,
-                $now
-            );
-
-            $this->notifyLguUsersAfterRegionalApproval(
-                $project,
-                $documentType,
-                $fileRecord,
-                $action,
-                $isRegionalOffice,
-                $routeConfig,
-                $scopeQuery,
-                null
-            );
-
-            return back()->with('success', 'Document validated successfully.');
-        }
-
-        // return
-        if ($isRegionalOffice) {
-            $fileRecord->approved_at_dilg_ro = null;
-            $fileRecord->approved_by_dilg_ro = $userId;
-        } else {
-            $fileRecord->approved_at_dilg_po = null;
-            $fileRecord->approved_by_dilg_po = $userId;
-            $fileRecord->approved_at_dilg_ro = null;
-            $fileRecord->approved_by_dilg_ro = null;
-        }
-
-        $fileRecord->status = 'returned';
-        $fileRecord->approved_at = $now;
-        $fileRecord->approved_by = $userId;
-        $fileRecord->approval_remarks = $remarks;
-        $fileRecord->user_remarks = $remarks;
-        $fileRecord->save();
-
+        $result = $workflowService->processValidation($user, $fileRecord, $action, $remarks, $project->city_municipality, $project->province);
         $fileRecord->refresh();
+
+        $logAction = match ($check['current_stage']) {
+            LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'validate_mlgoo' : 'return'),
+            LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'validate_po' : 'return'),
+            default => ($action === 'approve' ? 'validate_ro' : 'return'),
+        };
+
+        $logDesc = match ($check['current_stage']) {
+            LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'Validated (C/MLGOO)' : 'Returned (C/MLGOO)'),
+            LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'Validated (DILG PO)' : 'Returned (DILG PO)'),
+            default => ($action === 'approve' ? 'Validated (DILG RO)' : 'Returned (DILG RO)'),
+        };
+
         $this->logActivity(
             $project->project_code,
-            'return',
-            'Returned',
+            $logAction,
+            $logDesc,
             $fileRecord,
-            $remarks !== '' ? $remarks : null,
+            $remarks,
             $now
         );
 
@@ -729,13 +721,13 @@ class SglgifProjectCompletionReportController extends Controller
             $documentType,
             $fileRecord,
             $action,
-            $isRegionalOffice,
+            $check['current_stage'] === LguReportorialWorkflowService::STATUS_PENDING_RO,
             $routeConfig,
             $scopeQuery,
-            $remarks !== '' ? $remarks : null
+            $remarks
         );
 
-        return back()->with('success', 'Document returned with remarks.');
+        return back()->with('success', $result['message'] ?? 'Document updated successfully.');
     }
 
     private function formatDocumentLabel(string $documentType): string

@@ -869,20 +869,11 @@ class LocalProjectMonitoringCommitteeController extends Controller
             $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
                 return $user->matchesAssignedOffice((string) ($row['city_municipality'] ?? ''));
             }));
-        } elseif (
-            $user
-            && $user->isDilgUser()
-            && !empty($user->province)
-            && !$user->isRegionalUser()
-            && !$user->isRegionalOfficeAssignment()
-        ) {
-            $selectedProvince = $request->query('province');
-            $userProvince = !empty($selectedProvince) ? $selectedProvince : $user->province;
-            if ($userProvince !== 'Regional Office') {
-                $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
-                    return $row['province'] === $userProvince;
-                }));
-            }
+        } elseif ($user && ($user->isProvincialUser() || ($user->isDilgUser() && !$user->isRegionalUser() && !$user->isSuperAdmin() && !empty($user->province) && $user->province !== 'Regional Office'))) {
+            $userProvince = $user->province;
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
+                return strcasecmp($row['province'], $userProvince) === 0;
+            }));
         }
 
         $filterOptions = [
@@ -910,6 +901,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
                 ->toArray(),
             'statuses' => [
                 'no_upload' => 'No Upload',
+                'pending_mlgoo' => 'For C/MLGOO Validation',
                 'pending_po' => 'For PO Approval',
                 'pending_ro' => 'For RO Approval',
                 'approved' => 'Approved',
@@ -1031,6 +1023,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $officeName = $id;
         $province = $this->findProvinceByOffice($officeName);
+        $user = auth()->user();
+        abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
+
         $documents = LpmcDocument::where('office', $officeName)->get();
         $documentsByKey = $this->indexDocumentsByKey($documents);
         return view('reports.local-project-monitoring-committee.show', compact('officeName', 'province', 'documents', 'documentsByKey'));
@@ -1043,12 +1038,16 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $officeName = $id;
         $province = $this->findProvinceByOffice($officeName);
+        $user = auth()->user();
+        abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
+
         $documents = LpmcDocument::where('office', $officeName)->with('files')->get();
         $documentsByKey = $this->indexDocumentsByKey($documents);
         $activityLogs = $this->buildActivityLogs($documents, $officeName);
 
         $uploaderIds = $documents->pluck('uploaded_by')->filter()->unique()->values()->all();
-        $approverIds = $documents->pluck('approved_by_dilg_po')
+        $approverIds = $documents->pluck('approved_by_c_mlgoo')
+            ->merge($documents->pluck('approved_by_dilg_po'))
             ->merge($documents->pluck('approved_by_dilg_ro'))
             ->filter()
             ->unique()
@@ -1161,7 +1160,12 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         $uploadedAt = now();
         $user = auth()->user();
-        $isProvincialDilgUploader = $user && $user->isProvincialDilgAssignment();
+        abort_unless($user && $user->canSubmitForLgu($province, $officeName), 403);
+
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $initialStatus = $workflowService->initialStatusForUpload($user, $officeName, $province);
+        $isProvincialDilgUploader = ($initialStatus === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO);
+        $isMlgooUploader = ($initialStatus === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO && $user->isMlgooUser());
         $officeSlug = Str::slug($officeName, '_');
 
         $document = LpmcDocument::updateOrCreate(
@@ -1175,8 +1179,10 @@ class LocalProjectMonitoringCommitteeController extends Controller
                 'province' => $province,
                 'uploaded_by' => auth()->id(),
                 'uploaded_at' => $uploadedAt,
-                'status' => $isProvincialDilgUploader ? 'pending_ro' : 'pending',
+                'status' => $initialStatus,
                 'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
+                'approved_at_c_mlgoo' => $isMlgooUploader ? $uploadedAt : null,
+                'approved_by_c_mlgoo' => $isMlgooUploader ? ($user->idno ?? auth()->id()) : null,
                 'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
                 'approved_at_dilg_ro' => null,
                 'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
@@ -1229,6 +1235,10 @@ class LocalProjectMonitoringCommitteeController extends Controller
     public function viewDocumentFile($id, $fileId)
     {
         $officeName = $id;
+        $user = auth()->user();
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
+
         $file = LpmcDocumentFile::where('id', $fileId)
             ->whereHas('document', fn ($q) => $q->where('office', $officeName))
             ->firstOrFail();
@@ -1287,6 +1297,10 @@ class LocalProjectMonitoringCommitteeController extends Controller
     public function viewDocument($id, $docId)
     {
         $officeName = $id;
+        $user = auth()->user();
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
+
         $document = LpmcDocument::where('office', $officeName)->where('id', $docId)->firstOrFail();
         if (!$document->file_path || !Storage::disk('public')->exists($document->file_path)) {
             abort(404);
@@ -1312,9 +1326,12 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $officeName = $id;
         $user = auth()->user();
-        if (!$user || $user->agency !== 'DILG') {
+        if (!$user) {
             abort(403);
         }
+
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($user->canAccessLguScope($province, $officeName), 403);
 
         $validated = $request->validate([
             'action' => ['required', 'in:approve,return'],
@@ -1322,7 +1339,6 @@ class LocalProjectMonitoringCommitteeController extends Controller
         ]);
 
         $document = LpmcDocument::where('office', $officeName)->where('id', $docId)->firstOrFail();
-        $now = now();
         $action = $validated['action'];
         $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
 
@@ -1330,55 +1346,34 @@ class LocalProjectMonitoringCommitteeController extends Controller
             return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
         }
 
-        $isRegionalOffice = (bool) ($user && $user->isRegionalOfficeAssignment());
-        $isProvincialOffice = !$isRegionalOffice;
-
-        $updates = [
-            'approved_at' => $now,
-        ];
-
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $updates['approved_at_dilg_po'] = $now;
-                $updates['approved_by_dilg_po'] = $user->idno;
-                $updates['status'] = 'pending_ro';
-                $updates['approval_remarks'] = null;
-            } else {
-                $updates['approved_at_dilg_ro'] = $now;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-                $updates['status'] = 'approved';
-                $updates['approval_remarks'] = null;
-            }
-        } else {
-            if ($isRegionalOffice) {
-                $updates['approved_at_dilg_ro'] = null;
-                $updates['approved_by_dilg_ro'] = $user->idno;
-            } else {
-                $updates['approved_by_dilg_po'] = $user->idno;
-            }
-            $updates['status'] = 'returned';
-            $updates['approval_remarks'] = $remarks;
-            $updates['user_remarks'] = $remarks;
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $check = $workflowService->canUserValidate($user, $document, $officeName, $province);
+        if (!$check['allowed']) {
+            abort(403, $check['reason'] ?? 'Unauthorized validation action.');
         }
 
-        $document->update($updates);
-
+        $now = now();
+        $result = $workflowService->processValidation($user, $document, $action, $remarks, $officeName, $province);
         $document->refresh();
-        if ($action === 'approve') {
-            if ($isProvincialOffice) {
-                $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $now);
-            } else {
-                $this->logActivity($officeName, 'validate_ro', 'Validated (DILG RO)', $document, null, $now);
-            }
-        } else {
-            $this->logActivity($officeName, 'return', 'Returned', $document, $remarks, $now);
-        }
 
-        $this->notifyLguUsersAfterRegionalApproval($document, $action, $isRegionalOffice, $remarks);
+        $logAction = match ($check['current_stage']) {
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'validate_mlgoo' : 'return'),
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'validate_po' : 'return'),
+            default => ($action === 'approve' ? 'validate_ro' : 'return'),
+        };
+
+        $logDesc = match ($check['current_stage']) {
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'Validated (C/MLGOO)' : 'Returned (C/MLGOO)'),
+            \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'Validated (DILG PO)' : 'Returned (DILG PO)'),
+            default => ($action === 'approve' ? 'Validated (DILG RO)' : 'Returned (DILG RO)'),
+        };
+
+        $this->logActivity($officeName, $logAction, $logDesc, $document, $action === 'return' ? $remarks : null, $now);
+        $this->notifyLguUsersAfterRegionalApproval($document, $action, $user->isRegionalUser(), $remarks);
 
         return redirect()
             ->route('local-project-monitoring-committee.edit', $officeName)
-            ->with('success', $action === 'approve' ? 'Document validated.' : 'Document returned.');
+            ->with('success', $result['message']);
     }
 
     public function export(Request $request)
@@ -1396,20 +1391,11 @@ class LocalProjectMonitoringCommitteeController extends Controller
             $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
                 return $user->matchesAssignedOffice((string) ($row['city_municipality'] ?? ''));
             }));
-        } elseif (
-            $user
-            && $user->isDilgUser()
-            && !empty($user->province)
-            && !$user->isRegionalUser()
-            && !$user->isRegionalOfficeAssignment()
-        ) {
-            $selectedProvince = $request->query('province');
-            $userProvince = !empty($selectedProvince) ? $selectedProvince : $user->province;
-            if ($userProvince !== 'Regional Office') {
-                $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
-                    return $row['province'] === $userProvince;
-                }));
-            }
+        } elseif ($user && ($user->isProvincialUser() || ($user->isDilgUser() && !$user->isRegionalUser() && !$user->isSuperAdmin() && !empty($user->province) && $user->province !== 'Regional Office'))) {
+            $userProvince = $user->province;
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
+                return strcasecmp($row['province'], $userProvince) === 0;
+            }));
         }
 
         $documentsByOffice = [];

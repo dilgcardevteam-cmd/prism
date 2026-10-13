@@ -19,8 +19,10 @@ class RbisAnnualCertificationDocument extends Model
         'uploaded_at',
         'status',
         'approved_at',
+        'approved_at_c_mlgoo',
         'approved_at_dilg_po',
         'approved_at_dilg_ro',
+        'approved_by_c_mlgoo',
         'approved_by_dilg_po',
         'approved_by_dilg_ro',
         'approval_remarks',
@@ -31,6 +33,7 @@ class RbisAnnualCertificationDocument extends Model
         'document_year' => 'integer',
         'uploaded_at' => 'datetime',
         'approved_at' => 'datetime',
+        'approved_at_c_mlgoo' => 'datetime',
         'approved_at_dilg_po' => 'datetime',
         'approved_at_dilg_ro' => 'datetime',
     ];

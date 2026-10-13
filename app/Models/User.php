@@ -358,6 +358,14 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isProvincialDilgAssignment(): bool
     {
+        if ($this->isSuperAdmin()) {
+            return false;
+        }
+
+        if ($this->isProvincialUser()) {
+            return true;
+        }
+
         if (!$this->isDilgUser()) {
             return false;
         }
@@ -380,7 +388,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isLguUser(): bool
     {
-        return in_array($this->normalizedRole(), [self::ROLE_LGU, self::ROLE_MLGOO], true);
+        return $this->normalizedRole() === self::ROLE_LGU;
     }
 
     public function isActive(): bool
@@ -451,11 +459,19 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isLguScopedUser(): bool
     {
-        return $this->isLguUser() || $this->normalizedAgency() === 'lgu';
+        return $this->isLguUser() || $this->isMlgooUser() || $this->normalizedAgency() === 'lgu';
     }
 
     public function isRegionalOfficeAssignment(): bool
     {
+        if ($this->isSuperAdmin()) {
+            return false;
+        }
+
+        if ($this->isRegionalUser()) {
+            return true;
+        }
+
         if (!$this->isDilgUser() || $this->isLguScopedUser()) {
             return false;
         }
@@ -481,6 +497,88 @@ class User extends Authenticatable implements MustVerifyEmail
 
         return $assignedComparable !== ''
             && $this->normalizedOfficeComparable($candidate) === $assignedComparable;
+    }
+
+    public function canAccessLguScope(?string $province = null, ?string $office = null): bool
+    {
+        if ($this->isSuperAdmin() || $this->isRegionalUser() || $this->isRegionalOfficeAssignment()) {
+            return true;
+        }
+
+        $normalizedTargetProvince = Str::lower(trim((string) $province));
+        $userProvince = $this->normalizedProvince();
+
+        if ($this->isProvincialUser() || $this->isProvincialDilgAssignment()) {
+            if ($normalizedTargetProvince !== '') {
+                return $userProvince !== '' && $normalizedTargetProvince === $userProvince;
+            }
+            return true;
+        }
+
+        if ($this->isMlgooUser()) {
+            if ($office !== null && $office !== '') {
+                $officeMatch = $this->matchesAssignedOffice($office);
+                if (!$officeMatch) {
+                    return false;
+                }
+            }
+            if ($normalizedTargetProvince !== '' && $userProvince !== '') {
+                return $normalizedTargetProvince === $userProvince;
+            }
+            return true;
+        }
+
+        if ($this->isLguUser() || $this->isLguScopedUser()) {
+            if ($office !== null && $office !== '') {
+                return $this->matchesAssignedOffice($office);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    public function canAccessDilgDeliverables(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        if ($this->isLguUser() || $this->isMlgooUser() || $this->isLguScopedUser()) {
+            return false;
+        }
+
+        if ($this->isRegionalUser() || $this->isRegionalOfficeAssignment()) {
+            return true;
+        }
+
+        if ($this->isProvincialUser() || $this->isProvincialDilgAssignment()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function canSubmitForLgu(?string $province = null, ?string $office = null): bool
+    {
+        if ($this->isSuperAdmin() || $this->isRegionalUser()) {
+            return true;
+        }
+
+        if ($this->isProvincialUser() || $this->isProvincialDilgAssignment()) {
+            $targetProvince = Str::lower(trim((string) $province));
+            return $targetProvince === '' || $targetProvince === $this->normalizedProvince();
+        }
+
+        if ($this->isMlgooUser()) {
+            return $office !== null && $office !== '' && $this->matchesAssignedOffice($office);
+        }
+
+        if ($this->isLguUser()) {
+            return $office !== null && $office !== '' && $this->matchesAssignedOffice($office);
+        }
+
+        return false;
     }
 
     public function defaultCrudPermissions(): array

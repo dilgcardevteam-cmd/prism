@@ -74,24 +74,46 @@
         @php
             $upload = $uploadsByQuarter[$quarterCode] ?? null;
             $hasUpload = $upload && $upload->file_path;
-            $status = $upload?->status;
-            $isReturned = $status === 'returned';
-            $isApproved = $status === 'approved' || ($upload && $upload->approved_at_dilg_ro);
-            $isPendingRo = $status === 'pending_ro' || ($upload && $upload->approved_at_dilg_po && !$upload->approved_at_dilg_ro && $status !== 'returned');
-            $isPendingPo = $hasUpload && !$isReturned && !$isPendingRo && !$isApproved;
+            $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+            $stage = $upload ? $workflowService->currentStage($upload, $project->city_municipality) : null;
+            $badge = $workflowService->resolveStatusBadge($upload, $project->city_municipality);
+            $statusLabel = $badge['label'];
+            $isReturned = $stage === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED;
+            $isApproved = $stage === \App\Services\LguReportorialWorkflowService::STATUS_APPROVED;
+            $isPendingRo = $stage === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO;
+            $isPendingPo = $stage === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO;
+            $isPendingMlgoo = $stage === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO;
             $displayStyle = $selectedQuarter === $quarterCode ? 'block' : 'none';
             $iconRotation = $selectedQuarter === $quarterCode ? 'rotate(180deg)' : 'rotate(0deg)';
-            $statusLabel = 'Pending Upload';
-            $statusBackground = 'rgba(245,158,11,0.28)';
-            $statusCardBackground = '#fef3c7';
-            $statusCardText = '#92400e';
-            if ($isReturned) { $statusLabel = 'Returned'; $statusBackground = 'rgba(220,38,38,0.30)'; $statusCardBackground = '#fee2e2'; $statusCardText = '#b91c1c'; }
-            elseif ($isApproved) { $statusLabel = 'Approved'; $statusBackground = 'rgba(16,185,129,0.30)'; $statusCardBackground = '#dcfce7'; $statusCardText = '#166534'; }
-            elseif ($isPendingRo) { $statusLabel = 'For DILG Regional Office Validation'; $statusBackground = 'rgba(59,130,246,0.30)'; $statusCardBackground = '#dbeafe'; $statusCardText = '#1d4ed8'; }
-            elseif ($isPendingPo) { $statusLabel = 'For DILG Provincial Office Validation'; }
+            $statusBackground = match($stage) {
+                \App\Services\LguReportorialWorkflowService::STATUS_APPROVED => 'rgba(16,185,129,0.30)',
+                \App\Services\LguReportorialWorkflowService::STATUS_RETURNED => 'rgba(220,38,38,0.30)',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO => 'rgba(234,179,8,0.30)',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => 'rgba(59,130,246,0.30)',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => 'rgba(139,92,246,0.30)',
+                default => 'rgba(245,158,11,0.28)',
+            };
+            $statusCardBackground = match($stage) {
+                \App\Services\LguReportorialWorkflowService::STATUS_APPROVED => '#dcfce7',
+                \App\Services\LguReportorialWorkflowService::STATUS_RETURNED => '#fee2e2',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO => '#fef9c3',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => '#dbeafe',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => '#f3e8ff',
+                default => '#fef3c7',
+            };
+            $statusCardText = match($stage) {
+                \App\Services\LguReportorialWorkflowService::STATUS_APPROVED => '#166534',
+                \App\Services\LguReportorialWorkflowService::STATUS_RETURNED => '#b91c1c',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO => '#854d0e',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => '#1d4ed8',
+                \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => '#6b21a8',
+                default => '#92400e',
+            };
             $uploadedAt = $upload && $upload->uploaded_at ? $upload->uploaded_at->format('M d, Y h:i A') : 'Not uploaded yet';
             $uploadedBy = $upload && $upload->uploader ? $upload->uploader->fullName() : '-';
             $displayName = $upload && $upload->file_path ? ($upload->original_name ?: basename($upload->file_path)) : null;
+            $cMlgooValidatedAt = $upload && $upload->approved_at_c_mlgoo ? $upload->approved_at_c_mlgoo->format('M d, Y h:i A') : '-';
+            $cMlgooValidatedBy = $upload && $upload->cMlgooApprover ? $upload->cMlgooApprover->fullName() : '-';
             $poValidatedAt = $upload && $upload->approved_at_dilg_po ? $upload->approved_at_dilg_po->format('M d, Y h:i A') : '-';
             $poValidatedBy = $upload && $upload->dilgPoApprover ? $upload->dilgPoApprover->fullName() : '-';
             $roValidatedAt = $upload && $upload->approved_at_dilg_ro ? $upload->approved_at_dilg_ro->format('M d, Y h:i A') : '-';
@@ -121,10 +143,13 @@
                         : 'Submitted on or before the configured deadline of ' . $deadlineTime->format('M d, Y h:i A'),
                 ];
             }
-            $canUpload = !$isRegionalDilgViewer && (!$hasUpload || $isReturned);
-            $canDelete = $hasUpload && !$isRegionalDilgViewer && in_array((string) $status, ['pending', 'returned'], true);
-            $canApproveByPo = $isProvincialDilgViewer && $hasUpload && $status === 'pending';
-            $canApproveByRo = $isRegionalDilgViewer && $hasUpload && $status === 'pending_ro';
+            $canUploadForLgu = Auth::user()->canSubmitForLgu($project->province, $project->city_municipality);
+            $canUpload = $canUploadForLgu && (!$hasUpload || $isReturned);
+            $canDelete = Auth::user()->isSuperAdmin() && $hasUpload;
+            $canUserValidateCheck = ($hasUpload && $upload)
+                ? $workflowService->canUserValidate(Auth::user(), $upload, $project->city_municipality, $project->province)
+                : ['allowed' => false];
+            $canValidate = $canUserValidateCheck['allowed'];
         @endphp
 
         <div style="background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(15,23,42,.09);margin-bottom:24px;border:1px solid #e5e7eb;overflow:hidden;">
@@ -158,11 +183,13 @@
                     @if($isReturned && $remarks)
                         <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #fecaca;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:13px;line-height:1.6;"><div style="font-weight:700;margin-bottom:4px;">Returned with remarks</div><div>{{ $remarks }}</div></div>
                     @elseif($isPendingRo)
-                        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1d4ed8;font-size:13px;line-height:1.6;">Provincial validation is complete. This submission is awaiting DILG Regional Office approval.</div>
+                        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #fde68a;border-radius:10px;background:#fefce8;color:#854d0e;font-size:13px;line-height:1.6;">Provincial validation is complete. This submission is awaiting DILG Regional Office final approval.</div>
                     @elseif($isPendingPo)
-                        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb;color:#92400e;font-size:13px;line-height:1.6;">The report has been uploaded and is waiting for DILG Provincial Office validation.</div>
-                    @elseif(!$hasUpload && $isRegionalDilgViewer)
-                        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #d1d5db;border-radius:10px;background:#f8fafc;color:#475569;font-size:13px;line-height:1.6;">Regional Office users cannot upload files. Validation buttons will appear here after a report is submitted.</div>
+                        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1d4ed8;font-size:13px;line-height:1.6;">The report has been validated and is awaiting DILG Provincial Office review.</div>
+                    @elseif($isPendingMlgoo)
+                        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #e9d5ff;border-radius:10px;background:#faf5ff;color:#6b21a8;font-size:13px;line-height:1.6;">The report has been submitted and is awaiting C/MLGOO validation.</div>
+                    @elseif($isApproved)
+                        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;color:#166534;font-size:13px;line-height:1.6;">This report has received final Regional Office approval.</div>
                     @endif
 
                     <form action="{{ route($formMeta['upload_route'], ['projectCode' => $project->project_code]) }}" method="POST" enctype="multipart/form-data" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 12px;">
@@ -179,8 +206,8 @@
                     </div>
                     @if(!$canUpload)
                         <div style="margin-bottom:12px;font-size:12px;color:#64748b;">
-                            @if($isRegionalDilgViewer)
-                                Upload is disabled for DILG Regional Office users.
+                            @if(!$canUploadForLgu)
+                                You are not authorized to upload reports for this LGU.
                             @elseif($hasUpload && !$isReturned)
                                 Upload is locked while the submitted report is under review or already approved.
                             @endif
@@ -193,6 +220,7 @@
                         <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;background:white;"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">{{ $formMeta['deadline_card_label'] ?? 'Quarter Deadline' }}</div><div style="font-size:14px;font-weight:700;color:#111827;margin-top:8px;">{{ $quarterDeadlineDisplay !== '' ? $quarterDeadlineDisplay : 'No superadmin deadline set' }}</div><div style="font-size:11px;color:#64748b;margin-top:4px;">Configuration year: CY {{ $deadlineReportingYear }}</div></div>
                         <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;background:white;"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Uploaded At</div><div style="font-size:14px;font-weight:700;color:#111827;margin-top:8px;">{{ $uploadedAt }}</div>@if($timelinessBadge)<div title="{{ $timelinessBadge['title'] }}" style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;background:{{ $timelinessBadge['background'] }};color:{{ $timelinessBadge['color'] }};border:1px solid {{ $timelinessBadge['border'] }};margin-top:8px;">{{ $timelinessBadge['label'] }}</div>@endif</div>
                         <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;background:white;"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Uploaded By</div><div style="font-size:14px;font-weight:700;color:#111827;margin-top:8px;">{{ $uploadedBy }}</div></div>
+                        <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;background:white;"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">C/MLGOO Validation</div><div style="font-size:14px;font-weight:700;color:#111827;margin-top:8px;">{{ $cMlgooValidatedAt }}</div><div style="font-size:11px;color:#64748b;margin-top:4px;">{{ $cMlgooValidatedBy }}</div></div>
                         <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;background:white;"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">DILG Provincial Validation</div><div style="font-size:14px;font-weight:700;color:#111827;margin-top:8px;">{{ $poValidatedAt }}</div><div style="font-size:11px;color:#64748b;margin-top:4px;">{{ $poValidatedBy }}</div></div>
                         <div style="padding:14px;border:1px solid #e5e7eb;border-radius:10px;background:white;"><div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">DILG Regional Validation</div><div style="font-size:14px;font-weight:700;color:#111827;margin-top:8px;">{{ $roValidatedAt }}</div><div style="font-size:11px;color:#64748b;margin-top:4px;">{{ $roValidatedBy }}</div></div>
                         @if($isReturned)
@@ -213,7 +241,7 @@
                             </form>
                         @endif
 
-                        @if($canApproveByPo || $canApproveByRo)
+                        @if($canValidate)
                             <button type="button" onclick='openRpmesApprovalModal(@json($project->project_code), @json($quarterCode), "approve", @json($quarterLabel))' style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;"><i class="fas fa-check"></i> Approve</button>
                             <button type="button" onclick='openRpmesApprovalModal(@json($project->project_code), @json($quarterCode), "return", @json($quarterLabel))' style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:#dc2626;color:white;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;"><i class="fas fa-undo"></i> Return</button>
                         @endif
