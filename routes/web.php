@@ -499,6 +499,63 @@ Route::middleware(['auth'])->group(function () {
         $notification = $notificationQuery->first();
 
         if (!$notification) {
+            if (is_string($id) && str_starts_with($id, 'returned-fund-utilization-')) {
+                $workflowId = (int) \Illuminate\Support\Str::after($id, 'returned-fund-utilization-');
+                $workflow = \Illuminate\Support\Facades\DB::table('fund_utilization_approval_workflows')->where('id', $workflowId)->first();
+                if ($workflow) {
+                    \Illuminate\Support\Facades\DB::table('tbnotifications')
+                        ->where('user_id', \Illuminate\Support\Facades\Auth::id())
+                        ->where(function ($q) use ($workflow) {
+                            $q->where('url', 'like', '%' . $workflow->project_code . '%')
+                              ->orWhere('message', 'like', '%' . $workflow->project_code . '%');
+                        })
+                        ->update(['read_at' => now(), 'updated_at' => now()]);
+
+                    return redirect()->route('fund-utilization.show', [
+                        'projectCode' => $workflow->project_code,
+                        'quarter' => $workflow->quarter,
+                        'document' => $workflow->document_type,
+                    ]);
+                }
+            } elseif (is_string($id) && str_starts_with($id, 'returned-')) {
+                $remainder = \Illuminate\Support\Str::after($id, 'returned-');
+                $lastDashPos = strrpos($remainder, '-');
+                if ($lastDashPos !== false) {
+                    $table = substr($remainder, 0, $lastDashPos);
+                    $recordId = (int) substr($remainder, $lastDashPos + 1);
+                    if (\Illuminate\Support\Facades\Schema::hasTable($table)) {
+                        $record = \Illuminate\Support\Facades\DB::table($table)->where('id', $recordId)->first();
+                        if ($record) {
+                            $poolService = app(\App\Services\RegionalApprovalPoolService::class);
+                            $refClass = new \ReflectionClass($poolService);
+                            $docSourcesMethod = $refClass->getMethod('documentSources');
+                            $docSourcesMethod->setAccessible(true);
+                            $sources = $docSourcesMethod->invoke($poolService);
+
+                            foreach ($sources as $source) {
+                                if ($source['table'] === $table) {
+                                    $officeOrProject = trim((string) ($record->{$source['project'] ?? 'office'} ?? ''));
+                                    $period = $source['period'] ? trim((string) ($record->{$source['period']} ?? '')) : '';
+                                    $year = trim((string) ($record->year ?? $record->document_year ?? ''));
+                                    $label = trim((string) ($record->{$source['document'] ?? 'doc_type' ?? 'document_name'} ?? ''));
+
+                                    $buildMethod = $refClass->getMethod('buildTaskUrl');
+                                    $buildMethod->setAccessible(true);
+                                    $targetUrl = $buildMethod->invoke($poolService, $source, $record, $officeOrProject, $year, $period, $label);
+
+                                    \Illuminate\Support\Facades\DB::table('tbnotifications')
+                                        ->where('user_id', \Illuminate\Support\Facades\Auth::id())
+                                        ->where('url', 'like', '%' . $officeOrProject . '%')
+                                        ->update(['read_at' => now(), 'updated_at' => now()]);
+
+                                    return redirect($targetUrl);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             return redirect()->back();
         }
 

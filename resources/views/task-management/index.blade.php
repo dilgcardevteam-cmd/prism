@@ -975,7 +975,7 @@
                                             {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
                                         </td>
                                         <td>
-                                            <a href="{{ url('/notifications/' . $task['id'] . '/read') }}" class="task-action-btn btn-danger">
+                                            <a href="{{ url($task['url'] ?? ('/notifications/' . $task['id'] . '/read')) }}" class="task-action-btn btn-danger">
                                                 <i class="fas fa-edit"></i>
                                                 Act & Resubmit
                                             </a>

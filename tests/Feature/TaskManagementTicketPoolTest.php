@@ -118,5 +118,50 @@ class TaskManagementTicketPoolTest extends TestCase
         $response->assertStatus(200);
         $response->assertDontSee('Unassigned Tickets Pool');
     }
+
+    public function test_returned_task_act_and_resubmit_renders_direct_url_and_read_route_redirects(): void
+    {
+        $provincialUser = User::factory()->create([
+            'role' => User::ROLE_PROVINCIAL,
+            'agency' => 'DILG',
+            'province' => 'Benguet',
+            'status' => 'active',
+        ]);
+
+        \Illuminate\Support\Facades\DB::table('subay_project_profiles')->insert([
+            'project_code' => 'TEST-PROJ-RET-1',
+            'project_title' => 'Returned Test Project',
+            'province' => 'Benguet',
+            'city_municipality' => 'La Trinidad',
+            'region' => 'CAR',
+            'funding_year' => '2024',
+        ]);
+
+        $workflowId = \Illuminate\Support\Facades\DB::table('fund_utilization_approval_workflows')->insertGetId([
+            'project_code' => 'TEST-PROJ-RET-1',
+            'quarter' => 'Q3',
+            'document_type' => 'mov',
+            'status' => 'Returned by Regional Officer',
+            'uploader_id' => $provincialUser->idno,
+            'uploader_role' => User::ROLE_PROVINCIAL,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // 1. Task Management view renders the direct URL
+        $response = $this->actingAs($provincialUser)->get(route('task-management.index'));
+        $response->assertStatus(200);
+        $response->assertSee('/fund-utilization/TEST-PROJ-RET-1?quarter=Q3&amp;document=mov', false);
+
+        // 2. Accessing synthetic notification read URL redirects to the document
+        $readResponse = $this->actingAs($provincialUser)
+            ->get('/notifications/returned-fund-utilization-' . $workflowId . '/read');
+        $readResponse->assertStatus(302);
+        $readResponse->assertRedirect(route('fund-utilization.show', [
+            'projectCode' => 'TEST-PROJ-RET-1',
+            'quarter' => 'Q3',
+            'document' => 'mov',
+        ]));
+    }
 }
 
