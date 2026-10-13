@@ -524,10 +524,7 @@ class AnnualMaintenanceWorkProgramController extends Controller
         ]);
 
         $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
-        $initialStatus = $workflowService->initialStatusForUpload($officeName);
-
         $reportingYear = (int) $request->input('year');
-        $file = $request->file('document');
         $officeSlug = Str::slug($officeName, '_');
         $existingDocumentQuery = AnnualMaintenanceWorkProgramDocument::query()
             ->where('office', $officeName);
@@ -536,30 +533,36 @@ class AnnualMaintenanceWorkProgramController extends Controller
             ->orderByDesc('uploaded_at')
             ->orderByDesc('id')
             ->first();
-        $oldFilePath = $existingDocument?->file_path;
 
+        $isReturned = ($existingDocument && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED);
+        if ($isReturned) {
+            $checkResubmit = $workflowService->canUserResubmit($user, $existingDocument);
+            if (!$checkResubmit['allowed']) {
+                abort(403, $checkResubmit['reason']);
+            }
+        } elseif ($existingDocument && !empty($existingDocument->file_path)) {
+            return redirect()
+                ->back()
+                ->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
+        }
+
+        $oldFilePath = $existingDocument?->file_path;
+        $file = $request->file('document');
         $path = $file->store('annual-maintenance-work-program/' . $officeSlug, 'public');
         $uploadedAt = now();
 
-        $documentPayload = [
+        $uploadFields = $isReturned
+            ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
+            : $workflowService->initialFieldsForUpload($user, $officeName, $province);
+
+        $documentPayload = array_merge([
             'province' => $province,
             'document_name' => 'Annual Maintenance Work Program (AMWP) Document (CY ' . $reportingYear . ')',
             'document_year' => $reportingYear,
             'remarks' => null,
             'file_path' => $path,
-            'uploaded_by' => auth()->id(),
-            'uploaded_at' => $uploadedAt,
-            'status' => $initialStatus,
-            'approved_at' => null,
-            'approved_at_c_mlgoo' => null,
-            'approved_by_c_mlgoo' => null,
-            'approved_at_dilg_po' => null,
-            'approved_by_dilg_po' => null,
-            'approved_at_dilg_ro' => null,
-            'approved_by_dilg_ro' => null,
-            'approval_remarks' => null,
-            'user_remarks' => null,
-        ];
+            'uploaded_by' => $user->idno ?? auth()->id(),
+        ], $uploadFields);
 
         if ($existingDocument) {
             $existingDocument->update($documentPayload);
@@ -574,7 +577,8 @@ class AnnualMaintenanceWorkProgramController extends Controller
             Storage::disk('public')->delete($oldFilePath);
         }
 
-        $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
+        $workflowService->recordSubmissionAuditLog($user, $document, $isReturned, $officeName, $province);
+        $this->logActivity($officeName, $isReturned ? 'resubmit' : 'upload', $isReturned ? 'Resubmitted' : 'Uploaded', $document, null, $uploadedAt);
         $this->notifyWorkflowUsersOnUpload($document, $officeName);
 
         return back()->with('success', 'Annual Maintenance Work Program document uploaded successfully.');

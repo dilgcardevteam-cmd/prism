@@ -1146,9 +1146,18 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ->where('quarter', $quarter)
             ->first();
 
-        // Block new uploads if document was already submitted and not yet returned,
-        // UNLESS the slot has no files at all (legacy: file_path is null AND no files table rows).
-        if ($existingDocument && $existingDocument->status !== 'returned') {
+        $user = auth()->user();
+        abort_unless($user && $user->canSubmitForLgu($province, $officeName), 403);
+
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $isReturned = ($existingDocument && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED);
+
+        if ($isReturned) {
+            $checkResubmit = $workflowService->canUserResubmit($user, $existingDocument);
+            if (!$checkResubmit['allowed']) {
+                abort(403, $checkResubmit['reason']);
+            }
+        } elseif ($existingDocument) {
             $hasFiles = !empty($existingDocument->file_path) ||
                 LpmcDocumentFile::where('lpmc_document_id', $existingDocument->id)->exists();
             if ($hasFiles) {
@@ -1159,13 +1168,12 @@ class LocalProjectMonitoringCommitteeController extends Controller
         }
 
         $uploadedAt = now();
-        $user = auth()->user();
-        abort_unless($user && $user->canSubmitForLgu($province, $officeName), 403);
 
-        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
-        $initialStatus = $workflowService->initialStatusForUpload($user, $officeName, $province);
-        $isProvincialDilgUploader = ($initialStatus === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO);
-        $isMlgooUploader = ($initialStatus === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO && $user->isMlgooUser());
+        $uploadFields = $isReturned
+            ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
+            : $workflowService->initialFieldsForUpload($user, $officeName, $province);
+
+        $isProvincialDilgUploader = ($uploadFields['status'] === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO);
         $officeSlug = Str::slug($officeName, '_');
 
         $document = LpmcDocument::updateOrCreate(
@@ -1175,21 +1183,10 @@ class LocalProjectMonitoringCommitteeController extends Controller
                 'year' => $year,
                 'quarter' => $quarter,
             ],
-            [
+            array_merge([
                 'province' => $province,
-                'uploaded_by' => auth()->id(),
-                'uploaded_at' => $uploadedAt,
-                'status' => $initialStatus,
-                'approved_at' => $isProvincialDilgUploader ? $uploadedAt : null,
-                'approved_at_c_mlgoo' => $isMlgooUploader ? $uploadedAt : null,
-                'approved_by_c_mlgoo' => $isMlgooUploader ? ($user->idno ?? auth()->id()) : null,
-                'approved_at_dilg_po' => $isProvincialDilgUploader ? $uploadedAt : null,
-                'approved_at_dilg_ro' => null,
-                'approved_by_dilg_po' => $isProvincialDilgUploader ? ($user->idno ?? auth()->id()) : null,
-                'approved_by_dilg_ro' => null,
-                'approval_remarks' => null,
-                'user_remarks' => null,
-            ]
+                'uploaded_by' => $user->idno ?? auth()->id(),
+            ], $uploadFields)
         );
 
         $uploadedFiles = $request->file('document');
@@ -1220,8 +1217,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
             }
         }
 
-        $this->logActivity($officeName, 'upload', 'Uploaded', $document, null, $uploadedAt);
-        if ($isProvincialDilgUploader) {
+        $workflowService->recordSubmissionAuditLog($user, $document, $isReturned, $officeName, $province);
+        $this->logActivity($officeName, $isReturned ? 'resubmit' : 'upload', $isReturned ? 'Resubmitted' : 'Uploaded', $document, null, $uploadedAt);
+        if ($isProvincialDilgUploader && !$isReturned) {
             $this->logActivity($officeName, 'validate_po', 'Validated (DILG PO)', $document, null, $uploadedAt);
         }
 

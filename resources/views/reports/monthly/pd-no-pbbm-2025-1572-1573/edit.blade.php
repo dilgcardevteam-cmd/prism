@@ -130,21 +130,22 @@
                     $filenameId = 'road-maintenance-file-' . $monthCode;
                     $hasFile = $doc && $doc->file_path;
                     $isReturned = $doc && $doc->status === 'returned';
+                    $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
                     $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
                     $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
-                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned);
+                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
                     $requestedMonth = strtoupper(trim((string) request()->query('month', '')));
                     $isExpandedByDefault = $requestedMonth !== ''
                         ? $requestedMonth === $monthCode
                         : $loop->first;
-                    $badge = $workflowService->resolveStatusBadge($doc, $officeName);
-                    $statusLabel = $badge['label'];
-                    $statusColor = $badge['color'];
-                    $uploadedInfo = $resolveUploaderMeta($doc);
+                    $badge = $workflowService->resolveStatusBadge($hasFile ? $doc : null, $officeName);
+                    $statusLabel = $badge['label'] ?? 'Pending Upload';
+                    $statusColor = $badge['color'] ?? $badge['badgeBg'] ?? '#6b7280';
+                    $uploadedInfo = $hasFile ? $resolveUploaderMeta($doc) : ['time' => null, 'name' => 'Unknown'];
                     $uploadedTime = $uploadedInfo['time'];
-                    $submissionTimeliness = $resolveSubmissionTimelinessTag($uploadedTime, $configuredMonthDeadline);
+                    $submissionTimeliness = $hasFile ? $resolveSubmissionTimelinessTag($uploadedTime, $configuredMonthDeadline) : null;
                     $uploaderName = $uploadedInfo['name'];
                     $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                     $isProvincialDilgUploader = $uploaderUser && method_exists($uploaderUser, 'isProvincialDilgAssignment')
@@ -348,13 +349,15 @@
                                     <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
                                         @if (!$canUploadForLgu)
                                             You are not authorized to upload documents for this LGU.
+                                        @elseif ($isReturned && !$canResubmitDoc)
+                                            Returned reports can only be edited and resubmitted by the originating submitter.
                                         @else
                                             File already uploaded for this month. Choose file is disabled.
                                         @endif
                                     </div>
                             @endif
                             @php
-                                $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
+                                $canValidateDoc = $hasFile && $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                             @endphp
                             @if ($canValidateDoc)
                                 <div style="display: flex; gap: 6px; margin-top: 8px; margin-bottom: 8px; justify-content: flex-start; align-items: center;">

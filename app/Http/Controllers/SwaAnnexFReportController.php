@@ -666,8 +666,6 @@ class SwaAnnexFReportController extends Controller
         ]);
 
         $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
-        $initialStatus = $workflowService->initialStatusForUpload($officeName);
-
         $year = (int) $request->input('year');
         $month = (string) $request->input('month');
         $docType = $this->reportDocType();
@@ -678,41 +676,48 @@ class SwaAnnexFReportController extends Controller
             ->where('year', $year)
             ->where('month', $month)
             ->first();
-        $oldFilePath = $existingDocument?->file_path;
 
+        $isReturned = ($existingDocument && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED);
+        if ($isReturned) {
+            $checkResubmit = $workflowService->canUserResubmit($user, $existingDocument);
+            if (!$checkResubmit['allowed']) {
+                abort(403, $checkResubmit['reason']);
+            }
+        } elseif ($existingDocument && !empty($existingDocument->file_path)) {
+            return redirect()
+                ->back()
+                ->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
+        }
+
+        $oldFilePath = $existingDocument?->file_path;
         $file = $request->file('document');
         $officeSlug = Str::slug($officeName, '_');
         $path = $file->store('swa-annex-f/' . $officeSlug, 'public');
         $uploadedAt = now();
 
-        SwaAnnexFDocument::updateOrCreate(
+        $uploadFields = $isReturned
+            ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
+            : $workflowService->initialFieldsForUpload($user, $officeName, $province);
+
+        $document = SwaAnnexFDocument::updateOrCreate(
             [
                 'office' => $officeName,
                 'doc_type' => $docType,
                 'year' => $year,
                 'month' => $month,
             ],
-            [
+            array_merge([
                 'province' => $province,
                 'file_path' => $path,
-                'uploaded_by' => auth()->id(),
-                'uploaded_at' => $uploadedAt,
-                'status' => $initialStatus,
-                'approved_at' => null,
-                'approved_at_c_mlgoo' => null,
-                'approved_by_c_mlgoo' => null,
-                'approved_at_dilg_po' => null,
-                'approved_by_dilg_po' => null,
-                'approved_at_dilg_ro' => null,
-                'approved_by_dilg_ro' => null,
-                'approval_remarks' => null,
-                'user_remarks' => null,
-            ]
+                'uploaded_by' => $user->idno ?? auth()->id(),
+            ], $uploadFields)
         );
 
         if ($oldFilePath && $oldFilePath !== $path && Storage::disk('public')->exists($oldFilePath)) {
             Storage::disk('public')->delete($oldFilePath);
         }
+
+        $workflowService->recordSubmissionAuditLog($user, $document, $isReturned, $officeName, $province);
 
         return back()->with('success', 'SWA- Annex F uploaded successfully.');
     }

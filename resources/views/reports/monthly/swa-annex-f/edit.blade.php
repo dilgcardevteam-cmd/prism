@@ -77,13 +77,14 @@
                         $filenameId = 'swa-annex-f-file-' . $monthCode;
                         $hasFile = $doc && $doc->file_path;
                         $isReturned = $doc && $doc->status === 'returned';
+                        $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
                         $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
                         $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
-                        $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned);
+                        $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                         $isExpandedByDefault = $loop->first;
-                        $badge = $workflowService->resolveStatusBadge($doc, $officeName);
-                        $statusLabel = $badge['label'];
-                        $statusColor = $badge['color'];
+                        $badge = $workflowService->resolveStatusBadge($hasFile ? $doc : null, $officeName);
+                        $statusLabel = $badge['label'] ?? 'Pending Upload';
+                        $statusColor = $badge['color'] ?? $badge['badgeBg'] ?? '#6b7280';
 
                         $uploaderUser = $doc && $doc->uploaded_by && isset($usersById[$doc->uploaded_by]) ? $usersById[$doc->uploaded_by] : null;
                         $mlgooApprover = $doc && $doc->approved_by_c_mlgoo && isset($usersById[$doc->approved_by_c_mlgoo]) ? $usersById[$doc->approved_by_c_mlgoo] : null;
@@ -183,7 +184,7 @@
                             ];
                         }
 
-                        $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
+                        $canValidateDoc = $hasFile && $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                     @endphp
                     <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
                         <button
@@ -266,6 +267,8 @@
                                     <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
                                         @if (!$canUploadForLgu)
                                             You are not authorized to upload documents for this LGU.
+                                        @elseif ($isReturned && !$canResubmitDoc)
+                                            Returned reports can only be edited and resubmitted by the originating submitter.
                                         @else
                                             File already uploaded for this month. Choose file is disabled.
                                         @endif

@@ -2,11 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\User;
 use App\Support\InputSanitizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
@@ -36,6 +39,10 @@ class LguReportorialWorkflowService
 
     /**
      * Determine initial status when a document is uploaded.
+     *
+     * Workflow A (LGU User): Starts at C/MLGOO validation (pending_mlgoo).
+     * Workflow B (C/MLGOO User): Starts at Provincial validation (pending_po).
+     * Workflow C (Provincial User): Starts at Regional validation (pending_ro).
      */
     public function initialStatusForUpload($uploaderOrOffice, ?string $officeName = null, ?string $province = null): string
     {
@@ -49,20 +56,202 @@ class LguReportorialWorkflowService
 
         $isPlgu = $this->isPlguOffice($officeName);
 
-        if ($isPlgu) {
-            if ($uploader && ($uploader->isProvincialUser() || $uploader->isProvincialDilgAssignment())) {
-                return self::STATUS_PENDING_RO;
-            }
+        // Workflow C: Provincial User submission starts directly at Regional validation
+        if ($uploader && ($uploader->isProvincialUser() || $uploader->isProvincialDilgAssignment())) {
+            return self::STATUS_PENDING_RO;
+        }
+
+        // Workflow B: C/MLGOO submitting on behalf of LGU satisfies C/MLGOO stage, starts at Provincial validation
+        if ($uploader && $uploader->isMlgooUser()) {
             return self::STATUS_PENDING_PO;
         }
 
-        // Municipal/City office
-        if ($uploader && $uploader->isMlgooUser()) {
-            // C/MLGOO submitting on behalf of LGU satisfies C/MLGOO stage
+        // PLGU submitted by LGU user has no C/MLGOO stage, starts at Provincial validation
+        if ($isPlgu) {
             return self::STATUS_PENDING_PO;
+        }
+
+        // Workflow A: Standard LGU User submission starts at C/MLGOO validation
+        return self::STATUS_PENDING_MLGOO;
+    }
+
+    /**
+     * Determine the initial field values for a freshly uploaded report.
+     */
+    public function initialFieldsForUpload($uploaderOrOffice, ?string $officeName = null, ?string $province = null): array
+    {
+        if ($uploaderOrOffice instanceof User) {
+            $uploader = $uploaderOrOffice;
+        } else {
+            $uploader = auth()->user();
+            $province = $officeName;
+            $officeName = (string) $uploaderOrOffice;
+        }
+
+        $status = $this->initialStatusForUpload($uploader, $officeName, $province);
+        $now = now();
+        $actorId = $uploader ? (int) ($uploader->idno ?? $uploader->getKey()) : (int) auth()->id();
+
+        $isProvincial = ($status === self::STATUS_PENDING_RO);
+        $isMlgoo = ($status === self::STATUS_PENDING_PO && $uploader && $uploader->isMlgooUser());
+
+        return [
+            'status' => $status,
+            'uploaded_by' => $actorId,
+            'uploaded_at' => $now,
+            'approved_at' => $isProvincial ? $now : null,
+            'approved_at_c_mlgoo' => $isMlgoo ? $now : null,
+            'approved_by_c_mlgoo' => $isMlgoo ? $actorId : null,
+            'approved_at_dilg_po' => $isProvincial ? $now : null,
+            'approved_by_dilg_po' => $isProvincial ? $actorId : null,
+            'approved_at_dilg_ro' => null,
+            'approved_by_dilg_ro' => null,
+            'approval_remarks' => null,
+            'user_remarks' => null,
+        ];
+    }
+
+    /**
+     * Check if the authenticated user is authorized to edit and resubmit a returned report.
+     * Returned reports are editable only by the authorized originating submitter (or superadmin).
+     *
+     * @return array{allowed: bool, reason: ?string}
+     */
+    public function canUserResubmit(User $user, $document): array
+    {
+        if (!$user->isActive()) {
+            return [
+                'allowed' => false,
+                'reason' => 'User account is inactive.',
+            ];
+        }
+
+        $status = Str::lower(trim((string) ($document->status ?? '')));
+        if ($status !== self::STATUS_RETURNED) {
+            return [
+                'allowed' => false,
+                'reason' => 'Only returned reports can be resubmitted.',
+            ];
+        }
+
+        if ($user->isSuperAdmin()) {
+            return [
+                'allowed' => true,
+                'reason' => null,
+            ];
+        }
+
+        $uploaderId = (int) ($document->uploaded_by ?? 0);
+        $userId = (int) ($user->idno ?? $user->getKey());
+
+        if ($uploaderId > 0 && $uploaderId !== $userId) {
+            return [
+                'allowed' => false,
+                'reason' => 'Returned reports are editable only by the authorized originating submitter.',
+            ];
+        }
+
+        return [
+            'allowed' => true,
+            'reason' => null,
+        ];
+    }
+
+    /**
+     * Determine the restart validation stage upon resubmission.
+     * Restarts validation sequence at the initial validation stage corresponding to the original route:
+     * - Workflow A (LGU origin): C/MLGOO validation (pending_mlgoo)
+     * - Workflow B (C/MLGOO origin): Provincial validation (pending_po)
+     * - Workflow C (Provincial origin): Regional validation (pending_ro)
+     */
+    public function restartStatusForResubmission($document, ?User $currentUser = null, ?string $officeName = null, ?string $province = null): string
+    {
+        $officeName = $officeName ?? ($document->office ?? null);
+        $province = $province ?? ($document->province ?? null);
+
+        $uploaderId = (int) ($document->uploaded_by ?? 0);
+        $originalUploader = null;
+        if ($uploaderId > 0) {
+            if ($currentUser && (int) ($currentUser->idno ?? $currentUser->getKey()) === $uploaderId) {
+                $originalUploader = $currentUser;
+            } else {
+                $originalUploader = User::where('idno', $uploaderId)->orWhere('id', $uploaderId)->first();
+            }
+        }
+
+        if ($originalUploader) {
+            return $this->initialStatusForUpload($originalUploader, $officeName, $province);
+        }
+
+        if ($currentUser) {
+            return $this->initialStatusForUpload($currentUser, $officeName, $province);
         }
 
         return self::STATUS_PENDING_MLGOO;
+    }
+
+    /**
+     * Determine field updates when a returned document is resubmitted.
+     */
+    public function resubmissionFields($document, User $resubmitter, ?string $officeName = null, ?string $province = null): array
+    {
+        $targetStatus = $this->restartStatusForResubmission($document, $resubmitter, $officeName, $province);
+        $now = now();
+        $actorId = (int) ($resubmitter->idno ?? $resubmitter->getKey());
+
+        $isProvincialOrigin = ($targetStatus === self::STATUS_PENDING_RO);
+        $isMlgooOrigin = ($targetStatus === self::STATUS_PENDING_PO && $resubmitter->isMlgooUser());
+
+        return [
+            'status' => $targetStatus,
+            'uploaded_at' => $now,
+            'approved_at' => $isProvincialOrigin ? $now : null,
+            'approved_at_c_mlgoo' => $isMlgooOrigin ? $now : null,
+            'approved_by_c_mlgoo' => $isMlgooOrigin ? $actorId : null,
+            'approved_at_dilg_po' => $isProvincialOrigin ? $now : null,
+            'approved_by_dilg_po' => $isProvincialOrigin ? $actorId : null,
+            'approved_at_dilg_ro' => null,
+            'approved_by_dilg_ro' => null,
+            'approval_remarks' => null,
+            'user_remarks' => null,
+        ];
+    }
+
+    /**
+     * Check whether a document or submission record has an uploaded file.
+     */
+    public function hasUploadedDocument($document): bool
+    {
+        if (!$document) {
+            return false;
+        }
+
+        if (is_array($document)) {
+            if (!empty($document['file_path']) && trim((string) $document['file_path']) !== '') {
+                return true;
+            }
+            if (!empty($document['files']) && count($document['files']) > 0) {
+                return true;
+            }
+            return false;
+        }
+
+        if ($document instanceof Model) {
+            $filePath = trim((string) ($document->file_path ?? ''));
+            if ($filePath !== '') {
+                return true;
+            }
+
+            if ($document->relationLoaded('files')) {
+                return $document->files->isNotEmpty();
+            }
+
+            if (method_exists($document, 'files') && $document->exists) {
+                return $document->files()->exists();
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -70,6 +259,10 @@ class LguReportorialWorkflowService
      */
     public function currentStage($document, ?string $officeName = null): string
     {
+        if (!$document || !$this->hasUploadedDocument($document)) {
+            return 'pending_upload';
+        }
+
         $status = Str::lower(trim((string) ($document->status ?? '')));
         $approvedAtRo = $document->approved_at_dilg_ro ?? null;
         $approvedAtPo = $document->approved_at_dilg_po ?? null;
@@ -113,11 +306,26 @@ class LguReportorialWorkflowService
 
     /**
      * Determine whether the given user can validate or return the document at its current stage.
+     * Enforces:
+     * - Inactive account blocking
+     * - Self-validation prevention (users cannot approve or return their own submissions)
+     * - Role-specific validation stages
+     * - Geographic scope restrictions (municipality/province)
+     * - Sequential progression (no skipping stages)
      *
      * @return array{allowed: bool, reason: ?string, current_stage: string, target_stage: ?string}
      */
     public function canUserValidate(User $user, $document, ?string $officeName = null, ?string $province = null): array
     {
+        if (!$document || !$this->hasUploadedDocument($document)) {
+            return [
+                'allowed' => false,
+                'reason' => 'Cannot validate a submission with no uploaded document or file.',
+                'current_stage' => 'pending_upload',
+                'target_stage' => null,
+            ];
+        }
+
         $officeName = $officeName ?? ($document->office ?? null);
         $province = $province ?? ($document->province ?? null);
         $currentStage = $this->currentStage($document, $officeName);
@@ -126,6 +334,18 @@ class LguReportorialWorkflowService
             return [
                 'allowed' => false,
                 'reason' => 'User account is inactive.',
+                'current_stage' => $currentStage,
+                'target_stage' => null,
+            ];
+        }
+
+        // Self-validation prevention: users cannot validate or return their own submissions
+        $uploaderId = (int) ($document->uploaded_by ?? 0);
+        $userId = (int) ($user->idno ?? $user->getKey());
+        if ($uploaderId > 0 && $uploaderId === $userId) {
+            return [
+                'allowed' => false,
+                'reason' => 'Users cannot approve or return their own submissions.',
                 'current_stage' => $currentStage,
                 'target_stage' => null,
             ];
@@ -158,7 +378,7 @@ class LguReportorialWorkflowService
             ];
         }
 
-        // Supervisor can oversee and validate at any stage
+        // SuperAdmin can oversee and validate if not the uploader
         if ($user->isSuperAdmin()) {
             $targetStage = match ($currentStage) {
                 self::STATUS_PENDING_MLGOO => self::STATUS_PENDING_PO,
@@ -175,6 +395,7 @@ class LguReportorialWorkflowService
             ];
         }
 
+        // Stage 1: C/MLGOO validation
         if ($currentStage === self::STATUS_PENDING_MLGOO) {
             if (!$user->isMlgooUser()) {
                 if ($user->isProvincialUser()) {
@@ -220,6 +441,7 @@ class LguReportorialWorkflowService
             ];
         }
 
+        // Stage 2: Provincial validation
         if ($currentStage === self::STATUS_PENDING_PO) {
             if ($user->isMlgooUser()) {
                 return [
@@ -268,6 +490,7 @@ class LguReportorialWorkflowService
             ];
         }
 
+        // Stage 3: Regional validation
         if ($currentStage === self::STATUS_PENDING_RO) {
             if ($user->isMlgooUser()) {
                 return [
@@ -313,7 +536,7 @@ class LguReportorialWorkflowService
     }
 
     /**
-     * Process an approve or return action on a document.
+     * Process an approve or return action on a document with pessimistic row locking and database transactions.
      *
      * @return array{success: bool, action: string, status: string, message: string}
      */
@@ -329,25 +552,38 @@ class LguReportorialWorkflowService
             throw new InvalidArgumentException('Invalid action: ' . $action);
         }
 
+        $officeName = $officeName ?? ($document->office ?? null);
+        $province = $province ?? ($document->province ?? null);
+
         $check = $this->canUserValidate($user, $document, $officeName, $province);
         if (!$check['allowed']) {
             throw new RuntimeException($check['reason'] ?? 'Unauthorized validation action.');
         }
 
         $sanitizedRemarks = InputSanitizer::sanitizeNullablePlainText($remarks, true);
-        if ($action === 'return' && $sanitizedRemarks === null) {
+        if ($action === 'return' && ($sanitizedRemarks === null || trim($sanitizedRemarks) === '')) {
             throw new InvalidArgumentException('Return remarks must contain plain text.');
         }
 
-        return DB::transaction(function () use ($user, $document, $action, $sanitizedRemarks, $check) {
+        return DB::transaction(function () use ($user, $document, $action, $sanitizedRemarks, $officeName, $province) {
+            // Pessimistic row locking to protect against concurrent or duplicate validation attempts
+            $lockedDocument = $document->newQuery()->lockForUpdate()->find($document->getKey());
+            if (!$lockedDocument) {
+                throw new RuntimeException('Document not found.');
+            }
+
+            // Re-verify authorization and current stage on the locked fresh database record
+            $freshCheck = $this->canUserValidate($user, $lockedDocument, $officeName, $province);
+            if (!$freshCheck['allowed']) {
+                throw new RuntimeException($freshCheck['reason'] ?? 'Workflow state has changed or action is no longer allowed.');
+            }
+
             $now = now();
             $actorId = (int) ($user->idno ?? $user->getKey());
-            $currentStage = $check['current_stage'];
+            $currentStage = $freshCheck['current_stage'];
             $updates = [];
 
             if ($action === 'approve') {
-                $targetStage = $check['target_stage'];
-
                 if ($currentStage === self::STATUS_PENDING_MLGOO) {
                     $updates['status'] = self::STATUS_PENDING_PO;
                     $updates['approved_at_c_mlgoo'] = $now;
@@ -387,23 +623,149 @@ class LguReportorialWorkflowService
             }
 
             // Only update columns that exist on the model table
-            $table = $document->getTable();
+            $table = $lockedDocument->getTable();
             $filteredUpdates = [];
             foreach ($updates as $col => $val) {
-                if (\Illuminate\Support\Facades\Schema::hasColumn($table, $col)) {
+                if (Schema::hasColumn($table, $col)) {
                     $filteredUpdates[$col] = $val;
                 }
             }
 
-            $document->update($filteredUpdates);
+            $lockedDocument->update($filteredUpdates);
+
+            // Record immutable audit history in activity_logs
+            $this->recordAuditLog(
+                user: $user,
+                document: $lockedDocument,
+                action: $action === 'approve' ? 'REPORT_VALIDATED' : 'REPORT_RETURNED',
+                description: $message,
+                previousStatus: $currentStage,
+                resultingStatus: $updates['status'],
+                remarks: $sanitizedRemarks,
+                timestamp: $now
+            );
 
             return [
                 'success' => true,
                 'action' => $action,
-                'status' => $document->status,
+                'status' => $lockedDocument->status,
                 'message' => $message,
             ];
         });
+    }
+
+    /**
+     * Record an immutable audit log entry for workflow events.
+     */
+    public function recordAuditLog(
+        User $user,
+        Model $document,
+        string $action,
+        string $description,
+        ?string $previousStatus = null,
+        ?string $resultingStatus = null,
+        ?string $remarks = null,
+        ?Carbon $timestamp = null
+    ): void {
+        try {
+            if (!Schema::hasTable('activity_logs')) {
+                return;
+            }
+
+            $now = $timestamp ?: now();
+            $actorId = (int) ($user->idno ?? $user->getKey());
+            $table = $document->getTable();
+            $docId = (int) $document->getKey();
+
+            $cycle = DB::table('activity_logs')
+                ->where('properties->report_table', $table)
+                ->where('properties->report_id', $docId)
+                ->where('action', 'REPORT_RETURNED')
+                ->count() + 1;
+
+            ActivityLog::create([
+                'user_id' => $actorId,
+                'username' => $user->username ?? $user->email ?? ('user_' . $actorId),
+                'action' => $action,
+                'description' => $description,
+                'properties' => [
+                    'report_table' => $table,
+                    'report_id' => $docId,
+                    'office' => $document->office ?? null,
+                    'province' => $document->province ?? null,
+                    'actor_role' => $user->role,
+                    'cycle' => $cycle,
+                    'previous_status' => $previousStatus,
+                    'resulting_status' => $resultingStatus,
+                    'remarks' => $remarks,
+                ],
+                'created_at' => $now,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to record activity log in workflow service: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Record submission or resubmission event in the audit trail.
+     */
+    public function recordSubmissionAuditLog(
+        User $user,
+        Model $document,
+        bool $isResubmission = false,
+        ?string $officeName = null,
+        ?string $province = null
+    ): void {
+        $action = $isResubmission ? 'REPORT_RESUBMITTED' : 'REPORT_SUBMITTED';
+        $desc = $isResubmission
+            ? 'Report resubmitted by originating submitter.'
+            : 'Report submitted.';
+
+        $this->recordAuditLog(
+            user: $user,
+            document: $document,
+            action: $action,
+            description: $desc,
+            previousStatus: $isResubmission ? self::STATUS_RETURNED : null,
+            resultingStatus: $document->status,
+            remarks: null
+        );
+    }
+
+    /**
+     * Retrieve the audit history for a document.
+     */
+    public function getValidationHistory(Model $document): array
+    {
+        if (!Schema::hasTable('activity_logs')) {
+            return [];
+        }
+
+        $table = $document->getTable();
+        $docId = (int) $document->getKey();
+
+        return DB::table('activity_logs')
+            ->where('properties->report_table', $table)
+            ->where('properties->report_id', $docId)
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function ($row) {
+                $props = is_string($row->properties) ? json_decode($row->properties, true) : (array) $row->properties;
+                return [
+                    'id' => $row->id,
+                    'user_id' => $row->user_id,
+                    'username' => $row->username,
+                    'action' => $row->action,
+                    'description' => $row->description,
+                    'cycle' => $props['cycle'] ?? 1,
+                    'actor_role' => $props['actor_role'] ?? null,
+                    'previous_status' => $props['previous_status'] ?? null,
+                    'resulting_status' => $props['resulting_status'] ?? null,
+                    'remarks' => $props['remarks'] ?? null,
+                    'created_at' => $row->created_at,
+                ];
+            })
+            ->toArray();
     }
 
     /**
@@ -411,6 +773,17 @@ class LguReportorialWorkflowService
      */
     public function resolveStatusBadge($document, ?string $officeName = null): array
     {
+        if (!$document || !$this->hasUploadedDocument($document)) {
+            return [
+                'label' => 'Pending Upload',
+                'stage' => 'pending_upload',
+                'badgeBg' => '#6b7280',
+                'badgeColor' => '#ffffff',
+                'color' => '#6b7280',
+                'icon' => 'fa-hourglass-start',
+            ];
+        }
+
         $stage = $this->currentStage($document, $officeName);
 
         return match ($stage) {
@@ -419,6 +792,7 @@ class LguReportorialWorkflowService
                 'stage' => self::STATUS_APPROVED,
                 'badgeBg' => '#059669',
                 'badgeColor' => '#ffffff',
+                'color' => '#059669',
                 'icon' => 'fa-check-circle',
             ],
             self::STATUS_RETURNED => [
@@ -426,6 +800,7 @@ class LguReportorialWorkflowService
                 'stage' => self::STATUS_RETURNED,
                 'badgeBg' => '#dc2626',
                 'badgeColor' => '#ffffff',
+                'color' => '#dc2626',
                 'icon' => 'fa-undo',
             ],
             self::STATUS_PENDING_RO => [
@@ -433,6 +808,7 @@ class LguReportorialWorkflowService
                 'stage' => self::STATUS_PENDING_RO,
                 'badgeBg' => '#eab308',
                 'badgeColor' => '#ffffff',
+                'color' => '#eab308',
                 'icon' => 'fa-clock',
             ],
             self::STATUS_PENDING_PO => [
@@ -440,6 +816,7 @@ class LguReportorialWorkflowService
                 'stage' => self::STATUS_PENDING_PO,
                 'badgeBg' => '#3b82f6',
                 'badgeColor' => '#ffffff',
+                'color' => '#3b82f6',
                 'icon' => 'fa-clock',
             ],
             self::STATUS_PENDING_MLGOO => [
@@ -447,13 +824,15 @@ class LguReportorialWorkflowService
                 'stage' => self::STATUS_PENDING_MLGOO,
                 'badgeBg' => '#8b5cf6',
                 'badgeColor' => '#ffffff',
+                'color' => '#8b5cf6',
                 'icon' => 'fa-clock',
             ],
             default => [
                 'label' => 'Pending Upload',
                 'stage' => 'pending_upload',
-                'badgeBg' => '#9ca3af',
+                'badgeBg' => '#6b7280',
                 'badgeColor' => '#ffffff',
+                'color' => '#6b7280',
                 'icon' => 'fa-hourglass-start',
             ],
         };

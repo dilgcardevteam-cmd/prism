@@ -153,9 +153,10 @@
                     $inputId = 'lpmc-doc-input-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
                     $buttonId = 'lpmc-doc-btn-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
                     $filenameId = 'lpmc-doc-file-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
-                    $hasFile = $doc && $doc->file_path;
+                    $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
                     $isReturned = $doc && $doc->status === 'returned';
-                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned);
+                    $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
+                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
                     $statusTheme = $resolveStatusTheme($doc);
@@ -357,6 +358,8 @@
                         <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
                             @if (!$canUploadForLgu)
                                 You are not authorized to upload documents for this LGU.
+                            @elseif ($isReturned && !$canResubmitDoc)
+                                Returned reports can only be edited and resubmitted by the originating submitter.
                             @else
                                 File already submitted. Choose file is disabled until the current file is returned.
                             @endif
@@ -373,7 +376,7 @@
                         Upload
                     </button>
                     @php
-                        $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
+                        $canValidateDoc = $hasFile && $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                     @endphp
                     @if ($canValidateDoc)
                         <div style="display: flex; gap: 8px; margin-top: 8px;">
@@ -449,8 +452,10 @@
                                         && !empty($configuredQuarterDeadline['is_closed']);
                                     $hasFile = $doc && $doc->file_path;
                                     $isReturned = $doc && $doc->status === 'returned';
+                                    $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
                                     $disableUploadInput = !$canUploadForLgu
                                         || ($hasFile && !$isReturned)
+                                        || ($isReturned && !$canResubmitDoc)
                                         || $disableQuarterUpload;
                                     
                                     $statusTheme = $resolveStatusTheme($doc);
@@ -662,6 +667,8 @@
                                                 Uploads are closed for {{ $label }} based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
                                             @elseif (!$canUploadForLgu)
                                                 You are not authorized to upload documents for this LGU.
+                                            @elseif ($isReturned && !$canResubmitDoc)
+                                                Returned reports can only be edited and resubmitted by the originating submitter.
                                             @else
                                                 File already submitted. Choose file is disabled until the current file is returned.
                                             @endif
@@ -677,7 +684,7 @@
                                         Upload
                                     </button>
                                     @php
-                                        $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
+                                        $canValidateDoc = $hasFile && $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                                     @endphp
                                     @if ($canValidateDoc)
                                         <div style="display: flex; gap: 8px; margin-top: 8px;">

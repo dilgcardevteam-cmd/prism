@@ -113,12 +113,13 @@
                 $isProvincialDilgViewer = Auth::user()->agency === 'DILG' && Auth::user()->province !== 'Regional Office';
                 $hasFile = $doc && $doc->file_path;
                 $isReturned = $doc && $doc->status === 'returned';
-                $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned);
+                $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
+                $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                 $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                 $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
-                $badge = $workflowService->resolveStatusBadge($doc, $officeName);
-                $statusLabel = $badge['label'];
-                $statusColor = $badge['color'];
+                $badge = $workflowService->resolveStatusBadge($hasFile ? $doc : null, $officeName);
+                $statusLabel = $badge['label'] ?? 'Pending Upload';
+                $statusColor = $badge['color'] ?? $badge['badgeBg'] ?? '#6b7280';
                 $resolveUploaderMeta = function ($record) use ($isProvincialDilgViewer, $usersById) {
                     if (!$record) {
                         return ['time' => null, 'name' => 'Unknown'];
@@ -392,13 +393,15 @@
                             <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
                                 @if (!$canUploadForLgu)
                                     You are not authorized to upload documents for this LGU.
+                                @elseif ($isReturned && !$canResubmitDoc)
+                                    Returned reports can only be edited and resubmitted by the originating submitter.
                                 @else
                                     File already uploaded for this year. Choose file is disabled.
                                 @endif
                             </div>
                         @endif
                         @php
-                            $canValidateDoc = $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
+                            $canValidateDoc = $hasFile && $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                         @endphp
                         @if ($canValidateDoc)
                             <div style="display: flex; gap: 6px; margin-top: 8px; margin-bottom: 8px; justify-content: flex-start; align-items: center;">
