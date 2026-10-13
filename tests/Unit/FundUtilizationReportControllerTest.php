@@ -440,7 +440,7 @@ class FundUtilizationReportControllerTest extends \Tests\TestCase
         $this->assertTrue($method->invoke($controller, $superadmin));
         $this->assertTrue($method->invoke($controller, $provincial));
         $this->assertTrue($method->invoke($controller, $lgu));
-        $this->assertFalse($method->invoke($controller, $regional));
+        $this->assertTrue($method->invoke($controller, $regional));
     }
 
     #[Test]

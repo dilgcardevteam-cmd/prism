@@ -74,6 +74,10 @@
         $isDilg = strtoupper(trim((string) ($currentUser->agency ?? ''))) === 'DILG';
         $isRegionalDilg = $isDilg && strtolower(trim((string) ($currentUser->province ?? ''))) === 'regional office';
         $isProvincialDilg = $isDilg && !$isRegionalDilg;
+        $permissionModule = $permissionModule ?? (
+            str_contains($routeConfig['index'] ?? '', 'falgu-gef-sbdp') ? 'lgsf_project_completion_reports' :
+            (str_contains($routeConfig['index'] ?? '', 'sglgif') ? 'sglgif_project_completion_reports' : 'pre_implementation_documents')
+        );
 
         $resolveUserName = function ($id) use ($usersById) {
             if (!$id) {
@@ -183,12 +187,13 @@
                     $isApprovedRo = $fileRecord && $fileRecord->status === 'approved';
                     $isPendingRo = $fileRecord && $fileRecord->status === 'pending_ro';
                     $disableUpload = !$isMultiUpload && $hasFile;
-                    $canDeleteReturnedDocument = !$isMultiUpload
+                    $canDeleteReturnedDocument = !empty($routeConfig['delete'])
+                        && !$isMultiUpload
                         && $hasFile
                         && $isReturned
                         && !$isRegionalDilg
                         && $currentUser
-                        && $currentUser->hasCrudPermission('pre_implementation_documents', 'add');
+                        && $currentUser->hasCrudPermission($permissionModule, 'add');
                     $uploadDisabledMessage = $canDeleteReturnedDocument
                         ? 'Document was returned. Delete the current file, then upload and submit a replacement.'
                         : null;
@@ -428,7 +433,7 @@
                         @endif
                     </div>
                 @else
-                @if ($canDeleteReturnedDocument)
+                @if ($canDeleteReturnedDocument && !empty($routeConfig['delete']))
                     <form id="{{ $deleteFormId }}" method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: none;">
                         @csrf
                         @method('DELETE')
@@ -497,7 +502,7 @@
                                         <i class="fas fa-clock-rotate-left"></i>
                                         <span style="margin-left: 6px;">History</span>
                                     </button>
-                                    @if ($canDeleteReturnedDocument)
+                                    @if ($canDeleteReturnedDocument && !empty($routeConfig['delete']))
                                         <button type="submit" form="{{ $deleteFormId }}" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
                                             <i class="fas fa-trash-alt"></i>
                                             <span>Delete</span>
@@ -679,10 +684,11 @@
                                         $uploadedBy = $resolveUserName($multiFile->uploaded_by ?? null);
                                         $multiWorkflow = app(\App\Services\LguReportorialWorkflowService::class);
                                         $multiBadge = $multiWorkflow->resolveStatusBadge($multiFile, $project->city_municipality);
-                                        $canDeleteReturnedMultiFile = $multiFile->status === 'returned'
+                                        $canDeleteReturnedMultiFile = !empty($routeConfig['delete_file'])
+                                            && $multiFile->status === 'returned'
                                             && !$isRegionalDilg
                                             && $currentUser
-                                            && $currentUser->hasCrudPermission('pre_implementation_documents', 'add');
+                                            && $currentUser->hasCrudPermission($permissionModule, 'add');
                                         $multiValidationCheck = $currentUser
                                             ? $multiWorkflow->canUserValidate($currentUser, $multiFile, $project->city_municipality, $project->province)
                                             : ['allowed' => false];
@@ -718,7 +724,7 @@
                                                     Return
                                                 </button>
                                             @endif
-                                            @if ($canDeleteReturnedMultiFile)
+                                            @if ($canDeleteReturnedMultiFile && !empty($routeConfig['delete_file']))
                                                 <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; margin-left: 6px;">
                                                     @csrf
                                                     @method('DELETE')

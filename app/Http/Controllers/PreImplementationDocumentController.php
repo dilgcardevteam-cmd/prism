@@ -274,6 +274,7 @@ class PreImplementationDocumentController extends Controller
             'pageConfig' => $pageConfig,
             'routeConfig' => $routeConfig,
             'scopeQuery' => $scopeQuery,
+            'permissionModule' => 'pre_implementation_documents',
         ]);
     }
 

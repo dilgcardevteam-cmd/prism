@@ -24,7 +24,7 @@ class LgsfProjectCompletionReportController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:lgsf_project_completion_reports,view')->only(['index', 'show']);
-        $this->middleware('crud_permission:lgsf_project_completion_reports,add')->only(['save', 'uploadMultiDocument']);
+        $this->middleware('crud_permission:lgsf_project_completion_reports,add')->only(['save', 'uploadMultiDocument', 'deleteDocument', 'deleteDocumentFile']);
         $this->middleware('crud_permission:lgsf_project_completion_reports,update')->only(['validateDocument', 'validateDocumentFile']);
     }
 
@@ -266,6 +266,7 @@ class LgsfProjectCompletionReportController extends Controller
             'pageConfig' => $pageConfig,
             'routeConfig' => $routeConfig,
             'scopeQuery' => $scopeQuery,
+            'permissionModule' => 'lgsf_project_completion_reports',
         ]);
     }
 
@@ -443,6 +444,132 @@ class LgsfProjectCompletionReportController extends Controller
         return redirect()
             ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
             ->with('success', $this->documentFieldMap()[$documentType] . ' uploaded successfully.');
+    }
+
+    public function deleteDocument(Request $request, string $projectCode, string $documentType)
+    {
+        if ($this->isMultiUploadDocumentType($documentType) || !array_key_exists($documentType, $this->documentFieldMap())) {
+            abort(404);
+        }
+
+        $scopeQuery = $this->scopeQuery($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
+        if (!$project) {
+            abort(404);
+        }
+
+        $user = Auth::user();
+        if ($user && $user->isDilgUser() && $user->isRegionalOfficeAssignment()) {
+            abort(403);
+        }
+
+        $fileRecord = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)
+            ->where('document_type', $documentType)
+            ->orderByDesc('uploaded_at')
+            ->orderByDesc('created_at')
+            ->firstOrFail();
+
+        if (($fileRecord->status ?? null) !== 'returned') {
+            return redirect()
+                ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+                ->with('error', 'Only returned documents can be deleted from project documents.');
+        }
+
+        $document = LgsfProjectCompletionReport::firstOrNew(['project_code' => $project->project_code]);
+        $path = $fileRecord->file_path ?: ($document->{$documentType} ?? null);
+        $deletedAt = now();
+
+        DB::transaction(function () use ($document, $documentType, $fileRecord, $path, $deletedAt, $project): void {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+
+            if ($document->exists) {
+                $document->{$documentType} = null;
+                $document->updated_by = Auth::user()->idno ?? null;
+                $document->save();
+            }
+
+            $this->logActivity(
+                $project->project_code,
+                'delete',
+                'Deleted',
+                $fileRecord,
+                'Returned document deleted so a replacement can be uploaded and resubmitted.',
+                $deletedAt
+            );
+
+            $fileRecord->delete();
+        });
+
+        return redirect()
+            ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+            ->with('success', $this->documentFieldMap()[$documentType] . ' deleted successfully. You can upload and submit a replacement document.');
+    }
+
+    public function deleteDocumentFile(Request $request, string $projectCode, int $fileId)
+    {
+        $scopeQuery = $this->scopeQuery($request);
+        $routeConfig = $this->routeConfig($request);
+        $project = $this->resolveProjectForUser($projectCode, Auth::user());
+        if (!$project) {
+            abort(404);
+        }
+
+        $user = Auth::user();
+        if ($user && $user->isDilgUser() && $user->isRegionalOfficeAssignment()) {
+            abort(403);
+        }
+
+        $fileRecord = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)
+            ->where('id', $fileId)
+            ->firstOrFail();
+
+        if (($fileRecord->status ?? null) !== 'returned') {
+            return redirect()
+                ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+                ->with('error', 'Only returned documents can be deleted from project documents.');
+        }
+
+        $documentType = (string) $fileRecord->document_type;
+        $path = $fileRecord->file_path;
+        $document = LgsfProjectCompletionReport::firstOrNew(['project_code' => $project->project_code]);
+        $deletedAt = now();
+
+        DB::transaction(function () use ($document, $documentType, $fileRecord, $path, $deletedAt, $project): void {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+
+            if ($document->exists && (string) ($document->{$documentType} ?? '') === (string) $path) {
+                $replacementPath = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)
+                    ->where('document_type', $documentType)
+                    ->where('id', '!=', $fileRecord->id)
+                    ->orderByDesc('uploaded_at')
+                    ->orderByDesc('created_at')
+                    ->value('file_path');
+
+                $document->{$documentType} = $replacementPath ?: null;
+                $document->updated_by = Auth::user()->idno ?? null;
+                $document->save();
+            }
+
+            $this->logActivity(
+                $project->project_code,
+                'delete',
+                'Deleted',
+                $fileRecord,
+                'Returned document deleted so a replacement can be uploaded and resubmitted.',
+                $deletedAt
+            );
+
+            $fileRecord->delete();
+        });
+
+        return redirect()
+            ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+            ->with('success', $this->formatDocumentLabel($documentType) . ' deleted successfully. You can upload and submit a replacement document.');
     }
 
     private function notifyUploadInterventionRecipients(object $project, array $documentTypes, array $routeConfig, array $scopeQuery = []): void
@@ -1223,6 +1350,8 @@ class LgsfProjectCompletionReportController extends Controller
             'validate' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.validate',
             'validate_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.validate-file',
             'upload_multi' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.upload-multi',
+            'delete' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.delete',
+            'delete_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.delete-file',
         ];
     }
 

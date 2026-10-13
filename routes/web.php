@@ -3322,6 +3322,14 @@ Route::middleware(['auth'])->group(function () {
         '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/validate-file/{fileId}',
         [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'validateDocumentFile']
     )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.validate-file');
+    Route::delete(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/document/{documentType}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'deleteDocument']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.delete');
+    Route::delete(
+        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/document-file/{fileId}',
+        [App\Http\Controllers\LgsfProjectCompletionReportController::class, 'deleteDocumentFile']
+    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.delete-file');
     Route::view(
         '/reports/one-time/project-completion-reports/safpb',
         'reports.one-time.shared.show',
@@ -3362,6 +3370,14 @@ Route::middleware(['auth'])->group(function () {
         '/reports/one-time/project-completion-reports/sglgif/{projectCode}/validate-file/{fileId}',
         [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'validateDocumentFile']
     )->name('reports.one-time.project-completion-reports.sglgif.validate-file');
+    Route::delete(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}/document/{documentType}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'deleteDocument']
+    )->name('reports.one-time.project-completion-reports.sglgif.delete');
+    Route::delete(
+        '/reports/one-time/project-completion-reports/sglgif/{projectCode}/document-file/{fileId}',
+        [App\Http\Controllers\SglgifProjectCompletionReportController::class, 'deleteDocumentFile']
+    )->name('reports.one-time.project-completion-reports.sglgif.delete-file');
     Route::get('/reports/one-time/pisat', [App\Http\Controllers\PisatReportController::class, 'index'])
         ->middleware('crud_permission:pisat_reports,view')
         ->name('reports.one-time.pisat');
