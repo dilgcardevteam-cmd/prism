@@ -557,7 +557,7 @@
 @section('content')
 @php
     $user = Auth::user();
-    $hasValidatorRole = $user->isSuperAdmin() || $user->isRegionalUser() || $user->isProvincialUser();
+    $hasValidatorRole = $user && ($user->isSuperAdmin() || $user->isRegionalUser() || $user->isProvincialUser() || $user->isMlgooUser());
 
     // Module icon mapper based on label/key
     $moduleIcons = [
@@ -581,26 +581,42 @@
         <!-- Hero Header -->
         <section class="task-mgmt-hero">
             <div class="task-mgmt-hero-content">
-                <div class="task-mgmt-eyebrow">
-                    <i class="fas fa-list-check"></i>
-                    Workflow Tasks
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px;">
+                    <div class="task-mgmt-eyebrow">
+                        <i class="fas fa-list-check"></i>
+                        Workflow Tasks
+                    </div>
+                    @if(isset($userLevelLabel) && $userLevelLabel !== '')
+                        <div class="task-mgmt-eyebrow" style="background: rgba(255, 255, 255, 0.22); color: #fff;">
+                            <i class="fas fa-user-shield"></i>
+                            Level: {{ $userLevelLabel }}
+                        </div>
+                    @endif
+                    @if(isset($userJurisdictionLabel) && $userJurisdictionLabel !== '')
+                        <div class="task-mgmt-eyebrow" style="background: rgba(56, 189, 248, 0.25); color: #f0f9ff; border: 1px solid rgba(125, 211, 252, 0.3);">
+                            <i class="fas fa-location-dot"></i>
+                            {{ $userJurisdictionLabel }}
+                        </div>
+                    @endif
                 </div>
                 <h1 class="task-mgmt-title">Task Management Hub</h1>
                 <p class="task-mgmt-description">
-                    Track the accomplishments, review pending uploads, and action documents that have been returned for revision. Click a program card to open its task list.
+                    Track accomplishments, review pending uploads, and action documents awaiting validation or returned for revision. Click a program card to open its task list.
                 </p>
             </div>
         </section>
 
-        <!-- Pool Section 1: CENTRALIZED APPROVALS POOL (Only visible to validators) -->
+        <!-- Pool Section 1: APPROVALS POOL (Only visible to validators) -->
         @if($hasValidatorRole)
             <div class="task-pool-section">
                 <h2 class="task-pool-section-title">
                     <i class="fas fa-inbox"></i>
                     @if($user->isRegionalUser())
-                        <span>Centralized Regional Approvals Pool</span>
+                        <span>Centralized Regional Approvals Pool — {{ $user->region ?: 'CAR' }}</span>
                     @elseif($user->isProvincialUser())
-                        <span>Provincial Approvals Pool</span>
+                        <span>Provincial Approvals Pool — {{ $user->province ?: 'Provincial' }}</span>
+                    @elseif($user->isMlgooUser())
+                        <span>C/MLGOO Approvals Pool — {{ $user->office ?: 'Municipal' }}@if($user->province), {{ $user->province }}@endif</span>
                     @else
                         <span>All Pending System Approvals</span>
                     @endif
@@ -635,7 +651,17 @@
                     <div class="empty-state" style="border: 1px solid #e2e8f0; border-radius: 16px;">
                         <div class="empty-icon"><i class="fas fa-circle-check" style="color: #10b981;"></i></div>
                         <div class="empty-title">All Caught Up!</div>
-                        <p class="empty-desc">There are no document submissions waiting for your approval in this pool.</p>
+                        <p class="empty-desc">
+                            @if($user->isMlgooUser())
+                                There are no document submissions awaiting C/MLGOO validation for {{ $user->office ?: 'your assigned municipality' }}.
+                            @elseif($user->isProvincialUser())
+                                There are no document submissions awaiting provincial validation for {{ $user->province ?: 'your province' }}.
+                            @elseif($user->isRegionalUser())
+                                There are no document submissions awaiting regional validation in the regional pool.
+                            @else
+                                There are no document submissions waiting for your approval in this pool.
+                            @endif
+                        </p>
                     </div>
                 @endif
             </div>
@@ -646,7 +672,13 @@
             <div class="task-pool-section" style="margin-top: 14px;">
                 <h2 class="task-pool-section-title">
                     <i class="fas fa-ticket"></i>
-                    <span>Unassigned Tickets Pool</span>
+                    @if($user->isRegionalUser())
+                        <span>Unassigned Tickets Pool — Regional (CAR)</span>
+                    @elseif($user->isProvincialUser())
+                        <span>Unassigned Tickets Pool — {{ $user->province ?: 'Provincial' }}</span>
+                    @else
+                        <span>Unassigned Tickets Pool</span>
+                    @endif
                 </h2>
                 
                 @if($ticketsByCategory->isNotEmpty())
@@ -675,7 +707,15 @@
                     <div class="empty-state" style="border: 1px solid #e2e8f0; border-radius: 16px;">
                         <div class="empty-icon"><i class="fas fa-circle-check" style="color: #10b981;"></i></div>
                         <div class="empty-title">All Caught Up!</div>
-                        <p class="empty-desc">There are no unassigned tickets waiting in your queue.</p>
+                        <p class="empty-desc">
+                            @if($user->isProvincialUser())
+                                There are no unassigned tickets waiting in the {{ $user->province }} queue.
+                            @elseif($user->isRegionalUser())
+                                There are no unassigned tickets waiting in the regional queue.
+                            @else
+                                There are no unassigned tickets waiting in your queue.
+                            @endif
+                        </p>
                     </div>
                 @endif
             </div>
@@ -685,7 +725,15 @@
         <div class="task-pool-section" style="margin-top: 14px;">
             <h2 class="task-pool-section-title">
                 <i class="fas fa-rotate-left"></i>
-                <span>Returned Documents Awaiting Action</span>
+                @if($user->isLguUser())
+                    <span>Returned Documents Awaiting Action — {{ $user->office ?: 'My LGU' }}</span>
+                @elseif($user->isMlgooUser())
+                    <span>Returned Documents Awaiting Action — {{ $user->office ?: 'My Jurisdiction' }}</span>
+                @elseif($user->isProvincialUser())
+                    <span>Returned Documents Awaiting Action — {{ $user->province ?: 'Provincial Jurisdiction' }}</span>
+                @else
+                    <span>Returned Documents Awaiting Action</span>
+                @endif
             </h2>
             
             @if($returnedByModule->isNotEmpty())
@@ -717,7 +765,15 @@
                 <div class="empty-state" style="border: 1px solid #e2e8f0; border-radius: 16px;">
                     <div class="empty-icon"><i class="fas fa-thumbs-up" style="color: #3b82f6;"></i></div>
                     <div class="empty-title">No Returned Documents</div>
-                    <p class="empty-desc">Great job! You have no document submissions that are returned or pending revisions.</p>
+                    <p class="empty-desc">
+                        @if($user->isLguUser() || $user->isMlgooUser())
+                            Great job! There are no returned documents requiring revision for {{ $user->office ?: 'your assigned LGU' }}.
+                        @elseif($user->isProvincialUser())
+                            Great job! There are no returned documents requiring revision in {{ $user->province ?: 'your province' }}.
+                        @else
+                            Great job! You have no document submissions that are returned or pending revisions.
+                        @endif
+                    </p>
                 </div>
             @endif
         </div>
@@ -744,7 +800,15 @@
                 <div class="task-modal-header">
                     <h3 class="task-modal-title">
                         <i class="{{ $iconClass }}"></i>
-                        <span>{{ $moduleLabel }} - Approvals Pool</span>
+                        @if($user->isMlgooUser())
+                            <span>{{ $moduleLabel }} - C/MLGOO Approvals Pool ({{ $user->office }})</span>
+                        @elseif($user->isProvincialUser())
+                            <span>{{ $moduleLabel }} - Provincial Approvals Pool ({{ $user->province }})</span>
+                        @elseif($user->isRegionalUser())
+                            <span>{{ $moduleLabel }} - Regional Approvals Pool (CAR)</span>
+                        @else
+                            <span>{{ $moduleLabel }} - Approvals Pool</span>
+                        @endif
                     </h3>
                     <button class="task-modal-close" onclick="closeTaskModal('{{ $slug }}')">
                         <i class="fas fa-times"></i>
@@ -848,6 +912,9 @@
                                         @else
                                             <td>
                                                 <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
+                                                @if(!empty($task['province']))
+                                                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;"><i class="fas fa-map-marker-alt"></i> {{ $task['province'] }}</div>
+                                                @endif
                                             </td>
                                         @endif
                                         <td>

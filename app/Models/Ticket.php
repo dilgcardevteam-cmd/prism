@@ -256,9 +256,15 @@ class Ticket extends Model
 
         if ($user->isRegionalUser()) {
             $normalizedRegion = $user->normalizedRegionComparable();
+            $regionCondition = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite'
+                ? 'LOWER(TRIM(COALESCE(region_scope, ""))) LIKE ?'
+                : 'LOWER(TRIM(SUBSTRING_INDEX(COALESCE(region_scope, ""), "(", 1))) = ?';
+            $regionParam = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite'
+                ? '%' . $normalizedRegion . '%'
+                : $normalizedRegion;
 
             return $query
-                ->whereRaw('LOWER(TRIM(SUBSTRING_INDEX(COALESCE(region_scope, ""), "(", 1))) = ?', [$normalizedRegion])
+                ->whereRaw($regionCondition, [$regionParam])
                 ->where(function (Builder $builder): void {
                     $builder->whereIn('current_level', [
                         self::LEVEL_REGIONAL,

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -121,14 +122,23 @@ class RegionalApprovalPoolService
                 $recordProvince = trim((string) ($projectLocation['province'] ?? $record->province ?? ''));
                 $recordOffice = trim((string) ($projectLocation['city_municipality'] ?? $record->office ?? ''));
 
+                if ($recordProvince === '' && $recordOffice !== '') {
+                    $recordProvince = $this->resolveProvinceFromOffice($recordOffice);
+                }
+
                 // Enforce jurisdiction scope
                 if ($user->isProvincialUser()) {
-                    if ($recordProvince !== '' && Str::lower($recordProvince) !== $user->normalizedProvince()) {
+                    if ($recordProvince === '' || !$this->matchesProvince($recordProvince, $user->province)) {
                         continue;
                     }
                 } elseif ($user->isMlgooUser()) {
                     if (!$user->matchesAssignedOffice($recordOffice)) {
                         continue;
+                    }
+                    if ($recordProvince !== '' && $user->normalizedProvince() !== '') {
+                        if (!$this->matchesProvince($recordProvince, $user->province)) {
+                            continue;
+                        }
                     }
                 }
 
@@ -194,13 +204,24 @@ class RegionalApprovalPoolService
                 $displayDocumentType = $this->documentDisplayLabel($documentType);
                 $location = $this->resolveProjectLocation($projectCode);
 
+                $workflowProvince = trim((string) ($location['province'] ?? ''));
+                $workflowOffice = trim((string) ($location['city_municipality'] ?? ''));
+                if ($workflowProvince === '' && $workflowOffice !== '') {
+                    $workflowProvince = $this->resolveProvinceFromOffice($workflowOffice);
+                }
+
                 if ($user->isProvincialUser()) {
-                    if ($location['province'] !== '' && Str::lower($location['province']) !== $user->normalizedProvince()) {
+                    if ($workflowProvince === '' || !$this->matchesProvince($workflowProvince, $user->province)) {
                         continue;
                     }
                 } elseif ($user->isMlgooUser()) {
-                    if (!$user->matchesAssignedOffice($location['city_municipality'])) {
+                    if (!$user->matchesAssignedOffice($workflowOffice)) {
                         continue;
+                    }
+                    if ($workflowProvince !== '' && $user->normalizedProvince() !== '') {
+                        if (!$this->matchesProvince($workflowProvince, $user->province)) {
+                            continue;
+                        }
                     }
                 }
 
@@ -288,13 +309,22 @@ class RegionalApprovalPoolService
                 $recordProvince = trim((string) ($projectLocation['province'] ?? $record->province ?? ''));
                 $recordOffice = trim((string) ($projectLocation['city_municipality'] ?? $record->office ?? ''));
 
+                if ($recordProvince === '' && $recordOffice !== '') {
+                    $recordProvince = $this->resolveProvinceFromOffice($recordOffice);
+                }
+
                 // Scope to user's jurisdiction
                 if ($user->isLguUser() || $user->isMlgooUser()) {
                     if (!$user->matchesAssignedOffice($recordOffice)) {
                         continue;
                     }
+                    if ($recordProvince !== '' && $user->normalizedProvince() !== '') {
+                        if (!$this->matchesProvince($recordProvince, $user->province)) {
+                            continue;
+                        }
+                    }
                 } elseif ($user->isProvincialUser()) {
-                    if ($recordProvince !== '' && Str::lower($recordProvince) !== $user->normalizedProvince()) {
+                    if ($recordProvince === '' || !$this->matchesProvince($recordProvince, $user->province)) {
                         continue;
                     }
                 }
@@ -338,12 +368,23 @@ class RegionalApprovalPoolService
                 $displayDocumentType = $this->documentDisplayLabel($documentType);
                 $location = $this->resolveProjectLocation($projectCode);
 
+                $workflowProvince = trim((string) ($location['province'] ?? ''));
+                $workflowOffice = trim((string) ($location['city_municipality'] ?? ''));
+                if ($workflowProvince === '' && $workflowOffice !== '') {
+                    $workflowProvince = $this->resolveProvinceFromOffice($workflowOffice);
+                }
+
                 if ($user->isLguUser() || $user->isMlgooUser()) {
-                    if (!$user->matchesAssignedOffice($location['city_municipality'])) {
+                    if (!$user->matchesAssignedOffice($workflowOffice)) {
                         continue;
                     }
+                    if ($workflowProvince !== '' && $user->normalizedProvince() !== '') {
+                        if (!$this->matchesProvince($workflowProvince, $user->province)) {
+                            continue;
+                        }
+                    }
                 } elseif ($user->isProvincialUser()) {
-                    if ($location['province'] !== '' && Str::lower($location['province']) !== $user->normalizedProvince()) {
+                    if ($workflowProvince === '' || !$this->matchesProvince($workflowProvince, $user->province)) {
                         continue;
                     }
                 }
@@ -573,5 +614,98 @@ class RegionalApprovalPoolService
             'province' => $province,
             'city_municipality' => $cityMunicipality,
         ];
+    }
+
+    /**
+     * Resolve province name from an office or municipality label.
+     */
+    public function resolveProvinceFromOffice(?string $office): string
+    {
+        $office = trim((string) $office);
+        if ($office === '') {
+            return '';
+        }
+
+        if (preg_match('/^(?:plgu|provincial\s+government(?:\s+of)?)\s+(.+)$/i', $office, $matches)) {
+            return trim($matches[1]);
+        }
+
+        $normalizedOffice = ProjectLocationFilterHelper::normalizeComparableLocationLabel($office);
+
+        $carProvinces = [
+            'Abra' => [
+                'Bangued', 'Boliney', 'Bucay', 'Bucloc', 'Daguioman', 'Danglas', 'Dolores',
+                'La Paz', 'Lacub', 'Lagangilang', 'Lagayan', 'Langiden', 'Licuan-Baay', 'Luba', 'Malibcong',
+                'Manabo', 'Peñarrubia', 'Pidigan', 'Pilar', 'Sallapadan', 'San Isidro', 'San Juan',
+                'San Quintin', 'Tayum', 'Tineg', 'Tubo', 'Villaviciosa',
+            ],
+            'Apayao' => [
+                'Calanasan', 'Conner', 'Flora', 'Kabugao', 'Luna', 'Pudtol', 'Santa Marcela',
+            ],
+            'Benguet' => [
+                'Atok', 'Bakun', 'Bokod', 'Buguias', 'Itogon', 'Kabayan', 'Kapangan',
+                'Kibungan', 'La Trinidad', 'Mankayan', 'Sablan', 'Tuba', 'Tublay', 'Baguio City', 'City of Baguio',
+            ],
+            'Ifugao' => [
+                'Aguinaldo', 'Alfonso Lista', 'Asipulo', 'Banaue', 'Hingyon', 'Hungduan',
+                'Kiangan', 'Lagawe', 'Lamut', 'Mayoyao', 'Tinoc',
+            ],
+            'Kalinga' => [
+                'Balbalan', 'Lubuagan', 'Pasil', 'Pinukpuk', 'Rizal', 'Tabuk', 'Tabuk City', 'Tanudan',
+            ],
+            'Mountain Province' => [
+                'Barlig', 'Bauko', 'Besao', 'Bontoc', 'Natonin', 'Paracelis',
+                'Sabangan', 'Sadanga', 'Sagada', 'Tadian',
+            ],
+        ];
+
+        foreach ($carProvinces as $province => $municipalities) {
+            if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($province) === $normalizedOffice) {
+                return $province;
+            }
+
+            foreach ($municipalities as $municipality) {
+                if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($municipality) === $normalizedOffice) {
+                    return $province;
+                }
+            }
+        }
+
+        $hierarchy = ProjectLocationFilterHelper::buildConfiguredLocationHierarchy();
+        foreach ($hierarchy as $province => $cities) {
+            if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($province) === $normalizedOffice) {
+                return $province;
+            }
+            foreach ($cities as $city => $barangays) {
+                if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($city) === $normalizedOffice) {
+                    return $province;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Check if two province names match, with handling for comparable labels and Baguio/Benguet.
+     */
+    public function matchesProvince(?string $province1, ?string $province2): bool
+    {
+        $p1 = ProjectLocationFilterHelper::normalizeComparableLocationLabel($province1);
+        $p2 = ProjectLocationFilterHelper::normalizeComparableLocationLabel($province2);
+
+        if ($p1 === '' || $p2 === '') {
+            return false;
+        }
+
+        if ($p1 === $p2) {
+            return true;
+        }
+
+        if (($p1 === 'baguio' && $p2 === 'benguet') || ($p1 === 'benguet' && $p2 === 'baguio')) {
+            return true;
+        }
+
+        return false;
     }
 }

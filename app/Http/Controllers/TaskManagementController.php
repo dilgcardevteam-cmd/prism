@@ -37,11 +37,18 @@ class TaskManagementController extends Controller
                     ->groupBy(fn($t) => $t->category->name ?? 'Uncategorized');
             } elseif ($user->isRegionalUser()) {
                 $normalizedRegion = $user->normalizedRegionComparable();
-                $ticketsByCategory = \App\Models\Ticket::with(['category', 'submitter'])
+                $regionalTicketsQuery = \App\Models\Ticket::with(['category', 'submitter'])
                     ->where('current_level', \App\Models\Ticket::LEVEL_REGIONAL)
                     ->whereNull('assigned_to')
-                    ->whereRaw('LOWER(TRIM(SUBSTRING_INDEX(COALESCE(region_scope, ""), "(", 1))) = ?', [$normalizedRegion])
-                    ->get()
+                    ->where('status', '!=', \App\Models\Ticket::STATUS_CLOSED);
+
+                if (DB::connection()->getDriverName() === 'sqlite') {
+                    $regionalTicketsQuery->whereRaw('LOWER(TRIM(COALESCE(region_scope, ""))) LIKE ?', ['%' . $normalizedRegion . '%']);
+                } else {
+                    $regionalTicketsQuery->whereRaw('LOWER(TRIM(SUBSTRING_INDEX(COALESCE(region_scope, ""), "(", 1))) = ?', [$normalizedRegion]);
+                }
+
+                $ticketsByCategory = $regionalTicketsQuery->get()
                     ->groupBy(fn($t) => $t->category->name ?? 'Uncategorized');
             } elseif ($user->isProvincialUser()) {
                 $ticketsByCategory = \App\Models\Ticket::with(['category', 'submitter'])
@@ -60,6 +67,34 @@ class TaskManagementController extends Controller
         $pendingByModule = $pendingApprovals->groupBy('module_label');
         $returnedByModule = $returnedDocuments->groupBy('module_label');
 
-        return view('task-management.index', compact('pendingByModule', 'returnedByModule', 'ticketsByCategory'));
+        $userLevelLabel = 'User';
+        $userJurisdictionLabel = '';
+
+        if ($user) {
+            if ($user->isSuperAdmin()) {
+                $userLevelLabel = 'Super Admin / Central Oversight';
+                $userJurisdictionLabel = 'All Jurisdictions (CAR)';
+            } elseif ($user->isRegionalUser()) {
+                $userLevelLabel = 'Regional Validator';
+                $userJurisdictionLabel = $user->region ?: 'Cordillera Administrative Region (CAR)';
+            } elseif ($user->isProvincialUser()) {
+                $userLevelLabel = 'Provincial Validator';
+                $userJurisdictionLabel = 'Province of ' . ($user->province ?: 'Assigned Province');
+            } elseif ($user->isMlgooUser()) {
+                $userLevelLabel = 'C/MLGOO Validator';
+                $userJurisdictionLabel = ($user->office ?: 'Assigned Municipality') . ($user->province ? ', ' . $user->province : '');
+            } elseif ($user->isLguUser()) {
+                $userLevelLabel = 'LGU Submitter';
+                $userJurisdictionLabel = ($user->office ?: 'Assigned LGU') . ($user->province ? ', ' . $user->province : '');
+            }
+        }
+
+        return view('task-management.index', compact(
+            'pendingByModule',
+            'returnedByModule',
+            'ticketsByCategory',
+            'userLevelLabel',
+            'userJurisdictionLabel'
+        ));
     }
 }
