@@ -391,6 +391,111 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->normalizedRole() === self::ROLE_LGU;
     }
 
+    /**
+     * Determine user's approval level ('regional', 'provincial', 'cmlgoo', or null).
+     */
+    public function approvalLevel(): ?string
+    {
+        if ($this->isLguUser()) {
+            return null;
+        }
+
+        if ($this->isMlgooUser()) {
+            return 'cmlgoo';
+        }
+
+        if ($this->isProvincialUser()) {
+            return 'provincial';
+        }
+
+        if ($this->isRegionalUser()) {
+            return 'regional';
+        }
+
+        $baseRole = UserRole::baseRoleFor($this->normalizedRole());
+        if ($baseRole) {
+            if ($baseRole === self::ROLE_MLGOO) {
+                return 'cmlgoo';
+            }
+            if ($baseRole === self::ROLE_PROVINCIAL) {
+                return 'provincial';
+            }
+            if ($baseRole === self::ROLE_REGIONAL) {
+                return 'regional';
+            }
+            if ($baseRole === self::ROLE_LGU) {
+                return null;
+            }
+        }
+
+        $officeLower = $this->normalizedOffice();
+        $provinceLower = $this->normalizedProvince();
+
+        if ($this->isRegionalOfficeAssignment() || $provinceLower === 'regional office' || $officeLower === 'regional office') {
+            return 'regional';
+        }
+
+        if ($officeLower !== '' && !str_contains($officeLower, 'regional') && !str_contains($officeLower, 'provincial')) {
+            $hierarchy = \App\Support\ProjectLocationFilterHelper::buildConfiguredLocationHierarchy();
+            foreach ($hierarchy as $prov => $cities) {
+                foreach ($cities as $city => $brgys) {
+                    if (\App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($city) === \App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($officeLower)) {
+                        return 'cmlgoo';
+                    }
+                }
+            }
+        }
+
+        if ($this->isProvincialDilgAssignment()) {
+            return 'provincial';
+        }
+
+        if ($this->isSuperAdmin()) {
+            if ($provinceLower !== '' && $provinceLower !== 'regional office') {
+                return 'provincial';
+            }
+
+            return 'regional';
+        }
+
+        return null;
+    }
+
+    public function hasApprovalLevel(): bool
+    {
+        return $this->approvalLevel() !== null;
+    }
+
+    public function isApprovalLevelRegional(): bool
+    {
+        return $this->approvalLevel() === 'regional';
+    }
+
+    public function isApprovalLevelProvincial(): bool
+    {
+        return $this->approvalLevel() === 'provincial';
+    }
+
+    public function isApprovalLevelMlgoo(): bool
+    {
+        return $this->approvalLevel() === 'cmlgoo';
+    }
+
+    public function approvalOfficeLabel(): string
+    {
+        $level = $this->approvalLevel();
+        if ($level === 'cmlgoo') {
+            return ($this->office ?: 'Municipal') . ($this->province ? ', ' . $this->province : '');
+        }
+        if ($level === 'provincial') {
+            return $this->province ?: 'Provincial';
+        }
+        if ($level === 'regional') {
+            return $this->region ?: 'CAR';
+        }
+        return '';
+    }
+
     public function isActive(): bool
     {
         return strtolower(trim((string) $this->status)) === 'active';

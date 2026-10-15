@@ -20,8 +20,9 @@ class RegionalApprovalPoolService
     {
         $tasks = collect();
 
-        // LGU users cannot validate submissions
-        if ($user->isLguUser()) {
+        // LGU users or users without approval level cannot validate submissions
+        $approvalLevel = $user->approvalLevel();
+        if ($approvalLevel === null) {
             return $tasks;
         }
 
@@ -37,7 +38,7 @@ class RegionalApprovalPoolService
             ], true);
 
             // DILG deliverables are not accessible to C/MLGOO or LGU users
-            if ($isDilgDeliverable && ($user->isLguUser() || $user->isMlgooUser() || $user->isLguScopedUser())) {
+            if ($isDilgDeliverable && ($approvalLevel === 'cmlgoo' || $user->isLguUser() || $user->isMlgooUser() || $user->isLguScopedUser())) {
                 continue;
             }
 
@@ -49,41 +50,32 @@ class RegionalApprovalPoolService
                 $query->whereIn('doc_type', $source['doc_types']);
             }
 
-            // Status scoping based on user role
-            if ($user->isSuperAdmin()) {
-                $query->where(function ($q) {
-                    $q->whereIn(DB::raw("LOWER(TRIM(COALESCE(status, '')))"), [
-                        'pending_mlgoo',
-                        'pending',
-                        'pending_po',
-                        'pending_ro',
-                    ]);
-                })->whereNull('approved_at_dilg_ro');
-            } elseif ($user->isRegionalUser()) {
+            // Status scoping based on user approval level
+            if ($approvalLevel === 'regional') {
                 $query->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_ro'")
                     ->whereNull('approved_at_dilg_ro');
-            } elseif ($user->isProvincialUser()) {
-                if ($isDilgDeliverable) {
-                    $query->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_ro'")
-                        ->whereNull('approved_at_dilg_ro');
-                } else {
-                    $hasOfficeCol = \Illuminate\Support\Facades\Schema::hasColumn($source['table'], 'office');
-                    $query->where(function ($q) use ($hasOfficeCol) {
-                        $q->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_po'");
-                        if ($hasOfficeCol) {
-                            $q->orWhere(function ($legacy) {
-                                $legacy->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending'")
-                                    ->where(function ($plgu) {
-                                        $plgu->whereRaw("LOWER(TRIM(COALESCE(office, ''))) LIKE 'plgu%'")
-                                            ->orWhereRaw("LOWER(TRIM(COALESCE(office, ''))) LIKE 'provincial government%'");
-                                    });
-                            });
-                        } else {
-                            $q->orWhereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending'");
-                        }
-                    })->whereNull('approved_at_dilg_po');
-                }
-            } elseif ($user->isMlgooUser()) {
+            } elseif ($approvalLevel === 'provincial') {
+                $hasOfficeCol = \Illuminate\Support\Facades\Schema::hasColumn($source['table'], 'office');
+                $hasApprovedAtMlgooCol = \Illuminate\Support\Facades\Schema::hasColumn($source['table'], 'approved_at_c_mlgoo');
+                $query->where(function ($q) use ($hasOfficeCol, $hasApprovedAtMlgooCol) {
+                    $q->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_po'");
+                    if ($hasOfficeCol) {
+                        $q->orWhere(function ($legacy) {
+                            $legacy->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending'")
+                                ->where(function ($plgu) {
+                                    $plgu->whereRaw("LOWER(TRIM(COALESCE(office, ''))) LIKE 'plgu%'")
+                                        ->orWhereRaw("LOWER(TRIM(COALESCE(office, ''))) LIKE 'provincial government%'");
+                                });
+                        });
+                    }
+                    if ($hasApprovedAtMlgooCol) {
+                        $q->orWhere(function ($approvedMlgoo) {
+                            $approvedMlgoo->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending'")
+                                ->whereNotNull('approved_at_c_mlgoo');
+                        });
+                    }
+                })->whereNull('approved_at_dilg_po');
+            } elseif ($approvalLevel === 'cmlgoo') {
                 if ($isDilgDeliverable) {
                     continue;
                 }
@@ -126,12 +118,12 @@ class RegionalApprovalPoolService
                     $recordProvince = $this->resolveProvinceFromOffice($recordOffice);
                 }
 
-                // Enforce jurisdiction scope
-                if ($user->isProvincialUser()) {
+                // Enforce jurisdiction scope based on approval level office
+                if ($approvalLevel === 'provincial') {
                     if ($recordProvince === '' || !$this->matchesProvince($recordProvince, $user->province)) {
                         continue;
                     }
-                } elseif ($user->isMlgooUser()) {
+                } elseif ($approvalLevel === 'cmlgoo') {
                     if (!$user->matchesAssignedOffice($recordOffice)) {
                         continue;
                     }
@@ -146,13 +138,33 @@ class RegionalApprovalPoolService
                 $taskUrl = $this->buildTaskUrl($source, $record, $officeOrProject, $year, $period, $label);
 
                 $statusStr = Str::lower(trim((string) ($record->status ?? '')));
+                $hasApprovedAtPo = !empty($record->approved_at_dilg_po);
+                $hasApprovedAtRo = !empty($record->approved_at_dilg_ro);
+                $hasApprovedAtMlgoo = !empty($record->approved_at_c_mlgoo);
+
                 $queueKey = match ($statusStr) {
                     'pending_mlgoo' => 'pending_c_mlgoo',
                     'pending_po' => 'pending_provincial',
                     'pending_ro' => 'pending_regional',
-                    'pending' => ($this->isPlguOffice($recordOffice) ? 'pending_provincial' : 'pending_c_mlgoo'),
+                    'pending' => ($this->isPlguOffice($recordOffice, $recordProvince) || $hasApprovedAtMlgoo ? 'pending_provincial' : 'pending_c_mlgoo'),
                     default => 'pending_regional',
                 };
+
+                // STRICT LEVEL CHECK:
+                // Provincial Pool: only show tasks where approval/validation is FOR PROVINCIAL LEVEL
+                if ($approvalLevel === 'provincial') {
+                    if ($queueKey !== 'pending_provincial' || $hasApprovedAtPo) {
+                        continue;
+                    }
+                } elseif ($approvalLevel === 'cmlgoo') {
+                    if ($queueKey !== 'pending_c_mlgoo' || $hasApprovedAtMlgoo) {
+                        continue;
+                    }
+                } elseif ($approvalLevel === 'regional') {
+                    if ($queueKey !== 'pending_regional' || $hasApprovedAtRo) {
+                        continue;
+                    }
+                }
 
                 $message = match ($queueKey) {
                     'pending_c_mlgoo' => 'Awaiting C/MLGOO Validation',
@@ -188,42 +200,42 @@ class RegionalApprovalPoolService
             $workflowQuery = DB::table('fund_utilization_approval_workflows')
                 ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'pending level %'");
 
-            if ($user->isRegionalUser()) {
+            if ($approvalLevel === 'regional') {
                 $workflowQuery->where('current_approval_level', '>=', 2);
-            } elseif ($user->isProvincialUser()) {
+            } elseif ($approvalLevel === 'provincial') {
                 $workflowQuery->where('current_approval_level', 1);
-            } elseif ($user->isMlgooUser()) {
-                $workflowQuery->where('current_approval_level', 1);
+            } else {
+                $workflowQuery = null;
             }
 
-            foreach ($workflowQuery->orderByDesc('updated_at')->get() as $workflow) {
-                $projectCode = trim((string) $workflow->project_code);
-                $quarter = trim((string) $workflow->quarter);
-                $documentType = trim((string) $workflow->document_type);
-                $uploader = $this->resolveUploader($workflow->uploader_id ?? null);
-                $displayDocumentType = $this->documentDisplayLabel($documentType);
-                $location = $this->resolveProjectLocation($projectCode);
+            if ($workflowQuery) {
+                foreach ($workflowQuery->orderByDesc('updated_at')->get() as $workflow) {
+                    $projectCode = trim((string) $workflow->project_code);
+                    $quarter = trim((string) $workflow->quarter);
+                    $documentType = trim((string) $workflow->document_type);
+                    $uploader = $this->resolveUploader($workflow->uploader_id ?? null);
+                    $displayDocumentType = $this->documentDisplayLabel($documentType);
+                    $location = $this->resolveProjectLocation($projectCode);
 
-                $workflowProvince = trim((string) ($location['province'] ?? ''));
-                $workflowOffice = trim((string) ($location['city_municipality'] ?? ''));
-                if ($workflowProvince === '' && $workflowOffice !== '') {
-                    $workflowProvince = $this->resolveProvinceFromOffice($workflowOffice);
-                }
+                    $workflowProvince = trim((string) ($location['province'] ?? ''));
+                    $workflowOffice = trim((string) ($location['city_municipality'] ?? ''));
+                    if ($workflowProvince === '' && $workflowOffice !== '') {
+                        $workflowProvince = $this->resolveProvinceFromOffice($workflowOffice);
+                    }
 
-                if ($user->isProvincialUser()) {
-                    if ($workflowProvince === '' || !$this->matchesProvince($workflowProvince, $user->province)) {
-                        continue;
-                    }
-                } elseif ($user->isMlgooUser()) {
-                    if (!$user->matchesAssignedOffice($workflowOffice)) {
-                        continue;
-                    }
-                    if ($workflowProvince !== '' && $user->normalizedProvince() !== '') {
-                        if (!$this->matchesProvince($workflowProvince, $user->province)) {
+                    if ($approvalLevel === 'provincial') {
+                        if ($workflowProvince === '' || !$this->matchesProvince($workflowProvince, $user->province)) {
                             continue;
                         }
                     }
-                }
+
+                    $workflowQueueKey = ((int) $workflow->current_approval_level >= 2) ? 'pending_regional' : 'pending_provincial';
+                    if ($approvalLevel === 'provincial' && $workflowQueueKey !== 'pending_provincial') {
+                        continue;
+                    }
+                    if ($approvalLevel === 'regional' && $workflowQueueKey !== 'pending_regional') {
+                        continue;
+                    }
 
                 $tasks->push([
                     'id' => 'status-fund-utilization-' . $workflow->id,
@@ -246,6 +258,7 @@ class RegionalApprovalPoolService
                 ]);
             }
         }
+    }
 
         return $tasks->unique(fn (array $task): string => implode('|', [
             $task['module_key'],
@@ -263,6 +276,12 @@ class RegionalApprovalPoolService
     public function returnedTasksForUser(User $user): Collection
     {
         $tasks = collect();
+
+        // Regional and Superadmin users do not have reports returned to them to resubmit
+        if ($user->isRegionalUser() || $user->isSuperAdmin()) {
+            return $tasks;
+        }
+
         $sources = $this->documentSources();
 
         foreach ($sources as $source) {
@@ -313,8 +332,15 @@ class RegionalApprovalPoolService
                     $recordProvince = $this->resolveProvinceFromOffice($recordOffice);
                 }
 
-                // Scope to user's jurisdiction
+                $isUploader = ((int) ($record->uploaded_by ?? 0) === (int) ($user->idno ?? $user->getKey()));
+                $isProvincialDeliverable = $isDilgDeliverable || $this->isPlguOffice($recordOffice, $recordProvince);
+
+                // Scope to user's office and level
                 if ($user->isLguUser() || $user->isMlgooUser()) {
+                    // LGU and C/MLGOO only act on municipal deliverables matching their assigned office
+                    if ($isProvincialDeliverable) {
+                        continue;
+                    }
                     if (!$user->matchesAssignedOffice($recordOffice)) {
                         continue;
                     }
@@ -324,11 +350,18 @@ class RegionalApprovalPoolService
                         }
                     }
                 } elseif ($user->isProvincialUser()) {
+                    // Provincial users only act on provincial/PLGU deliverables or submissions they uploaded for their province
                     if ($recordProvince === '' || !$this->matchesProvince($recordProvince, $user->province)) {
                         continue;
                     }
+                    if (!$isProvincialDeliverable && !$isUploader) {
+                        continue;
+                    }
+                } else {
+                    continue;
                 }
 
+                $returner = $this->resolveReturner($source, $record);
                 $uploader = $this->resolveUploader($record->uploaded_by ?? null);
                 $taskUrl = $this->buildTaskUrl($source, $record, $officeOrProject, $year, $period, $label);
 
@@ -342,9 +375,14 @@ class RegionalApprovalPoolService
                     'quarter' => $period,
                     'period' => $period,
                     'year' => $year,
-                    'sender_name' => $uploader['name'],
+                    'sender_name' => $returner['name'],
+                    'returned_by_name' => $returner['name'],
+                    'returned_by_role' => $returner['role'],
+                    'returned_by_province' => $returner['province'],
+                    'returned_at' => $returner['returned_at'] ?: ($record->updated_at ?? $record->uploaded_at ?? $record->created_at),
+                    'uploader_name' => $uploader['name'],
                     'uploader_province' => $uploader['province'],
-                    'created_at' => $record->uploaded_at ?? $record->created_at,
+                    'created_at' => $returner['returned_at'] ?: ($record->uploaded_at ?? $record->created_at),
                     'project_code' => $officeOrProject,
                     'province' => $recordProvince,
                     'city_municipality' => $recordOffice,
@@ -374,7 +412,17 @@ class RegionalApprovalPoolService
                     $workflowProvince = $this->resolveProvinceFromOffice($workflowOffice);
                 }
 
+                $isUploader = ((int) ($workflow->uploader_id ?? 0) === (int) ($user->idno ?? $user->getKey()));
+                $projectOwner = trim((string) ($location['project_owner'] ?? ''));
+                $isProvincialDeliverable = $this->isPlguOffice($workflowOffice, $workflowProvince)
+                    || strtolower($projectOwner) === 'province';
+
+                // Scope to user's office and level
                 if ($user->isLguUser() || $user->isMlgooUser()) {
+                    // LGU and C/MLGOO users only receive returned fund utilization reports for their assigned municipality
+                    if ($isProvincialDeliverable) {
+                        continue;
+                    }
                     if (!$user->matchesAssignedOffice($workflowOffice)) {
                         continue;
                     }
@@ -384,10 +432,18 @@ class RegionalApprovalPoolService
                         }
                     }
                 } elseif ($user->isProvincialUser()) {
+                    // Provincial users only receive returned provincial/PLGU reports or submissions they uploaded for their province
                     if ($workflowProvince === '' || !$this->matchesProvince($workflowProvince, $user->province)) {
                         continue;
                     }
+                    if (!$isProvincialDeliverable && !$isUploader) {
+                        continue;
+                    }
+                } else {
+                    continue;
                 }
+
+                $returner = $this->resolveWorkflowReturner($workflow);
 
                 $tasks->push([
                     'id' => 'returned-fund-utilization-' . $workflow->id,
@@ -398,9 +454,14 @@ class RegionalApprovalPoolService
                     'quarter' => $quarter,
                     'period' => $quarter,
                     'year' => '',
-                    'sender_name' => $uploader['name'],
+                    'sender_name' => $returner['name'],
+                    'returned_by_name' => $returner['name'],
+                    'returned_by_role' => $returner['role'],
+                    'returned_by_province' => $returner['province'],
+                    'returned_at' => $returner['returned_at'] ?: $workflow->updated_at,
+                    'uploader_name' => $uploader['name'],
                     'uploader_province' => $uploader['province'],
-                    'created_at' => $workflow->updated_at,
+                    'created_at' => $returner['returned_at'] ?: $workflow->updated_at,
                     'project_code' => $projectCode,
                     'province' => $location['province'],
                     'city_municipality' => $location['city_municipality'],
@@ -456,11 +517,29 @@ class RegionalApprovalPoolService
         ];
     }
 
-    private function isPlguOffice(?string $officeName): bool
+    private function isPlguOffice(?string $officeName, ?string $provinceName = null): bool
     {
-        $normalized = Str::lower(trim((string) $officeName));
-        return str_starts_with($normalized, 'plgu')
-            || str_starts_with($normalized, 'provincial government');
+        $normalizedOffice = ProjectLocationFilterHelper::normalizeComparableLocationLabel($officeName);
+        if ($normalizedOffice === '') {
+            return false;
+        }
+
+        if ($normalizedOffice === 'province'
+            || str_starts_with($normalizedOffice, 'province')
+            || str_starts_with($normalizedOffice, 'plgu')
+            || str_starts_with($normalizedOffice, 'provincial government')
+            || str_contains($normalizedOffice, 'provincial office')) {
+            return true;
+        }
+
+        if ($provinceName !== null) {
+            $normalizedProvince = ProjectLocationFilterHelper::normalizeComparableLocationLabel($provinceName);
+            if ($normalizedProvince !== '' && $normalizedOffice === $normalizedProvince) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function buildTaskUrl(array $source, object $record, string $officeOrProject, string $year, string $period, string $label): string
@@ -557,6 +636,169 @@ class RegionalApprovalPoolService
         return [
             'name' => $user?->fullName() ?: 'Unknown uploader',
             'province' => trim((string) ($user?->province ?? '')),
+        ];
+    }
+
+    /**
+     * Resolve the validator who returned the reportorial document.
+     *
+     * @param array<string, mixed> $source
+     * @return array{name: string, role: string, province: string, returned_at: mixed}
+     */
+    private function resolveReturner(array $source, object $record): array
+    {
+        $table = $source['table'] ?? '';
+        $recordId = (int) ($record->id ?? 0);
+
+        if ($table !== '' && $recordId > 0 && Schema::hasTable('activity_logs')) {
+            try {
+                $log = DB::table('activity_logs')
+                    ->where('properties->report_table', $table)
+                    ->where('properties->report_id', $recordId)
+                    ->where(function ($q) {
+                        $q->where('action', 'REPORT_RETURNED')
+                            ->orWhereRaw("LOWER(TRIM(COALESCE(action, ''))) LIKE '%return%'");
+                    })
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($log && !empty($log->user_id)) {
+                    $user = $this->resolveUser($log->user_id);
+                    if ($user['name'] !== 'Unknown') {
+                        $user['returned_at'] = $log->created_at;
+                        return $user;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fallback gracefully if JSON querying fails
+            }
+        }
+
+        $returnerId = $record->approved_by_dilg_ro
+            ?? $record->approved_by_dilg_po
+            ?? $record->approved_by_c_mlgoo
+            ?? $record->returned_by
+            ?? null;
+
+        if ($returnerId) {
+            $user = $this->resolveUser($returnerId);
+            if ($user['name'] !== 'Unknown') {
+                $user['returned_at'] = $record->updated_at ?? null;
+                return $user;
+            }
+        }
+
+        return [
+            'name' => 'Validator',
+            'role' => 'Reviewer',
+            'province' => '',
+            'returned_at' => null,
+        ];
+    }
+
+    /**
+     * Resolve the validator who returned the Fund Utilization workflow submission.
+     *
+     * @return array{name: string, role: string, province: string, returned_at: mixed}
+     */
+    private function resolveWorkflowReturner(object $workflow): array
+    {
+        $workflowId = (int) ($workflow->id ?? 0);
+
+        if ($workflowId > 0 && Schema::hasTable('approval_logs')) {
+            try {
+                $log = DB::table('approval_logs')
+                    ->where('submission_id', $workflowId)
+                    ->whereRaw("LOWER(TRIM(COALESCE(action, ''))) LIKE '%return%'")
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($log && !empty($log->approver_id)) {
+                    $user = $this->resolveUser($log->approver_id);
+                    if ($user['name'] !== 'Unknown') {
+                        $user['returned_at'] = $log->created_at;
+                        return $user;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fallback gracefully
+            }
+        }
+
+        if ($workflowId > 0 && Schema::hasTable('activity_logs')) {
+            try {
+                $log = DB::table('activity_logs')
+                    ->where(function ($q) use ($workflow, $workflowId) {
+                        $q->where('properties->workflow_id', $workflowId)
+                            ->orWhere(function ($sub) use ($workflow) {
+                                $sub->where('properties->project_code', $workflow->project_code)
+                                    ->where('properties->quarter', $workflow->quarter);
+                            });
+                    })
+                    ->whereRaw("LOWER(TRIM(COALESCE(action, ''))) LIKE '%return%'")
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($log && !empty($log->user_id)) {
+                    $user = $this->resolveUser($log->user_id);
+                    if ($user['name'] !== 'Unknown') {
+                        $user['returned_at'] = $log->created_at;
+                        return $user;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fallback gracefully
+            }
+        }
+
+        $status = strtolower((string) ($workflow->status ?? ''));
+        $role = '';
+        if (str_contains($status, 'regional')) {
+            $role = 'Regional Validator';
+        } elseif (str_contains($status, 'provincial')) {
+            $role = 'Provincial Validator';
+        }
+
+        return [
+            'name' => $role ?: 'Validator',
+            'role' => $role ?: 'Reviewer',
+            'province' => '',
+            'returned_at' => null,
+        ];
+    }
+
+    /**
+     * @return array{name: string, role: string, province: string, returned_at: mixed}
+     */
+    private function resolveUser($userId): array
+    {
+        if (empty($userId)) {
+            return ['name' => 'Unknown', 'role' => '', 'province' => '', 'returned_at' => null];
+        }
+
+        $user = User::query()
+            ->select(['idno', 'fname', 'lname', 'role', 'province'])
+            ->where('idno', $userId)
+            ->first();
+
+        if (!$user) {
+            return ['name' => 'Unknown', 'role' => '', 'province' => '', 'returned_at' => null];
+        }
+
+        $roleLabel = match (strtolower((string) $user->role)) {
+            User::ROLE_REGIONAL => 'Regional Validator',
+            User::ROLE_PROVINCIAL => 'Provincial Validator',
+            User::ROLE_MLGOO => 'C/MLGOO Validator',
+            User::ROLE_LGU => 'LGU User',
+            User::ROLE_SUPERADMIN => 'Super Administrator',
+            default => ucwords(str_replace(['_', '-'], ' ', (string) $user->role)),
+        };
+
+        return [
+            'name' => $user->fullName() ?: 'Unknown',
+            'role' => $roleLabel,
+            'province' => trim((string) ($user->province ?? '')),
+            'returned_at' => null,
         ];
     }
 

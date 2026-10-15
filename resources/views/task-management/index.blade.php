@@ -557,7 +557,8 @@
 @section('content')
 @php
     $user = Auth::user();
-    $hasValidatorRole = $user && ($user->isSuperAdmin() || $user->isRegionalUser() || $user->isProvincialUser() || $user->isMlgooUser());
+    $approvalLevel = $approvalLevel ?? ($user ? $user->approvalLevel() : null);
+    $hasValidatorRole = $approvalLevel !== null;
 
     // Module icon mapper based on label/key
     $moduleIcons = [
@@ -606,19 +607,17 @@
             </div>
         </section>
 
-        <!-- Pool Section 1: APPROVALS POOL (Only visible to validators) -->
+        <!-- Pool Section 1: APPROVALS POOL (Only visible to validators based on approval level office / level) -->
         @if($hasValidatorRole)
             <div class="task-pool-section">
                 <h2 class="task-pool-section-title">
                     <i class="fas fa-inbox"></i>
-                    @if($user->isRegionalUser())
+                    @if($approvalLevel === 'regional')
                         <span>Centralized Regional Approvals Pool — {{ $user->region ?: 'CAR' }}</span>
-                    @elseif($user->isProvincialUser())
+                    @elseif($approvalLevel === 'provincial')
                         <span>Provincial Approvals Pool — {{ $user->province ?: 'Provincial' }}</span>
-                    @elseif($user->isMlgooUser())
+                    @elseif($approvalLevel === 'cmlgoo')
                         <span>C/MLGOO Approvals Pool — {{ $user->office ?: 'Municipal' }}@if($user->province), {{ $user->province }}@endif</span>
-                    @else
-                        <span>All Pending System Approvals</span>
                     @endif
                 </h2>
                 
@@ -652,11 +651,11 @@
                         <div class="empty-icon"><i class="fas fa-circle-check" style="color: #10b981;"></i></div>
                         <div class="empty-title">All Caught Up!</div>
                         <p class="empty-desc">
-                            @if($user->isMlgooUser())
+                            @if($approvalLevel === 'cmlgoo')
                                 There are no document submissions awaiting C/MLGOO validation for {{ $user->office ?: 'your assigned municipality' }}.
-                            @elseif($user->isProvincialUser())
+                            @elseif($approvalLevel === 'provincial')
                                 There are no document submissions awaiting provincial validation for {{ $user->province ?: 'your province' }}.
-                            @elseif($user->isRegionalUser())
+                            @elseif($approvalLevel === 'regional')
                                 There are no document submissions awaiting regional validation in the regional pool.
                             @else
                                 There are no document submissions waiting for your approval in this pool.
@@ -721,62 +720,62 @@
             </div>
         @endif
 
-        <!-- Pool Section 2: RETURNED DOCUMENTS (Visible to all uploaders, e.g., LGUs) -->
-        <div class="task-pool-section" style="margin-top: 14px;">
-            <h2 class="task-pool-section-title">
-                <i class="fas fa-rotate-left"></i>
-                @if($user->isLguUser())
-                    <span>Returned Documents Awaiting Action — {{ $user->office ?: 'My LGU' }}</span>
-                @elseif($user->isMlgooUser())
-                    <span>Returned Documents Awaiting Action — {{ $user->office ?: 'My Jurisdiction' }}</span>
-                @elseif($user->isProvincialUser())
-                    <span>Returned Documents Awaiting Action — {{ $user->province ?: 'Provincial Jurisdiction' }}</span>
+        <!-- Pool Section 2: RETURNED DOCUMENTS (Visible only to users based on their office / level) -->
+        @if(!$user->isRegionalUser() && !$user->isSuperAdmin())
+            <div class="task-pool-section" style="margin-top: 14px;">
+                <h2 class="task-pool-section-title">
+                    <i class="fas fa-rotate-left"></i>
+                    @if($user->isLguUser())
+                        <span>Returned Documents Awaiting Action — {{ $user->office ?: 'My LGU' }}</span>
+                    @elseif($user->isMlgooUser())
+                        <span>Returned Documents Awaiting Action — {{ $user->office ?: 'My Jurisdiction' }}</span>
+                    @elseif($user->isProvincialUser())
+                        <span>Returned Documents Awaiting Action — {{ $user->province ?: 'Provincial Jurisdiction' }}</span>
+                    @endif
+                </h2>
+                
+                @if($returnedByModule->isNotEmpty())
+                    <div class="menu-cards-grid">
+                        @foreach($returnedByModule as $moduleLabel => $tasks)
+                            @php
+                                $firstTask = $tasks->first();
+                                $moduleKey = $firstTask['module_key'] ?? 'default';
+                                $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
+                                $slug = 'modal-returned-' . Str::slug($moduleLabel);
+                            @endphp
+                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
+                                <div class="menu-card-top">
+                                    <div class="menu-card-icon-wrapper danger">
+                                        <i class="{{ $iconClass }}"></i>
+                                    </div>
+                                    <span class="menu-card-badge danger">{{ $tasks->count() }}</span>
+                                </div>
+                                <div>
+                                    <h3 class="menu-card-title">{{ $moduleLabel }}</h3>
+                                    <div class="menu-card-footer danger">
+                                        Act & Resubmit <i class="fas fa-arrow-right"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
                 @else
-                    <span>Returned Documents Awaiting Action</span>
+                    <div class="empty-state" style="border: 1px solid #e2e8f0; border-radius: 16px;">
+                        <div class="empty-icon"><i class="fas fa-thumbs-up" style="color: #3b82f6;"></i></div>
+                        <div class="empty-title">No Returned Documents</div>
+                        <p class="empty-desc">
+                            @if($user->isLguUser() || $user->isMlgooUser())
+                                Great job! There are no returned documents requiring revision for {{ $user->office ?: 'your assigned LGU' }}.
+                            @elseif($user->isProvincialUser())
+                                Great job! There are no returned documents requiring revision in {{ $user->province ?: 'your province' }}.
+                            @else
+                                Great job! You have no document submissions that are returned or pending revisions.
+                            @endif
+                        </p>
+                    </div>
                 @endif
-            </h2>
-            
-            @if($returnedByModule->isNotEmpty())
-                <div class="menu-cards-grid">
-                    @foreach($returnedByModule as $moduleLabel => $tasks)
-                        @php
-                            $firstTask = $tasks->first();
-                            $moduleKey = $firstTask['module_key'] ?? 'default';
-                            $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
-                            $slug = 'modal-returned-' . Str::slug($moduleLabel);
-                        @endphp
-                        <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
-                            <div class="menu-card-top">
-                                <div class="menu-card-icon-wrapper danger">
-                                    <i class="{{ $iconClass }}"></i>
-                                </div>
-                                <span class="menu-card-badge danger">{{ $tasks->count() }}</span>
-                            </div>
-                            <div>
-                                <h3 class="menu-card-title">{{ $moduleLabel }}</h3>
-                                <div class="menu-card-footer danger">
-                                    Act & Resubmit <i class="fas fa-arrow-right"></i>
-                                </div>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @else
-                <div class="empty-state" style="border: 1px solid #e2e8f0; border-radius: 16px;">
-                    <div class="empty-icon"><i class="fas fa-thumbs-up" style="color: #3b82f6;"></i></div>
-                    <div class="empty-title">No Returned Documents</div>
-                    <p class="empty-desc">
-                        @if($user->isLguUser() || $user->isMlgooUser())
-                            Great job! There are no returned documents requiring revision for {{ $user->office ?: 'your assigned LGU' }}.
-                        @elseif($user->isProvincialUser())
-                            Great job! There are no returned documents requiring revision in {{ $user->province ?: 'your province' }}.
-                        @else
-                            Great job! You have no document submissions that are returned or pending revisions.
-                        @endif
-                    </p>
-                </div>
-            @endif
-        </div>
+            </div>
+        @endif
 
     </div>
 </div>
@@ -800,11 +799,11 @@
                 <div class="task-modal-header">
                     <h3 class="task-modal-title">
                         <i class="{{ $iconClass }}"></i>
-                        @if($user->isMlgooUser())
+                        @if($approvalLevel === 'cmlgoo')
                             <span>{{ $moduleLabel }} - C/MLGOO Approvals Pool ({{ $user->office }})</span>
-                        @elseif($user->isProvincialUser())
+                        @elseif($approvalLevel === 'provincial')
                             <span>{{ $moduleLabel }} - Provincial Approvals Pool ({{ $user->province }})</span>
-                        @elseif($user->isRegionalUser())
+                        @elseif($approvalLevel === 'regional')
                             <span>{{ $moduleLabel }} - Regional Approvals Pool (CAR)</span>
                         @else
                             <span>{{ $moduleLabel }} - Approvals Pool</span>
@@ -1036,10 +1035,16 @@
                                             <div class="task-message-cell" style="font-style: italic;">{{ $task['message'] }}</div>
                                         </td>
                                         <td>
-                                            <div style="font-weight: 600;">{{ $task['sender_name'] ?: 'System' }}</div>
+                                            <div style="font-weight: 600;">{{ $task['returned_by_name'] ?? $task['sender_name'] ?? 'Validator' }}</div>
+                                            @if(!empty($task['returned_by_role']))
+                                                <div style="font-size: 0.75rem; color: #64748b;">{{ $task['returned_by_role'] }}</div>
+                                            @endif
                                         </td>
                                         <td>
-                                            {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
+                                            @php
+                                                $returnedDate = $task['returned_at'] ?? $task['created_at'] ?? null;
+                                            @endphp
+                                            {{ !empty($returnedDate) ? \Illuminate\Support\Carbon::parse($returnedDate)->format('M d, Y h:i A') : 'N/A' }}
                                         </td>
                                         <td>
                                             <a href="{{ url($task['url'] ?? ('/notifications/' . $task['id'] . '/read')) }}" class="task-action-btn btn-danger">

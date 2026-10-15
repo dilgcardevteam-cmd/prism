@@ -27,15 +27,26 @@ class TaskManagementController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
 
+        $approvalLevel = $user instanceof User ? $user->approvalLevel() : null;
+
         $ticketsByCategory = collect();
         if ($user instanceof User) {
             if ($user->isSuperAdmin()) {
-                $ticketsByCategory = \App\Models\Ticket::with(['category', 'submitter'])
-                    ->whereNull('assigned_to')
-                    ->where('status', '!=', \App\Models\Ticket::STATUS_CLOSED)
-                    ->get()
-                    ->groupBy(fn($t) => $t->category->name ?? 'Uncategorized');
-            } elseif ($user->isRegionalUser()) {
+                if ($approvalLevel === 'provincial' && $user->normalizedProvince() !== '') {
+                    $ticketsByCategory = \App\Models\Ticket::with(['category', 'submitter'])
+                        ->where('current_level', \App\Models\Ticket::LEVEL_PROVINCIAL)
+                        ->whereNull('assigned_to')
+                        ->whereRaw('LOWER(TRIM(COALESCE(province_scope, ""))) = ?', [$user->normalizedProvince()])
+                        ->get()
+                        ->groupBy(fn($t) => $t->category->name ?? 'Uncategorized');
+                } else {
+                    $ticketsByCategory = \App\Models\Ticket::with(['category', 'submitter'])
+                        ->whereNull('assigned_to')
+                        ->where('status', '!=', \App\Models\Ticket::STATUS_CLOSED)
+                        ->get()
+                        ->groupBy(fn($t) => $t->category->name ?? 'Uncategorized');
+                }
+            } elseif ($user->isRegionalUser() || $approvalLevel === 'regional') {
                 $normalizedRegion = $user->normalizedRegionComparable();
                 $regionalTicketsQuery = \App\Models\Ticket::with(['category', 'submitter'])
                     ->where('current_level', \App\Models\Ticket::LEVEL_REGIONAL)
@@ -50,7 +61,7 @@ class TaskManagementController extends Controller
 
                 $ticketsByCategory = $regionalTicketsQuery->get()
                     ->groupBy(fn($t) => $t->category->name ?? 'Uncategorized');
-            } elseif ($user->isProvincialUser()) {
+            } elseif ($user->isProvincialUser() || $approvalLevel === 'provincial') {
                 $ticketsByCategory = \App\Models\Ticket::with(['category', 'submitter'])
                     ->where('current_level', \App\Models\Ticket::LEVEL_PROVINCIAL)
                     ->whereNull('assigned_to')
@@ -71,16 +82,13 @@ class TaskManagementController extends Controller
         $userJurisdictionLabel = '';
 
         if ($user) {
-            if ($user->isSuperAdmin()) {
-                $userLevelLabel = 'Super Admin / Central Oversight';
-                $userJurisdictionLabel = 'All Jurisdictions (CAR)';
-            } elseif ($user->isRegionalUser()) {
+            if ($approvalLevel === 'regional') {
                 $userLevelLabel = 'Regional Validator';
                 $userJurisdictionLabel = $user->region ?: 'Cordillera Administrative Region (CAR)';
-            } elseif ($user->isProvincialUser()) {
+            } elseif ($approvalLevel === 'provincial') {
                 $userLevelLabel = 'Provincial Validator';
                 $userJurisdictionLabel = 'Province of ' . ($user->province ?: 'Assigned Province');
-            } elseif ($user->isMlgooUser()) {
+            } elseif ($approvalLevel === 'cmlgoo') {
                 $userLevelLabel = 'C/MLGOO Validator';
                 $userJurisdictionLabel = ($user->office ?: 'Assigned Municipality') . ($user->province ? ', ' . $user->province : '');
             } elseif ($user->isLguUser()) {
@@ -94,7 +102,8 @@ class TaskManagementController extends Controller
             'returnedByModule',
             'ticketsByCategory',
             'userLevelLabel',
-            'userJurisdictionLabel'
+            'userJurisdictionLabel',
+            'approvalLevel'
         ));
     }
 }
