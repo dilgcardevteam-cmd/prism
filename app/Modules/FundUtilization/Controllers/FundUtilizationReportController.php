@@ -587,13 +587,14 @@ class FundUtilizationReportController extends Controller
         return $singlePath !== '' ? [$singlePath] : [];
     }
 
-    private function resolveFundUtilizationStoredFilePath(?string $storedPath): ?string
+    private function resolveFundUtilizationStoredFilePath(?string $storedPath, ?string $batchProjectCode = null): ?string
     {
         $storedPath = trim((string) $storedPath);
         if ($storedPath === '' || str_contains($storedPath, '://')) {
             return null;
         }
 
+        $disk = Storage::disk('public');
         $normalizedPath = str_replace('\\', '/', $storedPath);
         $normalizedPath = ltrim($normalizedPath, '/');
         $candidates = [$normalizedPath];
@@ -610,9 +611,21 @@ class FundUtilizationReportController extends Controller
                 continue;
             }
 
-            $disk = Storage::disk('public');
             if ($disk->exists($candidate)) {
                 return $disk->path($candidate);
+            }
+        }
+
+        if ($batchProjectCode !== null) {
+            $fileName = basename($normalizedPath);
+            $batchDirectory = 'fur/batch-documents/' . trim($batchProjectCode);
+
+            if ($fileName !== '' && $fileName !== '.' && $fileName !== '..') {
+                foreach ($disk->files($batchDirectory) as $batchFile) {
+                    if (strcasecmp(basename($batchFile), $fileName) === 0) {
+                        return $disk->path($batchFile);
+                    }
+                }
             }
         }
 
@@ -4544,7 +4557,7 @@ class FundUtilizationReportController extends Controller
                 abort(404, 'Document not found');
             }
 
-            $filePath = $this->resolveFundUtilizationStoredFilePath($selectedFilePath);
+            $filePath = $this->resolveFundUtilizationStoredFilePath($selectedFilePath, $projectCode);
         } else {
             if (!$upload || !$upload->$column) {
                 abort(404, 'Document not found');
