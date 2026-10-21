@@ -82,15 +82,6 @@
         };
     @endphp
 
-    @if($canBatchUploadFundUtilization)
-        {{-- <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-            <button type="button" class="dashboard-filter-export-btn" onclick="openBatchUploadModal()" style="height: 38px; min-width: 210px; border-radius: 8px; background: linear-gradient(180deg, #003a99 0%, #002C76 100%); box-shadow: 0 12px 24px rgba(0, 44, 118, 0.18);">
-                <i class="fas fa-layer-group" aria-hidden="true"></i>
-                Batch Upload FUR
-            </button>
-        </div> --}}
-    @endif
-
     <!-- Quarterly Submissions Dashboard -->
     @php
         $qd = $quarterlyDashboard ?? ['total_projects' => 0, 'quarters' => [], 'overall_submission_rate' => 0, 'overall_compliant' => 0, 'overall_submitted' => 0, 'total_slots' => 0];

@@ -11,6 +11,11 @@ use Illuminate\Support\Str;
 
 class RegionalApprovalPoolService
 {
+    private array $tableExists = [];
+    private array $columnExists = [];
+    private array $projectLocations = [];
+    private array $users = [];
+
     /**
      * Build pending tasks for a specific user based on role and assigned jurisdiction.
      *
@@ -29,7 +34,7 @@ class RegionalApprovalPoolService
         $sources = $this->documentSources();
 
         foreach ($sources as $source) {
-            if (!Schema::hasTable($source['table'])) {
+            if (!$this->hasTable($source['table'])) {
                 continue;
             }
 
@@ -55,8 +60,8 @@ class RegionalApprovalPoolService
                 $query->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_ro'")
                     ->whereNull('approved_at_dilg_ro');
             } elseif ($approvalLevel === 'provincial') {
-                $hasOfficeCol = \Illuminate\Support\Facades\Schema::hasColumn($source['table'], 'office');
-                $hasApprovedAtMlgooCol = \Illuminate\Support\Facades\Schema::hasColumn($source['table'], 'approved_at_c_mlgoo');
+                $hasOfficeCol = $this->hasColumn($source['table'], 'office');
+                $hasApprovedAtMlgooCol = $this->hasColumn($source['table'], 'approved_at_c_mlgoo');
                 $query->where(function ($q) use ($hasOfficeCol, $hasApprovedAtMlgooCol) {
                     $q->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_po'");
                     if ($hasOfficeCol) {
@@ -79,7 +84,7 @@ class RegionalApprovalPoolService
                 if ($isDilgDeliverable) {
                     continue;
                 }
-                $hasOfficeCol = \Illuminate\Support\Facades\Schema::hasColumn($source['table'], 'office');
+                $hasOfficeCol = $this->hasColumn($source['table'], 'office');
                 $query->where(function ($q) use ($hasOfficeCol) {
                     $q->whereRaw("LOWER(TRIM(COALESCE(status, ''))) = 'pending_mlgoo'");
                     if ($hasOfficeCol) {
@@ -196,7 +201,7 @@ class RegionalApprovalPoolService
         }
 
         // Fund Utilization Workflows
-        if (Schema::hasTable('fund_utilization_approval_workflows')) {
+        if ($this->hasTable('fund_utilization_approval_workflows')) {
             $workflowQuery = DB::table('fund_utilization_approval_workflows')
                 ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'pending level %'");
 
@@ -285,7 +290,7 @@ class RegionalApprovalPoolService
         $sources = $this->documentSources();
 
         foreach ($sources as $source) {
-            if (!Schema::hasTable($source['table'])) {
+            if (!$this->hasTable($source['table'])) {
                 continue;
             }
 
@@ -394,7 +399,7 @@ class RegionalApprovalPoolService
         }
 
         // Returned Fund Utilization Workflows
-        if (Schema::hasTable('fund_utilization_approval_workflows')) {
+        if ($this->hasTable('fund_utilization_approval_workflows')) {
             $workflowQuery = DB::table('fund_utilization_approval_workflows')
                 ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'returned by %'");
 
@@ -650,7 +655,7 @@ class RegionalApprovalPoolService
         $table = $source['table'] ?? '';
         $recordId = (int) ($record->id ?? 0);
 
-        if ($table !== '' && $recordId > 0 && Schema::hasTable('activity_logs')) {
+        if ($table !== '' && $recordId > 0 && $this->hasTable('activity_logs')) {
             try {
                 $log = DB::table('activity_logs')
                     ->where('properties->report_table', $table)
@@ -705,7 +710,7 @@ class RegionalApprovalPoolService
     {
         $workflowId = (int) ($workflow->id ?? 0);
 
-        if ($workflowId > 0 && Schema::hasTable('approval_logs')) {
+        if ($workflowId > 0 && $this->hasTable('approval_logs')) {
             try {
                 $log = DB::table('approval_logs')
                     ->where('submission_id', $workflowId)
@@ -725,7 +730,7 @@ class RegionalApprovalPoolService
             }
         }
 
-        if ($workflowId > 0 && Schema::hasTable('activity_logs')) {
+        if ($workflowId > 0 && $this->hasTable('activity_logs')) {
             try {
                 $log = DB::table('activity_logs')
                     ->where(function ($q) use ($workflow, $workflowId) {
@@ -776,13 +781,18 @@ class RegionalApprovalPoolService
             return ['name' => 'Unknown', 'role' => '', 'province' => '', 'returned_at' => null];
         }
 
+        $cacheKey = (string) $userId;
+        if (array_key_exists($cacheKey, $this->users)) {
+            return $this->users[$cacheKey];
+        }
+
         $user = User::query()
             ->select(['idno', 'fname', 'lname', 'role', 'province'])
             ->where('idno', $userId)
             ->first();
 
         if (!$user) {
-            return ['name' => 'Unknown', 'role' => '', 'province' => '', 'returned_at' => null];
+            return $this->users[$cacheKey] = ['name' => 'Unknown', 'role' => '', 'province' => '', 'returned_at' => null];
         }
 
         $roleLabel = match (strtolower((string) $user->role)) {
@@ -794,7 +804,7 @@ class RegionalApprovalPoolService
             default => ucwords(str_replace(['_', '-'], ' ', (string) $user->role)),
         };
 
-        return [
+        return $this->users[$cacheKey] = [
             'name' => $user->fullName() ?: 'Unknown',
             'role' => $roleLabel,
             'province' => trim((string) ($user->province ?? '')),
@@ -832,8 +842,16 @@ class RegionalApprovalPoolService
      */
     private function resolveProjectLocation(string $projectCode): array
     {
-        if ($projectCode === '' || !Schema::hasTable('subay_project_profiles')) {
+        if ($projectCode === '') {
             return ['province' => '', 'city_municipality' => ''];
+        }
+
+        if (array_key_exists($projectCode, $this->projectLocations)) {
+            return $this->projectLocations[$projectCode];
+        }
+
+        if (!$this->hasTable('subay_project_profiles')) {
+            return $this->projectLocations[$projectCode] = ['province' => '', 'city_municipality' => ''];
         }
 
         $profile = DB::table('subay_project_profiles')
@@ -841,7 +859,7 @@ class RegionalApprovalPoolService
             ->first(['province', 'city_municipality', 'project_owner']);
 
         if (!$profile) {
-            return ['province' => '', 'city_municipality' => ''];
+            return $this->projectLocations[$projectCode] = ['province' => '', 'city_municipality' => ''];
         }
 
         $province = trim((string) ($profile->province ?? ''));
@@ -852,10 +870,22 @@ class RegionalApprovalPoolService
             $cityMunicipality = 'Province';
         }
 
-        return [
+        return $this->projectLocations[$projectCode] = [
             'province' => $province,
             'city_municipality' => $cityMunicipality,
         ];
+    }
+
+    private function hasTable(string $table): bool
+    {
+        return $this->tableExists[$table] ??= Schema::hasTable($table);
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        $key = $table . '.' . $column;
+
+        return $this->columnExists[$key] ??= Schema::hasColumn($table, $column);
     }
 
     /**

@@ -663,6 +663,27 @@
                         </p>
                     </div>
                 @endif
+                @if($pendingFurUploadBatches->isNotEmpty())
+                    <div class="menu-cards-grid" style="margin-top: 20px;">
+                        <a class="menu-card" href="{{ route('fund-utilization.upload-batches.index') }}" style="text-decoration:none; color:inherit;">
+                            <div class="menu-card-top">
+                                <div class="menu-card-icon-wrapper primary">
+                                    <i class="fas fa-layer-group"></i>
+                                </div>
+                                <span class="menu-card-badge danger">{{ $pendingFurUploadBatches->count() }}</span>
+                            </div>
+                            <div>
+                                <h3 class="menu-card-title">FUR Batch Upload Review</h3>
+                                <p style="margin: 6px 0 14px; color:#64748b; font-size:12px; line-height:1.45;">
+                                    {{ $pendingFurUploadBatches->sum('pending_projects_count') }} project{{ $pendingFurUploadBatches->sum('pending_projects_count') === 1 ? '' : 's' }} awaiting selection
+                                </p>
+                                <div class="menu-card-footer primary">
+                                    Open Batch Review <i class="fas fa-arrow-right"></i>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                @endif
             </div>
         @endif
 
@@ -1201,19 +1222,6 @@
 @endif
 
 <script>
-    let taskPageNeedsRefresh = false;
-
-    document.addEventListener('visibilitychange', function () {
-        if (document.hidden) {
-            taskPageNeedsRefresh = true;
-            return;
-        }
-
-        if (taskPageNeedsRefresh) {
-            window.location.reload();
-        }
-    });
-
     function openTaskModal(id) {
         const modal = document.getElementById(id);
         if (modal) {

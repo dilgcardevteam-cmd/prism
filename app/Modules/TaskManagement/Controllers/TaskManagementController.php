@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Support\NotificationCenter;
 use App\Models\User;
 use App\Services\RegionalApprovalPoolService;
+use App\Modules\FundUtilization\Models\FURUploadBatch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -76,6 +77,18 @@ class TaskManagementController extends Controller
         $poolService = app(RegionalApprovalPoolService::class);
         $pendingApprovals = $user ? $poolService->pendingTasksForUser($user) : collect();
         $returnedDocuments = $user ? $poolService->returnedTasksForUser($user) : collect();
+        $pendingFurUploadBatches = collect();
+        if ($user && $approvalLevel !== null) {
+            $pendingFurUploadBatches = FURUploadBatch::query()
+                ->withCount([
+                    'projects',
+                    'projects as pending_projects_count' => fn ($query) => $query->where('status', 'pending'),
+                ])
+                ->whereIn('status', ['submitted', 'partially_validated'])
+                ->whereHas('projects', fn ($query) => $query->where('status', 'pending'))
+                ->latest('submitted_at')
+                ->get();
+        }
 
         $pendingByModule = $pendingApprovals->groupBy('module_label');
         $returnedByModule = $returnedDocuments->groupBy('module_label');
@@ -105,7 +118,8 @@ class TaskManagementController extends Controller
             'ticketsByCategory',
             'userLevelLabel',
             'userJurisdictionLabel',
-            'approvalLevel'
+            'approvalLevel',
+            'pendingFurUploadBatches'
         ));
     }
 }
