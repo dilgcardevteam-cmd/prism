@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class GzipCompressionTest extends TestCase
@@ -23,6 +24,18 @@ class GzipCompressionTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertNull($response->headers->get('Content-Encoding'));
+    }
+
+    public function test_static_asset_responses_include_a_far_future_cache_policy(): void
+    {
+        Route::get('/assets/app.js', function () {
+            return response('console.log("hello");', 200)->header('Content-Type', 'application/javascript');
+        });
+
+        $response = $this->get('/assets/app.js');
+
+        $response->assertOk();
+        $this->assertSame('immutable, max-age=31536000, public', $response->headers->get('Cache-Control'));
     }
 }
 
