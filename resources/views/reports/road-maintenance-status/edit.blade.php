@@ -314,6 +314,13 @@
                                     </div>
                                 @endforeach
                             </div>
+                            @php
+                                $isApprovedDoc = (bool) ($doc && ($doc->approved_at_dilg_ro || strtolower((string) $doc->status) === 'approved'));
+                                $canDeleteDoc = $hasFile && $doc && (
+                                    Auth::user()->isSuperAdmin()
+                                    || (!$isApprovedDoc && Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'delete') && Auth::user()->canAccessLguScope($province, $officeName))
+                                );
+                            @endphp
                             @if ($doc && $doc->file_path)
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
                                     <a href="{{ route('road-maintenance-status.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
@@ -324,15 +331,16 @@
                                             {{ $submissionTimeliness['label'] }}
                                         </span>
                                     @endif
-                                    @if (Auth::user()->isSuperAdmin())
-                                        <form method="POST" action="{{ route('road-maintenance-status.delete-document', ['roadMaintenance' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
-                                                <i class="fas fa-trash-alt"></i>
-                                                <span>Delete</span>
-                                            </button>
-                                        </form>
+                                    @if ($canDeleteDoc)
+                                        <button
+                                            type="submit"
+                                            form="road-maintenance-delete-form-{{ $quarter }}"
+                                            onclick="return confirm('Delete this uploaded document? This action cannot be undone.');"
+                                            style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;"
+                                        >
+                                            <i class="fas fa-trash-alt"></i>
+                                            <span>Delete</span>
+                                        </button>
                                     @endif
                                 </div>
                             @endif
@@ -383,6 +391,12 @@
                                 Upload
                             </button>
                         </form>
+                        @if ($canDeleteDoc && $doc)
+                            <form id="road-maintenance-delete-form-{{ $quarter }}" method="POST" action="{{ route('road-maintenance-status.delete-document', ['roadMaintenance' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
+                                @csrf
+                                @method('DELETE')
+                            </form>
+                        @endif
                     </div>
                 </div>
             @endforeach

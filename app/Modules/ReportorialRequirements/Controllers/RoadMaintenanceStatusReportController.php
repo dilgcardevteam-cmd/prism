@@ -27,8 +27,7 @@ class RoadMaintenanceStatusReportController extends Controller
         $this->middleware('crud_permission:road_maintenance_status_reports,view')->only(['index', 'show', 'edit', 'viewDocument']);
         $this->middleware('crud_permission:road_maintenance_status_reports,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:road_maintenance_status_reports,update')->only(['update', 'approveDocument']);
-        $this->middleware('crud_permission:road_maintenance_status_reports,delete')->only(['destroy']);
-        $this->middleware('superadmin')->only(['deleteDocument']);
+        $this->middleware('crud_permission:road_maintenance_status_reports,delete')->only(['destroy', 'deleteDocument']);
     }
 
     private function legacyOffices(): array
@@ -953,18 +952,49 @@ class RoadMaintenanceStatusReportController extends Controller
     public function deleteDocument($id, $docId)
     {
         $officeName = (string) $id;
+        $province = $this->findProvinceByOffice($officeName) ?? 'Unknown';
+        $user = auth()->user();
+        abort_unless($user && ($user->isSuperAdmin() || $user->canAccessLguScope($province, $officeName)), 403);
+
         $document = RoadMaintenanceStatusDocument::query()
-            ->where('office', $officeName)
             ->where('id', $docId)
-            ->firstOrFail();
+            ->where('office', $officeName)
+            ->first();
+
+        if (!$document) {
+            $document = RoadMaintenanceStatusDocument::query()
+                ->where('id', $docId)
+                ->firstOrFail();
+        }
+
+        $isApproved = !empty($document->approved_at_dilg_ro) || strtolower((string) $document->status) === 'approved';
+        if ($isApproved && !$user->isSuperAdmin()) {
+            abort(403, 'Approved documents can only be deleted by a SuperAdmin.');
+        }
+
+        $quarter = $document->quarter;
+        $year = (int) ($document->year ?? now()->year);
+        $effectiveOffice = $document->office ?: $officeName;
 
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
             Storage::disk('public')->delete($document->file_path);
         }
 
+        $this->logActivity($effectiveOffice, 'delete', 'Deleted', $document);
+
         $document->delete();
 
-        return back()->with('success', 'Uploaded document deleted successfully.');
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json(['success' => true, 'message' => 'Uploaded document deleted successfully.']);
+        }
+
+        return redirect()
+            ->route('road-maintenance-status.edit', [
+                'roadMaintenance' => $effectiveOffice,
+                'year' => $year,
+                'quarter' => $quarter,
+            ])
+            ->with('success', 'Uploaded document deleted successfully.');
     }
 
     public function upload(Request $request, $id)
