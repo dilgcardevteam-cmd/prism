@@ -63,7 +63,7 @@
     $isBatchDocumentForPoValidation = $batchDocumentValidationState['is_pending_provincial'];
     $isBatchDocumentUnderValidation = $isBatchDocumentPendingDilgRoValidation || $isBatchDocumentForPoValidation;
 @endphp
-<div style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $batchDocumentStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
+<div id="doc-card-batch-document-{{ $quarter }}" style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $batchDocumentStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
     <h3 style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0; padding: 12px 16px; background-color: #f8fafc; border-bottom: 1px solid #e5e7eb; font-weight: 400;">
         <span style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
             <span style="width: 30px; height: 30px; background: rgba(217,119,6,0.12); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">

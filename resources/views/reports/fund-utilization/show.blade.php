@@ -544,6 +544,7 @@
     @endphp
 
     <!-- Quarterly Sections -->
+    <div id="fur-quarters-container">
     @foreach ($quarters as $quarter)
         @php
             $quarterLabels = ['Q1' => 'Quarter 1', 'Q2' => 'Quarter 2', 'Q3' => 'Quarter 3', 'Q4' => 'Quarter 4'];
@@ -557,9 +558,18 @@
             $quarterWindow = $quarterWindows[$quarter] ?? '';
             $configuredQuarterDeadline = $configuredQuarterDeadlines[$quarter] ?? null;
             $quarterDeadlineDisplay = trim((string) ($configuredQuarterDeadline['display'] ?? ''));
-            $isExpandedByDefault = strtolower(request()->query('open_quarter')) === strtolower($quarter);
+            $requestedQuarter = strtolower(trim((string) (request()->query('open_quarter') ?: request()->query('quarter'))));
+            $isExpandedByDefault = $requestedQuarter === strtolower($quarter);
             $displayStyle = $isExpandedByDefault ? 'block' : 'none';
             $iconRotation = $isExpandedByDefault ? 'rotate(-180deg)' : 'rotate(0deg)';
+
+            $requestedDocument = strtolower(trim((string) request()->query('document')));
+            $isBatchRequested = $isExpandedByDefault && ($requestedDocument === 'batch-document');
+            $isIndividualRequested = $isExpandedByDefault && ($requestedDocument !== '' ? !$isBatchRequested : true);
+            $individualDisplayStyle = $isIndividualRequested ? 'block' : 'none';
+            $individualIconRotation = $isIndividualRequested ? 'rotate(180deg)' : 'rotate(0deg)';
+            $batchDisplayStyle = $isBatchRequested ? 'block' : 'none';
+            $batchIconRotation = $isBatchRequested ? 'rotate(180deg)' : 'rotate(0deg)';
 
             // Define FDP variables early to avoid undefined variable errors
             $isFdpReturned = $fdpDocuments[$quarter] && $fdpDocuments[$quarter]->fdp_status === 'returned';
@@ -606,9 +616,9 @@
                         </span>
                         <span>Individual Documents</span>
                     </span>
-                    <i class="fas fa-chevron-down" id="icon-individual-documents-{{ $quarter }}" style="transition: transform 0.3s; transform: rotate(0deg);"></i>
+                    <i class="fas fa-chevron-down" id="icon-individual-documents-{{ $quarter }}" style="transition: transform 0.3s; transform: {{ $individualIconRotation }};"></i>
                 </button>
-                <div id="individual-documents-{{ $quarter }}" style="display: none; padding: 18px 18px 0;">
+                <div id="individual-documents-{{ $quarter }}" style="display: {{ $individualDisplayStyle }}; padding: 18px 18px 0;">
             <!-- Fund Utilization Report (MOV) Section -->
             @php
                 $hasMovFile = $movUploads[$quarter] && $movUploads[$quarter]->mov_file_path;
@@ -632,7 +642,7 @@
                 $isMovForPoValidation = $movValidationState['is_pending_provincial'];
                 $isMovUnderValidation = $isPendingDilgRoValidation || $isMovForPoValidation;
             @endphp
-            <div style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $movStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
+            <div id="doc-card-mov-{{ $quarter }}" style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $movStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
                 <h3 style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 0 0 0; padding: 12px 16px; background-color: #f8fafc; border-bottom: 1px solid #e5e7eb; font-weight: 400;">
                     <span style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
                         <span style="width: 30px; height: 30px; background: rgba(220,38,38,0.1); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -848,7 +858,7 @@
                                 $isDbmForPoValidation = $dbmValidationState['is_pending_provincial'];
                                 $isDbmUnderValidation = $isDbmPendingDilgRoValidation || $isDbmForPoValidation;
                             @endphp
-                            <div style="padding: 12px; background-color: {{ $dbmFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
+                            <div id="doc-card-written-notice-dbm-{{ $quarter }}" style="padding: 12px; background-color: {{ $dbmFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
                                 <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
                                     <span>Secretary of DBM</span>
                                     <span style="display: inline-block; padding: 2px 8px; background-color: {{ $dbmStatusColor }}; color: white; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap;">
@@ -1004,7 +1014,7 @@
                                 $isDilgForPoValidation = $dilgValidationState['is_pending_provincial'];
                                 $isDilgUnderValidation = $isDilgPendingDilgRoValidation || $isDilgForPoValidation;
                             @endphp
-                            <div style="padding: 12px; background-color: {{ $dilgFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
+                            <div id="doc-card-written-notice-dilg-{{ $quarter }}" style="padding: 12px; background-color: {{ $dilgFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
                                 <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
                                     <span>Secretary of DILG</span>
                                     <span style="display: inline-block; padding: 2px 8px; background-color: {{ $dilgStatusColor }}; color: white; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap;">
@@ -1163,7 +1173,7 @@
                                 $isSpeakerForPoValidation = $speakerValidationState['is_pending_provincial'];
                                 $isSpeakerUnderValidation = $isSpeakerPendingDilgRoValidation || $isSpeakerForPoValidation;
                             @endphp
-                            <div style="padding: 12px; background-color: {{ $speakerFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
+                            <div id="doc-card-written-notice-speaker-{{ $quarter }}" style="padding: 12px; background-color: {{ $speakerFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
                                 <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
                                     <span>Speaker of the House</span>
                                     <span style="display: inline-block; padding: 2px 8px; background-color: {{ $speakerStatusColor }}; color: white; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap;">
@@ -1316,7 +1326,7 @@
                                 $isPresidentForPoValidation = $presidentValidationState['is_pending_provincial'];
                                 $isPresidentUnderValidation = $isPresidentPendingDilgRoValidation || $isPresidentForPoValidation;
                             @endphp
-                            <div style="padding: 12px; background-color: {{ $presidentFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
+                            <div id="doc-card-written-notice-president-{{ $quarter }}" style="padding: 12px; background-color: {{ $presidentFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
                                 <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
                                     <span>President of the Senate</span>
                                     <span style="display: inline-block; padding: 2px 8px; background-color: {{ $presidentStatusColor }}; color: white; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap;">
@@ -1459,7 +1469,7 @@
                                 $isHouseForPoValidation = $houseValidationState['is_pending_provincial'];
                                 $isHouseUnderValidation = $isHousePendingDilgRoValidation || $isHouseForPoValidation;
                             @endphp
-                            <div style="padding: 12px; background-color: {{ $houseFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
+                            <div id="doc-card-written-notice-house-{{ $quarter }}" style="padding: 12px; background-color: {{ $houseFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
                                 <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
                                     <span>House Committee on Appropriation</span>
                                     <span style="display: inline-block; padding: 2px 8px; background-color: {{ $houseStatusColor }}; color: white; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap;">
@@ -1603,7 +1613,7 @@
                                 $isSenateForPoValidation = $senateValidationState['is_pending_provincial'];
                                 $isSenateUnderValidation = $isSenatePendingDilgRoValidation || $isSenateForPoValidation;
                             @endphp
-                            <div style="padding: 12px; background-color: {{ $senateFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
+                            <div id="doc-card-written-notice-senate-{{ $quarter }}" style="padding: 12px; background-color: {{ $senateFieldBg }}; border: 1px solid #e5e7eb; border-radius: 6px;">
                                 <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 600; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
                                     <span>Senate Committee on Finance</span>
                                     <span style="display: inline-block; padding: 2px 8px; background-color: {{ $senateStatusColor }}; color: white; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap;">
@@ -1749,7 +1759,7 @@
                 $fdpBackgroundColor = $isFdpReturned ? '#fee2e2' : ($hasFdpFile ? '#fffbeb' : 'transparent');
                 $fdpBorderColor = $isFdpReturned ? '#ef4444' : ($hasFdpFile ? '#059669' : '#f59e0b');
             @endphp
-            <div style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $fdpBorderColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
+            <div id="doc-card-fdp-{{ $quarter }}" style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $fdpBorderColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
                 <h3 style="margin: 0; padding: 12px 16px; background-color: #f8fafc; border-bottom: 1px solid #e5e7eb; font-weight: 400; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
                     <span style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
                         <span style="width: 30px; height: 30px; background: rgba(220,38,38,0.1); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -1941,7 +1951,7 @@
                 $postingStatusLabel = $postingValidationState['status_label'];
                 $postingBackgroundColor = $postingValidationState['field_bg'];
             @endphp
-            <div style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $postingStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
+            <div id="doc-card-posting-link-{{ $quarter }}" style="border: 1px solid #e5e7eb; border-left: 4px solid {{ $postingStatusColor }}; border-radius: 8px; margin-bottom: 18px; overflow: hidden; background-color: white;">
                 <h3 style="margin: 0; padding: 12px 16px; background-color: #f8fafc; border-bottom: 1px solid #e5e7eb; font-weight: 400; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
                     <span style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
                         <span style="width: 30px; height: 30px; background: rgba(5,150,105,0.1); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
@@ -2088,9 +2098,9 @@
                         </span>
                         <span>Batch Documents</span>
                     </span>
-                    <i class="fas fa-chevron-down" id="icon-batch-documents-{{ $quarter }}" style="transition: transform 0.3s; transform: rotate(0deg);"></i>
+                    <i class="fas fa-chevron-down" id="icon-batch-documents-{{ $quarter }}" style="transition: transform 0.3s; transform: {{ $batchIconRotation }};"></i>
                 </button>
-                <div id="batch-documents-{{ $quarter }}" style="display: none; padding: 18px 18px 0;">
+                <div id="batch-documents-{{ $quarter }}" style="display: {{ $batchDisplayStyle }}; padding: 18px 18px 0;">
                     @include('reports.fund-utilization.partials.batch-documents-card')
                 </div>
             </div>
@@ -2098,6 +2108,7 @@
             </div>
         </div>
     @endforeach
+    </div>
 
     <style>
         button:hover {
@@ -2999,17 +3010,43 @@
             modal.style.display = 'none';
         }
 
-        function submitResubmissionDecision(uploadType, quarter, decision) {
-            const form = document.getElementById('resubmissionDecisionForm');
-            const decisionInput = document.getElementById('resubmissionDecisionInput');
+        async function submitResubmissionDecision(uploadType, quarter, decision) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            const url = `${baseUrl}/${projectCode}/resubmission-request/${uploadType}/${quarter}`;
 
-            if (!form || !decisionInput) {
-                return;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ decision: decision })
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.message || 'Failed to submit decision.');
+                }
+
+                if (payload.message) {
+                    showToast(payload.message, 'success');
+                }
+                const targetCardId = 'doc-card-' + uploadType + '-' + quarter;
+                await refreshPagePreservingState(targetCardId);
+            } catch (err) {
+                console.warn('AJAX decision submit failed, falling back to form submit:', err);
+                const form = document.getElementById('resubmissionDecisionForm');
+                const decisionInput = document.getElementById('resubmissionDecisionInput');
+                if (form && decisionInput) {
+                    saveCurrentFurAccordionState();
+                    form.setAttribute('action', url);
+                    decisionInput.value = decision;
+                    form.submit();
+                }
             }
-
-            form.setAttribute('action', `${baseUrl}/${projectCode}/resubmission-request/${uploadType}/${quarter}`);
-            decisionInput.value = decision;
-            form.submit();
         }
 
         function confirmResubmissionDecision(uploadType, quarter, decision) {
@@ -3241,6 +3278,223 @@
             }
         }
 
+        const FUR_STORAGE_KEY = 'fur_state_' + encodeURIComponent(projectCode);
+
+        function saveCurrentFurAccordionState(customScrollY = null) {
+            try {
+                let openQuarter = null;
+                let openSub = null;
+
+                document.querySelectorAll('[id^="quarter-"]').forEach(function(qEl) {
+                    if (qEl.style.display === 'block') {
+                        openQuarter = qEl.id;
+                        const sub = qEl.querySelector('[id^="individual-documents-"][style*="display: block"], [id^="batch-documents-"][style*="display: block"]');
+                        if (sub) {
+                            openSub = sub.id;
+                        }
+                    }
+                });
+
+                const scrollY = customScrollY !== null ? customScrollY : (window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0);
+
+                sessionStorage.setItem(FUR_STORAGE_KEY, JSON.stringify({
+                    openQuarter: openQuarter,
+                    openSub: openSub,
+                    scrollY: scrollY,
+                    savedAt: Date.now()
+                }));
+            } catch (e) {
+                // Ignore storage errors
+            }
+        }
+
+        function restoreFurAccordionState() {
+            try {
+                // If user navigated directly from the index table, clear stale state so they get a fresh view
+                if (document.referrer && !document.referrer.includes(encodeURIComponent(projectCode)) && !document.referrer.includes(projectCode)) {
+                    sessionStorage.removeItem(FUR_STORAGE_KEY);
+                    return;
+                }
+
+                const raw = sessionStorage.getItem(FUR_STORAGE_KEY);
+                if (!raw) return;
+                const state = JSON.parse(raw);
+                if (!state) return;
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const hasUrlQuarter = urlParams.has('quarter') || urlParams.has('open_quarter');
+
+                if (!hasUrlQuarter && state.openQuarter) {
+                    const quarterEl = document.getElementById(state.openQuarter);
+                    const quarterIcon = document.getElementById('icon-' + state.openQuarter);
+                    if (quarterEl) {
+                        document.querySelectorAll('[id^="quarter-"]').forEach(function(other) {
+                            if (other !== quarterEl && other.style.display === 'block') {
+                                other.style.display = 'none';
+                                const otherIcon = document.getElementById('icon-' + other.id);
+                                if (otherIcon) otherIcon.style.transform = 'rotate(0deg)';
+                            }
+                        });
+                        quarterEl.style.display = 'block';
+                        if (quarterIcon) quarterIcon.style.transform = 'rotate(-180deg)';
+                    }
+                }
+
+                if (!hasUrlQuarter && state.openSub) {
+                    const subEl = document.getElementById(state.openSub);
+                    const subIcon = document.getElementById('icon-' + state.openSub);
+                    if (subEl) {
+                        const quarter = state.openSub.replace('individual-documents-', '').replace('batch-documents-', '');
+                        const siblingId = state.openSub.startsWith('individual-documents-')
+                            ? `batch-documents-${quarter}`
+                            : `individual-documents-${quarter}`;
+                        const siblingEl = document.getElementById(siblingId);
+                        const siblingIcon = document.getElementById('icon-' + siblingId);
+                        if (siblingEl && siblingEl.style.display === 'block') {
+                            siblingEl.style.display = 'none';
+                            if (siblingIcon) siblingIcon.style.transform = 'rotate(0deg)';
+                        }
+                        subEl.style.display = 'block';
+                        if (subIcon) subIcon.style.transform = 'rotate(180deg)';
+                    }
+                }
+
+                if (typeof state.scrollY === 'number' && state.scrollY > 0) {
+                    requestAnimationFrame(function() {
+                        window.scrollTo({
+                            top: state.scrollY,
+                            behavior: 'instant'
+                        });
+                    });
+                }
+            } catch (e) {
+                // Ignore restore errors
+            }
+        }
+
+        async function refreshPagePreservingState(targetCardId = null) {
+            const currentScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+            saveCurrentFurAccordionState(currentScrollY);
+
+            let activeQuarterId = null;
+            let activeSubId = null;
+
+            document.querySelectorAll('[id^="quarter-"]').forEach(function(qEl) {
+                if (qEl.style.display === 'block') {
+                    activeQuarterId = qEl.id;
+                    const sub = qEl.querySelector('[id^="individual-documents-"][style*="display: block"], [id^="batch-documents-"][style*="display: block"]');
+                    if (sub) {
+                        activeSubId = sub.id;
+                    }
+                }
+            });
+
+            try {
+                const response = await fetch(window.location.href, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Cache-Control': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to refresh data: HTTP ' + response.status);
+                }
+
+                const htmlText = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(htmlText, 'text/html');
+
+                const newQuartersContainer = doc.getElementById('fur-quarters-container');
+                const currentQuartersContainer = document.getElementById('fur-quarters-container');
+
+                if (!newQuartersContainer || !currentQuartersContainer) {
+                    throw new Error('Quarters container not found in response.');
+                }
+
+                if (activeQuarterId) {
+                    const newQuarter = newQuartersContainer.querySelector('#' + activeQuarterId);
+                    const newQuarterIcon = newQuartersContainer.querySelector('#icon-' + activeQuarterId);
+                    if (newQuarter) {
+                        newQuarter.style.display = 'block';
+                        if (newQuarterIcon) newQuarterIcon.style.transform = 'rotate(-180deg)';
+                    }
+                }
+
+                if (activeSubId) {
+                    const newSub = newQuartersContainer.querySelector('#' + activeSubId);
+                    const newSubIcon = newQuartersContainer.querySelector('#icon-' + activeSubId);
+                    if (newSub) {
+                        newSub.style.display = 'block';
+                        if (newSubIcon) newSubIcon.style.transform = 'rotate(180deg)';
+                    }
+                }
+
+                const newLogsModal = doc.getElementById('logsModal');
+                const currentLogsModal = document.getElementById('logsModal');
+                if (newLogsModal && currentLogsModal) {
+                    const newLogsTable = newLogsModal.querySelector('.logs-table');
+                    const currentLogsTable = currentLogsModal.querySelector('.logs-table');
+                    if (newLogsTable && currentLogsTable) {
+                        currentLogsTable.replaceWith(newLogsTable);
+                    }
+                }
+
+                const scriptTags = doc.querySelectorAll('script');
+                scriptTags.forEach(function(s) {
+                    const text = s.textContent || '';
+                    if (text.includes('submissionWorkflows =')) {
+                        const mWorkflows = text.match(/submissionWorkflows\s*=\s*(\[[\s\S]*?\]|\{[\s\S]*?\});/);
+                        if (mWorkflows && mWorkflows[1]) {
+                            try { window.submissionWorkflows = JSON.parse(mWorkflows[1]); } catch(e) {}
+                        }
+                        const mLogs = text.match(/activityLogs\s*=\s*(\[[\s\S]*?\]|\{[\s\S]*?\});/);
+                        if (mLogs && mLogs[1]) {
+                            try { window.activityLogs = JSON.parse(mLogs[1]); } catch(e) {}
+                        }
+                    }
+                });
+
+                currentQuartersContainer.replaceWith(newQuartersContainer);
+
+                if (typeof initializeUploadStyling === 'function') {
+                    initializeUploadStyling();
+                }
+                if (typeof initializeBatchUploadConfirmation === 'function') {
+                    initializeBatchUploadConfirmation();
+                }
+                if (typeof initializeCustomConfirmationBypass === 'function') {
+                    initializeCustomConfirmationBypass();
+                }
+
+                window.scrollTo({
+                    top: currentScrollY,
+                    behavior: 'instant'
+                });
+
+                if (targetCardId) {
+                    const cardEl = document.getElementById(targetCardId);
+                    if (cardEl) {
+                        const prevTransition = cardEl.style.transition;
+                        const prevBoxShadow = cardEl.style.boxShadow;
+                        cardEl.style.transition = 'box-shadow 0.3s ease';
+                        cardEl.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.45)';
+                        setTimeout(() => {
+                            cardEl.style.boxShadow = prevBoxShadow || '';
+                            cardEl.style.transition = prevTransition || '';
+                        }, 1200);
+                    }
+                }
+
+                return true;
+            } catch (error) {
+                console.warn('In-place refresh encountered an error, falling back to full reload:', error);
+                window.location.reload();
+                return false;
+            }
+        }
+
         document.getElementById('remarksForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -3290,13 +3544,14 @@
                     throw new Error(errorMessage);
                 }
 
+                closeRemarksModal();
+
                 if (payload && typeof payload.message === 'string' && payload.message.trim() !== '') {
                     showToast(payload.message, 'success');
-                    setTimeout(() => window.location.reload(), 600);
-                    return;
                 }
 
-                window.location.reload();
+                const targetCardId = (currentUploadType && currentQuarter) ? 'doc-card-' + currentUploadType + '-' + currentQuarter : null;
+                await refreshPagePreservingState(targetCardId);
             })
             .catch((error) => {
                 console.error('Error:', error);
@@ -3328,33 +3583,35 @@
                         const otherIcon = document.getElementById('icon-' + otherId);
                         if (otherIcon) otherIcon.style.transform = 'rotate(0deg)';
                     }
-                    });
+                });
+            }
+
+            if (
+                elementId.startsWith('individual-documents-')
+                || elementId.startsWith('batch-documents-')
+            ) {
+                const quarter = elementId.replace('individual-documents-', '').replace('batch-documents-', '');
+                const siblingId = elementId.startsWith('individual-documents-')
+                    ? `batch-documents-${quarter}`
+                    : `individual-documents-${quarter}`;
+                const siblingElement = document.getElementById(siblingId);
+                const siblingIcon = document.getElementById('icon-' + siblingId);
+
+                if (siblingElement && siblingElement.style.display === 'block') {
+                    siblingElement.style.display = 'none';
+                    if (siblingIcon) siblingIcon.style.transform = 'rotate(0deg)';
                 }
+            }
 
-                if (
-                    elementId.startsWith('individual-documents-')
-                    || elementId.startsWith('batch-documents-')
-                ) {
-                    const quarter = elementId.replace('individual-documents-', '').replace('batch-documents-', '');
-                    const siblingId = elementId.startsWith('individual-documents-')
-                        ? `batch-documents-${quarter}`
-                        : `individual-documents-${quarter}`;
-                    const siblingElement = document.getElementById(siblingId);
-                    const siblingIcon = document.getElementById('icon-' + siblingId);
-
-                    if (siblingElement && siblingElement.style.display === 'block') {
-                        siblingElement.style.display = 'none';
-                        if (siblingIcon) siblingIcon.style.transform = 'rotate(0deg)';
-                    }
-                }
-
-                if (!isOpen) {
-                    element.style.display = 'block';
-                    if (icon) icon.style.transform = 'rotate(180deg)';
-                } else {
+            if (!isOpen) {
+                element.style.display = 'block';
+                if (icon) icon.style.transform = elementId.startsWith('quarter-') ? 'rotate(-180deg)' : 'rotate(180deg)';
+            } else {
                 element.style.display = 'none';
                 if (icon) icon.style.transform = 'rotate(0deg)';
             }
+
+            saveCurrentFurAccordionState();
         }
 
         // Save Quarter Function
@@ -3393,6 +3650,8 @@
                 showToast('No changes to save for this quarter.', 'info');
                 return;
             }
+
+            saveCurrentFurAccordionState();
 
             // Submit all forms with changes
             formsToSubmit.forEach(form => {
@@ -3465,15 +3724,18 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             })
             .then(response => response.json())
-            .then(data => {
+            .then(async (data) => {
                 if (data.message) {
                     showToast(data.message, 'success');
                     if (data.message.toLowerCase().includes('deleted successfully')) {
-                        setTimeout(() => window.location.reload(), 800);
+                        const targetCardId = 'doc-card-' + docType + '-' + quarter;
+                        await refreshPagePreservingState(targetCardId);
                     }
                 }
             })
@@ -3632,11 +3894,21 @@
         document.addEventListener('DOMContentLoaded', initializeUploadStyling);
         document.addEventListener('DOMContentLoaded', initializeBatchUploadConfirmation);
         document.addEventListener('DOMContentLoaded', initializeCustomConfirmationBypass);
+        document.addEventListener('DOMContentLoaded', restoreFurAccordionState);
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             initializeUploadStyling();
             initializeBatchUploadConfirmation();
             initializeCustomConfirmationBypass();
+            restoreFurAccordionState();
         }
+
+        let furScrollDebounce = null;
+        window.addEventListener('scroll', function() {
+            clearTimeout(furScrollDebounce);
+            furScrollDebounce = setTimeout(function() {
+                saveCurrentFurAccordionState();
+            }, 250);
+        }, { passive: true });
 
         // Show save button and filename when file is selected
         function renderSelectedFileName(filenameDiv, fileName) {
