@@ -587,7 +587,7 @@ class FundUtilizationReportController extends Controller
         return $singlePath !== '' ? [$singlePath] : [];
     }
 
-    private function resolveFundUtilizationStoredFilePath(?string $storedPath, ?string $batchProjectCode = null): ?string
+    private function resolveFundUtilizationStoredFilePath(?string $storedPath, ?string $fallbackDirectory = null): ?string
     {
         $storedPath = trim((string) $storedPath);
         if ($storedPath === '' || str_contains($storedPath, '://')) {
@@ -616,12 +616,12 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        if ($batchProjectCode !== null) {
-            $fileName = basename($normalizedPath);
-            $batchDirectory = 'fur/batch-documents/' . trim($batchProjectCode);
+        if ($fallbackDirectory !== null) {
+            $fileName = rawurldecode(basename($normalizedPath));
+            $fallbackDirectory = trim($fallbackDirectory, '/');
 
             if ($fileName !== '' && $fileName !== '.' && $fileName !== '..') {
-                foreach ($disk->files($batchDirectory) as $batchFile) {
+                foreach ($disk->files($fallbackDirectory) as $batchFile) {
                     if (strcasecmp(basename($batchFile), $fileName) === 0) {
                         return $disk->path($batchFile);
                     }
@@ -4541,6 +4541,13 @@ class FundUtilizationReportController extends Controller
         $config = $docTypeMap[$docType];
         $table = $config['table'];
         $column = $config['column'];
+        $documentDirectory = match (true) {
+            $docType === 'batch-document' => 'fur/batch-documents/' . $projectCode,
+            $docType === 'mov' => 'fur/mov/' . $projectCode,
+            $docType === 'fdp' => 'fur/fdp/' . $projectCode,
+            str_starts_with($docType, 'written-notice-') => 'fur/written-notice/' . $projectCode,
+            default => null,
+        };
 
         // Get the file path from database
         $upload = \DB::table($table)
@@ -4557,13 +4564,13 @@ class FundUtilizationReportController extends Controller
                 abort(404, 'Document not found');
             }
 
-            $filePath = $this->resolveFundUtilizationStoredFilePath($selectedFilePath, $projectCode);
+            $filePath = $this->resolveFundUtilizationStoredFilePath($selectedFilePath, $documentDirectory);
         } else {
             if (!$upload || !$upload->$column) {
                 abort(404, 'Document not found');
             }
 
-            $filePath = $this->resolveFundUtilizationStoredFilePath($upload->$column);
+            $filePath = $this->resolveFundUtilizationStoredFilePath($upload->$column, $documentDirectory);
         }
 
         if ($filePath === null || !is_file($filePath) || !is_readable($filePath)) {
