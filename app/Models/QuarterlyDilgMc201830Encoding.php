@@ -2,25 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-
-class QuarterlyDilgMc201830Encoding extends Model
+/**
+ * Backward-compatibility proxy for modular QuarterlyDilgMc201830Encoding model.
+ */
+class QuarterlyDilgMc201830Encoding extends \App\Modules\ReportorialRequirements\Models\QuarterlyDilgMc201830Encoding
 {
-    protected $table = 'quarterly_dilg_mc_2018_30_encodings';
-
-    protected $fillable = [
-        'office',
-        'province',
-        'year',
-        'quarter',
-        'rows',
-        'last_saved_by',
-        'last_saved_at',
-    ];
-
-    protected $casts = [
-        'year' => 'integer',
-        'rows' => 'array',
-        'last_saved_at' => 'datetime',
-    ];
 }

@@ -2,45 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-
-class LpmcDocument extends Model
+/**
+ * Backward-compatibility proxy for modular LpmcDocument model.
+ */
+class LpmcDocument extends \App\Modules\ReportorialRequirements\Models\LpmcDocument
 {
-    protected $table = 'tblpmc_documents';
-
-    protected $fillable = [
-        'office',
-        'province',
-        'doc_type',
-        'year',
-        'quarter',
-        'file_path',
-        'original_filename',
-        'uploaded_by',
-        'uploaded_at',
-        'status',
-        'approved_at',
-        'approved_at_c_mlgoo',
-        'approved_at_dilg_po',
-        'approved_at_dilg_ro',
-        'approved_by_c_mlgoo',
-        'approved_by_dilg_po',
-        'approved_by_dilg_ro',
-        'approval_remarks',
-        'user_remarks',
-    ];
-
-    protected $casts = [
-        'uploaded_at' => 'datetime',
-        'approved_at' => 'datetime',
-        'approved_at_c_mlgoo' => 'datetime',
-        'approved_at_dilg_po' => 'datetime',
-        'approved_at_dilg_ro' => 'datetime',
-        'year' => 'integer',
-    ];
-
-    public function files()
-    {
-        return $this->hasMany(LpmcDocumentFile::class, 'lpmc_document_id');
-    }
 }

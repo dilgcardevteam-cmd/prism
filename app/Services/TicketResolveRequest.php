@@ -2,27 +2,11 @@
 
 namespace App\Services;
 
-use App\Support\InputSanitizer;
-use Illuminate\Foundation\Http\FormRequest;
-
-class TicketResolveRequest extends FormRequest
+/**
+ * Backward-compatibility proxy for App\Modules\Ticketing\Requests\TicketResolveRequest.
+ *
+ * @deprecated Use App\Modules\Ticketing\Requests\TicketResolveRequest directly.
+ */
+class TicketResolveRequest extends \App\Modules\Ticketing\Requests\TicketResolveRequest
 {
-    public function authorize(): bool
-    {
-        return (bool) $this->user();
-    }
-
-    protected function prepareForValidation(): void
-    {
-        $all = $this->all();
-        $all = InputSanitizer::sanitizeTextFields($all, ['resolution_note'], true, true);
-        $this->replace($all);
-    }
-
-    public function rules(): array
-    {
-        return [
-            'resolution_note' => ['nullable', 'string', 'max:5000'],
-        ];
-    }
 }

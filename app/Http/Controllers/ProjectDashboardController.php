@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
-class ProjectDashboardController extends Controller
+/**
+ * Backward-compatibility proxy for modular ProjectDashboardController.
+ */
+class ProjectDashboardController extends \App\Modules\Dashboard\Controllers\ProjectDashboardController
 {
 }

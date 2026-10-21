@@ -2,27 +2,11 @@
 
 namespace App\Services;
 
-use App\Support\InputSanitizer;
-use Illuminate\Foundation\Http\FormRequest;
-
-class TicketForwardRequest extends FormRequest
+/**
+ * Backward-compatibility proxy for App\Modules\Ticketing\Requests\TicketForwardRequest.
+ *
+ * @deprecated Use App\Modules\Ticketing\Requests\TicketForwardRequest directly.
+ */
+class TicketForwardRequest extends \App\Modules\Ticketing\Requests\TicketForwardRequest
 {
-    public function authorize(): bool
-    {
-        return (bool) $this->user();
-    }
-
-    protected function prepareForValidation(): void
-    {
-        $all = $this->all();
-        $all = InputSanitizer::sanitizeTextFields($all, ['forward_note'], true, true);
-        $this->replace($all);
-    }
-
-    public function rules(): array
-    {
-        return [
-            'forward_note' => ['nullable', 'string', 'max:5000'],
-        ];
-    }
 }

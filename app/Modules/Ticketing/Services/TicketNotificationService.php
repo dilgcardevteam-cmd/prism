@@ -1,0 +1,230 @@
+<?php
+
+namespace App\Modules\Ticketing\Services;
+
+use App\Models\User;
+use App\Modules\Ticketing\Models\Ticket;
+use App\Support\NotificationUrl;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+
+class TicketNotificationService
+{
+    public function __construct(
+        protected TicketRoutingService $routingService,
+    ) {
+    }
+
+    public function notifyProvincialQueue(Ticket $ticket, User $actor): void
+    {
+        $recipients = $this->routingService
+            ->provincialRecipientsForProvince($ticket->province_scope)
+            ->reject(fn (User $recipient) => (int) $recipient->getKey() === (int) $actor->getKey())
+            ->values();
+
+        $message = sprintf(
+            'New ticket %s from %s was submitted to the provincial queue for %s.',
+            $ticket->ticket_number,
+            $this->resolveActorName($actor),
+            $ticket->province_scope ?: 'the assigned province'
+        );
+
+        $this->insertNotifications(
+            recipients: $recipients,
+            sender: $actor,
+            message: $message,
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
+    public function notifyRegionalQueue(Ticket $ticket, User $actor): void
+    {
+        $recipients = $this->routingService
+            ->regionalRecipientsForTicket($ticket)
+            ->reject(fn (User $recipient) => (int) $recipient->getKey() === (int) $actor->getKey())
+            ->values();
+
+        $message = sprintf(
+            'Ticket %s was escalated by %s to the regional queue for %s.',
+            $ticket->ticket_number,
+            $this->resolveActorName($actor),
+            $ticket->region_scope ?: 'the assigned region'
+        );
+
+        $this->insertNotifications(
+            recipients: $recipients,
+            sender: $actor,
+            message: $message,
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
+    public function notifySuperadmin(Ticket $ticket, User $actor): void
+    {
+        $recipient = $this->routingService->resolveSuperadminAssignee();
+        $recipients = $recipient ? collect([$recipient]) : collect();
+
+        $message = sprintf(
+            'Ticket %s was submitted by %s and assigned to the Superadmin.',
+            $ticket->ticket_number,
+            $this->resolveActorName($actor),
+        );
+
+        $this->insertNotifications(
+            recipients: $recipients,
+            sender: $actor,
+            message: $message,
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
+    public function notifyTicketComment(Ticket $ticket, User $actor, string $comment): void
+    {
+        $recipientIds = collect([$ticket->submitted_by, $ticket->assigned_to])
+            ->filter()
+            ->map(fn ($id): int => (int) $id)
+            ->reject(fn (int $id): bool => $id === (int) $actor->getKey())
+            ->unique()
+            ->values();
+
+        if ($actor->isRegionalUser()) {
+            $superadmin = $this->routingService->resolveSuperadminAssignee();
+            if ($superadmin) {
+                $recipientIds = $recipientIds
+                    ->push((int) $superadmin->getKey())
+                    ->reject(fn (int $id): bool => $id === (int) $actor->getKey())
+                    ->unique()
+                    ->values();
+            }
+        }
+
+        if ($recipientIds->isEmpty()) {
+            return;
+        }
+
+        $recipients = User::query()
+            ->whereIn('idno', $recipientIds->all())
+            ->where('status', 'active')
+            ->get();
+
+        $message = sprintf(
+            '%s added a remark to ticket %s: %s',
+            $this->resolveActorName($actor),
+            $ticket->ticket_number,
+            Str::limit(trim($comment), 300, '...'),
+        );
+
+        $this->insertNotifications(
+            recipients: $recipients,
+            sender: $actor,
+            message: $message,
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
+    public function notifySuperadminOfRegionalAction(Ticket $ticket, User $actor, string $action): void
+    {
+        if (!$actor->isRegionalUser()) {
+            return;
+        }
+
+        $superadmin = $this->routingService->resolveSuperadminAssignee();
+        if (!$superadmin || (int) $superadmin->getKey() === (int) $actor->getKey()) {
+            return;
+        }
+
+        $this->insertNotifications(
+            recipients: collect([$superadmin]),
+            sender: $actor,
+            message: sprintf(
+                '%s performed "%s" on ticket %s in the Regional Office workflow.',
+                $this->resolveActorName($actor),
+                $action,
+                $ticket->ticket_number,
+            ),
+            url: route('ticketing.show', $ticket, false),
+            documentType: 'ticketing-system',
+        );
+    }
+
+    protected function insertNotifications(
+        Collection $recipients,
+        User $sender,
+        string $message,
+        string $url,
+        string $documentType,
+    ): void {
+        if ($recipients->isEmpty() || !Schema::hasTable('tbnotifications')) {
+            return;
+        }
+
+        $url = NotificationUrl::normalizeForStorage($url);
+        \App\Support\NotificationCenter::syncRelatedNotifications($url);
+        $senderId = (int) $sender->getKey();
+        $senderName = $this->resolveActorName($sender);
+        $now = now();
+        $notificationMessage = Str::limit(trim($message), 500, '...');
+        $hasSenderUserIdColumn = Schema::hasColumn('tbnotifications', 'sender_user_id');
+        $hasSenderNameColumn = Schema::hasColumn('tbnotifications', 'sender_name');
+
+        $rows = $recipients->map(function (User $recipient) use (
+            $senderId,
+            $senderName,
+            $notificationMessage,
+            $url,
+            $documentType,
+            $now,
+            $hasSenderUserIdColumn,
+            $hasSenderNameColumn,
+        ): array {
+            $row = [
+                'user_id' => (int) $recipient->getKey(),
+                'message' => $notificationMessage,
+                'url' => $url,
+                'document_type' => $documentType,
+                'quarter' => null,
+                'read_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($hasSenderUserIdColumn) {
+                $row['sender_user_id'] = $senderId;
+            }
+
+            if ($hasSenderNameColumn) {
+                $row['sender_name'] = $senderName;
+            }
+
+            return $row;
+        })->all();
+
+        try {
+            foreach (array_chunk($rows, 500) as $chunk) {
+                DB::table('tbnotifications')->insert($chunk);
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('Failed to create ticketing notifications.', [
+                'document_type' => $documentType,
+                'recipient_count' => count($rows),
+                'url' => $url,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    protected function resolveActorName(User $actor): string
+    {
+        return $actor->fullName() !== ''
+            ? $actor->fullName()
+            : trim((string) ($actor->username ?? 'System User'));
+    }
+}
+

@@ -2,27 +2,11 @@
 
 namespace App\Services;
 
-use App\Support\InputSanitizer;
-use Illuminate\Foundation\Http\FormRequest;
-
-class TicketCommentStoreRequest extends FormRequest
+/**
+ * Backward-compatibility proxy for App\Modules\Ticketing\Requests\TicketCommentStoreRequest.
+ *
+ * @deprecated Use App\Modules\Ticketing\Requests\TicketCommentStoreRequest directly.
+ */
+class TicketCommentStoreRequest extends \App\Modules\Ticketing\Requests\TicketCommentStoreRequest
 {
-    public function authorize(): bool
-    {
-        return (bool) $this->user();
-    }
-
-    protected function prepareForValidation(): void
-    {
-        $all = $this->all();
-        $all = InputSanitizer::sanitizeTextFields($all, ['comment'], true);
-        $this->replace($all);
-    }
-
-    public function rules(): array
-    {
-        return [
-            'comment' => ['required', 'string', 'max:5000'],
-        ];
-    }
 }

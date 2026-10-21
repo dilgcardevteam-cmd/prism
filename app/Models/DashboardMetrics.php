@@ -2,11 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-
-class DashboardMetrics extends Model
+/**
+ * Backward-compatibility proxy for modular DashboardMetrics model.
+ */
+class DashboardMetrics extends \App\Modules\Dashboard\Models\DashboardMetrics
 {
-    protected $table = 'subay_project_profiles';
-
-    public $timestamps = false;
 }

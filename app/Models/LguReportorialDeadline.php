@@ -2,26 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-
-class LguReportorialDeadline extends Model
+/**
+ * Backward-compatibility proxy for the modular LguReportorialDeadline model.
+ */
+class LguReportorialDeadline extends \App\Modules\SystemSettings\Models\LguReportorialDeadline
 {
-    protected $fillable = [
-        'aspect',
-        'timeline',
-        'reporting_year',
-        'reporting_period',
-        'deadline_date',
-        'deadline_time',
-        'updated_by',
-    ];
-
-    protected function casts(): array
-    {
-        return [
-            'reporting_year' => 'integer',
-            'deadline_date' => 'date',
-            'updated_by' => 'integer',
-        ];
-    }
 }

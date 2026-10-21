@@ -2,16 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-
-class FURAdminRemark extends Model
+/**
+ * Backward-compatibility proxy for modular FURAdminRemark model.
+ */
+class FURAdminRemark extends \App\Modules\FundUtilization\Models\FURAdminRemark
 {
-    protected $table = 'tbfur_admin_remarks';
-    
-    protected $fillable = [
-        'project_code',
-        'quarter',
-        'remarks',
-        'admin_id',
-    ];
 }
