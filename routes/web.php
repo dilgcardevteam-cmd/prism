@@ -670,7 +670,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
-    $renderProjectDashboard = function (string $activeProjectTab = 'locally-funded') {
+    $renderProjectDashboard = function (string $activeProjectTab = 'locally-funded', ?string $modalId = null) {
         try {
             if ($activeProjectTab === 'rssa') {
                 return app(\App\Http\Controllers\RssaDashboardController::class)->index(request());
@@ -754,6 +754,10 @@ Route::middleware(['auth'])->group(function () {
 
             $cachedDashboardViewData = Cache::get($dashboardCacheKey);
             if (is_array($cachedDashboardViewData)) {
+                if ($modalId !== null) {
+                    return view('dashboard.partials.modal-body', array_merge($cachedDashboardViewData, ['modalId' => $modalId]));
+                }
+
                 return view('dashboard.index', $cachedDashboardViewData);
             }
 
@@ -2246,13 +2250,6 @@ Route::middleware(['auth'])->group(function () {
                         'program' => $row->program ?? null,
                         'status' => $statusLabel,
                     ];
-
-                    $provinceFundingYearProgramStatusSourceRows[] = [
-                        'province' => trim((string) ($row->province ?? '')) ?: 'Unspecified Province',
-                        'funding_year' => trim((string) ($row->funding_year ?? '')) ?: 'Unspecified Funding Year',
-                        'program' => trim((string) ($row->program ?? '')) ?: 'Unspecified Program',
-                        'project_status' => $statusLabel,
-                    ];
                 }
 
                 $filteredProjectCodesQuery = (clone $subayDashboardQuery)
@@ -2501,21 +2498,74 @@ Route::middleware(['auth'])->group(function () {
                     ->selectRaw('TRIM(COALESCE(funding_year, "")) as funding_year')
                     ->selectRaw('COALESCE(NULLIF(TRIM(fund_source), ""), "Unspecified Program") as program')
                     ->selectRaw('TRIM(COALESCE(status, "")) as status_raw')
+                    ->selectRaw('COUNT(*) as total')
+                    ->groupByRaw('TRIM(COALESCE(province, ""))')
+                    ->groupByRaw('TRIM(COALESCE(funding_year, ""))')
+                    ->groupByRaw('COALESCE(NULLIF(TRIM(fund_source), ""), "Unspecified Program")')
+                    ->groupByRaw('TRIM(COALESCE(status, ""))')
                     ->get();
 
+                $fallbackProvinceFundingYearProgramStatusGrouped = [];
                 foreach ($fallbackProvinceFundingYearProgramStatusRows as $row) {
                     $statusLabel = $labelForStatus($normalizeStatus($row->status_raw));
                     if ($statusLabel === null) {
                         continue;
                     }
 
-                    $provinceFundingYearProgramStatusSourceRows[] = [
-                        'province' => trim((string) ($row->province ?? '')) ?: 'Unspecified Province',
-                        'funding_year' => trim((string) ($row->funding_year ?? '')) ?: 'Unspecified Funding Year',
-                        'program' => trim((string) ($row->program ?? '')) ?: 'Unspecified Program',
-                        'project_status' => $statusLabel,
-                    ];
+                    $provinceLabel = trim((string) ($row->province ?? '')) ?: 'Unspecified Province';
+                    $fundingYearLabel = trim((string) ($row->funding_year ?? '')) ?: 'Unspecified Funding Year';
+                    $programLabel = trim((string) ($row->program ?? '')) ?: 'Unspecified Program';
+                    $groupKey = "{$provinceLabel}|{$fundingYearLabel}|{$programLabel}|{$statusLabel}";
+
+                    if (!array_key_exists($groupKey, $fallbackProvinceFundingYearProgramStatusGrouped)) {
+                        $fallbackProvinceFundingYearProgramStatusGrouped[$groupKey] = [
+                            'province' => $provinceLabel,
+                            'funding_year' => $fundingYearLabel,
+                            'program' => $programLabel,
+                            'project_status' => $statusLabel,
+                            'total' => 0,
+                        ];
+                    }
+
+                    $fallbackProvinceFundingYearProgramStatusGrouped[$groupKey]['total'] += (int) ($row->total ?? 0);
                 }
+
+                $provinceFundingYearProgramStatusReport = array_values($fallbackProvinceFundingYearProgramStatusGrouped);
+                usort($provinceFundingYearProgramStatusReport, function (array $leftRow, array $rightRow) use ($statusDisplayOrderPositions) {
+                    $provinceCompare = strnatcasecmp((string) ($leftRow['province'] ?? ''), (string) ($rightRow['province'] ?? ''));
+                    if ($provinceCompare !== 0) {
+                        return $provinceCompare;
+                    }
+
+                    $leftFundingYear = trim((string) ($leftRow['funding_year'] ?? ''));
+                    $rightFundingYear = trim((string) ($rightRow['funding_year'] ?? ''));
+                    $leftFundingYearIsNumeric = is_numeric($leftFundingYear);
+                    $rightFundingYearIsNumeric = is_numeric($rightFundingYear);
+                    if ($leftFundingYearIsNumeric && $rightFundingYearIsNumeric) {
+                        $fundingYearCompare = (int) $rightFundingYear <=> (int) $leftFundingYear;
+                    } else {
+                        $fundingYearCompare = strnatcasecmp($leftFundingYear, $rightFundingYear);
+                    }
+                    if ($fundingYearCompare !== 0) {
+                        return $fundingYearCompare;
+                    }
+
+                    $programCompare = strnatcasecmp((string) ($leftRow['program'] ?? ''), (string) ($rightRow['program'] ?? ''));
+                    if ($programCompare !== 0) {
+                        return $programCompare;
+                    }
+
+                    $leftStatus = (string) ($leftRow['project_status'] ?? '');
+                    $rightStatus = (string) ($rightRow['project_status'] ?? '');
+                    $leftStatusPosition = $statusDisplayOrderPositions[$leftStatus] ?? PHP_INT_MAX;
+                    $rightStatusPosition = $statusDisplayOrderPositions[$rightStatus] ?? PHP_INT_MAX;
+
+                    if ($leftStatusPosition !== $rightStatusPosition) {
+                        return $leftStatusPosition <=> $rightStatusPosition;
+                    }
+
+                    return strnatcasecmp($leftStatus, $rightStatus);
+                });
             }
 
             $fundSourceCounts = collect();
@@ -2591,6 +2641,10 @@ Route::middleware(['auth'])->group(function () {
 
             Cache::put($dashboardCacheKey, $dashboardViewData, now()->addMinutes(5));
 
+            if ($modalId !== null) {
+                return view('dashboard.partials.modal-body', array_merge($dashboardViewData, ['modalId' => $modalId]));
+            }
+
             return view('dashboard.index', $dashboardViewData);
         } catch (\Exception $e) {
             return response()->json([
@@ -2605,6 +2659,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', function () use ($renderProjectDashboard) {
         return $renderProjectDashboard(request()->query('tab', 'locally-funded'));
     })->name('dashboard');
+
+    Route::get('/dashboard/modal-body/{modalId}', function (string $modalId) use ($renderProjectDashboard) {
+        return $renderProjectDashboard(request()->query('tab', 'locally-funded'), $modalId);
+    })->name('dashboard.modal-body');
     
     // Profile routes
     Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show'])->name('profile.show');

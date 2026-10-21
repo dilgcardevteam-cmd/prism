@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectUsersTo('/dashboard');
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
+        $middleware->append(\App\Http\Middleware\GzipEncodeResponse::class);
         $middleware->web(append: [
             \App\Http\Middleware\EnsureSystemMaintenanceAccess::class,
             \App\Http\Middleware\RecordActivityLog::class,

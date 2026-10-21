@@ -191,6 +191,56 @@
     @include('projects.partials.project-section-tabs', ['activeTab' => $activeProjectTab ?? 'locally-funded'])
 
     <script>
+        window.ensureDashboardModalLoaded = window.ensureDashboardModalLoaded || function (modalElement) {
+            if (!modalElement) return;
+            var modalBody = modalElement.querySelector('.dashboard-modal-body');
+            if (!modalBody) return;
+            if (modalBody.dataset.loaded === 'true' || modalBody.dataset.loading === 'true') {
+                return;
+            }
+            if (modalBody.children.length > 0 && !modalBody.querySelector('.dashboard-modal-loading')) {
+                modalBody.dataset.loaded = 'true';
+                return;
+            }
+
+            modalBody.dataset.loading = 'true';
+            modalBody.innerHTML = '<div class="dashboard-modal-loading" style="padding: 48px 24px; text-align: center; color: #64748b;"><i class="fas fa-spinner fa-spin" style="font-size: 28px; color: #002C76; margin-bottom: 12px; display: block;"></i><span>Loading projects...</span></div>';
+
+            var modalId = modalElement.id;
+            var baseUrl = '{{ url('/dashboard/modal-body') }}/' + encodeURIComponent(modalId);
+            var search = window.location.search;
+            var url = baseUrl + (search ? (search.charAt(0) === '?' ? search : '?' + search) : '');
+
+            fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.text();
+            })
+            .then(function (html) {
+                modalBody.innerHTML = html;
+                modalBody.dataset.loaded = 'true';
+                delete modalBody.dataset.loading;
+
+                var exportBtn = modalElement.querySelector('.dashboard-modal-export-btn');
+                var table = modalBody.querySelector('.dashboard-modal-table');
+                if (exportBtn && table) {
+                    exportBtn.disabled = false;
+                }
+
+                if (typeof window.runDashboardModalFilters === 'function') {
+                    window.runDashboardModalFilters(modalElement);
+                }
+            })
+            .catch(function () {
+                delete modalBody.dataset.loading;
+                modalBody.innerHTML = '<div class="dashboard-modal-empty-state" style="padding: 32px 16px; text-align: center; color: #dc2626;"><p style="margin-bottom: 12px;">Failed to load project details.</p><button type="button" class="dashboard-modal-filter-clear" style="padding: 6px 16px; cursor: pointer;" onclick="window.ensureDashboardModalLoaded(document.getElementById(\'' + modalId + '\'))">Retry</button></div>';
+            });
+        };
+
         window.openDashboardModalById = window.openDashboardModalById || function (modalId, event) {
             if (event && typeof event.preventDefault === 'function') {
                 event.preventDefault();
@@ -208,6 +258,9 @@
             modalElement.hidden = false;
             modalElement.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
+
+            window.ensureDashboardModalLoaded(modalElement);
+
             if (typeof window.runDashboardModalFilters === 'function') {
                 window.runDashboardModalFilters(modalElement);
             }
@@ -1950,37 +2003,8 @@
             $statusModalKey = trim((string) preg_replace('/[^a-z0-9]+/i', '-', (string) $status), '-');
             $statusModalId = 'status-subaybayan-' . ($statusModalKey !== '' ? $statusModalKey : 'unspecified') . '-modal';
             $statusModalTitleId = $statusModalId . '-title';
-            $statusModalProjects = collect($statusSubaybayanProjectsModalMap[$status] ?? []);
-            $statusModalProvinceOptions = $statusModalProjects
-                ->pluck('province')
-                ->map(fn ($value) => trim((string) $value))
-                ->filter(fn ($value) => $value !== '')
-                ->unique()
-                ->sort()
-                ->values();
-            $statusModalCityOptions = $statusModalProjects
-                ->pluck('city_municipality')
-                ->map(fn ($value) => trim((string) $value))
-                ->filter(fn ($value) => $value !== '')
-                ->unique()
-                ->sort()
-                ->values();
-            $statusModalFundingYearOptions = $statusModalProjects
-                ->pluck('funding_year')
-                ->map(fn ($value) => trim((string) $value))
-                ->filter(fn ($value) => $value !== '')
-                ->unique()
-                ->sort()
-                ->values();
-            $statusModalStatusOptions = $statusModalProjects
-                ->pluck('status')
-                ->map(fn ($value) => trim((string) $value))
-                ->filter(fn ($value) => $value !== '')
-                ->unique()
-                ->sort()
-                ->values();
         @endphp
-            <div id="{{ $statusModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
+        <div id="{{ $statusModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $statusModalTitleId }}">
                 <div class="dashboard-modal-header">
@@ -1992,100 +2016,13 @@
                 <p class="dashboard-modal-subtitle">
                     Projects with {{ $status }} status in SubayBAYAN, based on the current dashboard filters.
                 </p>
-                <div class="dashboard-modal-body">
-                    @if ($statusModalProjects->isNotEmpty())
-                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $statusModalProjects->count() }}">
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Code</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Title</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Province</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($statusModalProvinceOptions as $provinceOption)
-                                        <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>City/Municipality</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($statusModalCityOptions as $cityOption)
-                                        <option value="{{ $cityOption }}">{{ $cityOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Funding Year</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="4" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($statusModalFundingYearOptions as $fundingYearOption)
-                                        <option value="{{ $fundingYearOption }}">{{ $fundingYearOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Status</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="5" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($statusModalStatusOptions as $statusOption)
-                                        <option value="{{ $statusOption }}">{{ $statusOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <div class="dashboard-modal-filter-actions">
-                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
-                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
-                            </div>
-                        </div>
-                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
-                            No projects match the selected modal filters.
-                        </div>
-                        <div class="dashboard-modal-table-wrap">
-                            <table class="dashboard-modal-table">
-                                <thead>
-                                    <tr>
-                                        <th>Project Code</th>
-                                        <th>Project Title</th>
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
-                                        <th>Funding Year</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($statusModalProjects as $projectRow)
-                                        <tr>
-                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                            <td>{{ $projectRow->province ?: '-' }}</td>
-                                            <td>{{ $projectRow->city_municipality ?: '-' }}</td>
-                                            <td>{{ $projectRow->funding_year ?: '-' }}</td>
-                                            <td>{{ $projectRow->status ?: '-' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @else
-                        <div class="dashboard-modal-empty-state">
-                            No {{ strtolower($status) }} projects found for the current dashboard filters.
-                        </div>
-                    @endif
-                </div>
+                <div class="dashboard-modal-body" data-modal-body-id="{{ $statusModalId }}"></div>
                 <div class="dashboard-modal-footer">
                     <button
                         type="button"
                         class="dashboard-modal-export-btn"
                         onclick="exportDashboardModalTableToExcel(this)"
                         data-export-filename="status-subaybayan-{{ $statusModalKey !== '' ? $statusModalKey : 'unspecified' }}.xls"
-                        @disabled($statusModalProjects->isEmpty())
                     >
                         Export Excel
                     </button>
@@ -2099,11 +2036,6 @@
                 $fundSourceModalKey = trim((string) preg_replace('/[^a-z0-9]+/i', '-', (string) $fundSource), '-');
                 $fundSourceModalId = 'fund-source-' . ($fundSourceModalKey !== '' ? $fundSourceModalKey : 'unspecified') . '-modal';
                 $fundSourceModalTitleId = $fundSourceModalId . '-title';
-                $fundSourceModalProjects = collect(
-                    $fundSourceProjectsModalMap[$fundSource]
-                        ?? $fundSourceProjectsModalMap[strtoupper(trim((string) $fundSource))]
-                        ?? []
-                );
             @endphp
             <div id="{{ $fundSourceModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
                 <div class="dashboard-modal-backdrop" data-close-modal></div>
@@ -2117,112 +2049,13 @@
                     <p class="dashboard-modal-subtitle">
                         Basic project information under {{ $fundSource }} based on the current dashboard filters.
                     </p>
-                    <div class="dashboard-modal-body">
-                        @if ($fundSourceModalProjects->isNotEmpty())
-                            @php
-                                $fundSourceProvinceOptions = $fundSourceModalProjects
-                                    ->pluck('province')
-                                    ->map(fn ($value) => trim((string) $value))
-                                    ->filter(fn ($value) => $value !== '')
-                                    ->unique()
-                                    ->sort()
-                                    ->values();
-                                $fundSourceCityOptions = $fundSourceModalProjects
-                                    ->pluck('city_municipality')
-                                    ->map(fn ($value) => trim((string) $value))
-                                    ->filter(fn ($value) => $value !== '')
-                                    ->unique()
-                                    ->sort()
-                                    ->values();
-                                $fundSourceStatusOptions = $fundSourceModalProjects
-                                    ->pluck('status')
-                                    ->map(fn ($value) => trim((string) $value))
-                                    ->filter(fn ($value) => $value !== '')
-                                    ->unique()
-                                    ->sort()
-                                    ->values();
-                            @endphp
-                            <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $fundSourceModalProjects->count() }}">
-                                <label class="dashboard-modal-filter-field">
-                                    <span>Project Code</span>
-                                    <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
-                                </label>
-                                <label class="dashboard-modal-filter-field">
-                                    <span>Project Title</span>
-                                    <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
-                                </label>
-                                <label class="dashboard-modal-filter-field">
-                                    <span>Province</span>
-                                    <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
-                                        <option value="">All</option>
-                                        @foreach ($fundSourceProvinceOptions as $provinceOption)
-                                            <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
-                                        @endforeach
-                                    </select>
-                                </label>
-                                <label class="dashboard-modal-filter-field">
-                                    <span>City/Municipality</span>
-                                    <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
-                                        <option value="">All</option>
-                                        @foreach ($fundSourceCityOptions as $cityOption)
-                                            <option value="{{ $cityOption }}">{{ $cityOption }}</option>
-                                        @endforeach
-                                    </select>
-                                </label>
-                                <label class="dashboard-modal-filter-field">
-                                    <span>Status</span>
-                                    <select data-modal-filter-control data-filter-mode="exact" data-column-index="4" onchange="return window.runDashboardModalFilters(this)">
-                                        <option value="">All</option>
-                                        @foreach ($fundSourceStatusOptions as $statusOption)
-                                            <option value="{{ $statusOption }}">{{ $statusOption }}</option>
-                                        @endforeach
-                                    </select>
-                                </label>
-                                <div class="dashboard-modal-filter-actions">
-                                    <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
-                                    <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
-                                </div>
-                            </div>
-                            <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
-                                No projects match the selected modal filters.
-                            </div>
-                            <div class="dashboard-modal-table-wrap">
-                                <table class="dashboard-modal-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Project Code</th>
-                                            <th>Project Title</th>
-                                            <th>Province</th>
-                                            <th>City/Municipality</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach ($fundSourceModalProjects as $projectRow)
-                                            <tr>
-                                                <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                                <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                                <td>{{ $projectRow->province ?: '-' }}</td>
-                                                <td>{{ $projectRow->city_municipality ?: '-' }}</td>
-                                                <td>{{ $projectRow->status ?: '-' }}</td>
-                                            </tr>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        @else
-                            <div class="dashboard-modal-empty-state">
-                                No projects found for {{ $fundSource }} under the current dashboard filters.
-                            </div>
-                        @endif
-                    </div>
+                    <div class="dashboard-modal-body" data-modal-body-id="{{ $fundSourceModalId }}"></div>
                     <div class="dashboard-modal-footer">
                         <button
                             type="button"
                             class="dashboard-modal-export-btn"
                             onclick="exportDashboardModalTableToExcel(this)"
                             data-export-filename="projects-by-fund-source-{{ $fundSourceModalKey !== '' ? $fundSourceModalKey : 'unspecified' }}.xls"
-                            @disabled($fundSourceModalProjects->isEmpty())
                         >
                             Export Excel
                         </button>
@@ -2262,15 +2095,6 @@
                 'export_filename' => 'financial-disbursement-projects.xls',
             ],
         ];
-        $financialStatusFilterOptions = [
-            'status' => $financialStatusProjectsModal
-                ->pluck('status')
-                ->map(fn ($value) => trim((string) $value))
-                ->filter(fn ($value) => $value !== '')
-                ->unique()
-                ->sort()
-                ->values(),
-        ];
     @endphp
     @foreach ($financialStatusModalConfigs as $financialModalConfig)
         <div id="{{ $financialModalConfig['modal_id'] }}" class="dashboard-modal" aria-hidden="true" hidden>
@@ -2285,79 +2109,13 @@
                 <p class="dashboard-modal-subtitle">
                     {{ $financialModalConfig['subtitle'] }}
                 </p>
-                <div class="dashboard-modal-body">
-                    @if ($financialStatusProjectsModal->isNotEmpty())
-                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $financialStatusProjectsModal->count() }}">
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Code</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Title</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Status</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($financialStatusFilterOptions['status'] as $statusOption)
-                                        <option value="{{ $statusOption }}">{{ $statusOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <div class="dashboard-modal-filter-actions">
-                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
-                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
-                            </div>
-                        </div>
-                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
-                            No projects match the selected modal filters.
-                        </div>
-                        <div class="dashboard-modal-table-wrap">
-                            <table class="dashboard-modal-table">
-                                <thead>
-                                    <tr>
-                                        <th>Project Code</th>
-                                        <th>Project Title</th>
-                                        <th>Status</th>
-                                        <th>Original Allocation</th>
-                                        <th>LGU Counterpart</th>
-                                        <th>Obligation</th>
-                                        <th>Disbursement</th>
-                                        <th>Reverted Allocation</th>
-                                        <th>Balance</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($financialStatusProjectsModal as $projectRow)
-                                        <tr>
-                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                            <td>{{ $projectRow->status ?: '-' }}</td>
-                                            <td>{{ $projectRow->original_allocation !== null ? number_format((float) $projectRow->original_allocation, 2) : '-' }}</td>
-                                            <td>{{ $projectRow->lgu_counterpart !== null ? number_format((float) $projectRow->lgu_counterpart, 2) : '-' }}</td>
-                                            <td>{{ $projectRow->obligation !== null ? number_format((float) $projectRow->obligation, 2) : '-' }}</td>
-                                            <td>{{ $projectRow->disbursement !== null ? number_format((float) $projectRow->disbursement, 2) : '-' }}</td>
-                                            <td>{{ $projectRow->reverted_allocation !== null ? number_format((float) $projectRow->reverted_allocation, 2) : '-' }}</td>
-                                            <td>{{ $projectRow->balance !== null ? number_format((float) $projectRow->balance, 2) : '-' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @else
-                        <div class="dashboard-modal-empty-state">
-                            No financial status projects found for the current dashboard filters.
-                        </div>
-                    @endif
-                </div>
+                <div class="dashboard-modal-body" data-modal-body-id="{{ $financialModalConfig['modal_id'] }}"></div>
                 <div class="dashboard-modal-footer">
                     <button
                         type="button"
                         class="dashboard-modal-export-btn"
                         onclick="exportDashboardModalTableToExcel(this)"
                         data-export-filename="{{ $financialModalConfig['export_filename'] }}"
-                        @disabled($financialStatusProjectsModal->isEmpty())
                     >
                         Export Excel
                     </button>
@@ -2377,115 +2135,13 @@
             <p class="dashboard-modal-subtitle">
                 {{ $balanceProjectsModalSubtitle }}
             </p>
-            <div class="dashboard-modal-body">
-                @if ($balanceProjectsModal->isNotEmpty())
-                    @php
-                        $balanceStatusOptions = $balanceProjectsModal
-                            ->pluck('status')
-                            ->map(fn ($value) => trim((string) $value))
-                            ->filter(fn ($value) => $value !== '')
-                            ->unique()
-                            ->sort()
-                            ->values();
-                    @endphp
-                    <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $balanceProjectsModal->count() }}">
-                        <label class="dashboard-modal-filter-field">
-                            <span>Project Code</span>
-                            <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
-                        </label>
-                        <label class="dashboard-modal-filter-field">
-                            <span>Project Title</span>
-                            <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
-                        </label>
-                        <label class="dashboard-modal-filter-field">
-                            <span>Status</span>
-                            <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
-                                <option value="">All</option>
-                                @foreach ($balanceStatusOptions as $statusOption)
-                                    <option value="{{ $statusOption }}">{{ $statusOption }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                        <div class="dashboard-modal-filter-actions">
-                            <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
-                            <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
-                        </div>
-                    </div>
-                    <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
-                        No projects match the selected modal filters.
-                    </div>
-                    <div class="dashboard-modal-table-wrap">
-                        @php
-                            $balanceTotals = [
-                                'original_allocation' => (float) $balanceProjectsModal->sum(fn ($row) => (float) ($row->original_allocation ?? 0)),
-                                'lgu_counterpart' => (float) $balanceProjectsModal->sum(fn ($row) => (float) ($row->lgu_counterpart ?? 0)),
-                                'reverted_allocation' => (float) $balanceProjectsModal->sum(fn ($row) => (float) ($row->reverted_allocation ?? 0)),
-                                'obligation' => (float) $balanceProjectsModal->sum(fn ($row) => (float) ($row->obligation ?? 0)),
-                                'disbursement' => (float) $balanceProjectsModal->sum(fn ($row) => (float) ($row->disbursement ?? 0)),
-                                'balance' => (float) $balanceProjectsModal->sum(fn ($row) => (float) ($row->balance ?? 0)),
-                            ];
-                        @endphp
-                        <table class="dashboard-modal-table">
-                            <thead>
-                                <tr>
-                                    <th>Project Code</th>
-                                    <th>Project Title</th>
-                                    <th>Status</th>
-                                    <th>Original Allocation</th>
-                                    <th>LGU Counterpart</th>
-                                    <th>Reverted Allocation</th>
-                                    <th>Obligation</th>
-                                    <th>Disbursement</th>
-                                    <th>Balance</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($balanceProjectsModal as $projectRow)
-                                    @php
-                                        $originalAllocation = $projectRow->original_allocation ?? null;
-                                        $lguCounterpart = $projectRow->lgu_counterpart ?? null;
-                                        $revertedAllocation = $projectRow->reverted_allocation ?? null;
-                                        $obligationAmount = $projectRow->obligation ?? null;
-                                        $disbursementAmount = $projectRow->disbursement ?? null;
-                                        $balanceAmount = $projectRow->balance ?? null;
-                                    @endphp
-                                    <tr>
-                                        <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                        <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                        <td>{{ $projectRow->status ?: '-' }}</td>
-                                        <td>{{ $originalAllocation !== null ? number_format((float) $originalAllocation, 2) : '-' }}</td>
-                                        <td>{{ $lguCounterpart !== null ? number_format((float) $lguCounterpart, 2) : '-' }}</td>
-                                        <td>{{ $revertedAllocation !== null ? number_format((float) $revertedAllocation, 2) : '-' }}</td>
-                                        <td>{{ $obligationAmount !== null ? number_format((float) $obligationAmount, 2) : '-' }}</td>
-                                        <td>{{ $disbursementAmount !== null ? number_format((float) $disbursementAmount, 2) : '-' }}</td>
-                                        <td>{{ $balanceAmount !== null ? number_format((float) $balanceAmount, 2) : '-' }}</td>
-                                    </tr>
-                                @endforeach
-                                <tr class="dashboard-modal-total-row">
-                                    <td colspan="3">Total</td>
-                                    <td>{{ number_format($balanceTotals['original_allocation'], 2) }}</td>
-                                    <td>{{ number_format($balanceTotals['lgu_counterpart'], 2) }}</td>
-                                    <td>{{ number_format($balanceTotals['reverted_allocation'], 2) }}</td>
-                                    <td>{{ number_format($balanceTotals['obligation'], 2) }}</td>
-                                    <td>{{ number_format($balanceTotals['disbursement'], 2) }}</td>
-                                    <td>{{ number_format($balanceTotals['balance'], 2) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                @else
-                    <div class="dashboard-modal-empty-state">
-                        No projects with balance found for the current dashboard filters.
-                    </div>
-                @endif
-            </div>
+            <div class="dashboard-modal-body" data-modal-body-id="{{ $balanceProjectsModalId }}"></div>
             <div class="dashboard-modal-footer">
                 <button
                     type="button"
                     class="dashboard-modal-export-btn"
                     onclick="exportDashboardModalTableToExcel(this)"
                     data-export-filename="projects-with-balance.xls"
-                    @disabled($balanceProjectsModal->isEmpty())
                 >
                     Export Excel
                 </button>
@@ -2497,7 +2153,6 @@
             $riskKey = strtolower(str_replace(' ', '-', $riskLabel));
             $modalId = 'project-risk-aging-' . $riskKey . '-modal';
             $modalTitleId = $modalId . '-title';
-            $modalProjects = $projectAtRiskAgingProjectsModal[$riskLabel] ?? collect();
             $subtitleText = $projectAtRiskAgingModalSubtitles[$riskLabel] ?? '';
         @endphp
         <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true" hidden>
@@ -2512,112 +2167,13 @@
                 <p class="dashboard-modal-subtitle">
                     {{ $subtitleText }}
                 </p>
-                <div class="dashboard-modal-body">
-                    @if ($modalProjects->isNotEmpty())
-                        @php
-                            $modalProvinceOptions = $modalProjects
-                                ->pluck('province')
-                                ->map(fn ($value) => trim((string) $value))
-                                ->filter(fn ($value) => $value !== '')
-                                ->unique()
-                                ->sort()
-                                ->values();
-                            $modalCityOptions = $modalProjects
-                                ->pluck('city_municipality')
-                                ->map(fn ($value) => trim((string) $value))
-                                ->filter(fn ($value) => $value !== '')
-                                ->unique()
-                                ->sort()
-                                ->values();
-                        @endphp
-                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $modalProjects->count() }}">
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Code</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Title</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Province</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($modalProvinceOptions as $provinceOption)
-                                        <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>City/Municipality</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($modalCityOptions as $cityOption)
-                                        <option value="{{ $cityOption }}">{{ $cityOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Min Aging</span>
-                                <input type="number" step="0.01" data-modal-filter-control data-filter-mode="number-min" data-column-index="5" placeholder="0" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Max Aging</span>
-                                <input type="number" step="0.01" data-modal-filter-control data-filter-mode="number-max" data-column-index="5" placeholder="999" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <div class="dashboard-modal-filter-actions">
-                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
-                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
-                            </div>
-                        </div>
-                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
-                            No projects match the selected modal filters.
-                        </div>
-                        <div class="dashboard-modal-table-wrap">
-                            <table class="dashboard-modal-table">
-                                <thead>
-                                    <tr>
-                                        <th>Project Code</th>
-                                        <th>Project Title</th>
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
-                                        <th>Extraction Date</th>
-                                        <th>Aging (Days)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($modalProjects as $projectRow)
-                                        @php
-                                            $latestUpdateDateRaw = trim((string) ($projectRow->latest_update_date ?? ''));
-                                            $latestUpdateDate = $latestUpdateDateRaw !== ''
-                                                ? \Illuminate\Support\Carbon::parse($latestUpdateDateRaw)->format('M d, Y')
-                                                : '-';
-                                        @endphp
-                                        <tr>
-                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                            <td>{{ $projectRow->province ?: '-' }}</td>
-                                            <td>{{ $projectRow->city_municipality ?: '-' }}</td>
-                                            <td>{{ $latestUpdateDate }}</td>
-                                            <td>{{ $projectRow->aging_days ?? '-' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @else
-                        <div class="dashboard-modal-empty-state">
-                            No {{ strtolower($riskLabel) }} aging projects found for the current dashboard filters.
-                        </div>
-                    @endif
-                </div>
+                <div class="dashboard-modal-body" data-modal-body-id="{{ $modalId }}"></div>
                 <div class="dashboard-modal-footer">
                     <button
                         type="button"
                         class="dashboard-modal-export-btn"
                         onclick="exportDashboardModalTableToExcel(this)"
                         data-export-filename="aging-of-projects-with-slippage-{{ $riskKey }}.xls"
-                        @disabled($modalProjects->isEmpty())
                     >
                         Export Excel
                     </button>
@@ -2630,7 +2186,6 @@
             $riskKey = strtolower(str_replace(' ', '-', $riskLabel));
             $modalId = 'project-risk-slippage-' . $riskKey . '-modal';
             $modalTitleId = $modalId . '-title';
-            $modalProjects = collect($projectAtRiskSlippageProjectsModal[$riskLabel] ?? []);
             $subtitleText = $projectAtRiskSlippageModalSubtitles[$riskLabel] ?? '';
         @endphp
         <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true" hidden>
@@ -2645,129 +2200,13 @@
                 <p class="dashboard-modal-subtitle">
                     {{ $subtitleText }}
                 </p>
-                <div class="dashboard-modal-body">
-                    @if ($modalProjects->isNotEmpty())
-                        @php
-                            $modalProvinceOptions = $modalProjects
-                                ->pluck('province')
-                                ->map(fn ($value) => trim((string) $value))
-                                ->filter(fn ($value) => $value !== '')
-                                ->unique()
-                                ->sort()
-                                ->values();
-                            $modalCityOptions = $modalProjects
-                                ->pluck('city_municipality')
-                                ->map(fn ($value) => trim((string) $value))
-                                ->filter(fn ($value) => $value !== '')
-                                ->unique()
-                                ->sort()
-                                ->values();
-                            $modalRiskOptions = $modalProjects
-                                ->pluck('risk_level')
-                                ->map(fn ($value) => trim((string) $value))
-                                ->filter(fn ($value) => $value !== '')
-                                ->unique()
-                                ->sort()
-                                ->values();
-                        @endphp
-                        <div class="dashboard-modal-filter-panel" data-modal-filter-panel data-total-count="{{ $modalProjects->count() }}">
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Code</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="0" placeholder="Contains code" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Project Title</span>
-                                <input type="search" data-modal-filter-control data-filter-mode="contains" data-column-index="1" placeholder="Contains title" oninput="return window.runDashboardModalFilters(this)">
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Province</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="2" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($modalProvinceOptions as $provinceOption)
-                                        <option value="{{ $provinceOption }}">{{ $provinceOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>City/Municipality</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="3" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($modalCityOptions as $cityOption)
-                                        <option value="{{ $cityOption }}">{{ $cityOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="dashboard-modal-filter-field">
-                                <span>Risk Level</span>
-                                <select data-modal-filter-control data-filter-mode="exact" data-column-index="6" onchange="return window.runDashboardModalFilters(this)">
-                                    <option value="">All</option>
-                                    @foreach ($modalRiskOptions as $riskOption)
-                                        <option value="{{ $riskOption }}">{{ $riskOption }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <div class="dashboard-modal-filter-actions">
-                                <button type="button" class="dashboard-modal-filter-clear" data-modal-filter-clear onclick="return window.clearDashboardModalFilters(this)">Clear</button>
-                                <span class="dashboard-modal-filter-count" data-modal-filter-count></span>
-                            </div>
-                        </div>
-                        <div class="dashboard-modal-empty-state dashboard-modal-filter-empty" data-modal-filter-empty hidden>
-                            No projects match the selected modal filters.
-                        </div>
-                        <div class="dashboard-modal-table-wrap">
-                            <table class="dashboard-modal-table">
-                                <thead>
-                                    <tr>
-                                        <th>Project Code</th>
-                                        <th>Project Title</th>
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
-                                        <th>Extraction Date</th>
-                                        <th>Slippage</th>
-                                        <th>Risk Level</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($modalProjects as $projectRow)
-                                        @php
-                                            $latestUpdateDateRaw = trim((string) ($projectRow->latest_update_date ?? ''));
-                                            $latestUpdateDate = $latestUpdateDateRaw !== ''
-                                                ? \Illuminate\Support\Carbon::parse($latestUpdateDateRaw)->format('M d, Y')
-                                                : '-';
-                                            $slippageDisplay = trim((string) ($projectRow->slippage_display ?? ''));
-                                            if ($slippageDisplay === '' && $projectRow->slippage_value !== null) {
-                                                $slippageDisplay = rtrim(rtrim(number_format((float) $projectRow->slippage_value, 2, '.', ''), '0'), '.');
-                                            }
-                                            if ($slippageDisplay !== '' && !str_contains($slippageDisplay, '%')) {
-                                                $slippageDisplay .= '%';
-                                            }
-                                        @endphp
-                                        <tr>
-                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                            <td>{{ $projectRow->province ?: '-' }}</td>
-                                            <td>{{ $projectRow->city_municipality ?: '-' }}</td>
-                                            <td>{{ $latestUpdateDate }}</td>
-                                            <td>{{ $slippageDisplay !== '' ? $slippageDisplay : '-' }}</td>
-                                            <td>{{ $projectRow->risk_level ?: '-' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @else
-                        <div class="dashboard-modal-empty-state">
-                            No {{ strtolower($riskLabel) }} slippage projects found for the current dashboard filters.
-                        </div>
-                    @endif
-                </div>
+                <div class="dashboard-modal-body" data-modal-body-id="{{ $modalId }}"></div>
                 <div class="dashboard-modal-footer">
                     <button
                         type="button"
                         class="dashboard-modal-export-btn"
                         onclick="exportDashboardModalTableToExcel(this)"
                         data-export-filename="risk-level-as-to-slippage-{{ $riskKey }}.xls"
-                        @disabled($modalProjects->isEmpty())
                     >
                         Export Excel
                     </button>
@@ -2775,15 +2214,6 @@
             </div>
         </div>
     @endforeach
-    @php
-        $projectUpdateAllStatusHasProjects = false;
-        foreach ($projectUpdateStatusOrder as $riskLabel) {
-            if (collect($projectUpdateRiskProjectsModal[$riskLabel] ?? [])->isNotEmpty()) {
-                $projectUpdateAllStatusHasProjects = true;
-                break;
-            }
-        }
-    @endphp
     <div id="{{ $projectUpdateAllStatusModalId }}" class="dashboard-modal" aria-hidden="true" hidden>
         <div class="dashboard-modal-backdrop" data-close-modal></div>
         <div class="dashboard-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="{{ $projectUpdateAllStatusModalTitleId }}">
@@ -2796,71 +2226,13 @@
             <p class="dashboard-modal-subtitle">
                 {{ $projectUpdateAllStatusModalSubtitle }}
             </p>
-            <div class="dashboard-modal-body">
-                @if ($projectUpdateAllStatusHasProjects)
-                    <div class="dashboard-modal-table-wrap">
-                        <table class="dashboard-modal-table">
-                            <thead>
-                                <tr>
-                                    <th>Status</th>
-                                    <th>Project Code</th>
-                                    <th>Project Title</th>
-                                    <th>Province</th>
-                                    <th>City/Municipality</th>
-                                    <th>Latest Date</th>
-                                    <th>Aging (Days)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($projectUpdateStatusOrder as $riskLabel)
-                                    @php
-                                        $riskStyle = $projectUpdateStatusStyles[$riskLabel] ?? ['badgeBg' => '#f3f4f6', 'badgeColor' => '#374151'];
-                                        $riskProjects = collect($projectUpdateRiskProjectsModal[$riskLabel] ?? []);
-                                    @endphp
-                                    @foreach ($riskProjects as $projectRow)
-                                        @php
-                                            $latestUpdateDateRaw = trim((string) ($projectRow->latest_update_date ?? ''));
-                                            $latestUpdateDate = $latestUpdateDateRaw !== ''
-                                                ? \Illuminate\Support\Carbon::parse($latestUpdateDateRaw)->format('M d, Y')
-                                                : '-';
-                                        @endphp
-                                        <tr>
-                                            <td>
-                                                <span
-                                                    class="project-update-status-badge"
-                                                    @style([
-                                                        'background-color: ' . $riskStyle['badgeBg'],
-                                                        'color: ' . $riskStyle['badgeColor'],
-                                                    ])
-                                                >
-                                                    {{ $riskLabel }}
-                                                </span>
-                                            </td>
-                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                            <td>{{ $projectRow->province ?: '-' }}</td>
-                                            <td>{{ $projectRow->city_municipality ?: '-' }}</td>
-                                            <td>{{ $latestUpdateDate }}</td>
-                                            <td>{{ $projectRow->aging_days ?? '-' }}</td>
-                                        </tr>
-                                    @endforeach
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @else
-                    <div class="dashboard-modal-empty-state">
-                        No project update status projects found for the current dashboard filters.
-                    </div>
-                @endif
-            </div>
+            <div class="dashboard-modal-body" data-modal-body-id="{{ $projectUpdateAllStatusModalId }}"></div>
             <div class="dashboard-modal-footer">
                 <button
                     type="button"
                     class="dashboard-modal-export-btn"
                     onclick="exportDashboardModalTableToExcel(this)"
                     data-export-filename="project-update-all-risk-levels.xls"
-                    @disabled(!$projectUpdateAllStatusHasProjects)
                 >
                     Export Excel
                 </button>
@@ -2872,7 +2244,6 @@
             $riskKey = strtolower(str_replace(' ', '-', $riskLabel));
             $modalId = 'project-update-' . $riskKey . '-modal';
             $modalTitleId = $modalId . '-title';
-            $modalProjects = $projectUpdateRiskProjectsModal[$riskLabel] ?? collect();
             $subtitleText = $projectUpdateModalSubtitles[$riskLabel] ?? '';
         @endphp
         <div id="{{ $modalId }}" class="dashboard-modal" aria-hidden="true" hidden>
@@ -2887,53 +2258,13 @@
                 <p class="dashboard-modal-subtitle">
                     {{ $subtitleText }}
                 </p>
-                <div class="dashboard-modal-body">
-                    @if ($modalProjects->isNotEmpty())
-                        <div class="dashboard-modal-table-wrap">
-                            <table class="dashboard-modal-table">
-                                <thead>
-                                    <tr>
-                                        <th>Project Code</th>
-                                        <th>Project Title</th>
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
-                                        <th>Latest Date</th>
-                                        <th>Aging (Days)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach ($modalProjects as $projectRow)
-                                        @php
-                                            $latestUpdateDateRaw = trim((string) ($projectRow->latest_update_date ?? ''));
-                                            $latestUpdateDate = $latestUpdateDateRaw !== ''
-                                                ? \Illuminate\Support\Carbon::parse($latestUpdateDateRaw)->format('M d, Y')
-                                                : '-';
-                                        @endphp
-                                        <tr>
-                                            <td>{{ $projectRow->project_code ?? '-' }}</td>
-                                            <td>{{ $projectRow->project_title ?: '-' }}</td>
-                                            <td>{{ $projectRow->province ?: '-' }}</td>
-                                            <td>{{ $projectRow->city_municipality ?: '-' }}</td>
-                                            <td>{{ $latestUpdateDate }}</td>
-                                            <td>{{ $projectRow->aging_days ?? '-' }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    @else
-                        <div class="dashboard-modal-empty-state">
-                            No {{ strtolower($riskLabel) }} projects found for the current dashboard filters.
-                        </div>
-                    @endif
-                </div>
+                <div class="dashboard-modal-body" data-modal-body-id="{{ $modalId }}"></div>
                 <div class="dashboard-modal-footer">
                     <button
                         type="button"
                         class="dashboard-modal-export-btn"
                         onclick="exportDashboardModalTableToExcel(this)"
                         data-export-filename="project-update-{{ $riskKey }}-projects.xls"
-                        @disabled($modalProjects->isEmpty())
                     >
                         Export Excel
                     </button>
@@ -5070,7 +4401,6 @@
         const DASHBOARD_LEGEND_STATE_PREFIX = 'dashboard.legend_collapsed.';
         const STATUS_LOCATION_EXPORT_ROWS = @json($statusSubaybayanLocationReport ?? []);
         const PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS = @json($provinceFundingYearProgramStatusReport ?? []);
-        const PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS = @json($provinceFundingYearProgramStatusSourceRows ?? []);
         const STATUS_LOCATION_EXPORT_STATUSES = @json($statusDisplayOrder ?? array_keys($statusSubaybayanCounts ?? []));
         const DASHBOARD_PROVINCE_CITY_OPTIONS = @json($filterOptions['province_city_map'] ?? []);
         const DASHBOARD_CITY_BARANGAY_OPTIONS = @json($filterOptions['city_barangay_map'] ?? []);
@@ -5443,6 +4773,11 @@
             modalElement.hidden = false;
             modalElement.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
+
+            if (typeof window.ensureDashboardModalLoaded === 'function') {
+                window.ensureDashboardModalLoaded(modalElement);
+            }
+
             if (typeof window.runDashboardModalFilters === 'function') {
                 window.runDashboardModalFilters(modalElement);
             }
@@ -6456,9 +5791,6 @@
             const groupedStatusRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS)
                 ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS
                 : [];
-            const groupedStatusSourceRows = Array.isArray(PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS)
-                ? PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_SOURCE_ROWS
-                : [];
 
             const toNumber = (value) => {
                 const numeric = Number(value);
@@ -6496,41 +5828,13 @@
                 });
             });
             const totalProjects = statusColumns.reduce((carry, statusLabel) => carry + toNumber(statusTotals[statusLabel] ?? 0), 0);
-            const normalizedGroupedStatusRows = (() => {
-                if (groupedStatusSourceRows.length > 0) {
-                    const aggregatedRows = new Map();
-
-                    groupedStatusSourceRows.forEach((row) => {
-                        const provinceLabel = String(row?.province || '').trim() || 'Unspecified Province';
-                        const fundingYearLabel = String(row?.funding_year || '').trim() || 'Unspecified Funding Year';
-                        const programLabel = String(row?.program || '').trim() || 'Unspecified Program';
-                        const projectStatusLabel = String(row?.project_status || '').trim() || 'Unspecified Status';
-                        const rowKey = [provinceLabel, fundingYearLabel, programLabel, projectStatusLabel].join('||');
-
-                        if (!aggregatedRows.has(rowKey)) {
-                            aggregatedRows.set(rowKey, {
-                                province: provinceLabel,
-                                funding_year: fundingYearLabel,
-                                program: programLabel,
-                                project_status: projectStatusLabel,
-                                total: 0,
-                            });
-                        }
-
-                        aggregatedRows.get(rowKey).total += 1;
-                    });
-
-                    return Array.from(aggregatedRows.values());
-                }
-
-                return groupedStatusRows.map((row) => ({
-                    province: String(row?.province || '').trim() || 'Unspecified Province',
-                    funding_year: String(row?.funding_year || '').trim() || 'Unspecified Funding Year',
-                    program: String(row?.program || '').trim() || 'Unspecified Program',
-                    project_status: String(row?.project_status || '').trim() || 'Unspecified Status',
-                    total: toInt(row?.total ?? 0),
-                }));
-            })();
+            const normalizedGroupedStatusRows = groupedStatusRows.map((row) => ({
+                province: String(row?.province || '').trim() || 'Unspecified Province',
+                funding_year: String(row?.funding_year || '').trim() || 'Unspecified Funding Year',
+                program: String(row?.program || '').trim() || 'Unspecified Program',
+                project_status: String(row?.project_status || '').trim() || 'Unspecified Status',
+                total: toInt(row?.total ?? 0),
+            }));
             const overviewColumnCount = Math.max(statusColumns.length + 3, 3);
             const overviewColumnWidths = [
                 140,
