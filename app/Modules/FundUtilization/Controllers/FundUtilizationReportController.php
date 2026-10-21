@@ -587,6 +587,38 @@ class FundUtilizationReportController extends Controller
         return $singlePath !== '' ? [$singlePath] : [];
     }
 
+    private function resolveFundUtilizationStoredFilePath(?string $storedPath): ?string
+    {
+        $storedPath = trim((string) $storedPath);
+        if ($storedPath === '' || str_contains($storedPath, '://')) {
+            return null;
+        }
+
+        $normalizedPath = str_replace('\\', '/', $storedPath);
+        $normalizedPath = ltrim($normalizedPath, '/');
+        $candidates = [$normalizedPath];
+
+        foreach (['storage/app/public/', 'app/public/', 'public/storage/', 'storage/'] as $prefix) {
+            if (str_starts_with($normalizedPath, $prefix)) {
+                $candidates[] = substr($normalizedPath, strlen($prefix));
+            }
+        }
+
+        foreach (array_unique($candidates) as $candidate) {
+            $candidate = ltrim($candidate, '/');
+            if ($candidate === '' || str_contains($candidate, '../')) {
+                continue;
+            }
+
+            $disk = Storage::disk('public');
+            if ($disk->exists($candidate)) {
+                return $disk->path($candidate);
+            }
+        }
+
+        return null;
+    }
+
     private function buildBatchDocumentStoragePayload(array $paths): array
     {
         $normalizedPaths = $this->normalizeBatchDocumentFilePaths($paths);
@@ -1037,6 +1069,38 @@ class FundUtilizationReportController extends Controller
      */
     public function index(Request $request)
     {
+        if (!$this->shouldCacheFundUtilizationIndex($request)) {
+            return $this->renderFundUtilizationIndex($request);
+        }
+
+        $cacheKey = 'fund_utilization:index_page:' . sha1((string) json_encode([
+            'user' => Auth::id(),
+            'query' => $request->query(),
+        ]));
+
+        $cacheHit = Cache::has($cacheKey);
+        $html = Cache::remember($cacheKey, now()->addMinutes(5), fn () => $this->renderFundUtilizationIndex($request));
+
+        return response($html)->header('X-Fund-Utilization-Cache', $cacheHit ? 'HIT' : 'MISS');
+    }
+
+    private function shouldCacheFundUtilizationIndex(Request $request): bool
+    {
+        if (!$request->isMethod('GET') || $request->boolean('batch_upload')) {
+            return false;
+        }
+
+        foreach (['success', 'error', 'warning', 'status'] as $flashKey) {
+            if ($request->hasSession() && $request->session()->has($flashKey)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function renderFundUtilizationIndex(Request $request): string
+    {
         $this->syncMissingLfpReports();
         [$reportsQuery, $filters, $filterOptions] = $this->buildFilteredReportsQuery($request);
         $perPage = (int) $request->query('per_page', 10);
@@ -1078,7 +1142,7 @@ class FundUtilizationReportController extends Controller
             ]
         );
 
-        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects', 'quarterlyDashboard'));
+        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects', 'quarterlyDashboard'))->render();
     }
 
     /**
@@ -1864,26 +1928,41 @@ class FundUtilizationReportController extends Controller
             'submission_year' => $submissionYear,
         ];
 
-        $filterOptions = $this->buildFundUtilizationFilterOptions(
-            clone $furQuery,
-            clone $lfpQuery,
-            clone $lfpFundingYearQuery,
-            [
-                'fur_program' => $furProgramExpression,
-                'lfp_program' => $lfpProgramExpression,
-                'fur_fund_source' => $furFundSourceExpression,
-                'lfp_fund_source' => $lfpFundSourceExpression,
-                'fur_project_status' => $furProjectStatusExpression,
-                'lfp_project_status' => $lfpProjectStatusExpression,
-                'fur_province' => $furProvinceExpression,
-                'lfp_province' => $lfpProvinceExpression,
-                'fur_city' => $furCityExpression,
-                'lfp_city' => $lfpCityExpression,
-                'fur_barangay' => $furBarangayExpression,
-                'lfp_barangay' => $lfpBarangayExpression,
-            ],
-            $normalizedFilters,
-            $activeFilters
+        $filterOptionExpressions = [
+            'fur_program' => $furProgramExpression,
+            'lfp_program' => $lfpProgramExpression,
+            'fur_fund_source' => $furFundSourceExpression,
+            'lfp_fund_source' => $lfpFundSourceExpression,
+            'fur_project_status' => $furProjectStatusExpression,
+            'lfp_project_status' => $lfpProjectStatusExpression,
+            'fur_province' => $furProvinceExpression,
+            'lfp_province' => $lfpProvinceExpression,
+            'fur_city' => $furCityExpression,
+            'lfp_city' => $lfpCityExpression,
+            'fur_barangay' => $furBarangayExpression,
+            'lfp_barangay' => $lfpBarangayExpression,
+        ];
+        $filterOptionsCacheKey = 'fund_utilization:filter_options:' . sha1((string) json_encode([
+            'user' => $user?->getAuthIdentifier(),
+            'province' => $userProvinceLower,
+            'office' => $userOfficeLower,
+            'lgu_scoped' => $isLguScopedUser,
+            'dilg_user' => $isDilgUser,
+            'filters' => $normalizedFilters,
+            'active' => $activeFilters,
+        ]));
+
+        $filterOptions = Cache::remember(
+            $filterOptionsCacheKey,
+            now()->addSeconds(60),
+            fn () => $this->buildFundUtilizationFilterOptions(
+                clone $furQuery,
+                clone $lfpQuery,
+                clone $lfpFundingYearQuery,
+                $filterOptionExpressions,
+                $normalizedFilters,
+                $activeFilters
+            )
         );
 
         $this->applyFundUtilizationFiltersToQueries(
@@ -4458,16 +4537,16 @@ class FundUtilizationReportController extends Controller
                 abort(404, 'Document not found');
             }
 
-            $filePath = storage_path('app/public/' . $selectedFilePath);
+            $filePath = $this->resolveFundUtilizationStoredFilePath($selectedFilePath);
         } else {
             if (!$upload || !$upload->$column) {
                 abort(404, 'Document not found');
             }
 
-            $filePath = storage_path('app/public/' . $upload->$column);
+            $filePath = $this->resolveFundUtilizationStoredFilePath($upload->$column);
         }
 
-        if (!file_exists($filePath)) {
+        if ($filePath === null || !is_file($filePath) || !is_readable($filePath)) {
             abort(404, 'File not found on disk');
         }
 
