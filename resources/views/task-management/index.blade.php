@@ -990,7 +990,7 @@
                         <input type="text" class="modal-search-input" placeholder="Search project or remarks..." oninput="filterModalRows('{{ $slug }}')">
                     </div>
                     @if($provinces->isNotEmpty())
-                        <select class="modal-select-filter" onchange="filterModalRows('{{ $slug }}')">
+                        <select class="modal-select-filter" data-filter="province" onchange="filterModalRows('{{ $slug }}')">
                             <option value="">All Provinces</option>
                             @foreach($provinces as $prov)
                                 <option value="{{ $prov }}">{{ $prov }}</option>
@@ -1258,38 +1258,33 @@
         if (!modal) return;
 
         const searchInput = modal.querySelector('.modal-search-input');
-        const searchVal = searchInput ? searchInput.value.toLowerCase() : '';
-        const provinceSelect = modal.querySelector('[data-filter="province"]');
-        const periodSelect = modal.querySelector('[data-filter="period"]');
-        const yearSelect = modal.querySelector('[data-filter="year"]');
-        const prioritySelect = modal.querySelector('[data-filter="priority"]');
-        
-        const provinceVal = provinceSelect ? provinceSelect.value.toLowerCase() : '';
-        const periodVal = periodSelect ? periodSelect.value.toLowerCase() : '';
-        const yearVal = yearSelect ? yearSelect.value.toLowerCase() : '';
-        const priorityVal = prioritySelect ? prioritySelect.value.toLowerCase() : '';
+        const searchVal = searchInput ? String(searchInput.value || '').trim().toLowerCase() : '';
+        const selectedFilters = {};
+
+        modal.querySelectorAll('[data-filter]').forEach((control) => {
+            const filterName = control.dataset.filter;
+            if (filterName) {
+                selectedFilters[filterName] = String(control.value || '').trim().toLowerCase();
+            }
+        });
         
         const rows = modal.querySelectorAll('.task-table tbody tr');
         rows.forEach(row => {
             const projTitleEl = row.querySelector('.proj-title-cell');
-            const projCode = projTitleEl ? projTitleEl.innerText.toLowerCase() : '';
+            const projCode = projTitleEl ? projTitleEl.textContent.toLowerCase() : '';
             const projMetaElement = row.querySelector('.proj-meta-cell');
-            const projMeta = projMetaElement ? projMetaElement.innerText.toLowerCase() : '';
+            const projMeta = projMetaElement ? projMetaElement.textContent.toLowerCase() : '';
             const messageEl = row.querySelector('.task-message-cell');
-            const details = messageEl ? messageEl.innerText.toLowerCase() : '';
-            
-            const provinceText = row.dataset.province ? row.dataset.province.toLowerCase() : '';
-            const periodText = row.dataset.period ? row.dataset.period.toLowerCase() : '';
-            const yearText = row.dataset.year ? row.dataset.year.toLowerCase() : '';
-            const priorityText = row.dataset.priority ? row.dataset.priority.toLowerCase() : '';
+            const details = messageEl ? messageEl.textContent.toLowerCase() : '';
             
             const matchesSearch = projCode.includes(searchVal) || projMeta.includes(searchVal) || details.includes(searchVal);
-            const matchesProvince = provinceVal === '' || provinceText === provinceVal;
-            const matchesPeriod = periodVal === '' || periodText === periodVal;
-            const matchesYear = yearVal === '' || yearText === yearVal;
-            const matchesPriority = priorityVal === '' || priorityText === priorityVal;
+            const matchesFilters = Object.entries(selectedFilters).every(([filterName, filterValue]) => {
+                if (filterValue === '') return true;
+
+                return String(row.dataset[filterName] || '').trim().toLowerCase() === filterValue;
+            });
             
-            if (matchesSearch && matchesProvince && matchesPeriod && matchesYear && matchesPriority) {
+            if (matchesSearch && matchesFilters) {
                 row.style.display = '';
             } else {
                 row.style.display = 'none';
