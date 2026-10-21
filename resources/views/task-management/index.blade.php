@@ -944,7 +944,7 @@
                                             {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
                                         </td>
                                         <td>
-                                            <a href="{{ $task['url'] }}" class="task-action-btn">
+                                            <a href="{{ $task['url'] }}" class="task-action-btn" target="_blank" rel="noopener noreferrer">
                                                 <i class="fas fa-clipboard-check"></i>
                                                 Review & Validate
                                             </a>
@@ -1201,6 +1201,19 @@
 @endif
 
 <script>
+    let taskPageNeedsRefresh = false;
+
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+            taskPageNeedsRefresh = true;
+            return;
+        }
+
+        if (taskPageNeedsRefresh) {
+            window.location.reload();
+        }
+    });
+
     function openTaskModal(id) {
         const modal = document.getElementById(id);
         if (modal) {

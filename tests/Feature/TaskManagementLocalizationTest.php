@@ -71,6 +71,8 @@ class TaskManagementLocalizationTest extends TestCase
         // Can see assigned municipality document
         $response->assertSee('La Trinidad');
         $response->assertSee('/local-project-monitoring-committee/La%20Trinidad/edit');
+        $response->assertSee('target="_blank"', false);
+        $response->assertSee('taskPageNeedsRefresh', false);
 
         // Cannot see other municipalities
         $response->assertDontSee('itogon_mep.pdf');
