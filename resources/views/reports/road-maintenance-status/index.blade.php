@@ -67,6 +67,9 @@
                         <a href="{{ route('road-maintenance-status.index', ['year' => $reportingYear, 'per_page' => $perPage ?? 15]) }}" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #6b7280; color: white; border: 1px solid #6b7280; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; text-decoration: none;">
                             Clear
                         </a>
+                        <a href="{{ route('road-maintenance-status.export', array_filter(['year' => $reportingYear, 'province' => $activeFilters['province'], 'city' => $activeFilters['city']])) }}" title="Export road maintenance status report" style="flex: 0 0 auto; height: 42px; padding: 0 18px; background-color: #059669; color: white; border: 1px solid #059669; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; text-decoration: none;">
+                            <i class="fas fa-file-export"></i> Export Report
+                        </a>
                     </form>
                 </div>
 

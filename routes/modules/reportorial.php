@@ -92,6 +92,8 @@ Route::middleware(['auth'])->group(function () {
         ->parameters(['local-project-monitoring-committee' => 'lpmc']);
 
     // Road Maintenance Status Report routes
+    Route::get('road-maintenance-status/export', [App\Modules\ReportorialRequirements\Controllers\RoadMaintenanceStatusReportController::class, 'export'])
+        ->name('road-maintenance-status.export');
     Route::post('road-maintenance-status/{roadMaintenance}/upload', [App\Modules\ReportorialRequirements\Controllers\RoadMaintenanceStatusReportController::class, 'upload'])
         ->name('road-maintenance-status.upload');
     Route::post('road-maintenance-status/{roadMaintenance}/approve/{docId}', [App\Modules\ReportorialRequirements\Controllers\RoadMaintenanceStatusReportController::class, 'approveDocument'])

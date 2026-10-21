@@ -24,7 +24,7 @@ class RoadMaintenanceStatusReportController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('crud_permission:road_maintenance_status_reports,view')->only(['index', 'show', 'edit', 'viewDocument']);
+        $this->middleware('crud_permission:road_maintenance_status_reports,view')->only(['index', 'show', 'edit', 'viewDocument', 'export']);
         $this->middleware('crud_permission:road_maintenance_status_reports,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:road_maintenance_status_reports,update')->only(['update', 'approveDocument']);
         $this->middleware('crud_permission:road_maintenance_status_reports,delete')->only(['destroy', 'deleteDocument']);
@@ -870,6 +870,119 @@ class RoadMaintenanceStatusReportController extends Controller
             'filters',
             'filterOptions'
         ));
+    }
+
+    public function export(Request $request)
+    {
+        $reportingYear = $this->resolveReportingYear($request);
+        $officeRows = $this->buildOfficeRows($this->getOffices());
+        $filters = [
+            'province' => trim((string) $request->query('province', '')),
+            'city' => trim((string) $request->query('city', '')),
+        ];
+
+        $user = auth()->user();
+        if ($user && $user->isLguScopedUser() && $user->normalizedOffice() !== '') {
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($user) {
+                return $user->matchesAssignedOffice((string) ($row['city_municipality'] ?? ''));
+            }));
+        } elseif ($user && ($user->isProvincialUser() || ($user->isDilgUser() && !$user->isRegionalUser() && !$user->isSuperAdmin() && !empty($user->province) && $user->province !== 'Regional Office'))) {
+            $userProvince = $user->province;
+            $officeRows = array_values(array_filter($officeRows, function ($row) use ($userProvince) {
+                return strcasecmp($row['province'], $userProvince) === 0;
+            }));
+        }
+
+        $officeRows = array_values(array_filter($officeRows, function ($row) use ($filters) {
+            return ($filters['province'] === '' || (string) $row['province'] === $filters['province'])
+                && ($filters['city'] === '' || (string) $row['city_municipality'] === $filters['city']);
+        }));
+
+        $officeNames = array_values(array_unique(array_column($officeRows, 'city_municipality')));
+        $documentsByOffice = [];
+        if (!empty($officeNames)) {
+            $documents = RoadMaintenanceStatusDocument::whereIn('office', $officeNames)
+                ->where('doc_type', $this->quarterlyDocType())
+                ->where('year', $reportingYear)
+                ->get();
+
+            foreach ($documents as $document) {
+                $key = $document->doc_type . '|' . ($document->year ?? '') . '|' . ($document->quarter ?? '');
+                $documentsByOffice[$document->office][$key] = $document;
+            }
+        }
+
+        $escape = static fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+        $formatDate = static function ($date) use ($escape): string {
+            return $date ? $escape(Carbon::parse($date)->setTimezone(config('app.timezone'))->format('M d, Y h:i A')) : '-';
+        };
+
+        $filterLabel = $filters['province'] !== '' ? $filters['province'] : 'All provinces';
+        if ($filters['city'] !== '') {
+            $filterLabel .= ' / ' . $filters['city'];
+        }
+        $columnCount = 14;
+        $html = '<html><head><meta charset="UTF-8"><style>'
+            . 'body{font-family:Arial,sans-serif;color:#1f2937;font-size:10pt;}'
+            . 'table{border-collapse:collapse;width:100%;}'
+            . '.title{background:#002c76;color:#fff;font-size:18pt;font-weight:bold;text-align:left;padding:14px 16px;}'
+            . '.subtitle{background:#e8f0fb;color:#24446f;font-size:10pt;padding:7px 16px;}'
+            . '.meta-label{background:#f3f4f6;color:#6b7280;font-weight:bold;padding:7px 10px;}'
+            . '.meta-value{background:#fff;color:#374151;padding:7px 10px;}'
+            . '.group{background:#0f766e;color:#fff;font-weight:bold;text-align:center;padding:9px 6px;border:1px solid #0b5f59;}'
+            .'.identity{background:#1f4e78;color:#fff;font-weight:bold;text-align:left;padding:9px 8px;border:1px solid #173b5c;}'
+            .'.subhead{background:#dbeafe;color:#1e3a5f;font-weight:bold;text-align:center;padding:8px 6px;border:1px solid #b8cbe3;}'
+            .'.data{padding:8px;border:1px solid #d9e0e8;vertical-align:middle;}'
+            .'.data-center{text-align:center;white-space:nowrap;}'
+            .'.alt{background:#f8fafc;}'
+            .'.link{color:#0563c1;text-decoration:underline;font-weight:bold;}'
+            .'.empty{text-align:center;color:#6b7280;padding:18px;border:1px solid #d9e0e8;}'
+            .'</style></head><body>'
+            . '<table><tr><td class="title" colspan="' . $columnCount . '">Road Maintenance Status Report</td></tr>'
+            . '<tr><td class="subtitle" colspan="' . $columnCount . '">Quarterly document monitoring report</td></tr>'
+            . '<tr><td class="meta-label">Reporting Year</td><td class="meta-value" colspan="2">' . $escape($reportingYear) . '</td>'
+            . '<td class="meta-label">Scope</td><td class="meta-value" colspan="10">' . $escape($filterLabel) . '</td></tr>'
+            . '<tr><td class="meta-label">Generated</td><td class="meta-value" colspan="2">' . $escape(now()->setTimezone(config('app.timezone'))->format('M d, Y h:i A')) . '</td>'
+            . '<td class="meta-label">Records</td><td class="meta-value" colspan="10">' . $escape(count($officeRows)) . '</td></tr>'
+            . '<tr><th class="identity" rowspan="2">Province</th><th class="identity" rowspan="2">City/Municipality</th>';
+
+        foreach (['Q1', 'Q2', 'Q3', 'Q4'] as $quarter) {
+            $html .= '<th class="group" colspan="3">' . $quarter . '</th>';
+        }
+
+        $html .= '</tr><tr>';
+        foreach (['Q1', 'Q2', 'Q3', 'Q4'] as $quarter) {
+            $html .= '<th class="subhead">Document Upload Link</th><th class="subhead">Date Uploaded</th><th class="subhead">Date Validated by Regional Users</th>';
+        }
+        $html .= '</tr>';
+
+        foreach ($officeRows as $rowIndex => $row) {
+            $rowClass = $rowIndex % 2 === 1 ? ' alt' : '';
+            $html .= '<tr class="' . $rowClass . '"><td class="data">' . $escape($row['province']) . '</td><td class="data">' . $escape($row['city_municipality']) . '</td>';
+            $officeDocs = $documentsByOffice[$row['city_municipality']] ?? [];
+
+            foreach (['Q1', 'Q2', 'Q3', 'Q4'] as $quarter) {
+                $document = $officeDocs[$this->quarterlyDocType() . '|' . $reportingYear . '|' . $quarter] ?? null;
+                $link = $document && $document->file_path
+                    ? route('road-maintenance-status.document', ['roadMaintenance' => $row['city_municipality'], 'docId' => $document->id])
+                    : null;
+                $html .= '<td class="data data-center">' . ($link ? '<a class="link" href="' . $escape($link) . '">Download document</a>' : '-') . '</td>';
+                $html .= '<td class="data data-center">' . $formatDate($document?->uploaded_at) . '</td>';
+                $html .= '<td class="data data-center">' . $formatDate($document?->approved_at_dilg_ro) . '</td>';
+            }
+
+            $html .= '</tr>';
+        }
+
+        if (empty($officeRows)) {
+            $html .= '<tr><td class="empty" colspan="' . $columnCount . '">No records found for the selected filters.</td></tr>';
+        }
+
+        $html .= '</table></body></html>';
+
+        return response($html)
+            ->header('Content-Type', 'application/vnd.ms-excel; charset=UTF-8')
+            ->header('Content-Disposition', 'attachment; filename="road_maintenance_status_' . $reportingYear . '.xls"');
     }
 
     public function create()
