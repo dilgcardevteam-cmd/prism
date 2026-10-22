@@ -4489,16 +4489,9 @@ class FundUtilizationReportController extends Controller
      */
     public function viewDocument($projectCode, $docType, $quarter)
     {
-        $projectCode = trim((string) $projectCode);
-        $quarter = strtoupper(trim((string) $quarter));
-
-        $report = FundUtilizationReport::query()
-            ->whereRaw('TRIM(project_code) = ?', [$projectCode])
-            ->first();
+        $report = FundUtilizationReport::find($projectCode);
         if (!$report) {
-            $lfp = LocallyFundedProject::query()
-                ->whereRaw('TRIM(subaybayan_project_code) = ?', [$projectCode])
-                ->firstOrFail();
+            $lfp = LocallyFundedProject::where('subaybayan_project_code', $projectCode)->firstOrFail();
             $report = (object) [
                 'fund_source' => $lfp->fund_source,
                 'province' => $lfp->province,
@@ -4531,8 +4524,8 @@ class FundUtilizationReportController extends Controller
 
         // Get the file path from database
         $upload = \DB::table($table)
-            ->whereRaw('TRIM(project_code) = ?', [$projectCode])
-            ->whereRaw('UPPER(TRIM(quarter)) = ?', [$quarter])
+            ->where('project_code', $projectCode)
+            ->where('quarter', $quarter)
             ->first();
 
         if ($docType === 'batch-document') {
