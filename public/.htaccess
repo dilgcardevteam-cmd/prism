@@ -49,9 +49,3 @@
     AddOutputFilterByType DEFLATE text/plain
     AddOutputFilterByType DEFLATE text/xml
 </IfModule>
-
-<IfModule mod_headers.c>
-    <FilesMatch "\.(?:css|js|mjs|map|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|eot)$">
-        Header set Cache-Control "public, max-age=86400"
-    </FilesMatch>
-</IfModule>

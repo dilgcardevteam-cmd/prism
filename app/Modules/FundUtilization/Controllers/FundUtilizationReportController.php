@@ -31,7 +31,6 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -94,52 +93,48 @@ class FundUtilizationReportController extends Controller
             return;
         }
 
-        Cache::remember('fund_utilization:missing_reports_synced', now()->addSeconds(60), function (): bool {
-            $now = now();
+        $now = now();
 
-            LocallyFundedProject::query()
-                ->whereRaw('UPPER(TRIM(COALESCE(fund_source, ""))) <> ?', ['SGLGIF'])
-                ->whereRaw('UPPER(TRIM(COALESCE(subaybayan_project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
-                ->whereNotExists(function ($query) {
-                    $query->select(DB::raw(1))
-                        ->from('tbfur')
-                        ->whereColumn('tbfur.project_code', 'locally_funded_projects.subaybayan_project_code');
-                })
-                ->orderBy('id')
-                ->chunkById(200, function ($projects) use ($now) {
-                    $rows = [];
+        LocallyFundedProject::query()
+            ->whereRaw('UPPER(TRIM(COALESCE(fund_source, ""))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(subaybayan_project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('tbfur')
+                    ->whereColumn('tbfur.project_code', 'locally_funded_projects.subaybayan_project_code');
+            })
+            ->orderBy('id')
+            ->chunkById(200, function ($projects) use ($now) {
+                $rows = [];
 
-                    foreach ($projects as $project) {
-                        $projectCode = trim((string) $project->subaybayan_project_code);
-                        if ($projectCode === '') {
-                            continue;
-                        }
-
-                        $rows[] = [
-                            'project_code' => $projectCode,
-                            'province' => $project->province,
-                            'implementing_unit' => $project->implementing_unit,
-                            'barangay' => $project->barangay,
-                            'fund_source' => $project->fund_source,
-                            'funding_year' => $project->funding_year,
-                            'project_title' => $project->project_name,
-                            'allocation' => $project->lgsf_allocation,
-                            'contract_amount' => $project->contract_amount,
-                            'project_status' => 'Ongoing',
-                            'created_at' => $now,
-                            'updated_at' => $now,
-                        ];
+                foreach ($projects as $project) {
+                    $projectCode = trim((string) $project->subaybayan_project_code);
+                    if ($projectCode === '') {
+                        continue;
                     }
 
-                    if (!empty($rows)) {
-                        DB::table('tbfur')->insertOrIgnore($rows);
-                    }
-                });
+                    $rows[] = [
+                        'project_code' => $projectCode,
+                        'province' => $project->province,
+                        'implementing_unit' => $project->implementing_unit,
+                        'barangay' => $project->barangay,
+                        'fund_source' => $project->fund_source,
+                        'funding_year' => $project->funding_year,
+                        'project_title' => $project->project_name,
+                        'allocation' => $project->lgsf_allocation,
+                        'contract_amount' => $project->contract_amount,
+                        'project_status' => 'Ongoing',
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
 
-            $this->syncMissingSubayReports();
+                if (!empty($rows)) {
+                    DB::table('tbfur')->insertOrIgnore($rows);
+                }
+            });
 
-            return true;
-        });
+        $this->syncMissingSubayReports();
     }
 
     private function normalizeText($value, string $fallback = ''): string
