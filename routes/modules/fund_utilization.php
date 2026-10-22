@@ -62,11 +62,6 @@ Route::middleware(['auth'])->group(function () {
         })->name('fund-utilization.batch-upload-documents.get');
         Route::post('/batch-upload-documents', [FundUtilizationReportController::class, 'uploadBatchDocumentsBulk'])->name('fund-utilization.batch-upload-documents');
         Route::post('/batch-upload-individual-documents', [FundUtilizationReportController::class, 'uploadIndividualDocumentsBulk'])->name('fund-utilization.batch-upload-individual-documents');
-        Route::get('/upload-batches', [FundUtilizationReportController::class, 'uploadBatchList'])->name('fund-utilization.upload-batches.index');
-        Route::get('/upload-batches/{batchId}', [FundUtilizationReportController::class, 'showUploadBatch'])->name('fund-utilization.upload-batches.show');
-        Route::post('/upload-batches/{batchId}/projects', [FundUtilizationReportController::class, 'selectUploadBatchProjects'])->name('fund-utilization.upload-batches.projects');
-        Route::post('/upload-batches/{batchId}/documents/{documentType}', [FundUtilizationReportController::class, 'reviewUploadBatchDocument'])->name('fund-utilization.upload-batches.documents.review');
-        Route::get('/upload-batches/{batchId}/documents/{documentType}/{projectCode}/history', [FundUtilizationReportController::class, 'uploadBatchDocumentHistory'])->name('fund-utilization.upload-batches.documents.history');
         Route::get('/{projectCode}', [FundUtilizationReportController::class, 'show'])->name('fund-utilization.show');
         Route::get('/{projectCode}/edit', [FundUtilizationReportController::class, 'edit'])->name('fund-utilization.edit');
         Route::put('/{projectCode}', [FundUtilizationReportController::class, 'update'])->name('fund-utilization.update');
@@ -95,3 +90,4 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{projectCode}/delete-document/{docType}/{quarter}', [FundUtilizationReportController::class, 'deleteDocument'])->name('fund-utilization.delete-document');
     });
 });
+
