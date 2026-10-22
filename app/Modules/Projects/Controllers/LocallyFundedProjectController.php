@@ -122,11 +122,9 @@ class LocallyFundedProjectController extends Controller
 
         try {
             $this->syncMissingFundUtilizationReports();
-        } catch (\Illuminate\Database\QueryException $exception) {
+        } catch (\Throwable $exception) {
             Cache::forget($cacheKey);
-            Log::warning('Unable to synchronize locally funded projects to tbfur.', [
-                'exception' => $exception,
-            ]);
+            throw $exception;
         }
     }
 
@@ -2544,23 +2542,6 @@ $url = route('locally-funded-project.show', $project, false);
             return;
         }
 
-        $requiredColumns = ['project_code', 'province', 'implementing_unit', 'fund_source', 'funding_year', 'project_title'];
-        foreach ($requiredColumns as $column) {
-            if (!$this->hasColumnCached('tbfur', $column)) {
-                Log::warning('Skipping locally funded project synchronization because tbfur is missing a required column.', [
-                    'column' => $column,
-                ]);
-
-                return;
-            }
-        }
-
-        $optionalColumns = ['barangay', 'allocation', 'contract_amount', 'project_status'];
-        $availableOptionalColumns = array_values(array_filter(
-            $optionalColumns,
-            fn (string $column): bool => $this->hasColumnCached('tbfur', $column)
-        ));
-
         $now = now();
 
         LocallyFundedProject::query()
@@ -2585,22 +2566,16 @@ $url = route('locally-funded-project.show', $project, false);
                         'project_code' => $projectCode,
                         'province' => $project->province,
                         'implementing_unit' => $project->implementing_unit,
+                        'barangay' => $project->barangay,
                         'fund_source' => $project->fund_source,
                         'funding_year' => $project->funding_year,
                         'project_title' => $project->project_name,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ];
-
-                    $optionalValues = [
-                        'barangay' => $project->barangay,
                         'allocation' => $project->lgsf_allocation,
                         'contract_amount' => $project->contract_amount,
                         'project_status' => 'Ongoing',
+                        'created_at' => $now,
+                        'updated_at' => $now,
                     ];
-                    foreach ($availableOptionalColumns as $column) {
-                        $rows[array_key_last($rows)][$column] = $optionalValues[$column];
-                    }
                 }
 
                 if (!empty($rows)) {
