@@ -1110,11 +1110,19 @@
         <div class="fur-batch-modal-backdrop" aria-hidden="true"></div>
         <div class="fur-batch-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="batchUploadModalTitle">
             <div class="fur-batch-modal-header">
-                <div>
-                    <h3 id="batchUploadModalTitle">Batch Upload FUR</h3>
-                    <p>Use project filters to narrow the upload queue before opening each FUR project.</p>
+                <div class="fur-batch-modal-header-main">
+                    <div class="fur-batch-modal-header-icon">
+                        <i class="fas fa-layer-group" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <div class="fur-batch-modal-header-title-row">
+                            <h3 id="batchUploadModalTitle">Batch Upload FUR</h3>
+                            <span class="fur-batch-header-pill"><i class="fas fa-bolt" aria-hidden="true"></i> Bulk Upload Mode</span>
+                        </div>
+                        <p>Attach fund utilization documents and assign them across multiple project records at once.</p>
+                    </div>
                 </div>
-                <button type="button" class="fur-batch-modal-close" data-batch-upload-close aria-label="Close">
+                <button type="button" class="fur-batch-modal-close" data-batch-upload-close aria-label="Close" title="Close modal">
                     <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
@@ -1127,11 +1135,12 @@
                         <div class="fur-batch-filter-form">
                             <button type="button" class="fur-batch-filter-toggle" onclick="toggleBatchUploadFilterPanel(this)" aria-expanded="true" aria-controls="batch-upload-filter-panel">
                                 <span class="fur-batch-filter-toggle-copy">
-                                    <i class="fas fa-filter" aria-hidden="true"></i>
-                                    <span>Batch Project Filters</span>
+                                    <span class="fur-batch-filter-icon-badge"><i class="fas fa-filter" aria-hidden="true"></i></span>
+                                    <span class="fur-batch-filter-toggle-title">Filter Projects Queue</span>
+                                    <span class="fur-batch-filter-toggle-hint">(Optional — narrow the list of available projects)</span>
                                 </span>
                                 <span class="fur-batch-filter-chevron">
-                                    <i class="fas fa-chevron-up"></i>
+                                    <i class="fas fa-chevron-up" aria-hidden="true"></i>
                                 </span>
                             </button>
 
@@ -1258,13 +1267,17 @@
                         </div>
                     </form>
 
+                    <div class="fur-batch-workspace">
                     <section class="fur-batch-document-panel" aria-labelledby="batchUploadDocumentTitle">
                         <div class="fur-batch-document-panel-header">
-                            <div>
-                                <h4 id="batchUploadDocumentTitle">Upload Documents</h4>
-                                <p>Attach the documents that will be used for the selected projects.</p>
+                            <div class="fur-batch-section-header-left">
+                                <span class="fur-batch-step-badge">1</span>
+                                <div>
+                                    <h4 id="batchUploadDocumentTitle" class="fur-batch-section-title">Upload Documents</h4>
+                                    <p class="fur-batch-section-desc">Select submission quarter and attach files to apply to selected projects.</p>
+                                </div>
                             </div>
-                            <span class="fur-batch-document-pill">Batch Upload</span>
+                            <span class="fur-batch-document-pill"><i class="fas fa-file-invoice" aria-hidden="true"></i> Category Mode</span>
                         </div>
 
                         <div class="fur-batch-document-mode-actions" role="group" aria-label="Choose batch upload mode" style="display: none;">
@@ -1322,13 +1335,26 @@
                             <div class="fur-batch-category-body">
                                 <div class="fur-batch-category-summary-card">
                                     <div class="fur-batch-category-summary-grid">
-                                        <div class="fur-batch-category-summary-block">
-                                            <div class="fur-batch-category-summary-label">Selected Projects</div>
-                                            <div id="batchUploadCategoryProjectCount" class="fur-batch-category-summary-value">0</div>
-                                            <div id="batchUploadCategoryProjectPreview" class="fur-batch-category-summary-copy">No projects selected yet.</div>
+                                        <div class="fur-batch-category-summary-block fur-batch-summary-projects">
+                                            <div class="fur-batch-summary-icon">
+                                                <i class="fas fa-folder-tree" aria-hidden="true"></i>
+                                            </div>
+                                            <div class="fur-batch-summary-info">
+                                                <div class="fur-batch-category-summary-label">Target Projects</div>
+                                                <div class="fur-batch-summary-count-wrap">
+                                                    <span id="batchUploadCategoryProjectCount" class="fur-batch-category-summary-value">0</span>
+                                                    <span class="fur-batch-summary-unit">selected</span>
+                                                </div>
+                                                <div id="batchUploadCategoryProjectPreview" class="fur-batch-category-summary-copy">No projects selected yet.</div>
+                                            </div>
                                         </div>
-                                        <div class="fur-batch-category-summary-block">
-                                            <label for="batchUploadCategoryQuarter" class="fur-batch-category-summary-label">Quarter</label>
+                                        <div class="fur-batch-category-summary-block fur-batch-summary-quarter">
+                                            <div class="fur-batch-summary-quarter-header">
+                                                <label for="batchUploadCategoryQuarter" class="fur-batch-category-summary-label">
+                                                    <i class="fas fa-calendar-check" aria-hidden="true"></i> Quarter
+                                                </label>
+                                                <span class="fur-batch-required-badge">Required</span>
+                                            </div>
                                             <select id="batchUploadCategoryQuarter" class="fur-batch-quarter-select fur-batch-category-quarter-select">
                                                 <option value="">Select Quarter</option>
                                                 <option value="Q1">Q1 (January - March)</option>
@@ -1341,19 +1367,19 @@
                                 </div>
 
                                 <div class="fur-batch-category-individual-shell">
-                                    <div class="fur-batch-category-document-card">
-                                        <h3 class="fur-batch-category-document-card-header">
+                                    <div class="fur-batch-category-document-card fur-batch-category-card-fur">
+                                        <div class="fur-batch-category-document-card-header">
                                             <span class="fur-batch-category-document-card-title-wrap">
                                                 <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-red">
                                                     <i class="fas fa-file-pdf" aria-hidden="true"></i>
                                                 </span>
                                                 <span class="fur-batch-category-document-card-title-group">
                                                     <span class="fur-batch-category-document-card-title">Fund Utilization Report</span>
-                                                    <span class="fur-batch-category-document-card-copy">MOV on PDF Format</span>
+                                                    <span class="fur-batch-category-document-card-copy">MOV on PDF Format (Max 50MB)</span>
                                                 </span>
                                             </span>
                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
-                                        </h3>
+                                        </div>
                                         <div class="fur-batch-category-document-card-content">
                                             <div class="fur-batch-category-document-field-wrap">
                                                 <div class="fur-batch-category-document-field">
@@ -1364,13 +1390,13 @@
                                         </div>
                                     </div>
 
-                                    <div class="fur-batch-category-document-card">
+                                    <div class="fur-batch-category-document-card fur-batch-category-card-notice">
                                         <div class="fur-batch-category-written-section-header">
                                             <div class="fur-batch-category-document-card-title-wrap">
                                                 <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-blue">
                                                     <i class="fas fa-envelope-open-text" aria-hidden="true"></i>
                                                 </span>
-                                                <div>
+                                                <div class="fur-batch-category-document-card-title-group">
                                                     <p class="fur-batch-category-written-section-title">Written Notice</p>
                                                     <p class="fur-batch-category-written-section-copy">MOV Screenshot of Emailed Notice &amp; Written Notice PDF</p>
                                                 </div>
@@ -1378,11 +1404,13 @@
                                         </div>
                                         <div class="fur-batch-category-document-card-content">
                                             <div class="fur-batch-category-written-recipient-shell">
-                                                <p class="fur-batch-category-written-recipient-title">Distribution Recipients:</p>
+                                                <p class="fur-batch-category-written-recipient-title">
+                                                    <i class="fas fa-paper-plane" style="color: #2563eb; margin-right: 6px;"></i> Distribution Recipients (6 Required Offices):
+                                                </p>
                                                 <div class="fur-batch-category-written-grid">
                                                     <div class="fur-batch-category-written-card">
-                                                        <label class="fur-batch-category-written-card-label">
-                                                            <span>Secretary of DBM</span>
+                                                        <label class="fur-batch-category-written-card-label" for="batchUploadCategorySecretaryDbm">
+                                                            <span><i class="fas fa-building-columns" style="color: #475569; margin-right: 6px;"></i>Secretary of DBM</span>
                                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
                                                         </label>
                                                         <div class="fur-batch-category-document-field">
@@ -1391,8 +1419,8 @@
                                                         <div id="batchUploadCategorySecretaryDbmName" class="fur-batch-category-file-name">No file selected.</div>
                                                     </div>
                                                     <div class="fur-batch-category-written-card">
-                                                        <label class="fur-batch-category-written-card-label">
-                                                            <span>Secretary of DILG</span>
+                                                        <label class="fur-batch-category-written-card-label" for="batchUploadCategorySecretaryDilg">
+                                                            <span><i class="fas fa-landmark" style="color: #475569; margin-right: 6px;"></i>Secretary of DILG</span>
                                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
                                                         </label>
                                                         <div class="fur-batch-category-document-field">
@@ -1401,8 +1429,8 @@
                                                         <div id="batchUploadCategorySecretaryDilgName" class="fur-batch-category-file-name">No file selected.</div>
                                                     </div>
                                                     <div class="fur-batch-category-written-card">
-                                                        <label class="fur-batch-category-written-card-label">
-                                                            <span>Speaker of the House</span>
+                                                        <label class="fur-batch-category-written-card-label" for="batchUploadCategorySpeakerHouse">
+                                                            <span><i class="fas fa-users-rectangle" style="color: #475569; margin-right: 6px;"></i>Speaker of the House</span>
                                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
                                                         </label>
                                                         <div class="fur-batch-category-document-field">
@@ -1411,8 +1439,8 @@
                                                         <div id="batchUploadCategorySpeakerHouseName" class="fur-batch-category-file-name">No file selected.</div>
                                                     </div>
                                                     <div class="fur-batch-category-written-card">
-                                                        <label class="fur-batch-category-written-card-label">
-                                                            <span>President of the Senate</span>
+                                                        <label class="fur-batch-category-written-card-label" for="batchUploadCategoryPresidentSenate">
+                                                            <span><i class="fas fa-scale-balanced" style="color: #475569; margin-right: 6px;"></i>President of the Senate</span>
                                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
                                                         </label>
                                                         <div class="fur-batch-category-document-field">
@@ -1421,8 +1449,8 @@
                                                         <div id="batchUploadCategoryPresidentSenateName" class="fur-batch-category-file-name">No file selected.</div>
                                                     </div>
                                                     <div class="fur-batch-category-written-card">
-                                                        <label class="fur-batch-category-written-card-label">
-                                                            <span>House Committee on Appropriation</span>
+                                                        <label class="fur-batch-category-written-card-label" for="batchUploadCategoryHouseCommittee">
+                                                            <span><i class="fas fa-coins" style="color: #475569; margin-right: 6px;"></i>House Committee on Appropriation</span>
                                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
                                                         </label>
                                                         <div class="fur-batch-category-document-field">
@@ -1431,8 +1459,8 @@
                                                         <div id="batchUploadCategoryHouseCommitteeName" class="fur-batch-category-file-name">No file selected.</div>
                                                     </div>
                                                     <div class="fur-batch-category-written-card">
-                                                        <label class="fur-batch-category-written-card-label">
-                                                            <span>Senate Committee on Finance</span>
+                                                        <label class="fur-batch-category-written-card-label" for="batchUploadCategorySenateCommittee">
+                                                            <span><i class="fas fa-file-invoice-dollar" style="color: #475569; margin-right: 6px;"></i>Senate Committee on Finance</span>
                                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
                                                         </label>
                                                         <div class="fur-batch-category-document-field">
@@ -1445,19 +1473,19 @@
                                         </div>
                                     </div>
 
-                                    <div class="fur-batch-category-document-card">
-                                        <h3 class="fur-batch-category-document-card-header">
+                                    <div class="fur-batch-category-document-card fur-batch-category-card-fdp">
+                                        <div class="fur-batch-category-document-card-header">
                                             <span class="fur-batch-category-document-card-title-wrap">
-                                                <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-red">
-                                                    <i class="fas fa-file-pdf" aria-hidden="true"></i>
+                                                <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-amber">
+                                                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
                                                 </span>
                                                 <span class="fur-batch-category-document-card-title-group">
                                                     <span class="fur-batch-category-document-card-title">Full Disclosure Policy (FDP)</span>
-                                                    <span class="fur-batch-category-document-card-copy">On PDF Format</span>
+                                                    <span class="fur-batch-category-document-card-copy">PDF / Image Format (Max 50MB)</span>
                                                 </span>
                                             </span>
                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
-                                        </h3>
+                                        </div>
                                         <div class="fur-batch-category-document-card-content">
                                             <div class="fur-batch-category-document-field-wrap">
                                                 <div class="fur-batch-category-document-field">
@@ -1468,124 +1496,152 @@
                                         </div>
                                     </div>
 
-                                    <div class="fur-batch-category-document-card">
-                                        <h3 class="fur-batch-category-document-card-header">
+                                    <div class="fur-batch-category-document-card fur-batch-category-card-link">
+                                        <div class="fur-batch-category-document-card-header">
                                             <span class="fur-batch-category-document-card-title-wrap">
                                                 <span class="fur-batch-category-document-card-icon fur-batch-category-document-card-icon-green">
-                                                    <i class="fas fa-link" aria-hidden="true"></i>
+                                                    <i class="fas fa-globe" aria-hidden="true"></i>
                                                 </span>
                                                 <span class="fur-batch-category-document-card-title-group">
                                                     <span class="fur-batch-category-document-card-title">LGU Website / Social Media</span>
-                                                    <span class="fur-batch-category-document-card-copy">Posting Link</span>
+                                                    <span class="fur-batch-category-document-card-copy">Online Public Posting URL</span>
                                                 </span>
                                             </span>
                                             <span class="fur-batch-category-document-status-badge fur-batch-category-document-status-badge-warning">Pending Upload</span>
-                                        </h3>
+                                        </div>
                                         <div class="fur-batch-category-document-card-content">
                                             <div class="fur-batch-category-document-field-wrap">
-                                                <div class="fur-batch-category-document-field">
-                                                    <input id="batchUploadCategoryPostingLink" type="text" class="fur-batch-category-text-input" placeholder="https://example.com/post">
+                                                <div class="fur-batch-category-document-field fur-batch-url-input-wrap">
+                                                    <span class="fur-batch-url-prefix"><i class="fas fa-link" aria-hidden="true"></i></span>
+                                                    <input id="batchUploadCategoryPostingLink" type="url" class="fur-batch-category-text-input" placeholder="https://facebook.com/lgu-post or https://lgu.gov.ph/fur">
                                                 </div>
-                                                <div class="fur-batch-category-file-name">Enter a valid http or https link if you want to submit a posting link.</div>
+                                                <div class="fur-batch-category-file-name" style="color: #64748b; font-weight: 500;">
+                                                    <i class="fas fa-info-circle" style="color: #94a3b8;"></i> Provide a valid HTTP or HTTPS link for online publication compliance.
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
-                        </div>
-
-                        <div class="fur-batch-document-submit-row" id="batchUploadDocumentSubmitRow" hidden>
-                            <button type="button" id="batchUploadDocumentSubmitBtn" class="fur-batch-document-submit-btn">
-                                <i class="fas fa-upload" aria-hidden="true"></i>
-                                Submit Documents
-                            </button>
                         </div>
                     </section>
 
                     <div class="fur-batch-project-list">
-                        <div class="fur-batch-shuttle" data-batch-shuttle>
-                    <input type="hidden" id="batch_upload_selected_project_codes" name="selected_project_codes_json" value="[]">
-
-                    <section class="fur-batch-shuttle-panel">
-                        <div class="fur-batch-shuttle-panel-header">
-                            <div>
-                                <h4>Available Projects</h4>
-                                <p>Filtered results from the current modal filters.</p>
-                            </div>
-                            <span class="fur-batch-shuttle-count" id="batchUploadAvailableCount">0</span>
-                        </div>
-                        <div class="fur-batch-shuttle-table-wrap">
-                            <table class="fur-batch-shuttle-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 44px;">
-                                            <input type="checkbox" id="batchUploadAvailableToggleAll">
-                                        </th>
-                                        <th style="width: 320px;">Project</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="batchUploadAvailableBody"></tbody>
-                            </table>
-                            <div class="fur-batch-empty-state" id="batchUploadAvailableEmpty" hidden>
-                                No projects match the selected filters.
-                            </div>
-                        </div>
-                    </section>
-
-                    <div class="fur-batch-shuttle-controls">
-                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveSelectedRight" aria-label="Move selected projects to selected list">
-                            <i class="fas fa-angle-right" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveAllRight" aria-label="Move all projects to selected list">
-                            <i class="fas fa-angles-right" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveSelectedLeft" aria-label="Remove selected projects from selected list">
-                            <i class="fas fa-angle-left" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveAllLeft" aria-label="Remove all projects from selected list">
-                            <i class="fas fa-angles-left" aria-hidden="true"></i>
-                        </button>
-                    </div>
-
-                    <section class="fur-batch-shuttle-panel">
-                        <div class="fur-batch-shuttle-panel-header">
-                            <div>
-                                <h4>Selected Projects</h4>
-                                <p>These are the projects moved from the filtered list.</p>
-                            </div>
-                            <span class="fur-batch-shuttle-count" id="batchUploadSelectedCount">0</span>
-                        </div>
-                        <div class="fur-batch-shuttle-table-wrap">
-                            <table class="fur-batch-shuttle-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 44px;">
-                                            <input type="checkbox" id="batchUploadSelectedToggleAll">
-                                        </th>
-                                        <th style="width: 320px;">Project</th>
-                                        <th style="width: 120px;">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="batchUploadSelectedBody"></tbody>
-                            </table>
-                            <div class="fur-batch-empty-state" id="batchUploadSelectedEmpty">
-                                No selected projects yet.
-                            </div>
-                        </div>
-                        <div class="fur-batch-selected-documents-summary" id="batchUploadSelectedDocumentsSummary" hidden>
-                            <div class="fur-batch-selected-documents-summary-header">
+                        <div class="fur-batch-project-panel-header">
+                            <div class="fur-batch-section-header-left">
+                                <span class="fur-batch-step-badge">2</span>
                                 <div>
-                                    <div class="fur-batch-selected-documents-summary-title">Prepared Document Summary</div>
-                                    <div class="fur-batch-selected-documents-summary-copy" id="batchUploadSelectedDocumentsSummaryCopy">
-                                        No prepared category documents yet.
-                                    </div>
+                                    <h4 class="fur-batch-section-title">Select Target Projects</h4>
+                                    <p class="fur-batch-section-desc">Move projects from Available list to Selected queue</p>
                                 </div>
                             </div>
-                            <div class="fur-batch-selected-documents-summary-list" id="batchUploadSelectedDocumentsSummaryList"></div>
+                            <span class="fur-batch-document-pill"><i class="fas fa-arrow-right-arrow-left" aria-hidden="true"></i> Shuttle Queue</span>
                         </div>
-                    </section>
+
+                        <div class="fur-batch-shuttle" data-batch-shuttle>
+                            <input type="hidden" id="batch_upload_selected_project_codes" name="selected_project_codes_json" value="[]">
+
+                            <section class="fur-batch-shuttle-panel">
+                                <div class="fur-batch-shuttle-panel-header">
+                                    <div class="fur-batch-shuttle-title-group">
+                                        <h4><i class="fas fa-list-ul" style="color: #3b82f6; margin-right: 6px;"></i> Available Projects</h4>
+                                        <p>Projects matching current filters</p>
+                                    </div>
+                                    <span class="fur-batch-shuttle-count" id="batchUploadAvailableCount">0</span>
+                                </div>
+                                <div class="fur-batch-shuttle-table-wrap">
+                                    <table class="fur-batch-shuttle-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 38px; text-align: center;">
+                                                    <input type="checkbox" id="batchUploadAvailableToggleAll" title="Select / Deselect all available">
+                                                </th>
+                                                <th>Project Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="batchUploadAvailableBody"></tbody>
+                                    </table>
+                                    <div class="fur-batch-empty-state" id="batchUploadAvailableEmpty" hidden>
+                                        <i class="fas fa-folder-open" style="font-size: 28px; color: #94a3b8; margin-bottom: 8px; display: block;"></i>
+                                        No projects match the selected filters.
+                                    </div>
+                                </div>
+                            </section>
+
+                            <div class="fur-batch-shuttle-controls">
+                                <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveSelectedRight" title="Move selected to Selected list" aria-label="Move selected projects to selected list">
+                                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveAllRight" title="Move ALL to Selected list" aria-label="Move all projects to selected list">
+                                    <i class="fas fa-angles-right" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveSelectedLeft" title="Remove selected from Selected list" aria-label="Remove selected projects from selected list">
+                                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" class="fur-batch-shuttle-btn" id="batchUploadMoveAllLeft" title="Remove ALL from Selected list" aria-label="Remove all projects from selected list">
+                                    <i class="fas fa-angles-left" aria-hidden="true"></i>
+                                </button>
+                            </div>
+
+                            <section class="fur-batch-shuttle-panel fur-batch-shuttle-panel-selected">
+                                <div class="fur-batch-shuttle-panel-header">
+                                    <div class="fur-batch-shuttle-title-group">
+                                        <h4><i class="fas fa-clipboard-check" style="color: #10b981; margin-right: 6px;"></i> Selected Projects</h4>
+                                        <p>Projects that will receive upload</p>
+                                    </div>
+                                    <span class="fur-batch-shuttle-count fur-batch-shuttle-count-selected" id="batchUploadSelectedCount">0</span>
+                                </div>
+                                <div class="fur-batch-shuttle-table-wrap">
+                                    <table class="fur-batch-shuttle-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 38px; text-align: center;">
+                                                    <input type="checkbox" id="batchUploadSelectedToggleAll" title="Select / Deselect all selected">
+                                                </th>
+                                                <th>Project Details</th>
+                                                <th style="width: 70px; text-align: center;">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="batchUploadSelectedBody"></tbody>
+                                    </table>
+                                    <div class="fur-batch-empty-state" id="batchUploadSelectedEmpty">
+                                        <i class="fas fa-inbox" style="font-size: 28px; color: #94a3b8; margin-bottom: 8px; display: block;"></i>
+                                        No projects selected yet.<br><span style="font-size: 11px; font-weight: normal; color: #94a3b8;">Select items from Available Projects and click &rarr;</span>
+                                    </div>
+                                </div>
+                                <div class="fur-batch-selected-documents-summary" id="batchUploadSelectedDocumentsSummary" hidden>
+                                    <div class="fur-batch-selected-documents-summary-header">
+                                        <div>
+                                            <div class="fur-batch-selected-documents-summary-title">
+                                                <i class="fas fa-check-double" style="color: #10b981; margin-right: 6px;"></i> Prepared Documents Ready
+                                            </div>
+                                            <div class="fur-batch-selected-documents-summary-copy" id="batchUploadSelectedDocumentsSummaryCopy">
+                                                No prepared category documents yet.
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="fur-batch-selected-documents-summary-list" id="batchUploadSelectedDocumentsSummaryList"></div>
+                                </div>
+                            </section>
                         </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fur-batch-modal-footer">
+                <div class="fur-batch-modal-footer-info">
+                    <span id="batchUploadFooterHint"><i class="fas fa-info-circle" style="color: #002C76;"></i> Attach documents on the left and select target projects from the queue.</span>
+                </div>
+                <div class="fur-batch-modal-footer-actions">
+                    <button type="button" class="fur-batch-modal-footer-cancel" data-batch-upload-close>
+                        <i class="fas fa-times" aria-hidden="true"></i> Close
+                    </button>
+                    <div class="fur-batch-document-submit-row" id="batchUploadDocumentSubmitRow" hidden>
+                        <button type="button" id="batchUploadDocumentSubmitBtn" class="fur-batch-document-submit-btn">
+                            <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>
+                            <span>Submit Documents</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2320,7 +2376,12 @@
             }
 
             if (filterForm) {
-                filterForm.classList.remove('collapsed');
+                const hasActiveFilters = Boolean(@json(!empty($activeFilters['search']) || !empty($activeFilters['program']) || !empty($activeFilters['funding_year']) || !empty($activeFilters['project_status']) || !empty($activeFilters['province'])));
+                filterForm.classList.toggle('collapsed', !hasActiveFilters);
+                const toggleBtn = filterForm.querySelector('.fur-batch-filter-toggle');
+                if (toggleBtn) {
+                    toggleBtn.setAttribute('aria-expanded', hasActiveFilters ? 'true' : 'false');
+                }
                 setBatchUploadFilterPanelHeight(filterForm);
             }
         }
@@ -2732,19 +2793,20 @@
             return preparedState.fileCount > 0 || preparedState.postingLink !== '';
         }
 
+        function formatBatchUploadDocumentSize(bytes) {
+            if (!Number.isFinite(bytes) || bytes <= 0) {
+                return '0 B';
+            }
+
+            const units = ['B', 'KB', 'MB', 'GB'];
+            const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+            const value = bytes / (1024 ** exponent);
+            return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+        }
+
         function getPreparedIndividualCategoryDocumentEntries() {
             const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
             const fieldLabelMap = getBatchUploadIndividualCategoryFieldLabelMap();
-            const formatBatchUploadDocumentSize = (bytes) => {
-                if (!Number.isFinite(bytes) || bytes <= 0) {
-                    return '0 B';
-                }
-
-                const units = ['B', 'KB', 'MB', 'GB'];
-                const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-                const value = bytes / (1024 ** exponent);
-                return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
-            };
             const entries = Object.entries(preparedState.files).reduce((preparedEntries, [fieldName, file]) => {
                 if (!fieldLabelMap[fieldName] || !(file instanceof File)) {
                     return preparedEntries;
@@ -2832,6 +2894,22 @@
             if (submitButton) {
                 submitButton.disabled = !shouldShowSubmit;
             }
+
+            const footerHint = document.getElementById('batchUploadFooterHint');
+            if (footerHint) {
+                const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+                if (!hasSelectedProjects && !hasCategoryDocuments) {
+                    footerHint.innerHTML = '<i class="fas fa-info-circle" style="color: #002C76;"></i> Attach documents on the left and select target projects from the queue.';
+                } else if (!hasSelectedProjects) {
+                    footerHint.innerHTML = '<i class="fas fa-arrow-right" style="color: #2563eb;"></i> Documents attached. Please select at least one project from the queue.';
+                } else if (!hasCategoryDocuments) {
+                    footerHint.innerHTML = `<i class="fas fa-arrow-left" style="color: #2563eb;"></i> <strong>${selectedProjectCodes.length}</strong> project(s) selected. Please attach at least one document on the left.`;
+                } else if (!preparedState.quarter) {
+                    footerHint.innerHTML = '<i class="fas fa-calendar-exclamation" style="color: #f59e0b;"></i> Please select a submission quarter in the dropdown above.';
+                } else {
+                    footerHint.innerHTML = `<i class="fas fa-check-circle" style="color: #10b981;"></i> Ready to submit documents to <strong>${selectedProjectCodes.length}</strong> project(s) for <strong>Quarter ${preparedState.quarter}</strong>.`;
+                }
+            }
         }
 
         function updateBatchUploadIndividualCategoryPreparedUi() {
@@ -2850,8 +2928,39 @@
                 return;
             }
 
+            const escapeBatchUploadHtml = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
             const file = inputElement.files && inputElement.files[0] ? inputElement.files[0] : null;
-            output.textContent = file ? file.name : 'No file selected.';
+            if (file) {
+                output.innerHTML = `<i class="fas fa-check-circle" style="color: #10b981; margin-right: 4px;"></i><span style="font-weight: 700; color: #047857;">${escapeBatchUploadHtml(file.name)}</span> <span style="color: #64748b; font-size: 10px; font-weight: normal;">(${formatBatchUploadDocumentSize(file.size)})</span>`;
+                output.classList.add('has-file');
+            } else {
+                output.textContent = 'No file selected.';
+                output.classList.remove('has-file');
+            }
+
+            const card = inputElement.closest('.fur-batch-category-document-card') || inputElement.closest('.fur-batch-category-written-card');
+            if (card) {
+                const badge = card.querySelector('.fur-batch-category-document-status-badge');
+                if (badge) {
+                    if (file) {
+                        badge.innerHTML = '<i class="fas fa-check" style="font-size: 9px; margin-right: 3px;"></i> Attached';
+                        badge.classList.remove('fur-batch-category-document-status-badge-warning');
+                        badge.classList.add('fur-batch-category-document-status-badge-success');
+                    } else {
+                        badge.textContent = 'Pending Upload';
+                        badge.classList.remove('fur-batch-category-document-status-badge-success');
+                        badge.classList.add('fur-batch-category-document-status-badge-warning');
+                    }
+                }
+                card.classList.toggle('has-attached-file', Boolean(file));
+            }
+
             syncBatchUploadIndividualCategoryDocumentsFromInputs();
             updateBatchUploadIndividualCategoryPreparedUi();
         }
@@ -2874,6 +2983,16 @@
             document.querySelectorAll('.fur-batch-category-file-input').forEach((inputElement) => {
                 inputElement.value = '';
                 syncBatchUploadIndividualCategoryFileName(inputElement);
+            });
+
+            document.querySelectorAll('.fur-batch-category-document-card, .fur-batch-category-written-card').forEach((card) => {
+                card.classList.remove('has-attached-file');
+                const badge = card.querySelector('.fur-batch-category-document-status-badge');
+                if (badge) {
+                    badge.textContent = 'Pending Upload';
+                    badge.classList.remove('fur-batch-category-document-status-badge-success');
+                    badge.classList.add('fur-batch-category-document-status-badge-warning');
+                }
             });
 
             updateBatchUploadIndividualCategoryProjectSummary();
@@ -2999,10 +3118,25 @@
             const postingLinkInput = document.getElementById('batchUploadCategoryPostingLink');
             if (postingLinkInput && postingLinkInput.dataset.batchCategoryPostingLinkBound !== '1') {
                 postingLinkInput.dataset.batchCategoryPostingLinkBound = '1';
+                const syncPostingBadge = () => {
+                    const card = postingLinkInput.closest('.fur-batch-category-document-card');
+                    if (card) {
+                        const badge = card.querySelector('.fur-batch-category-document-status-badge');
+                        const hasVal = Boolean(postingLinkInput.value.trim());
+                        if (badge) {
+                            badge.innerHTML = hasVal ? '<i class="fas fa-check" style="font-size: 9px; margin-right: 3px;"></i> Link Set' : 'Pending Upload';
+                            badge.classList.toggle('fur-batch-category-document-status-badge-success', hasVal);
+                            badge.classList.toggle('fur-batch-category-document-status-badge-warning', !hasVal);
+                        }
+                        card.classList.toggle('has-attached-file', hasVal);
+                    }
+                };
                 postingLinkInput.addEventListener('input', () => {
+                    syncPostingBadge();
                     syncBatchUploadIndividualCategoryDocumentsFromInputs();
                     updateBatchUploadIndividualCategoryPreparedUi();
                 });
+                syncPostingBadge();
             }
 
             document.querySelectorAll('.fur-batch-category-file-input').forEach((inputElement) => {
@@ -3342,21 +3476,14 @@
 
             const buildProjectCellMarkup = (project) => `
                 <div class="fur-batch-shuttle-project-cell">
-                    <div class="fur-batch-shuttle-field">
-                        <div class="fur-batch-shuttle-label">Project Code</div>
-                        <div class="fur-batch-project-code">${escapeBatchUploadHtml(project.project_code)}</div>
+                    <div class="fur-batch-shuttle-card-top">
+                        <span class="fur-batch-project-code"><i class="fas fa-barcode" aria-hidden="true" style="font-size: 9px; opacity: 0.65;"></i> ${escapeBatchUploadHtml(project.project_code)}</span>
+                        <span class="fur-batch-shuttle-year"><i class="fas fa-calendar-alt" aria-hidden="true" style="font-size: 9px; opacity: 0.65;"></i> FY ${escapeBatchUploadHtml(project.funding_year || '-')}</span>
                     </div>
-                    <div class="fur-batch-shuttle-field">
-                        <div class="fur-batch-shuttle-label">Project Title</div>
-                        <div class="fur-batch-shuttle-title">${escapeBatchUploadHtml(project.project_title || 'Untitled project')}</div>
-                    </div>
-                    <div class="fur-batch-shuttle-field">
-                        <div class="fur-batch-shuttle-label">Location</div>
-                        <div class="fur-batch-shuttle-meta">${escapeBatchUploadHtml(buildProjectMetaLabel(project))}</div>
-                    </div>
-                    <div class="fur-batch-shuttle-field">
-                        <div class="fur-batch-shuttle-label">Funding Year</div>
-                        <div class="fur-batch-shuttle-year">${escapeBatchUploadHtml(project.funding_year || '-')}</div>
+                    <div class="fur-batch-shuttle-title" title="${escapeBatchUploadHtml(project.project_title || 'Untitled project')}">${escapeBatchUploadHtml(project.project_title || 'Untitled project')}</div>
+                    <div class="fur-batch-shuttle-meta" title="${escapeBatchUploadHtml(buildProjectMetaLabel(project))}">
+                        <i class="fas fa-map-marker-alt" aria-hidden="true" style="color: #64748b; font-size: 10px;"></i>
+                        <span>${escapeBatchUploadHtml(buildProjectMetaLabel(project))}</span>
                     </div>
                 </div>
             `;
@@ -3377,11 +3504,10 @@
                     </td>
                     <td>${buildProjectCellMarkup(project)}</td>
                     <td>
-                        <div class="fur-batch-shuttle-field fur-batch-shuttle-field-center">
-                            <div class="fur-batch-shuttle-label">Action</div>
-                            <a href="${escapeBatchUploadHtml(project.open_url)}" class="fur-batch-project-link">
-                                Open
-                                <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        <div class="fur-batch-shuttle-action-wrap">
+                            <a href="${escapeBatchUploadHtml(project.open_url)}" class="fur-batch-project-link" target="_blank" title="Open project in new tab">
+                                <span>Open</span>
+                                <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
                             </a>
                         </div>
                     </td>
@@ -5135,7 +5261,9 @@
         .fur-batch-modal-backdrop {
             position: absolute;
             inset: 0;
-            background: rgba(15, 23, 42, 0.46);
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
         }
 
         .fur-batch-checklist-modal {
@@ -5545,106 +5673,548 @@
             text-align: center;
         }
 
-        .fur-batch-category-dialog {
-            width: min(1120px, 100%);
-            max-height: min(90vh, 920px);
+        /* ==========================================================================
+           Batch Upload Modal - Modern Redesign
+           ========================================================================== */
+        .fur-batch-modal-dialog {
+            position: relative;
+            z-index: 1;
+            width: min(1480px, 96vw);
+            max-height: min(94vh, 940px);
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 25px 60px -15px rgba(0, 20, 60, 0.35), 0 0 0 1px rgba(0, 44, 118, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            contain: layout paint;
         }
 
-        .fur-batch-category-inline-panel {
-            padding: 0;
-            overflow: hidden;
-        }
-
-        .fur-batch-category-body {
+        .fur-batch-modal-content {
             flex: 1;
             min-height: 0;
-            padding: 22px;
-            background: #f8fbff;
-            overflow-y: auto;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+            background: #f8fafc;
+        }
+
+        .fur-batch-modal-scroll {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-bottom: 8px;
+        }
+
+        .fur-batch-modal-scroll::-webkit-scrollbar,
+        .fur-batch-shuttle-table-wrap::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .fur-batch-modal-scroll::-webkit-scrollbar-track,
+        .fur-batch-shuttle-table-wrap::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .fur-batch-modal-scroll::-webkit-scrollbar-thumb,
+        .fur-batch-shuttle-table-wrap::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 999px;
+        }
+
+        .fur-batch-modal-scroll::-webkit-scrollbar-thumb:hover,
+        .fur-batch-shuttle-table-wrap::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Modal Header */
+        .fur-batch-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             gap: 16px;
+            padding: 20px 28px;
+            background: linear-gradient(135deg, #001f59 0%, #002C76 45%, #0284c7 100%);
+            box-shadow: 0 4px 14px rgba(0, 44, 118, 0.15);
+            flex-shrink: 0;
         }
 
-        .fur-batch-category-inline-panel .fur-batch-category-body {
-            overflow: visible;
+        .fur-batch-modal-header-main {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0;
         }
 
-        .fur-batch-category-summary-card {
-            border: 1px solid #dbe4f0;
-            border-radius: 16px;
+        .fur-batch-modal-header-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.16);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+            flex-shrink: 0;
+        }
+
+        .fur-batch-modal-header-title-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .fur-batch-modal-header h3 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            line-height: 1.25;
+        }
+
+        .fur-batch-header-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .fur-batch-modal-header p {
+            margin: 4px 0 0;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .fur-batch-modal-close {
+            width: 38px;
+            height: 38px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-modal-close:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(1.05);
+            color: #ffffff;
+        }
+
+        /* Filter Accordion */
+        .fur-batch-filter-form {
+            margin: 16px 28px 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
             background: #ffffff;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+            overflow: hidden;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .fur-batch-filter-form:hover {
+            border-color: #cbd5e1;
+        }
+
+        .fur-batch-filter-toggle {
+            width: 100%;
+            border: none;
+            background: #ffffff;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 18px;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+            text-align: left;
+        }
+
+        .fur-batch-filter-toggle:hover {
+            background: #f8fafc;
+        }
+
+        .fur-batch-filter-toggle-copy {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .fur-batch-filter-icon-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-filter-toggle-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .fur-batch-filter-toggle-hint {
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748b;
+        }
+
+        .fur-batch-filter-chevron {
+            color: #64748b;
+            font-size: 13px;
+            transition: transform 0.25s ease;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-filter-panel {
+            border-top: 1px solid #f1f5f9;
+            background: #ffffff;
+        }
+
+        .fur-batch-filter-form.collapsed .fur-batch-filter-panel {
+            display: none;
+        }
+
+        .fur-batch-filter-form.collapsed .fur-batch-filter-chevron {
+            transform: rotate(180deg);
+        }
+
+        .fur-batch-filter-panel .fur-batch-modal-body {
+            padding: 16px 20px;
+        }
+
+        .fur-batch-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid #f1f5f9;
+        }
+
+        .fur-batch-modal-reset,
+        .fur-batch-modal-primary {
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .fur-batch-modal-reset {
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #475569;
+        }
+
+        .fur-batch-modal-reset:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+            border-color: #94a3b8;
+        }
+
+        .fur-batch-modal-primary {
+            border: none;
+            background: linear-gradient(135deg, #002C76 0%, #1d4ed8 100%);
+            color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 44, 118, 0.2);
+        }
+
+        .fur-batch-modal-primary:hover {
+            background: linear-gradient(135deg, #001f59 0%, #1e40af 100%);
+            box-shadow: 0 4px 10px rgba(0, 44, 118, 0.3);
+            transform: translateY(-1px);
+        }
+
+        /* Workspace Grid */
+        .fur-batch-workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+            gap: 20px;
+            align-items: start;
+            padding: 20px 28px;
+            background: #f8fafc;
+        }
+
+        .fur-batch-document-panel,
+        .fur-batch-project-list {
+            min-width: 0;
+            contain: layout paint;
+        }
+
+        .fur-batch-document-panel-header,
+        .fur-batch-project-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .fur-batch-section-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .fur-batch-step-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #002C76 0%, #1d4ed8 100%);
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(0, 44, 118, 0.25);
+        }
+
+        .fur-batch-section-title {
+            margin: 0;
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+        }
+
+        .fur-batch-section-desc {
+            margin: 2px 0 0;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .fur-batch-document-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        /* Step 1: Summary Card (Projects + Quarter) */
+        .fur-batch-category-summary-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+            margin-bottom: 14px;
             overflow: hidden;
         }
 
         .fur-batch-category-summary-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
             gap: 16px;
-            padding: 18px;
+            padding: 14px 16px;
         }
 
         .fur-batch-category-summary-block {
             min-width: 0;
         }
 
+        .fur-batch-summary-projects {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding-right: 12px;
+            border-right: 1px solid #f1f5f9;
+        }
+
+        .fur-batch-summary-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(29, 78, 216, 0.1);
+        }
+
+        .fur-batch-summary-info {
+            min-width: 0;
+        }
+
         .fur-batch-category-summary-label {
             display: block;
-            color: #475569;
+            color: #64748b;
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.05em;
             text-transform: uppercase;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
+        }
+
+        .fur-batch-summary-count-wrap {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
         }
 
         .fur-batch-category-summary-value {
-            color: #0f172a;
-            font-size: 28px;
+            color: #002C76;
+            font-size: 26px;
             font-weight: 900;
             line-height: 1;
         }
 
-        .fur-batch-category-summary-copy {
-            margin-top: 8px;
-            color: #475569;
+        .fur-batch-summary-unit {
+            color: #64748b;
             font-size: 12px;
-            line-height: 1.55;
+            font-weight: 600;
+        }
+
+        .fur-batch-category-summary-copy {
+            margin-top: 4px;
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.4;
             overflow-wrap: anywhere;
         }
 
-        .fur-batch-category-quarter-select {
-            width: 100%;
+        .fur-batch-summary-quarter {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
+        .fur-batch-summary-quarter-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .fur-batch-summary-quarter-header .fur-batch-category-summary-label {
+            margin-bottom: 0;
+        }
+
+        .fur-batch-required-badge {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .fur-batch-quarter-select {
+            width: 100%;
+            height: 38px;
+            border-radius: 8px;
+            border: 1.5px solid #cbd5e1;
+            background: #ffffff;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e293b;
+            padding: 0 10px;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+        }
+
+        .fur-batch-quarter-select:focus {
+            outline: none;
+            border-color: #002C76;
+            box-shadow: 0 0 0 3px rgba(0, 44, 118, 0.12);
+        }
+
+        /* Step 1: Category Document Cards */
         .fur-batch-category-individual-shell {
             display: flex;
             flex-direction: column;
-            gap: 18px;
+            gap: 12px;
         }
 
         .fur-batch-category-document-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
+            border: 1px solid #e2e8f0;
             border-left-width: 4px;
+            border-radius: 12px;
             overflow: hidden;
             background: #ffffff;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
+            transition: all 0.2s ease;
         }
 
-        .fur-batch-category-document-card:nth-child(1) {
-            border-left-color: #059669;
+        .fur-batch-category-card-fur {
+            border-left-color: #ef4444;
         }
 
-        .fur-batch-category-document-card:nth-child(2) {
+        .fur-batch-category-card-notice {
             border-left-color: #2563eb;
         }
 
-        .fur-batch-category-document-card:nth-child(3),
-        .fur-batch-category-document-card:nth-child(4) {
+        .fur-batch-category-card-fdp {
             border-left-color: #f59e0b;
+        }
+
+        .fur-batch-category-card-link {
+            border-left-color: #10b981;
+        }
+
+        .fur-batch-category-document-card.has-attached-file {
+            background: #fbfefc;
+            border-color: #a7f3d0;
+            border-left-color: #10b981;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
         }
 
         .fur-batch-category-document-card-header,
@@ -5653,43 +6223,47 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            padding: 12px 16px;
-            margin: 0;
+            padding: 10px 14px;
             background: #f8fafc;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #f1f5f9;
         }
 
         .fur-batch-category-document-card-title-wrap {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             flex: 1;
             min-width: 0;
         }
 
         .fur-batch-category-document-card-icon {
-            width: 30px;
-            height: 30px;
-            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            font-size: 13px;
+            font-size: 14px;
         }
 
         .fur-batch-category-document-card-icon-red {
-            background: rgba(220, 38, 38, 0.1);
+            background: #fee2e2;
             color: #dc2626;
         }
 
         .fur-batch-category-document-card-icon-blue {
-            background: rgba(37, 99, 235, 0.1);
+            background: #eff6ff;
             color: #2563eb;
         }
 
+        .fur-batch-category-document-card-icon-amber {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
         .fur-batch-category-document-card-icon-green {
-            background: rgba(5, 150, 105, 0.1);
+            background: #dcfce7;
             color: #059669;
         }
 
@@ -5703,7 +6277,7 @@
         .fur-batch-category-document-card-title,
         .fur-batch-category-written-section-title {
             margin: 0;
-            color: #1e293b;
+            color: #0f172a;
             font-size: 13px;
             font-weight: 700;
             line-height: 1.3;
@@ -5714,587 +6288,208 @@
             margin: 0;
             color: #64748b;
             font-size: 11px;
-            line-height: 1.45;
+            line-height: 1.35;
         }
 
         .fur-batch-category-document-status-badge {
             display: inline-flex;
             align-items: center;
-            padding: 2px 8px;
-            border-radius: 12px;
+            padding: 3px 9px;
+            border-radius: 999px;
             font-size: 10px;
-            font-weight: 600;
+            font-weight: 700;
             white-space: nowrap;
             flex-shrink: 0;
+            letter-spacing: 0.02em;
+            transition: all 0.2s ease;
         }
 
         .fur-batch-category-document-status-badge-warning {
-            background-color: #f59e0b;
-            color: #ffffff;
+            background-color: #fffbeb;
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+
+        .fur-batch-category-document-status-badge-success {
+            background-color: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
         }
 
         .fur-batch-category-document-card-content {
-            padding: 16px;
+            padding: 12px 14px;
         }
 
-        .fur-batch-category-document-field-wrap,
-        .fur-batch-category-written-card {
-            padding: 12px;
-            background-color: #f9fafb;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
+        .fur-batch-category-document-field-wrap {
+            padding: 0;
         }
 
         .fur-batch-category-document-field {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .fur-batch-category-written-recipient-shell {
-            border-top: 1px solid #e5e7eb;
-            padding-top: 15px;
-            margin-top: 15px;
-        }
-
-        .fur-batch-category-written-recipient-title {
-            margin: 0 0 15px;
-            color: #374151;
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .fur-batch-category-file-input,
-        .fur-batch-category-text-input {
-            width: 100%;
-            min-height: 40px;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            background: #ffffff;
-            color: #0f172a;
-            font-size: 12px;
-            font-family: inherit;
-            box-sizing: border-box;
-            flex: 1;
-            min-width: 200px;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .fur-batch-category-file-input {
-            padding: 8px 10px;
+            width: 100%;
+            font-size: 11px;
+            color: #475569;
+            border: 1.5px dashed #cbd5e1;
+            border-radius: 8px;
+            background: #ffffff;
+            padding: 6px 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
         }
 
-        .fur-batch-category-text-input {
-            min-width: 240px;
-            padding: 10px;
+        .fur-batch-category-file-input:hover {
+            border-color: #002C76;
+            background: #f8fafc;
         }
 
-        .fur-batch-category-file-input:focus,
-        .fur-batch-category-text-input:focus {
+        .fur-batch-category-file-input:focus {
             outline: none;
-            border-color: #60a5fa;
-            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.18);
+            border-color: #002C76;
+            box-shadow: 0 0 0 3px rgba(0, 44, 118, 0.12);
+        }
+
+        .fur-batch-category-file-input::file-selector-button {
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            background: #f1f5f9;
+            color: #1e293b;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: all 0.15s ease;
+        }
+
+        .fur-batch-category-file-input::file-selector-button:hover {
+            background: #002C76;
+            color: #ffffff;
+            border-color: #002C76;
         }
 
         .fur-batch-category-file-name {
-            margin-top: 0;
-            color: #059669;
+            margin-top: 4px;
+            color: #94a3b8;
             font-size: 11px;
-            font-weight: 600;
-            line-height: 1.45;
+            font-style: italic;
+            line-height: 1.4;
             overflow-wrap: anywhere;
+        }
+
+        .fur-batch-category-file-name.has-file {
+            color: #047857;
+            font-style: normal;
+            font-weight: 600;
+        }
+
+        .fur-batch-category-written-recipient-shell {
+            margin-top: 2px;
+        }
+
+        .fur-batch-category-written-recipient-title {
+            margin: 0 0 10px;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
         }
 
         .fur-batch-category-written-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 20px;
+            gap: 10px;
+        }
+
+        .fur-batch-category-written-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px;
+            transition: all 0.15s ease;
+        }
+
+        .fur-batch-category-written-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+        }
+
+        .fur-batch-category-written-card.has-attached-file {
+            background: #f0fdf4;
+            border-color: #a7f3d0;
         }
 
         .fur-batch-category-written-card-label {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
-            color: #374151;
-            font-size: 12px;
-            font-weight: 600;
-            line-height: 1.4;
-            gap: 8px;
+            margin-bottom: 6px;
+            color: #1e293b;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.3;
+            gap: 6px;
         }
 
-        .fur-batch-modal-dialog {
+        .fur-batch-url-input-wrap {
             position: relative;
-            z-index: 1;
-            width: min(1380px, 100%);
-            max-height: min(92vh, 900px);
-            overflow: hidden;
             display: flex;
-            flex-direction: column;
-            background: #ffffff;
-            border-radius: 18px;
-            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
-            border: 1px solid rgba(148, 163, 184, 0.28);
-            contain: layout paint;
-        }
-
-        .fur-batch-modal-content {
-            flex: 1;
-            min-height: 0;
-            overflow: hidden;
-            display: flex;
-        }
-
-        .fur-batch-modal-scroll {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            overflow-x: hidden;
-            background: #ffffff;
-            padding-bottom: 24px;
-        }
-
-        .fur-batch-modal-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 24px 24px 18px;
-            border-bottom: 1px solid #e5e7eb;
-            background: linear-gradient(135deg, #eef4ff 0%, #f8fafc 55%, #ffffff 100%);
-        }
-
-        .fur-batch-modal-header h3 {
-            margin: 0;
-            color: #0f172a;
-            font-size: 22px;
-            font-weight: 800;
-        }
-
-        .fur-batch-modal-header p {
-            margin: 6px 0 0;
-            color: #475569;
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .fur-batch-modal-close {
-            width: 40px;
-            height: 40px;
-            border: none;
-            border-radius: 999px;
-            background: rgba(15, 23, 42, 0.08);
-            color: #0f172a;
-            cursor: pointer;
-            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            transition: background-color 0.2s ease, transform 0.2s ease;
-        }
-
-        .fur-batch-modal-close:hover {
-            background: rgba(15, 23, 42, 0.14);
-            transform: translateY(-1px);
-        }
-
-        .fur-batch-modal-body {
-            padding: 22px 24px 16px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        .fur-batch-filter-form {
-            margin: 16px 24px 0;
-            border: 1px solid rgba(191, 219, 254, 0.95);
-            border-radius: 18px;
-            overflow: hidden;
-            border-bottom: 1px solid #e5e7eb;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
-        }
-
-        .fur-batch-filter-toggle {
             width: 100%;
-            border: none;
-            background: transparent;
-            color: #0f172a;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 16px 24px;
-            cursor: pointer;
+        }
+
+        .fur-batch-url-prefix {
+            position: absolute;
+            left: 11px;
+            color: #94a3b8;
             font-size: 13px;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
+            pointer-events: none;
         }
 
-        .fur-batch-filter-toggle-copy {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .fur-batch-filter-chevron {
-            margin-left: auto;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: #64748b;
-            transition: transform 0.2s ease;
-        }
-
-        .fur-batch-filter-panel {
-            display: block;
-            contain: layout paint;
-        }
-
-        .fur-batch-filter-form.collapsed .fur-batch-filter-panel {
-            display: none;
-        }
-
-        .fur-batch-filter-form.collapsed .fur-batch-filter-chevron {
-            transform: rotate(180deg);
-        }
-
-        .fur-batch-filter-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(220px, 1fr));
-            gap: 16px;
-        }
-
-        .fur-batch-filter-field {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .fur-batch-filter-field span {
-            color: #0f172a;
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-        }
-
-        .fur-batch-filter-field input,
-        .fur-batch-filter-field select {
+        .fur-batch-category-text-input {
             width: 100%;
+            height: 38px;
+            border-radius: 8px;
             border: 1px solid #cbd5e1;
-            border-radius: 12px;
-            background: #ffffff;
+            padding: 0 12px 0 32px;
+            font-size: 12px;
             color: #0f172a;
-            font-size: 13px;
-            padding: 11px 12px;
+            background: #ffffff;
+            transition: all 0.15s ease;
             box-sizing: border-box;
         }
 
-        .fur-batch-filter-field select {
-            min-height: 142px;
-        }
-
-        .fur-batch-filter-hint {
-            margin-top: 14px;
-            padding: 12px 14px;
-            border-radius: 12px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            color: #475569;
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
-        .fur-batch-modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 18px;
-        }
-
-        .fur-batch-modal-reset,
-        .fur-batch-modal-secondary,
-        .fur-batch-modal-primary {
-            border: none;
-            border-radius: 10px;
-            padding: 11px 16px;
-            font-size: 13px;
-            font-weight: 700;
-            text-decoration: none;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .fur-batch-modal-reset {
-            background: #e2e8f0;
-            color: #0f172a;
-        }
-
-        .fur-batch-modal-secondary {
-            background: #64748b;
-            color: #ffffff;
-        }
-
-        .fur-batch-modal-primary {
-            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
-            color: #ffffff;
-            box-shadow: 0 14px 26px rgba(0, 44, 118, 0.2);
-        }
-
-        .fur-batch-project-list {
-            overflow: visible;
-            padding: 22px 24px 26px;
-            background: #f8fbff;
-            contain: layout paint;
-        }
-
-        .fur-batch-shuttle {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr);
-            gap: 22px;
-            align-items: stretch;
-        }
-
-        .fur-batch-shuttle-panel {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            border: 1px solid rgba(191, 219, 254, 0.95);
-            border-radius: 22px;
-            background: #ffffff;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-            overflow: hidden;
-            contain: layout paint;
-        }
-
-        .fur-batch-shuttle-panel-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 18px 20px;
-            border-bottom: 1px solid rgba(219, 228, 240, 0.9);
-            background: #eef4ff;
-        }
-
-        .fur-batch-shuttle-panel-header h4 {
-            margin: 0;
-            color: #0f172a;
-            font-size: 16px;
-            font-weight: 800;
-        }
-
-        .fur-batch-shuttle-panel-header p {
-            margin: 4px 0 0;
-            color: #64748b;
-            font-size: 12px;
-            line-height: 1.45;
-        }
-
-        .fur-batch-shuttle-count {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 38px;
-            padding: 7px 12px;
-            border-radius: 999px;
-            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
-            color: #ffffff;
-            font-size: 12px;
-            font-weight: 800;
-            box-shadow: 0 6px 12px rgba(0, 44, 118, 0.14);
-        }
-
-        .fur-batch-shuttle-table-wrap {
-            position: relative;
-            min-height: 460px;
-            max-height: 560px;
-            overflow: auto;
-            padding: 0 6px 6px;
-            contain: layout paint;
-        }
-
-        .fur-batch-document-panel {
-            margin: 18px 24px 0;
-            padding: 16px;
-            border: 1px solid rgba(0, 44, 118, 0.12);
-            border-radius: 16px;
-            background: #ffffff;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
-            contain: layout paint;
-        }
-
-        .fur-batch-document-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: 14px;
-            align-items: start;
-        }
-
-        .fur-batch-document-panel.has-files .fur-batch-document-layout {
-            grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-            gap: 16px;
-        }
-
-        .fur-batch-document-main {
-            min-width: 0;
-        }
-
-        .fur-batch-document-panel-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .fur-batch-document-panel-header h4 {
-            margin: 0;
-            color: #0f172a;
-            font-size: 14px;
-            font-weight: 800;
-            font-family: inherit;
-        }
-
-        .fur-batch-document-panel-header p {
-            margin: 4px 0 0;
-            color: #475569;
-            font-size: 11px;
-            line-height: 1.45;
-            font-family: inherit;
-        }
-
-        .fur-batch-document-pill {
-            display: inline-flex;
-            align-items: center;
-            padding: 6px 10px;
-            border-radius: 999px;
-            background: rgba(0, 44, 118, 0.08);
-            color: #002C76;
-            font-size: 10px;
-            font-weight: 900;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            white-space: nowrap;
-            font-family: inherit;
-        }
-
-        .fur-batch-document-mode-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 14px;
-        }
-
-        .fur-batch-document-mode-btn {
-            border: 1px solid #dbe4f0;
-            border-radius: 12px;
-            background: #f8fafc;
-            color: #1e293b;
-            padding: 11px 14px;
-            font-size: 11px;
-            font-weight: 800;
-            font-family: inherit;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
-        }
-
-        .fur-batch-document-mode-btn:hover {
-            border-color: rgba(0, 44, 118, 0.28);
-            background: #f1f5f9;
-        }
-
-        .fur-batch-document-mode-btn.is-active {
+        .fur-batch-category-text-input:focus {
+            outline: none;
             border-color: #002C76;
-            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
-            color: #ffffff;
-            box-shadow: 0 8px 16px rgba(0, 44, 118, 0.14);
-            transform: translateY(-1px);
+            box-shadow: 0 0 0 3px rgba(0, 44, 118, 0.12);
         }
 
+        /* Legacy As-One Mode (kept for safety) */
         .fur-batch-document-mode-card {
-            border: 1px solid #dbe4f0;
+            border: 1px solid #e2e8f0;
             border-radius: 14px;
-            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            background: #ffffff;
             padding: 14px;
         }
 
-        .fur-batch-document-mode-card-category-summary {
+        .fur-batch-category-inline-panel {
             padding: 0;
-            overflow: hidden;
+            border: none;
+            background: transparent;
         }
 
-        .fur-batch-document-layout-prepared {
-            grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-            gap: 16px;
-        }
-
-        .fur-batch-document-prepared-main {
-            min-width: 0;
-        }
-
-        .fur-batch-document-prepared-card {
+        .fur-batch-category-body {
+            padding: 0;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            gap: 16px;
-            min-height: 100%;
-            padding: 14px 16px;
-            border-right: 1px solid #e5e7eb;
-            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        }
-
-        .fur-batch-document-prepared-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .fur-batch-document-mode-card-guide {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .fur-batch-document-mode-card-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
-            background: rgba(0, 44, 118, 0.08);
-            color: #002C76;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-
-        .fur-batch-document-mode-card-copy {
-            min-width: 0;
-        }
-
-        .fur-batch-document-mode-card-copy h5 {
-            margin: 0;
-            color: #0f172a;
-            font-size: 12px;
-            font-weight: 800;
-            font-family: inherit;
-        }
-
-        .fur-batch-document-mode-card-copy p {
-            margin: 4px 0 0;
-            color: #475569;
-            font-size: 11px;
-            line-height: 1.45;
-            font-family: inherit;
+            gap: 0;
         }
 
         .fur-batch-document-dropzone {
@@ -6328,22 +6523,6 @@
             flex-shrink: 0;
         }
 
-        .fur-batch-document-copy h5 {
-            margin: 0;
-            color: #0f172a;
-            font-size: 12px;
-            font-weight: 800;
-            font-family: inherit;
-        }
-
-        .fur-batch-document-copy p {
-            margin: 4px 0 0;
-            color: #475569;
-            font-size: 11px;
-            line-height: 1.4;
-            font-family: inherit;
-        }
-
         .fur-batch-document-button {
             display: inline-flex;
             align-items: center;
@@ -6357,14 +6536,6 @@
             text-decoration: none;
             cursor: pointer;
             box-shadow: 0 6px 12px rgba(0, 44, 118, 0.12);
-            font-family: inherit;
-        }
-
-        .fur-batch-document-button-secondary {
-            border: none;
-            background: rgba(0, 44, 118, 0.08);
-            color: #002C76;
-            box-shadow: none;
         }
 
         .fur-batch-document-input {
@@ -6384,174 +6555,82 @@
             border-radius: 14px;
             background: #ffffff;
             overflow: hidden;
-            align-self: stretch;
-            min-height: 100%;
         }
 
-        .fur-batch-document-submit-row {
-            margin-top: 14px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .fur-batch-document-submit-btn {
-            border: none;
-            border-radius: 10px;
-            padding: 11px 18px;
-            background: linear-gradient(180deg, #003a99 0%, #002C76 100%);
-            color: #ffffff;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            box-shadow: 0 8px 16px rgba(0, 44, 118, 0.16);
-        }
-
-        .fur-batch-document-cancel-btn {
-            border: none;
-            border-radius: 10px;
-            padding: 11px 18px;
-            background: #e2e8f0;
-            color: #475569;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .fur-batch-document-submit-btn:disabled {
-            background: #94a3b8;
-            color: rgba(255, 255, 255, 0.92);
-            cursor: not-allowed;
-            box-shadow: none;
-            opacity: 0.9;
-        }
-
-        .fur-batch-document-file-list-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        /* Step 2: Shuttle System */
+        .fur-batch-shuttle {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
             gap: 12px;
-            padding: 12px 14px;
-            border-bottom: 1px solid #e5e7eb;
-            background: #f8fbff;
+            align-items: stretch;
         }
 
-        .fur-batch-document-file-list-title {
-            color: #0f172a;
-            font-size: 12px;
-            font-weight: 800;
-        }
-
-        .fur-batch-document-file-list-summary {
-            color: #64748b;
-            font-size: 11px;
-            line-height: 1.4;
-            margin-top: 3px;
-        }
-
-        .fur-batch-document-clear-btn {
-            border: none;
-            background: rgba(220, 38, 38, 0.08);
-            color: #b91c1c;
-            border-radius: 999px;
-            padding: 7px 12px;
-            font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
-        }
-
-        .fur-batch-document-file-items {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .fur-batch-document-file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 14px;
-            padding: 12px 14px;
-            border-top: 1px solid #eef2f7;
-        }
-
-        .fur-batch-document-file-item:first-child {
-            border-top: none;
-        }
-
-        .fur-batch-document-file-copy {
+        .fur-batch-shuttle-panel {
             min-width: 0;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+            overflow: hidden;
+            contain: layout paint;
         }
 
-        .fur-batch-document-file-name {
+        .fur-batch-shuttle-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .fur-batch-shuttle-title-group h4 {
+            margin: 0;
             color: #0f172a;
-            font-size: 12px;
-            font-weight: 700;
-            overflow-wrap: anywhere;
+            font-size: 13px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
         }
 
-        .fur-batch-document-file-meta {
+        .fur-batch-shuttle-title-group p {
+            margin: 2px 0 0;
             color: #64748b;
             font-size: 11px;
-            line-height: 1.4;
-            overflow-wrap: anywhere;
+            line-height: 1.3;
         }
 
-        .fur-batch-document-file-status {
+        .fur-batch-shuttle-count {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 7px 10px;
+            min-width: 30px;
+            padding: 3px 9px;
             border-radius: 999px;
-            background: rgba(0, 44, 118, 0.08);
-            color: #002C76;
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .fur-batch-document-file-actions {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            flex-shrink: 0;
-        }
-
-        .fur-batch-document-view-btn,
-        .fur-batch-document-remove-btn {
-            border: none;
-            border-radius: 999px;
-            padding: 8px 12px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
             font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+            font-weight: 800;
         }
 
-        .fur-batch-document-view-btn {
-            background: rgba(0, 44, 118, 0.08);
-            color: #002C76;
+        .fur-batch-shuttle-count-selected {
+            background: #ecfdf5;
+            color: #047857;
+            border-color: #a7f3d0;
         }
 
-        .fur-batch-document-remove-btn {
-            background: rgba(220, 38, 38, 0.08);
-            color: #b91c1c;
+        .fur-batch-shuttle-table-wrap {
+            position: relative;
+            height: 520px;
+            max-height: 520px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            contain: layout paint;
+            background: #ffffff;
         }
 
         .fur-batch-shuttle-table {
@@ -6563,57 +6642,30 @@
         .fur-batch-shuttle-table thead th {
             position: sticky;
             top: 0;
-            z-index: 1;
-            padding: 10px 12px;
-            background: #eef4ff;
-            color: #1e293b;
-            font-size: 11px;
+            z-index: 2;
+            padding: 9px 12px;
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 10px;
             font-weight: 800;
             text-align: left;
-            border-bottom: 1px solid #dbe4f0;
-            letter-spacing: 0.03em;
+            border-bottom: 1px solid #e2e8f0;
+            letter-spacing: 0.04em;
             text-transform: uppercase;
         }
 
         .fur-batch-shuttle-table tbody td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e5e7eb;
+            padding: 8px 10px;
+            border-bottom: 1px solid #f1f5f9;
             color: #0f172a;
             font-size: 11px;
-            vertical-align: top;
-            background: rgba(255, 255, 255, 0.9);
-        }
-
-        .fur-batch-shuttle-table tbody tr:nth-child(odd) td {
-            background: rgba(255, 255, 255, 0.98);
-        }
-
-        .fur-batch-shuttle-table tbody tr:nth-child(even) td {
-            background: rgba(248, 251, 255, 0.98);
-        }
-
-        .fur-batch-shuttle-table tbody tr td:first-child {
-            text-align: center;
             vertical-align: middle;
-            border-top-left-radius: 14px;
-            border-bottom-left-radius: 14px;
-        }
-
-        .fur-batch-shuttle-table tbody tr td:last-child {
-            border-top-right-radius: 14px;
-            border-bottom-right-radius: 14px;
-        }
-
-        .fur-batch-shuttle-table tbody tr:hover {
-            background: #eaf3ff;
+            background: #ffffff;
+            transition: background-color 0.1s ease;
         }
 
         .fur-batch-shuttle-table tbody tr:hover td {
-            background: transparent;
-        }
-
-        .fur-batch-shuttle-table tbody tr {
-            cursor: pointer;
+            background: #f0f7ff;
         }
 
         .fur-batch-row-checkbox {
@@ -6621,104 +6673,100 @@
             height: 16px;
             accent-color: #002C76;
             cursor: pointer;
+            vertical-align: middle;
         }
 
         .fur-batch-shuttle-project-cell {
             display: flex;
             flex-direction: column;
-            gap: 0;
-            min-width: 0;
-            border: 1px solid rgba(0, 44, 118, 0.16);
-            border-radius: 14px;
-            overflow: hidden;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 249, 255, 0.98) 100%);
-            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
-        }
-
-        .fur-batch-shuttle-field {
-            display: flex;
-            flex-direction: column;
             gap: 2px;
             min-width: 0;
-            padding: 8px 10px;
         }
 
-        .fur-batch-shuttle-field-center {
+        .fur-batch-shuttle-card-top {
+            display: flex;
             align-items: center;
-            text-align: center;
-        }
-
-        .fur-batch-shuttle-label {
-            color: #002C76;
-            font-size: 9px;
-            font-weight: 900;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            font-family: inherit;
+            justify-content: space-between;
+            gap: 6px;
         }
 
         .fur-batch-project-code {
             display: inline-flex;
             align-items: center;
-            width: fit-content;
-            padding: 4px 8px;
-            border-radius: 999px;
-            background: linear-gradient(180deg, #dbeafe 0%, #eef4ff 100%);
+            gap: 4px;
+            padding: 2px 7px;
+            border-radius: 5px;
+            background: #eff6ff;
             color: #1d4ed8;
             font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-            font-family: inherit;
-        }
-
-        .fur-batch-shuttle-title {
-            margin-top: 0;
-            color: #0f172a;
-            font-size: 11px;
             font-weight: 700;
-            line-height: 1.3;
-            overflow-wrap: anywhere;
-            font-family: inherit;
-        }
-
-        .fur-batch-shuttle-meta {
-            color: #475569;
-            font-size: 10px;
-            line-height: 1.3;
-            overflow-wrap: anywhere;
-            font-family: inherit;
+            letter-spacing: 0.03em;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
         .fur-batch-shuttle-year {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #64748b;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .fur-batch-shuttle-title {
             color: #0f172a;
             font-size: 11px;
             font-weight: 700;
-            line-height: 1.25;
-            font-family: inherit;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .fur-batch-shuttle-meta {
+            color: #64748b;
+            font-size: 10px;
+            line-height: 1.3;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 2px;
+        }
+
+        .fur-batch-shuttle-action-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .fur-batch-project-link {
-            margin: 18px 24px 24px;
             display: inline-flex;
-            padding: 22px 0 0;
-            gap: 8px;
-            color: #002C76;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: #eff6ff;
+            color: #2563eb;
             font-size: 11px;
             font-weight: 700;
             text-decoration: none;
-            padding: 7px 10px;
-            border-radius: 999px;
-            background: rgba(0, 44, 118, 0.08);
-            transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
-            font-family: inherit;
+            border: 1px solid #bfdbfe;
+            transition: all 0.15s ease;
+            white-space: nowrap;
         }
 
         .fur-batch-project-link:hover {
-            color: #001f59;
-            background: rgba(0, 44, 118, 0.14);
-            transform: translateY(-1px);
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
         }
 
         .fur-batch-shuttle-controls {
@@ -6726,69 +6774,72 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
+            padding: 60px 0 0;
         }
 
         .fur-batch-shuttle-btn {
-            width: 58px;
-            height: 58px;
-            border: 1px solid rgba(148, 163, 184, 0.32);
-            border-radius: 18px;
+            width: 38px;
+            height: 38px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
             background: #ffffff;
             color: #002C76;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 19px;
-            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
-            transition: background-color 0.08s linear, border-color 0.08s linear, color 0.08s linear;
+            font-size: 13px;
+            box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04);
+            transition: all 0.15s ease;
         }
 
         .fur-batch-shuttle-btn:hover {
             border-color: #002C76;
-            background: #eef4ff;
-            color: #001f59;
-            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+            background: #002C76;
+            color: #ffffff;
+            transform: scale(1.05);
+            box-shadow: 0 4px 10px rgba(0, 44, 118, 0.25);
+        }
+
+        .fur-batch-shuttle-btn:active {
+            transform: scale(0.96);
         }
 
         .fur-batch-empty-state {
-            padding: 28px 22px;
-            border: 1px dashed #cbd5e1;
-            border-radius: 16px;
-            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            padding: 40px 16px;
             text-align: center;
             color: #64748b;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            margin: 16px;
+            line-height: 1.5;
         }
 
         .fur-batch-selected-documents-summary {
-            margin: 0 16px 16px;
-            border: 1px solid #dbe4f0;
-            border-radius: 18px;
-            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            margin: 0 14px 14px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #ffffff;
             overflow: hidden;
         }
 
         .fur-batch-selected-documents-summary-header {
-            padding: 14px 16px;
-            border-bottom: 1px solid #e5e7eb;
-            background: #f8fbff;
+            padding: 10px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            background: #f8fafc;
         }
 
         .fur-batch-selected-documents-summary-title {
             color: #0f172a;
             font-size: 12px;
-            font-weight: 800;
+            font-weight: 700;
         }
 
         .fur-batch-selected-documents-summary-copy {
-            margin-top: 4px;
             color: #64748b;
             font-size: 11px;
-            line-height: 1.5;
+            margin-top: 2px;
+            line-height: 1.4;
         }
 
         .fur-batch-selected-documents-summary-list {
@@ -6800,9 +6851,9 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 14px;
-            padding: 12px 16px;
-            border-top: 1px solid #eef2f7;
+            gap: 12px;
+            padding: 10px 14px;
+            border-top: 1px solid #f1f5f9;
         }
 
         .fur-batch-selected-documents-summary-item:first-child {
@@ -6813,78 +6864,145 @@
             min-width: 0;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 2px;
         }
 
         .fur-batch-selected-documents-summary-item-title {
             color: #0f172a;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
-            overflow-wrap: anywhere;
         }
 
         .fur-batch-selected-documents-summary-item-meta {
             color: #64748b;
-            font-size: 11px;
-            line-height: 1.4;
-            overflow-wrap: anywhere;
+            font-size: 10px;
         }
 
         .fur-batch-selected-documents-summary-item-status {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            padding: 7px 10px;
+            padding: 3px 8px;
             border-radius: 999px;
-            background: rgba(0, 44, 118, 0.08);
-            color: #002C76;
+            background: #ecfdf5;
+            color: #047857;
             font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
+            font-weight: 700;
             white-space: nowrap;
+        }
+
+        /* Modal Footer Action Bar */
+        .fur-batch-modal-footer {
+            padding: 14px 28px;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
             flex-shrink: 0;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.03);
+        }
+
+        .fur-batch-modal-footer-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #475569;
+            font-weight: 500;
+            min-width: 0;
+        }
+
+        #batchUploadFooterHint {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            overflow-wrap: anywhere;
+        }
+
+        .fur-batch-modal-footer-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .fur-batch-modal-footer-cancel {
+            height: 40px;
+            padding: 0 18px;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #475569;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s ease;
+        }
+
+        .fur-batch-modal-footer-cancel:hover {
+            background: #f1f5f9;
+            color: #1e293b;
+            border-color: #94a3b8;
+        }
+
+        .fur-batch-document-submit-row {
+            display: inline-flex;
+        }
+
+        .fur-batch-document-submit-btn {
+            height: 40px;
+            padding: 0 22px;
+            border-radius: 10px;
+            border: none;
+            background: linear-gradient(135deg, #002C76 0%, #1d4ed8 100%);
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(0, 44, 118, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .fur-batch-document-submit-btn:hover {
+            background: linear-gradient(135deg, #001f59 0%, #1e40af 100%);
+            box-shadow: 0 6px 18px rgba(0, 44, 118, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .fur-batch-document-submit-btn:disabled {
+            background: #94a3b8;
+            color: rgba(255, 255, 255, 0.9);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+            opacity: 0.6;
         }
 
         body.fur-batch-modal-open {
             overflow: hidden;
         }
 
-        @media (max-width: 1100px) {
+        /* Responsive Breakpoints */
+        @media (max-width: 1200px) {
             .dashboard-filter-grid {
                 grid-template-columns: repeat(2, minmax(200px, 1fr)) !important;
             }
 
-            .fur-batch-shuttle {
+            .fur-batch-workspace {
                 grid-template-columns: 1fr;
+                gap: 24px;
             }
 
-            .fur-batch-shuttle-controls {
-                flex-direction: row;
-                flex-wrap: wrap;
-            }
-
-            .fur-batch-document-panel.has-files .fur-batch-document-layout {
-                grid-template-columns: 1fr;
-            }
-
-            .fur-batch-document-layout-prepared {
-                grid-template-columns: 1fr;
-            }
-
-            .fur-batch-document-prepared-card {
-                border-right: none;
-                border-bottom: 1px solid #e5e7eb;
-            }
-
-            .fur-batch-document-dropzone {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .fur-batch-category-summary-grid,
-            .fur-batch-category-written-grid {
-                grid-template-columns: 1fr;
+            .fur-batch-shuttle-table-wrap {
+                height: 400px;
+                max-height: 400px;
             }
         }
 
@@ -6908,85 +7026,72 @@
             }
 
             .fur-batch-modal {
-                padding: 12px;
+                padding: 10px;
             }
 
             .fur-batch-modal-dialog {
-                max-height: calc(100vh - 24px);
-                border-radius: 16px;
-            }
-
-            .fur-batch-modal-header,
-            .fur-batch-modal-body,
-            .fur-batch-project-list {
-                padding-left: 16px;
-                padding-right: 16px;
-            }
-
-            .fur-batch-shuttle-table-wrap {
-                min-height: 280px;
-                max-height: 360px;
-            }
-
-            .fur-batch-modal-actions {
-                justify-content: stretch;
-            }
-
-            .fur-batch-modal-reset,
-            .fur-batch-modal-secondary,
-            .fur-batch-modal-primary {
-                width: 100%;
-            }
-
-            .fur-batch-shuttle-btn {
-                width: 48px;
-                height: 48px;
+                max-height: calc(100vh - 20px);
                 border-radius: 14px;
             }
 
-            .fur-batch-document-mode-actions {
-                flex-direction: column;
-            }
-
-            .fur-batch-document-mode-btn,
-            .fur-batch-document-button,
-            .fur-batch-document-submit-btn,
-            .fur-batch-document-cancel-btn {
-                width: 100%;
-            }
-
-            .fur-batch-document-mode-card-guide,
-            .fur-batch-document-file-item,
-            .fur-batch-selected-documents-summary-item {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .fur-batch-document-file-actions {
-                width: 100%;
-                justify-content: flex-end;
-            }
-
-            .fur-batch-category-body {
+            .fur-batch-modal-header {
                 padding: 16px;
             }
 
-            .fur-batch-category-document-card-header,
-            .fur-batch-category-written-section-header,
+            .fur-batch-filter-form {
+                margin: 12px 16px 0;
+            }
+
+            .fur-batch-workspace {
+                padding: 16px;
+            }
+
             .fur-batch-category-summary-grid {
-                padding: 14px;
+                grid-template-columns: 1fr;
             }
 
-            .fur-batch-category-document-card-header,
-            .fur-batch-category-written-section-header {
-                flex-direction: column;
-                align-items: stretch;
+            .fur-batch-summary-projects {
+                border-right: none;
+                border-bottom: 1px solid #f1f5f9;
+                padding-right: 0;
+                padding-bottom: 12px;
             }
 
-            .fur-batch-document-prepared-actions,
-            .fur-batch-document-submit-row-category {
+            .fur-batch-category-written-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .fur-batch-shuttle {
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+
+            .fur-batch-shuttle-controls {
+                flex-direction: row;
+                flex-wrap: wrap;
+                padding: 0;
+            }
+
+            .fur-batch-shuttle-table-wrap {
+                height: 320px;
+                max-height: 320px;
+            }
+
+            .fur-batch-modal-footer {
+                padding: 12px 16px;
                 flex-direction: column;
                 align-items: stretch;
+                gap: 12px;
+            }
+
+            .fur-batch-modal-footer-actions {
+                justify-content: stretch;
+            }
+
+            .fur-batch-modal-footer-cancel,
+            .fur-batch-document-submit-btn {
+                flex: 1;
+                justify-content: center;
             }
         }
     </style>

@@ -119,7 +119,7 @@ class TaskManagementTicketPoolTest extends TestCase
         $response->assertDontSee('Unassigned Tickets Pool');
     }
 
-    public function test_returned_task_act_and_resubmit_renders_direct_url_and_read_route_redirects(): void
+    public function test_returned_fund_utilization_task_opens_in_modal_and_read_route_redirects(): void
     {
         $provincialUser = User::factory()->create([
             'role' => User::ROLE_PROVINCIAL,
@@ -148,9 +148,16 @@ class TaskManagementTicketPoolTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        // 1. Task Management view renders the direct URL
+        // 1. Task Management view renders the modal trigger and row URL
         $response = $this->actingAs($provincialUser)->get(route('task-management.index'));
         $response->assertStatus(200);
+        $response->assertSee("openTaskModal('modal-returned-fund-utilization-report')", false);
+        $response->assertDontSee('taskPageNeedsRefresh');
+        $response->assertDontSee('window.location.reload()');
+        $response->assertSee("event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;", false);
+        $response->assertSee('Returned Test Project');
+        $response->assertSee('Benguet');
+        $response->assertSee('La Trinidad');
         $response->assertSee(e(route('fund-utilization.show', [
             'projectCode' => 'TEST-PROJ-RET-1',
             'quarter' => 'Q3',

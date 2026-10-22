@@ -481,6 +481,92 @@
         text-overflow: ellipsis;
     }
 
+    .task-table-fund-utilization {
+        table-layout: fixed;
+        min-width: 0;
+        font-size: 11px;
+    }
+
+    .task-table-fund-utilization th,
+    .task-table-fund-utilization td {
+        padding: 9px 7px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .task-table-fund-utilization th {
+        font-size: 9px;
+        letter-spacing: 0.01em;
+    }
+
+    .task-table-fund-utilization th:nth-child(1),
+    .task-table-fund-utilization td:nth-child(1) {
+        width: 12%;
+    }
+
+    .task-table-fund-utilization th:nth-child(2),
+    .task-table-fund-utilization td:nth-child(2) {
+        width: 16%;
+    }
+
+    .task-table-fund-utilization th:nth-child(3),
+    .task-table-fund-utilization td:nth-child(3),
+    .task-table-fund-utilization th:nth-child(4),
+    .task-table-fund-utilization td:nth-child(4) {
+        width: 10%;
+    }
+
+    .task-table-fund-utilization th:nth-child(5),
+    .task-table-fund-utilization td:nth-child(5) {
+        width: 7%;
+    }
+
+    .task-table-fund-utilization th:nth-child(6),
+    .task-table-fund-utilization td:nth-child(6) {
+        width: 15%;
+    }
+
+    .task-table-fund-utilization th:nth-child(7),
+    .task-table-fund-utilization td:nth-child(7) {
+        width: 12%;
+    }
+
+    .task-table-fund-utilization th:nth-child(8),
+    .task-table-fund-utilization td:nth-child(8) {
+        width: 10%;
+    }
+
+    .task-table-fund-utilization th:nth-child(9),
+    .task-table-fund-utilization td:nth-child(9) {
+        width: 8%;
+    }
+
+    .task-table-fund-utilization .proj-title-cell {
+        max-width: none;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+
+    .task-table-fund-utilization .task-uploader-cell {
+        min-width: 0;
+        gap: 4px;
+    }
+
+    .task-table-fund-utilization .task-message-cell {
+        max-width: none;
+    }
+
+    .task-table-fund-utilization .task-action-btn {
+        padding: 6px 7px;
+        gap: 4px;
+        font-size: 10px;
+        line-height: 1.2;
+        justify-content: center;
+        text-align: center;
+    }
+
     .proj-meta-cell {
         font-size: 11px;
         color: #64748b;
@@ -629,11 +715,8 @@
                                 $moduleKey = $firstTask['module_key'] ?? 'default';
                                 $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
                                 $slug = 'modal-pending-' . Str::slug($moduleLabel);
-                                $moduleClickAction = $moduleKey === 'fund-utilization'
-                                    ? "window.location.href='" . route('fund-utilization.index') . "'"
-                                    : "openTaskModal('" . $slug . "')";
                             @endphp
-                            <div class="menu-card" onclick="{{ $moduleClickAction }}">
+                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
                                 <div class="menu-card-top">
                                     <div class="menu-card-icon-wrapper primary">
                                         <i class="{{ $iconClass }}"></i>
@@ -745,11 +828,8 @@
                                 $moduleKey = $firstTask['module_key'] ?? 'default';
                                 $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
                                 $slug = 'modal-returned-' . Str::slug($moduleLabel);
-                                $moduleClickAction = $moduleKey === 'fund-utilization'
-                                    ? "window.location.href='" . route('fund-utilization.index') . "'"
-                                    : "openTaskModal('" . $slug . "')";
                             @endphp
-                            <div class="menu-card" onclick="{{ $moduleClickAction }}">
+                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
                                 <div class="menu-card-top">
                                     <div class="menu-card-icon-wrapper danger">
                                         <i class="{{ $iconClass }}"></i>
@@ -796,6 +876,7 @@
             $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
             $slug = 'modal-pending-' . Str::slug($moduleLabel);
             $provinces = $tasks->pluck('province')->filter()->unique()->sort();
+            $cityMunicipalities = $tasks->pluck('city_municipality')->filter()->unique()->sort();
             $periods = $tasks->pluck('period')->filter()->unique()->sort();
             $years = $tasks->pluck('year')->filter()->unique()->sortDesc();
         @endphp
@@ -833,6 +914,17 @@
                             </select>
                         </div>
                     @endif
+                    @if($moduleKey === 'fund-utilization' && $cityMunicipalities->isNotEmpty())
+                        <div class="modal-filter-field">
+                            <i class="fas fa-city" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="cityMunicipality" aria-label="Filter by city or municipality">
+                                <option value="">All Cities/Municipalities</option>
+                                @foreach($cityMunicipalities as $cityMunicipality)
+                                    <option value="{{ $cityMunicipality }}">{{ $cityMunicipality }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                     @if($periods->isNotEmpty())
                         <div class="modal-filter-field">
                             <i class="fas fa-calendar-days" aria-hidden="true"></i>
@@ -844,7 +936,7 @@
                             </select>
                         </div>
                     @endif
-                    @if($years->isNotEmpty())
+                    @if($moduleKey !== 'fund-utilization' && $years->isNotEmpty())
                         <div class="modal-filter-field">
                             <i class="fas fa-calendar-check" aria-hidden="true"></i>
                             <select class="modal-select-filter" data-filter="year" aria-label="Filter by year">
@@ -868,10 +960,15 @@
                 <!-- Modal Body -->
                 <div class="task-modal-body">
                     <div class="table-container">
-                        <table class="task-table">
+                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : '' }}">
                             <thead>
                                 <tr>
-                                    @if($moduleKey === 'pre-implementation')
+                                    @if($moduleKey === 'fund-utilization')
+                                        <th>Project Code</th>
+                                        <th>Project Title</th>
+                                        <th>Province</th>
+                                        <th>City/Municipality</th>
+                                    @elseif($moduleKey === 'pre-implementation')
                                         <th>Project Code</th>
                                         <th>Province</th>
                                         <th>City/Municipality</th>
@@ -892,8 +989,21 @@
                             </thead>
                             <tbody>
                                 @foreach($tasks as $task)
-                                    <tr data-province="{{ $task['province'] ?? '' }}" data-period="{{ $task['period'] ?? $task['quarter'] ?? '' }}" data-year="{{ $task['year'] ?? '' }}">
-                                        @if($moduleKey === 'pre-implementation')
+                                    <tr data-province="{{ $task['province'] ?? '' }}" data-city-municipality="{{ $task['city_municipality'] ?? '' }}" data-period="{{ $task['period'] ?? $task['quarter'] ?? '' }}" data-year="{{ $task['year'] ?? '' }}">
+                                        @if($moduleKey === 'fund-utilization')
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['project_code'] ?? '' }}">{{ $task['project_code'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['project_title'] ?? '' }}">{{ $task['project_title'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['province'] ?? '' }}">{{ $task['province'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
+                                            </td>
+                                        @elseif($moduleKey === 'pre-implementation')
                                             <td>
                                                 <div class="proj-title-cell" title="{{ $task['project_code'] ?? '' }}">{{ $task['project_code'] ?: 'N/A' }}</div>
                                             </td>
@@ -950,7 +1060,7 @@
                                             {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
                                         </td>
                                         <td>
-                                            <a href="{{ $task['url'] }}" class="task-action-btn" target="_blank" rel="noopener noreferrer">
+                                            <a href="{{ $task['url'] }}" class="task-action-btn" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;">
                                                 <i class="fas fa-clipboard-check"></i>
                                                 Review & Validate
                                             </a>
@@ -975,6 +1085,8 @@
             $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
             $slug = 'modal-returned-' . Str::slug($moduleLabel);
             $provinces = $tasks->pluck('province')->filter()->unique()->sort();
+            $cityMunicipalities = $tasks->pluck('city_municipality')->filter()->unique()->sort();
+            $periods = $tasks->pluck('period')->filter()->unique()->sort();
         @endphp
         <div id="{{ $slug }}" class="task-modal-backdrop" onclick="closeTaskModalOnBackdrop(event, '{{ $slug }}')">
             <div class="task-modal">
@@ -1003,15 +1115,44 @@
                             @endforeach
                         </select>
                     @endif
+                    @if($moduleKey === 'fund-utilization' && $cityMunicipalities->isNotEmpty())
+                        <div class="modal-filter-field">
+                            <i class="fas fa-city" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="cityMunicipality" aria-label="Filter by city or municipality">
+                                <option value="">All Cities/Municipalities</option>
+                                @foreach($cityMunicipalities as $cityMunicipality)
+                                    <option value="{{ $cityMunicipality }}">{{ $cityMunicipality }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                    @if($moduleKey === 'fund-utilization' && $periods->isNotEmpty())
+                        <div class="modal-filter-field">
+                            <i class="fas fa-calendar-days" aria-hidden="true"></i>
+                            <select class="modal-select-filter" data-filter="period" aria-label="Filter by period">
+                                <option value="">All Periods</option>
+                                @foreach($periods as $period)
+                                    <option value="{{ $period }}">{{ $period }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                 </div>
 
                 <!-- Modal Body -->
                 <div class="task-modal-body">
                     <div class="table-container">
-                        <table class="task-table">
+                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : '' }}">
                             <thead>
                                 <tr>
-                                    <th>Project / Location</th>
+                                    @if($moduleKey === 'fund-utilization')
+                                        <th>Project Code</th>
+                                        <th>Project Title</th>
+                                        <th>Province</th>
+                                        <th>City/Municipality</th>
+                                    @else
+                                        <th>Project / Location</th>
+                                    @endif
                                     <th>Period</th>
                                     <th>Instructions / Remarks</th>
                                     <th>Returned By</th>
@@ -1021,19 +1162,34 @@
                             </thead>
                             <tbody>
                                 @foreach($tasks as $task)
-                                    <tr data-province="{{ $task['province'] ?? '' }}">
-                                        <td>
-                                            <div class="proj-title-cell" title="{{ $task['project_code'] }}">{{ $task['project_code'] }}</div>
-                                            <div class="proj-meta-cell">
-                                                @if(!empty($task['province']))
-                                                    <span><i class="fas fa-map-marker-alt"></i> {{ $task['province'] }}</span>
-                                                @endif
-                                                @if(!empty($task['city_municipality']))
-                                                    <span>&bull;</span>
-                                                    <span>{{ $task['city_municipality'] }}</span>
-                                                @endif
-                                            </div>
-                                        </td>
+                                    <tr data-province="{{ $task['province'] ?? '' }}" data-city-municipality="{{ $task['city_municipality'] ?? '' }}" data-period="{{ $task['period'] ?? $task['quarter'] ?? '' }}">
+                                        @if($moduleKey === 'fund-utilization')
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['project_code'] ?? '' }}">{{ $task['project_code'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['project_title'] ?? '' }}">{{ $task['project_title'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['province'] ?? '' }}">{{ $task['province'] ?: 'N/A' }}</div>
+                                            </td>
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['city_municipality'] ?? '' }}">{{ $task['city_municipality'] ?: 'N/A' }}</div>
+                                            </td>
+                                        @else
+                                            <td>
+                                                <div class="proj-title-cell" title="{{ $task['project_code'] }}">{{ $task['project_code'] }}</div>
+                                                <div class="proj-meta-cell">
+                                                    @if(!empty($task['province']))
+                                                        <span><i class="fas fa-map-marker-alt"></i> {{ $task['province'] }}</span>
+                                                    @endif
+                                                    @if(!empty($task['city_municipality']))
+                                                        <span>&bull;</span>
+                                                        <span>{{ $task['city_municipality'] }}</span>
+                                                    @endif
+                                                </div>
+                                            </td>
+                                        @endif
                                         <td>
                                             <strong>{{ strtoupper($task['quarter'] ?? 'N/A') }}</strong>
                                         </td>
@@ -1053,7 +1209,7 @@
                                             {{ !empty($returnedDate) ? \Illuminate\Support\Carbon::parse($returnedDate)->format('M d, Y h:i A') : 'N/A' }}
                                         </td>
                                         <td>
-                                            <a href="{{ url($task['url'] ?? ('/notifications/' . $task['id'] . '/read')) }}" class="task-action-btn btn-danger">
+                                            <a href="{{ url($task['url'] ?? ('/notifications/' . $task['id'] . '/read')) }}" class="task-action-btn btn-danger" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;">
                                                 <i class="fas fa-edit"></i>
                                                 Act & Resubmit
                                             </a>
@@ -1207,19 +1363,6 @@
 @endif
 
 <script>
-    let taskPageNeedsRefresh = false;
-
-    document.addEventListener('visibilitychange', function () {
-        if (document.hidden) {
-            taskPageNeedsRefresh = true;
-            return;
-        }
-
-        if (taskPageNeedsRefresh) {
-            window.location.reload();
-        }
-    });
-
     function openTaskModal(id) {
         const modal = document.getElementById(id);
         if (modal) {

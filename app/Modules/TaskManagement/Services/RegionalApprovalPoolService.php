@@ -254,6 +254,7 @@ class RegionalApprovalPoolService
                     'uploader_province' => $uploader['province'],
                     'created_at' => $workflow->updated_at,
                     'project_code' => $projectCode,
+                    'project_title' => $location['project_title'],
                     'province' => $location['province'],
                     'city_municipality' => $location['city_municipality'],
                     'module_key' => 'fund-utilization',
@@ -471,6 +472,7 @@ class RegionalApprovalPoolService
                     'uploader_province' => $uploader['province'],
                     'created_at' => $returner['returned_at'] ?: $workflow->updated_at,
                     'project_code' => $projectCode,
+                    'project_title' => $location['project_title'],
                     'province' => $location['province'],
                     'city_municipality' => $location['city_municipality'],
                     'module_key' => 'fund-utilization',
@@ -836,24 +838,25 @@ class RegionalApprovalPoolService
     }
 
     /**
-     * @return array{province: string, city_municipality: string}
+     * @return array{province: string, city_municipality: string, project_title: string, project_owner: string}
      */
     private function resolveProjectLocation(string $projectCode): array
     {
         if ($projectCode === '' || !Schema::hasTable('subay_project_profiles')) {
-            return ['province' => '', 'city_municipality' => ''];
+            return ['province' => '', 'city_municipality' => '', 'project_title' => '', 'project_owner' => ''];
         }
 
         $profile = DB::table('subay_project_profiles')
             ->where('project_code', $projectCode)
-            ->first(['province', 'city_municipality', 'project_owner']);
+            ->first(['province', 'city_municipality', 'project_title', 'project_owner']);
 
         if (!$profile) {
-            return ['province' => '', 'city_municipality' => ''];
+            return ['province' => '', 'city_municipality' => '', 'project_title' => '', 'project_owner' => ''];
         }
 
         $province = trim((string) ($profile->province ?? ''));
         $cityMunicipality = trim((string) ($profile->city_municipality ?? ''));
+        $projectTitle = trim((string) ($profile->project_title ?? ''));
         $projectOwner = trim((string) ($profile->project_owner ?? ''));
 
         if ($cityMunicipality === '' && ($province !== '' || strtolower($projectOwner) === 'province')) {
@@ -863,6 +866,8 @@ class RegionalApprovalPoolService
         return [
             'province' => $province,
             'city_municipality' => $cityMunicipality,
+            'project_title' => $projectTitle,
+            'project_owner' => $projectOwner,
         ];
     }
 
