@@ -31,6 +31,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
@@ -135,6 +136,24 @@ class FundUtilizationReportController extends Controller
             });
 
         $this->syncMissingSubayReports();
+    }
+
+    private function syncMissingLfpReportsIfDue(): void
+    {
+        $cacheKey = 'fur_lfp_sync_guard_v1';
+
+        if (!Cache::add($cacheKey, now()->timestamp, now()->addMinutes(15))) {
+            return;
+        }
+
+        try {
+            $this->syncMissingLfpReports();
+        } catch (\Illuminate\Database\QueryException $exception) {
+            Cache::forget($cacheKey);
+            Log::warning('Unable to synchronize locally funded projects to fund utilization reports.', [
+                'exception' => $exception,
+            ]);
+        }
     }
 
     private function normalizeText($value, string $fallback = ''): string
@@ -1032,7 +1051,7 @@ class FundUtilizationReportController extends Controller
      */
     public function index(Request $request)
     {
-        $this->syncMissingLfpReports();
+        $this->syncMissingLfpReportsIfDue();
         [$reportsQuery, $filters, $filterOptions] = $this->buildFilteredReportsQuery($request);
         $perPage = (int) $request->query('per_page', 10);
         $allowedPerPage = [10, 15, 25, 50];
@@ -1468,7 +1487,7 @@ class FundUtilizationReportController extends Controller
                 ->with('error', 'Invalid export format.');
         }
 
-        $this->syncMissingLfpReports();
+        $this->syncMissingLfpReportsIfDue();
         [$reportsQuery, $filters] = $this->buildFilteredReportsQuery($request);
         $selectedQuarter = trim((string) $request->query('quarter', ''));
 
