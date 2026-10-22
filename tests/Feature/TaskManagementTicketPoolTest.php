@@ -151,7 +151,11 @@ class TaskManagementTicketPoolTest extends TestCase
         // 1. Task Management view renders the direct URL
         $response = $this->actingAs($provincialUser)->get(route('task-management.index'));
         $response->assertStatus(200);
-        $response->assertSee('/fund-utilization/TEST-PROJ-RET-1?quarter=Q3&amp;document=mov', false);
+        $response->assertSee(e(route('fund-utilization.show', [
+            'projectCode' => 'TEST-PROJ-RET-1',
+            'quarter' => 'Q3',
+            'document' => 'mov',
+        ])), false);
 
         // 2. Accessing synthetic notification read URL redirects to the document
         $readResponse = $this->actingAs($provincialUser)
@@ -164,4 +168,3 @@ class TaskManagementTicketPoolTest extends TestCase
         ]));
     }
 }
-

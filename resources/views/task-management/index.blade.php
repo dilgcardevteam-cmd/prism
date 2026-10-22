@@ -629,8 +629,11 @@
                                 $moduleKey = $firstTask['module_key'] ?? 'default';
                                 $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
                                 $slug = 'modal-pending-' . Str::slug($moduleLabel);
+                                $moduleClickAction = $moduleKey === 'fund-utilization'
+                                    ? "window.location.href='" . route('fund-utilization.index') . "'"
+                                    : "openTaskModal('" . $slug . "')";
                             @endphp
-                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
+                            <div class="menu-card" onclick="{{ $moduleClickAction }}">
                                 <div class="menu-card-top">
                                     <div class="menu-card-icon-wrapper primary">
                                         <i class="{{ $iconClass }}"></i>
@@ -742,8 +745,11 @@
                                 $moduleKey = $firstTask['module_key'] ?? 'default';
                                 $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
                                 $slug = 'modal-returned-' . Str::slug($moduleLabel);
+                                $moduleClickAction = $moduleKey === 'fund-utilization'
+                                    ? "window.location.href='" . route('fund-utilization.index') . "'"
+                                    : "openTaskModal('" . $slug . "')";
                             @endphp
-                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
+                            <div class="menu-card" onclick="{{ $moduleClickAction }}">
                                 <div class="menu-card-top">
                                     <div class="menu-card-icon-wrapper danger">
                                         <i class="{{ $iconClass }}"></i>

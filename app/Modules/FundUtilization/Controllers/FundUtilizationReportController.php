@@ -1051,7 +1051,6 @@ class FundUtilizationReportController extends Controller
      */
     public function index(Request $request)
     {
-        $this->syncMissingLfpReportsIfDue();
         [$reportsQuery, $filters, $filterOptions] = $this->buildFilteredReportsQuery($request);
         $perPage = (int) $request->query('per_page', 10);
         $allowedPerPage = [10, 15, 25, 50];
@@ -1072,13 +1071,25 @@ class FundUtilizationReportController extends Controller
                 ->orderBy('project_code');
         };
 
-        $reportsCollection = $this->attachFundUtilizationListingData(
-            $applyListingOrder($reportsQuery)->get()
-        );
+        $cacheKey = 'fur_index_data_v2:' . md5(serialize([
+            'user' => Auth::id(),
+            'query' => $request->query(),
+        ]));
+        $cachedIndexData = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($applyListingOrder, $reportsQuery) {
+            $reportsCollection = $this->attachFundUtilizationListingData(
+                $applyListingOrder($reportsQuery)->get()
+            );
+            $sortedReports = $this->sortFundUtilizationReportsForListing($reportsCollection);
 
-        $sortedReports = $this->sortFundUtilizationReportsForListing($reportsCollection);
+            return [
+                'reports' => $sortedReports,
+                'quarterlyDashboard' => $this->buildQuarterlySubmissionDashboard($sortedReports),
+            ];
+        });
+
+        $sortedReports = $cachedIndexData['reports'];
         $batchUploadProjects = $sortedReports;
-        $quarterlyDashboard = $this->buildQuarterlySubmissionDashboard($sortedReports);
+        $quarterlyDashboard = $cachedIndexData['quarterlyDashboard'];
 
         $currentPage = max(1, (int) $request->query('page', 1));
         $reports = new LengthAwarePaginator(
@@ -1878,26 +1889,36 @@ class FundUtilizationReportController extends Controller
             'submission_year' => $submissionYear,
         ];
 
-        $filterOptions = $this->buildFundUtilizationFilterOptions(
-            clone $furQuery,
-            clone $lfpQuery,
-            clone $lfpFundingYearQuery,
-            [
-                'fur_program' => $furProgramExpression,
-                'lfp_program' => $lfpProgramExpression,
-                'fur_fund_source' => $furFundSourceExpression,
-                'lfp_fund_source' => $lfpFundSourceExpression,
-                'fur_project_status' => $furProjectStatusExpression,
-                'lfp_project_status' => $lfpProjectStatusExpression,
-                'fur_province' => $furProvinceExpression,
-                'lfp_province' => $lfpProvinceExpression,
-                'fur_city' => $furCityExpression,
-                'lfp_city' => $lfpCityExpression,
-                'fur_barangay' => $furBarangayExpression,
-                'lfp_barangay' => $lfpBarangayExpression,
-            ],
-            $normalizedFilters,
-            $activeFilters
+        $filterOptionExpressions = [
+            'fur_program' => $furProgramExpression,
+            'lfp_program' => $lfpProgramExpression,
+            'fur_fund_source' => $furFundSourceExpression,
+            'lfp_fund_source' => $lfpFundSourceExpression,
+            'fur_project_status' => $furProjectStatusExpression,
+            'lfp_project_status' => $lfpProjectStatusExpression,
+            'fur_province' => $furProvinceExpression,
+            'lfp_province' => $lfpProvinceExpression,
+            'fur_city' => $furCityExpression,
+            'lfp_city' => $lfpCityExpression,
+            'fur_barangay' => $furBarangayExpression,
+            'lfp_barangay' => $lfpBarangayExpression,
+        ];
+        $filterOptionsCacheKey = 'fur_filter_options_v1:' . md5(serialize([
+            'user' => Auth::id(),
+            'filters' => $normalizedFilters,
+            'active' => $activeFilters,
+        ]));
+        $filterOptions = Cache::remember(
+            $filterOptionsCacheKey,
+            now()->addMinutes(2),
+            fn () => $this->buildFundUtilizationFilterOptions(
+                clone $furQuery,
+                clone $lfpQuery,
+                clone $lfpFundingYearQuery,
+                $filterOptionExpressions,
+                $normalizedFilters,
+                $activeFilters
+            )
         );
 
         $this->applyFundUtilizationFiltersToQueries(

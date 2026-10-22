@@ -52,21 +52,6 @@
             ->sort()
             ->values();
         $multiFilterKeys = ['program', 'funding_year', 'project_status', 'province', 'city', 'barangay'];
-        $rawProjects = collect($batchUploadProjects ?? []);
-        $batchUploadProjects = $rawProjects
-            ->map(function ($report) {
-                return [
-                    'project_code' => trim((string) ($report->project_code ?? '')),
-                    'project_title' => trim((string) ($report->project_title ?? '')),
-                    'province' => trim((string) ($report->province ?? '')),
-                    'city_municipality' => trim((string) ($report->city_municipality ?? ($report->implementing_unit ?? ''))),
-                    'barangay' => trim((string) ($report->barangay ?? '')),
-                    'funding_year' => trim((string) ($report->funding_year ?? '')),
-                    'open_url' => route('fund-utilization.show', $report->project_code),
-                ];
-            })
-            ->filter(fn ($project) => $project['project_code'] !== '')
-            ->values();
         $defaultFundUtilizationRouteParams = array_filter([
             'per_page' => $perPage ?? 10,
             'batch_upload' => $batchUploadOpen ? 1 : null,
@@ -2019,6 +2004,7 @@
         const BATCH_UPLOAD_DOCUMENT_STORE_KEY = 'selected-documents';
         const BATCH_UPLOAD_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
         @php
+            $rawProjects = collect($batchUploadProjects ?? []);
             $serializedProjects = $rawProjects->map(function ($p) {
                 return [
                     'project_code' => trim((string) data_get($p, 'project_code', '')),
