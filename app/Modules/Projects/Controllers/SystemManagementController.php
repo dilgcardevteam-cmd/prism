@@ -978,12 +978,9 @@ class SystemManagementController extends Controller
 
         return DB::transaction(function () use ($rows, $headerMap, $dataStartRow, $uploadPage, $dataTable) {
             $now = now();
-            $batchRows = [];
-            $inserted = 0;
+            $processed = 0;
+            $projectRows = [];
             $rowDefaults = $uploadPage['rowDefaults'] ?? [];
-
-            // Replace only the rows owned by the active import scope.
-            $this->clearImportScopeRows($uploadPage);
 
             for ($rowIndex = $dataStartRow; $rowIndex < count($rows); $rowIndex++) {
                 $data = $rows[$rowIndex] ?? [];
@@ -1006,28 +1003,179 @@ class SystemManagementController extends Controller
                     continue;
                 }
 
-                $row['created_at'] = $now;
-                $row['updated_at'] = $now;
-                $batchRows[] = $row;
-
-                if (count($batchRows) >= 500) {
-                    DB::table($dataTable)->insert($batchRows);
-                    $inserted += count($batchRows);
-                    $batchRows = [];
+                $projectCode = $this->normalizeProjectCode($row['project_code'] ?? null);
+                if ($projectCode !== '') {
+                    $row['project_code'] = trim((string) $row['project_code']);
+                    $projectRows[$projectCode] = $row;
+                } else {
+                    $row['created_at'] = $now;
+                    $row['updated_at'] = $now;
+                    DB::table($dataTable)->insert($row);
                 }
+
+                $processed++;
             }
 
-            if (!empty($batchRows)) {
-                DB::table($dataTable)->insert($batchRows);
-                $inserted += count($batchRows);
+            foreach ($projectRows as $projectCode => $row) {
+                $this->upsertProjectProfileRow($dataTable, $projectCode, $row, $now);
             }
 
             if ($dataTable === 'subay_project_profiles') {
                 $this->refreshSubayDerivedColumnsForScope($uploadPage);
             }
 
-            return $inserted;
+            $this->synchronizeProjectMetadata($projectRows);
+
+            return $processed;
         });
+    }
+
+    private function normalizeProjectCode($value): string
+    {
+        return strtolower(trim((string) $value));
+    }
+
+    private function upsertProjectProfileRow(string $dataTable, string $projectCode, array $row, $now): void
+    {
+        $matchingRows = DB::table($dataTable)
+            ->whereRaw('LOWER(TRIM(project_code)) = ?', [$projectCode])
+            ->get(['id']);
+
+        if ($matchingRows->isEmpty()) {
+            $row['created_at'] = $now;
+            $row['updated_at'] = $now;
+            DB::table($dataTable)->insert($row);
+            return;
+        }
+
+        $updates = $this->nonBlankImportValues($row);
+        unset($updates['project_code'], $updates['created_at']);
+        $updates['updated_at'] = $now;
+
+        if (count($updates) > 1) {
+            DB::table($dataTable)
+                ->whereRaw('LOWER(TRIM(project_code)) = ?', [$projectCode])
+                ->update($updates);
+        }
+    }
+
+    private function nonBlankImportValues(array $row): array
+    {
+        return array_filter(
+            $row,
+            static fn ($value, $column): bool => !in_array($column, ['id', 'created_at', 'updated_at'], true)
+                && trim((string) $value) !== '',
+            ARRAY_FILTER_USE_BOTH
+        );
+    }
+
+    private function synchronizeProjectMetadata(array $projectRows): void
+    {
+        if ($projectRows === []) {
+            return;
+        }
+
+        $tables = [
+            'locally_funded_projects',
+            'tbfur',
+            'project_at_risks',
+            'rssa_project_profiles',
+            'pre_implementation_documents',
+            'quarterly_rpmes_form2_uploads',
+            'quarterly_rpmes_form5_uploads',
+            'quarterly_rpmes_form6_uploads',
+            'annual_rpmes_form4_uploads',
+            'lgsf_project_completion_reports',
+            'sglgif_project_completion_reports',
+            'pisat_assessments',
+            'tblnadai_management_documents',
+            'tblconfirmation_of_fund_receipt_documents',
+        ];
+        $aliases = [
+            'project_title' => ['project_title', 'project_name'],
+            'project_name' => ['project_name', 'project_title'],
+            'project_code' => ['project_code', 'subaybayan_project_code'],
+            'funding_year' => ['funding_year'],
+            'province' => ['province'],
+            'city_municipality' => ['city_municipality'],
+            'region' => ['region'],
+            'barangay' => ['barangay'],
+            'project_description' => ['project_description'],
+            'program' => ['program', 'name_of_program'],
+            'type' => ['project_type', 'type_of_project'],
+            'status' => ['status'],
+            'implementing_unit' => ['implementing_unit'],
+            'type_of_project' => ['type_of_project', 'project_type'],
+            'procurement_type' => ['procurement_type'],
+            'name_of_contractor' => ['contractor'],
+            'contract_price' => ['contract_amount'],
+            'duration' => ['project_duration', 'contract_duration'],
+            'date_of_nadai' => ['date_nadai'],
+            'actual_start_of_construction' => ['actual_start_date'],
+            'intended_completion_date' => ['target_date_completion'],
+        ];
+        $protectedFragments = [
+            '_path', 'file', 'image', 'attachment', 'approval', 'remark',
+            'updated_by', 'created_by', 'user_id',
+        ];
+
+        foreach ($tables as $table) {
+            if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'project_code')
+                && !Schema::hasColumn($table, 'subaybayan_project_code')) {
+                continue;
+            }
+
+            $columns = Schema::getColumnListing($table);
+            $codeColumn = in_array('project_code', $columns, true) ? 'project_code' : 'subaybayan_project_code';
+
+            foreach ($projectRows as $projectCode => $sourceRow) {
+                $matchingRows = DB::table($table)
+                    ->whereRaw('LOWER(TRIM(' . $codeColumn . ')) = ?', [$projectCode])
+                    ->get(['id']);
+
+                if ($matchingRows->isEmpty()) {
+                    continue;
+                }
+
+                $updates = [];
+                foreach ($sourceRow as $sourceColumn => $value) {
+                    if (trim((string) $value) === '') {
+                        continue;
+                    }
+
+                    foreach ($aliases[$sourceColumn] ?? [$sourceColumn] as $destinationColumn) {
+                        if (!in_array($destinationColumn, $columns, true)
+                            || in_array($destinationColumn, ['id', $codeColumn, 'created_at', 'updated_at'], true)
+                            || $this->isProtectedImportColumn($destinationColumn, $protectedFragments)) {
+                            continue;
+                        }
+
+                        $updates[$destinationColumn] = $value;
+                        break;
+                    }
+                }
+
+                if ($updates !== []) {
+                    $updates['updated_at'] = now();
+                    DB::table($table)
+                        ->whereRaw('LOWER(TRIM(' . $codeColumn . ')) = ?', [$projectCode])
+                        ->update($updates);
+                }
+            }
+        }
+    }
+
+    private function isProtectedImportColumn(string $column, array $protectedFragments): bool
+    {
+        $normalized = strtolower($column);
+
+        foreach ($protectedFragments as $fragment) {
+            if (str_contains($normalized, $fragment)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function readImportedRows(string $path): array
@@ -1427,45 +1575,6 @@ class SystemManagementController extends Controller
     private function resolveUploadDataTable(array $uploadPage): string
     {
         return (string) ($uploadPage['dataTable'] ?? 'subay_project_profiles');
-    }
-
-    private function clearImportScopeRows(array $uploadPage): void
-    {
-        $dataTable = $this->resolveUploadDataTable($uploadPage);
-        $scope = (string) ($uploadPage['snapshotScope'] ?? 'subaybayan');
-
-        if ($dataTable !== 'subay_project_profiles') {
-            DB::table($dataTable)->delete();
-            return;
-        }
-
-        if ($scope === 'sglgif') {
-            DB::table('subay_project_profiles')
-                ->whereRaw('UPPER(TRIM(COALESCE(program, ""))) = ?', ['SGLGIF'])
-                ->delete();
-
-            return;
-        }
-
-        if ($scope === 'subaybayan_2025_above') {
-            DB::table('subay_project_profiles')
-                ->where('subaybayan_dataset_group', '2025_above')
-                ->delete();
-
-            return;
-        }
-
-        DB::table('subay_project_profiles')
-            ->where(function ($query) {
-                $query->where(function ($subQuery) {
-                    $subQuery->whereNull('program')
-                        ->orWhereRaw('UPPER(TRIM(COALESCE(program, ""))) <> ?', ['SGLGIF']);
-                })->where(function ($subQuery) {
-                    $subQuery->whereNull('subaybayan_dataset_group')
-                        ->orWhere('subaybayan_dataset_group', '!=', '2025_above');
-                });
-            })
-            ->delete();
     }
 
     private function refreshSubayDerivedColumnsForScope(array $uploadPage): void

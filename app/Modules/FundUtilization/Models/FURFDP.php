@@ -14,6 +14,7 @@ class FURFDP extends Model
     protected $fillable = [
         'project_code',
         'quarter',
+        'batch_code',
         'fdp_file_path',
         'status',
         'approval_remarks',

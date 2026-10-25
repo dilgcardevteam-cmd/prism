@@ -65,6 +65,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Batch Approvals
         Route::get('/batch-approvals/{batchCode}', [\App\Modules\FundUtilization\Controllers\FundUtilizationBatchApprovalController::class, 'show'])->name('fund-utilization.batch-approval.show');
+        Route::post('/batch-approvals/{batchCode}/document-validation', [\App\Modules\FundUtilization\Controllers\FundUtilizationBatchApprovalController::class, 'validateDocument'])->name('fund-utilization.batch-approval.document-validation');
         Route::post('/batch-approvals/{batchCode}/approve', [\App\Modules\FundUtilization\Controllers\FundUtilizationBatchApprovalController::class, 'approve'])->name('fund-utilization.batch-approval.approve');
         Route::post('/batch-approvals/{batchCode}/return', [\App\Modules\FundUtilization\Controllers\FundUtilizationBatchApprovalController::class, 'returnBatch'])->name('fund-utilization.batch-approval.return');
 
@@ -96,4 +97,3 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{projectCode}/delete-document/{docType}/{quarter}', [FundUtilizationReportController::class, 'deleteDocument'])->name('fund-utilization.delete-document');
     });
 });
-

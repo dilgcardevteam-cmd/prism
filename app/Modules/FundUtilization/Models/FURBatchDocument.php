@@ -14,6 +14,7 @@ class FURBatchDocument extends Model
     protected $fillable = [
         'project_code',
         'quarter',
+        'batch_code',
         'batch_document_file_path',
         'batch_document_files_json',
         'status',

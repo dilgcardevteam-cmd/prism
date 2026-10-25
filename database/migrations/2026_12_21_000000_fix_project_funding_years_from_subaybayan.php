@@ -23,6 +23,10 @@ return new class extends Migration
                     SELECT spp.funding_year
                     FROM subay_project_profiles spp
                     WHERE spp.project_code = locally_funded_projects.subaybayan_project_code
+                      AND spp.funding_year IS NOT NULL
+                      AND TRIM(spp.funding_year) <> ''
+                    ORDER BY spp.id DESC
+                    LIMIT 1
                 )
                 WHERE EXISTS (
                     SELECT 1
@@ -47,6 +51,10 @@ return new class extends Migration
                     SELECT spp.funding_year
                     FROM subay_project_profiles spp
                     WHERE spp.project_code = tbfur.project_code
+                      AND spp.funding_year IS NOT NULL
+                      AND TRIM(spp.funding_year) <> ''
+                    ORDER BY spp.id DESC
+                    LIMIT 1
                 )
                 WHERE EXISTS (
                     SELECT 1

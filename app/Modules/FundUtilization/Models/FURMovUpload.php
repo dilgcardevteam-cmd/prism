@@ -14,6 +14,7 @@ class FURMovUpload extends Model
     protected $fillable = [
         'project_code',
         'quarter',
+        'batch_code',
         'mov_file_path',
         'status',
         'approval_remarks',

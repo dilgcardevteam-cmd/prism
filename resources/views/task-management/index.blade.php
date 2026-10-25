@@ -97,22 +97,35 @@
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 16px;
-        padding: 24px;
+        padding: 22px 24px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         min-height: 160px;
         cursor: pointer;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
         position: relative;
         overflow: hidden;
     }
 
+    .menu-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--card-accent, #1d4ed8);
+        transition: height 0.2s ease, opacity 0.2s ease;
+    }
+
     .menu-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 12px 20px -8px rgba(15, 23, 42, 0.15);
-        border-color: #cbd5e1;
+    }
+
+    .menu-card:hover::before {
+        height: 5px;
     }
 
     .menu-card-top {
@@ -123,13 +136,18 @@
     }
 
     .menu-card-icon-wrapper {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
+        width: 46px;
+        height: 46px;
+        border-radius: 13px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
+        font-size: 19px;
+        transition: transform 0.2s ease;
+    }
+
+    .menu-card:hover .menu-card-icon-wrapper {
+        transform: scale(1.05);
     }
 
     .menu-card-icon-wrapper.primary {
@@ -143,10 +161,12 @@
     }
 
     .menu-card-badge {
-        font-size: 14px;
+        font-size: 13.5px;
         font-weight: 800;
         padding: 4px 12px;
         border-radius: 999px;
+        letter-spacing: -0.01em;
+        transition: all 0.2s ease;
     }
 
     .menu-card-badge.danger {
@@ -157,21 +177,36 @@
 
     .menu-card-title {
         margin: 0;
-        font-size: 14px;
+        font-size: 14.5px;
         font-weight: 800;
-        color: #1e293b;
-        line-height: 1.4;
+        color: #0f172a;
+        line-height: 1.35;
+        letter-spacing: -0.01em;
     }
 
     .menu-card-footer {
         margin-top: 14px;
-        font-size: 10px;
-        font-weight: 700;
+        font-size: 11px;
+        font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.03em;
-        display: flex;
+        letter-spacing: 0.04em;
+        display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 6px;
+        transition: gap 0.2s ease;
+    }
+
+    .menu-card:hover .menu-card-footer {
+        gap: 8px;
+    }
+
+    .menu-card:hover .menu-card-footer i {
+        transform: translateX(2px);
+    }
+
+    .menu-card-footer i {
+        font-size: 10px;
+        transition: transform 0.2s ease;
     }
 
     .menu-card-footer.primary {
@@ -783,6 +818,7 @@
         padding: 12px 14px;
         border-bottom: 2px solid #e2e8f0;
         white-space: nowrap;
+        text-align: center;
     }
 
     .task-table-fund-utilization-batch tbody td {
@@ -790,6 +826,7 @@
         vertical-align: middle;
         border-bottom: 1px solid #f1f5f9;
         color: #334155;
+        text-align: center;
     }
 
     .task-table-fund-utilization-batch tbody tr {
@@ -817,6 +854,19 @@
     .task-table-fund-utilization-batch td:nth-child(7) { width: 9%; min-width: 95px; }
     .task-table-fund-utilization-batch th:nth-child(8),
     .task-table-fund-utilization-batch td:nth-child(8) { width: 12%; min-width: 150px; text-align: center; }
+
+    .task-table-fund-utilization-batch-pending th:nth-child(1),
+    .task-table-fund-utilization-batch-pending td:nth-child(1) { width: 25%; min-width: 190px; }
+    .task-table-fund-utilization-batch-pending th:nth-child(2),
+    .task-table-fund-utilization-batch-pending td:nth-child(2) { width: 12%; min-width: 100px; }
+    .task-table-fund-utilization-batch-pending th:nth-child(3),
+    .task-table-fund-utilization-batch-pending td:nth-child(3) { width: 21%; min-width: 160px; }
+    .task-table-fund-utilization-batch-pending th:nth-child(4),
+    .task-table-fund-utilization-batch-pending td:nth-child(4) { width: 15%; min-width: 130px; }
+    .task-table-fund-utilization-batch-pending th:nth-child(5),
+    .task-table-fund-utilization-batch-pending td:nth-child(5) { width: 12%; min-width: 110px; }
+    .task-table-fund-utilization-batch-pending th:nth-child(6),
+    .task-table-fund-utilization-batch-pending td:nth-child(6) { width: 15%; min-width: 150px; }
 
     /* Badge Components */
     .batch-code-pill {
@@ -1203,6 +1253,272 @@
         margin: 0 auto;
         line-height: 1.6;
     }
+
+    /* ==========================================================================
+       BATCH MODAL DOCUMENT SELECTOR CARDS
+       ========================================================================== */
+    .bm-doc-card {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 12px;
+        background: #ffffff;
+        gap: 12px;
+        cursor: pointer;
+        transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+    }
+
+    .bm-doc-card::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: transparent;
+        border-radius: 12px 0 0 12px;
+        transition: background-color 0.2s ease;
+    }
+
+    .bm-doc-card:hover:not(.is-active) {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.08);
+    }
+
+    /* Active (Currently Selected/Viewing) State */
+    .bm-doc-card.is-active {
+        border-color: #2563eb !important;
+        background: #eff6ff !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), 0 4px 12px -2px rgba(37, 99, 235, 0.18) !important;
+    }
+
+    .bm-doc-card.is-active::before {
+        background: #2563eb !important;
+    }
+
+    .bm-doc-card.is-active .bm-doc-icon {
+        background: #dbeafe !important;
+        color: #1d4ed8 !important;
+        border-color: #bfdbfe !important;
+    }
+
+    .bm-doc-card.is-active .bm-doc-section {
+        color: #2563eb !important;
+    }
+
+    .bm-doc-card.is-active .bm-doc-chevron {
+        color: #2563eb !important;
+        opacity: 1 !important;
+        transform: translateX(2px);
+    }
+
+    /* Has Selected Projects State (when not active) */
+    .bm-doc-card.has-selected-projects:not(.is-active) {
+        border-color: #86efac;
+        background: #f0fdf4;
+        box-shadow: 0 1px 3px rgba(22, 163, 74, 0.06);
+    }
+
+    .bm-doc-card.has-selected-projects:not(.is-active)::before {
+        background: #16a34a;
+    }
+
+    .bm-doc-card.has-selected-projects:not(.is-active) .bm-doc-icon {
+        background: #dcfce7;
+        color: #15803d;
+        border-color: #bbf7d0;
+    }
+
+    /* Document Icon Container */
+    .bm-doc-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+    }
+
+    /* Document Info */
+    .bm-doc-info {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .bm-doc-section {
+        font-size: 10px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        line-height: 1.2;
+        transition: color 0.2s ease;
+    }
+
+    .bm-doc-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .bm-doc-file {
+        font-size: 11px;
+        color: #64748b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 1px;
+    }
+
+    .bm-doc-file i {
+        font-size: 10px;
+        opacity: 0.7;
+        flex-shrink: 0;
+    }
+
+    .bm-doc-filename {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Document Actions & Indicators */
+    .bm-doc-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+
+    .bm-selection-indicator {
+        display: none;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: #dcfce7;
+        border: 1px solid #86efac;
+        color: #15803d;
+        font-size: 10.5px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .bm-doc-chevron {
+        font-size: 11px;
+        color: #94a3b8;
+        opacity: 0;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .bm-view-document {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 11px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #ffffff;
+        color: #334155;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: all 0.15s ease;
+    }
+
+    .bm-view-document:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    }
+
+    .bm-doc-card.is-active .bm-view-document {
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+        background: #ffffff;
+    }
+
+    .bm-doc-card.is-active .bm-view-document:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
+    /* Batch Document Individual Action Buttons */
+    #bm-btn-doc-return:hover {
+        background: #fee2e2 !important;
+        border-color: #ef4444 !important;
+        color: #991b1b !important;
+    }
+
+    #bm-btn-doc-approve:hover {
+        background: #15803d !important;
+        border-color: #15803d !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(22, 163, 74, 0.35) !important;
+    }
+
+    #bm-btn-doc-return:disabled, #bm-btn-doc-approve:disabled {
+        opacity: 0.55 !important;
+        cursor: not-allowed !important;
+        transform: none !important;
+    }
+
+    /* Remarks Dialog Modal Styles */
+    @keyframes bmRemarksPop {
+        0% {
+            opacity: 0;
+            transform: scale(0.96) translateY(8px);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+    }
+    .bm-remarks-dialog {
+        animation: bmRemarksPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .bm-remarks-dialog textarea:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.12) !important;
+    }
+    #bm-btn-confirm-remarks-action.is-approve:hover {
+        background: #15803d !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4) !important;
+    }
+    #bm-btn-confirm-remarks-action.is-return:hover {
+        background: #b91c1c !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
+    }
 </style>
 @endsection
 
@@ -1227,7 +1543,220 @@
         'monitoring-evaluation-lfp' => 'fas fa-file-lines',
         'monitoring-evaluation-rlip-lime' => 'fas fa-chart-line',
         'swa-annex-f' => 'fas fa-file-invoice',
+        'rpmes-form-2' => 'fas fa-file-lines',
+        'rpmes-form-4' => 'fas fa-file-lines',
+        'rpmes-form-5' => 'fas fa-file-lines',
+        'rpmes-form-6' => 'fas fa-file-lines',
     ];
+
+    // Theme color palette per program/module (Cards color coding)
+    // IMPORTANT: 'fund-utilization' and 'fund-utilization-batch' share the EXACT same color coding!
+    $moduleThemes = [
+        // 1. Fund Utilization Report (FUR & FUR Batch share the same Emerald theme)
+        'fund-utilization' => [
+            'accent' => '#059669',
+            'icon_bg' => '#ecfdf5',
+            'border' => '#a7f3d0',
+            'badge_bg' => '#d1fae5',
+            'badge_text' => '#065f46',
+            'badge_border' => '#6ee7b7',
+            'shadow' => 'rgba(5, 150, 105, 0.18)',
+            'bg_subtle' => 'rgba(16, 185, 129, 0.05)',
+        ],
+        'fund-utilization-batch' => [
+            'accent' => '#059669',
+            'icon_bg' => '#ecfdf5',
+            'border' => '#a7f3d0',
+            'badge_bg' => '#d1fae5',
+            'badge_text' => '#065f46',
+            'badge_border' => '#6ee7b7',
+            'shadow' => 'rgba(5, 150, 105, 0.18)',
+            'bg_subtle' => 'rgba(16, 185, 129, 0.05)',
+        ],
+
+        // 2. Pre-Implementation Documents (Indigo)
+        'pre-implementation' => [
+            'accent' => '#4f46e5',
+            'icon_bg' => '#eef2ff',
+            'border' => '#c7d2fe',
+            'badge_bg' => '#e0e7ff',
+            'badge_text' => '#3730a3',
+            'badge_border' => '#a5b4fc',
+            'shadow' => 'rgba(79, 70, 229, 0.18)',
+            'bg_subtle' => 'rgba(99, 102, 241, 0.05)',
+        ],
+
+        // 3. Local Project Monitoring Committee - LPMC (Teal)
+        'local-project-monitoring-committee' => [
+            'accent' => '#0d9488',
+            'icon_bg' => '#f0fdfa',
+            'border' => '#99f6e4',
+            'badge_bg' => '#ccfbf1',
+            'badge_text' => '#115e59',
+            'badge_border' => '#5eead4',
+            'shadow' => 'rgba(13, 148, 136, 0.18)',
+            'bg_subtle' => 'rgba(20, 184, 166, 0.05)',
+        ],
+
+        // 4. Road Maintenance Status (Amber)
+        'road-maintenance-status' => [
+            'accent' => '#d97706',
+            'icon_bg' => '#fffbeb',
+            'border' => '#fde68a',
+            'badge_bg' => '#fef3c7',
+            'badge_text' => '#92400e',
+            'badge_border' => '#fcd34d',
+            'shadow' => 'rgba(217, 119, 6, 0.18)',
+            'bg_subtle' => 'rgba(245, 158, 11, 0.05)',
+        ],
+
+        // 5. RBIS Annual Certification (Rose)
+        'rbis-annual-certification' => [
+            'accent' => '#e11d48',
+            'icon_bg' => '#fff1f2',
+            'border' => '#fecdd3',
+            'badge_bg' => '#ffe4e6',
+            'badge_text' => '#9f1239',
+            'badge_border' => '#fda4af',
+            'shadow' => 'rgba(225, 29, 72, 0.18)',
+            'bg_subtle' => 'rgba(244, 63, 94, 0.05)',
+        ],
+
+        // 6. Annual Maintenance Work Program - AMWP (Gold / Bronze)
+        'annual-maintenance-work-program' => [
+            'accent' => '#b45309',
+            'icon_bg' => '#fefce8',
+            'border' => '#fef08a',
+            'badge_bg' => '#fef9c3',
+            'badge_text' => '#854d0e',
+            'badge_border' => '#fde047',
+            'shadow' => 'rgba(180, 83, 9, 0.18)',
+            'bg_subtle' => 'rgba(234, 179, 8, 0.05)',
+        ],
+
+        // 7. LGSF Project Completion Reports (Sky Blue)
+        'lgsf-pcr' => [
+            'accent' => '#0284c7',
+            'icon_bg' => '#f0f9ff',
+            'border' => '#bae6fd',
+            'badge_bg' => '#e0e7ff',
+            'badge_text' => '#0369a1',
+            'badge_border' => '#7dd3fc',
+            'shadow' => 'rgba(2, 132, 199, 0.18)',
+            'bg_subtle' => 'rgba(14, 165, 233, 0.05)',
+        ],
+
+        // 8. SGLGIF Project Completion Reports (Purple)
+        'sglgif-pcr' => [
+            'accent' => '#9333ea',
+            'icon_bg' => '#faf5ff',
+            'border' => '#e9d5ff',
+            'badge_bg' => '#f3e8ff',
+            'badge_text' => '#6b21a8',
+            'badge_border' => '#d8b4fe',
+            'shadow' => 'rgba(147, 51, 234, 0.18)',
+            'bg_subtle' => 'rgba(168, 85, 247, 0.05)',
+        ],
+
+        // 9. PD No. PBBM-2025-1572-1573 (Red)
+        'pd-no-pbbm-2025-1572-1573' => [
+            'accent' => '#dc2626',
+            'icon_bg' => '#fef2f2',
+            'border' => '#fecaca',
+            'badge_bg' => '#fee2e2',
+            'badge_text' => '#991b1b',
+            'badge_border' => '#fca5a5',
+            'shadow' => 'rgba(220, 38, 38, 0.18)',
+            'bg_subtle' => 'rgba(239, 68, 68, 0.05)',
+        ],
+
+        // 10. Monitoring Evaluation Monthly - LFP / RLIP-LIME (Royal Blue)
+        'monitoring-evaluation-lfp' => [
+            'accent' => '#2563eb',
+            'icon_bg' => '#eff6ff',
+            'border' => '#bfdbfe',
+            'badge_bg' => '#dbeafe',
+            'badge_text' => '#1e40af',
+            'badge_border' => '#93c5fd',
+            'shadow' => 'rgba(37, 99, 235, 0.18)',
+            'bg_subtle' => 'rgba(59, 130, 246, 0.05)',
+        ],
+
+        // 11. SWA Annex F (Orange)
+        'swa-annex-f' => [
+            'accent' => '#ea580c',
+            'icon_bg' => '#fff7ed',
+            'border' => '#fed7aa',
+            'badge_bg' => '#ffedd5',
+            'badge_text' => '#9a3412',
+            'badge_border' => '#fdba74',
+            'shadow' => 'rgba(234, 88, 12, 0.18)',
+            'bg_subtle' => 'rgba(249, 115, 22, 0.05)',
+        ],
+
+        // 12. RPMES Forms
+        'rpmes-form-2' => [
+            'accent' => '#c026d3',
+            'icon_bg' => '#fdf4ff',
+            'border' => '#f5d0fe',
+            'badge_bg' => '#fae8ff',
+            'badge_text' => '#86198f',
+            'badge_border' => '#f0abfc',
+            'shadow' => 'rgba(192, 38, 211, 0.18)',
+            'bg_subtle' => 'rgba(217, 70, 239, 0.05)',
+        ],
+        'rpmes-form-4' => [
+            'accent' => '#4338ca',
+            'icon_bg' => '#eef2ff',
+            'border' => '#c7d2fe',
+            'badge_bg' => '#e0e7ff',
+            'badge_text' => '#312e81',
+            'badge_border' => '#a5b4fc',
+            'shadow' => 'rgba(67, 56, 202, 0.18)',
+            'bg_subtle' => 'rgba(99, 102, 241, 0.05)',
+        ],
+        'rpmes-form-5' => [
+            'accent' => '#db2777',
+            'icon_bg' => '#fdf2f8',
+            'border' => '#fbcfe8',
+            'badge_bg' => '#fce7f3',
+            'badge_text' => '#9d174d',
+            'badge_border' => '#f9a8d4',
+            'shadow' => 'rgba(219, 39, 119, 0.18)',
+            'bg_subtle' => 'rgba(236, 72, 153, 0.05)',
+        ],
+        'rpmes-form-6' => [
+            'accent' => '#0f766e',
+            'icon_bg' => '#f0fdfa',
+            'border' => '#99f6e4',
+            'badge_bg' => '#ccfbf1',
+            'badge_text' => '#134e4a',
+            'badge_border' => '#5eead4',
+            'shadow' => 'rgba(15, 118, 110, 0.18)',
+            'bg_subtle' => 'rgba(20, 184, 166, 0.05)',
+        ],
+
+        // Default Fallback
+        'default' => [
+            'accent' => '#1d4ed8',
+            'icon_bg' => '#eff6ff',
+            'border' => '#bfdbfe',
+            'badge_bg' => '#dbeafe',
+            'badge_text' => '#1e40af',
+            'badge_border' => '#93c5fd',
+            'shadow' => 'rgba(29, 78, 216, 0.18)',
+            'bg_subtle' => 'rgba(37, 99, 235, 0.05)',
+        ],
+    ];
+
+    $getTheme = function($key, $label = '') use ($moduleThemes) {
+        $slug = Str::slug($label);
+        // Explicit rule: FUR and FUR Batch share the EXACT same color coding!
+        if (str_contains($slug, 'fund-utilization') || str_contains($slug, 'fur')) {
+            return $moduleThemes['fund-utilization'];
+        }
+        return $moduleThemes[$key] ?? $moduleThemes[$slug] ?? $moduleThemes['default'];
+    };
 @endphp
 
 <div class="task-mgmt-page">
@@ -1279,21 +1808,28 @@
                         @foreach($pendingByModule as $moduleLabel => $tasks)
                             @php
                                 $firstTask = $tasks->first();
-                                $moduleKey = $firstTask['module_key'] ?? 'default';
+                                $moduleKey = $firstTask['module_key'] ?? Str::slug($moduleLabel);
                                 $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
                                 $slug = 'modal-pending-' . Str::slug($moduleLabel);
+                                $theme = $getTheme($moduleKey, $moduleLabel);
                             @endphp
-                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
+                            <div class="menu-card" 
+                                 onclick="openTaskModal('{{ $slug }}')" 
+                                 style="--card-accent: {{ $theme['accent'] }}; background: radial-gradient(circle at top right, {{ $theme['bg_subtle'] }} 0%, #ffffff 55%);"
+                                 onmouseenter="this.style.borderColor='{{ $theme['border'] }}'; this.style.boxShadow='0 12px 24px -6px {{ $theme['shadow'] }}, 0 4px 6px -1px rgba(0, 0, 0, 0.04)';"
+                                 onmouseleave="this.style.borderColor='#e2e8f0'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.03)';">
                                 <div class="menu-card-top">
-                                    <div class="menu-card-icon-wrapper primary">
+                                    <div class="menu-card-icon-wrapper" style="background: {{ $theme['icon_bg'] }}; color: {{ $theme['accent'] }}; border: 1px solid {{ $theme['border'] }};">
                                         <i class="{{ $iconClass }}"></i>
                                     </div>
-                                    <span class="menu-card-badge danger">{{ $tasks->count() }}</span>
+                                    <span class="menu-card-badge" style="background: {{ $theme['badge_bg'] }}; color: {{ $theme['badge_text'] }}; border: 1px solid {{ $theme['badge_border'] }};">
+                                        {{ $tasks->count() }}
+                                    </span>
                                 </div>
                                 <div>
                                     <h3 class="menu-card-title">{{ $moduleLabel }}</h3>
-                                    <div class="menu-card-footer primary">
-                                        Open Pool <i class="fas fa-arrow-right"></i>
+                                    <div class="menu-card-footer" style="color: {{ $theme['accent'] }};">
+                                        <span>Open Pool</span> <i class="fas fa-arrow-right"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1338,18 +1874,31 @@
                         @foreach($ticketsByCategory as $categoryName => $categoryTickets)
                             @php
                                 $slug = 'modal-ticket-' . Str::slug($categoryName);
+                                $ticketAccent = '#0284c7';
+                                $ticketBg = '#f0f9ff';
+                                $ticketBorder = '#bae6fd';
+                                $ticketBadgeBg = '#e0f2fe';
+                                $ticketBadgeText = '#0369a1';
+                                $ticketShadow = 'rgba(2, 132, 199, 0.18)';
+                                $ticketSubtle = 'rgba(14, 165, 233, 0.05)';
                             @endphp
-                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
+                            <div class="menu-card" 
+                                 onclick="openTaskModal('{{ $slug }}')" 
+                                 style="--card-accent: {{ $ticketAccent }}; background: radial-gradient(circle at top right, {{ $ticketSubtle }} 0%, #ffffff 55%);"
+                                 onmouseenter="this.style.borderColor='{{ $ticketBorder }}'; this.style.boxShadow='0 12px 24px -6px {{ $ticketShadow }}, 0 4px 6px -1px rgba(0, 0, 0, 0.04)';"
+                                 onmouseleave="this.style.borderColor='#e2e8f0'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.03)';">
                                 <div class="menu-card-top">
-                                    <div class="menu-card-icon-wrapper info" style="background: #e0f2fe; color: #0284c7;">
+                                    <div class="menu-card-icon-wrapper" style="background: {{ $ticketBg }}; color: {{ $ticketAccent }}; border: 1px solid {{ $ticketBorder }};">
                                         <i class="fas fa-ticket"></i>
                                     </div>
-                                    <span class="menu-card-badge info" style="background: #0284c7; color: #fff;">{{ $categoryTickets->count() }}</span>
+                                    <span class="menu-card-badge" style="background: {{ $ticketBadgeBg }}; color: {{ $ticketBadgeText }}; border: 1px solid {{ $ticketBorder }};">
+                                        {{ $categoryTickets->count() }}
+                                    </span>
                                 </div>
                                 <div>
                                     <h3 class="menu-card-title">{{ $categoryName }}</h3>
-                                    <div class="menu-card-footer info" style="color: #0284c7;">
-                                        Open Pool <i class="fas fa-arrow-right"></i>
+                                    <div class="menu-card-footer" style="color: {{ $ticketAccent }};">
+                                        <span>Open Pool</span> <i class="fas fa-arrow-right"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1392,21 +1941,28 @@
                         @foreach($returnedByModule as $moduleLabel => $tasks)
                             @php
                                 $firstTask = $tasks->first();
-                                $moduleKey = $firstTask['module_key'] ?? 'default';
+                                $moduleKey = $firstTask['module_key'] ?? Str::slug($moduleLabel);
                                 $iconClass = $moduleIcons[$moduleKey] ?? 'fas fa-folder';
                                 $slug = 'modal-returned-' . Str::slug($moduleLabel);
+                                $theme = $getTheme($moduleKey, $moduleLabel);
                             @endphp
-                            <div class="menu-card" onclick="openTaskModal('{{ $slug }}')">
+                            <div class="menu-card" 
+                                 onclick="openTaskModal('{{ $slug }}')" 
+                                 style="--card-accent: {{ $theme['accent'] }}; background: radial-gradient(circle at top right, {{ $theme['bg_subtle'] }} 0%, #ffffff 55%);"
+                                 onmouseenter="this.style.borderColor='{{ $theme['border'] }}'; this.style.boxShadow='0 12px 24px -6px {{ $theme['shadow'] }}, 0 4px 6px -1px rgba(0, 0, 0, 0.04)';"
+                                 onmouseleave="this.style.borderColor='#e2e8f0'; this.style.boxShadow='0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.03)';">
                                 <div class="menu-card-top">
-                                    <div class="menu-card-icon-wrapper danger">
+                                    <div class="menu-card-icon-wrapper" style="background: {{ $theme['icon_bg'] }}; color: {{ $theme['accent'] }}; border: 1px solid {{ $theme['border'] }};">
                                         <i class="{{ $iconClass }}"></i>
                                     </div>
-                                    <span class="menu-card-badge danger">{{ $tasks->count() }}</span>
+                                    <span class="menu-card-badge danger" style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;" title="{{ $tasks->count() }} returned document(s)">
+                                        <i class="fas fa-rotate-left mr-1" style="font-size: 11px;"></i> {{ $tasks->count() }}
+                                    </span>
                                 </div>
                                 <div>
                                     <h3 class="menu-card-title">{{ $moduleLabel }}</h3>
-                                    <div class="menu-card-footer danger">
-                                        Act & Resubmit <i class="fas fa-arrow-right"></i>
+                                    <div class="menu-card-footer" style="color: {{ $theme['accent'] }};">
+                                        <span>Act & Resubmit</span> <i class="fas fa-arrow-right"></i>
                                     </div>
                                 </div>
                             </div>
@@ -1607,14 +2163,12 @@
                 <!-- Modal Body -->
                 <div class="task-modal-body">
                     <div class="table-container">
-                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : ($moduleKey === 'fund-utilization-batch' ? ' task-table-fund-utilization-batch' : '') }}">
+                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : ($moduleKey === 'fund-utilization-batch' ? ' task-table-fund-utilization-batch task-table-fund-utilization-batch-pending' : '') }}">
                             <thead>
                                 <tr>
                                     @if($moduleKey === 'fund-utilization-batch')
                                         <th>Batch Approval Code</th>
                                         <th>Quarter</th>
-                                        <th>Target Scope</th>
-                                        <th>Documents Summary</th>
                                         <th>Submitted By</th>
                                         <th>Date Received</th>
                                         <th>Status</th>
@@ -1665,21 +2219,6 @@
                                                     @if(!empty($task['year']))
                                                         <span class="q-year">{{ $task['year'] }}</span>
                                                     @endif
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="batch-scope-chip" title="{{ $task['project_count'] ?? 0 }} projects covered in this submission">
-                                                    <i class="fas fa-cubes"></i>
-                                                    <strong>{{ $task['project_count'] ?? 0 }}</strong>
-                                                    <span class="chip-label">Projects</span>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <div class="batch-doc-summary" title="{{ $task['message'] }}">
-                                                    <div class="batch-summary-text">
-                                                        <i class="fas fa-file-shield text-blue-500 mr-1"></i>
-                                                        {{ $task['message'] }}
-                                                    </div>
                                                 </div>
                                             </td>
                                             <td>
@@ -1777,39 +2316,41 @@
                                                 @endif
                                             </td>
                                         @endif
-                                        <td>
-                                            <strong>{{ strtoupper($task['quarter'] ?? 'N/A') }}</strong>
-                                        </td>
-                                        <td>
-                                            <div class="task-message-cell">
-                                                <div style="font-weight: 700; color: #1e293b;">{{ $task['task_title'] ?? ($task['document_label'] ?? $task['message']) }}</div>
-                                                @if(isset($task['task_title']))
-                                                    <div style="margin-top: 4px; color: #64748b;">{{ $task['message'] }}</div>
-                                                @endif
-                                            </div>
-                                        </td>
-                                        <td>
-                                            @php
-                                                $uploaderName = $task['sender_name'] ?: 'Unknown uploader';
-                                            @endphp
-                                            <div class="task-uploader-cell">
-                                                <span>
-                                                    <span class="task-uploader-name">{{ $uploaderName }}</span>
-                                                    @if(!empty($task['uploader_province']))
-                                                        <span class="task-uploader-province"><i class="fas fa-map-marker-alt"></i> {{ $task['uploader_province'] }}</span>
+                                        @if($moduleKey !== 'fund-utilization-batch')
+                                            <td>
+                                                <strong>{{ strtoupper($task['quarter'] ?? 'N/A') }}</strong>
+                                            </td>
+                                            <td>
+                                                <div class="task-message-cell">
+                                                    <div style="font-weight: 700; color: #1e293b;">{{ $task['task_title'] ?? ($task['document_label'] ?? $task['message']) }}</div>
+                                                    @if(isset($task['task_title']))
+                                                        <div style="margin-top: 4px; color: #64748b;">{{ $task['message'] }}</div>
                                                     @endif
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
-                                        </td>
-                                        <td>
-                                            <a href="{{ $task['url'] }}" class="task-action-btn" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;">
-                                                <i class="fas fa-clipboard-check"></i>
-                                                Review & Validate
-                                            </a>
-                                        </td>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $uploaderName = $task['sender_name'] ?: 'Unknown uploader';
+                                                @endphp
+                                                <div class="task-uploader-cell">
+                                                    <span>
+                                                        <span class="task-uploader-name">{{ $uploaderName }}</span>
+                                                        @if(!empty($task['uploader_province']))
+                                                            <span class="task-uploader-province"><i class="fas fa-map-marker-alt"></i> {{ $task['uploader_province'] }}</span>
+                                                        @endif
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {{ !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at'])->format('M d, Y h:i A') : 'N/A' }}
+                                            </td>
+                                            <td>
+                                                <a href="{{ $task['url'] }}" class="task-action-btn" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;">
+                                                    <i class="fas fa-clipboard-check"></i>
+                                                    Review & Validate
+                                                </a>
+                                            </td>
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -2043,30 +2584,32 @@
                                                 </div>
                                             </td>
                                         @endif
-                                        <td>
-                                            <strong>{{ strtoupper($task['quarter'] ?? 'N/A') }}</strong>
-                                        </td>
-                                        <td>
-                                            <div class="task-message-cell" style="font-style: italic;">{{ $task['message'] }}</div>
-                                        </td>
-                                        <td>
-                                            <div style="font-weight: 600;">{{ $task['returned_by_name'] ?? $task['sender_name'] ?? 'Validator' }}</div>
-                                            @if(!empty($task['returned_by_role']))
-                                                <div style="font-size: 0.75rem; color: #64748b;">{{ $task['returned_by_role'] }}</div>
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @php
-                                                $returnedDate = $task['returned_at'] ?? $task['created_at'] ?? null;
-                                            @endphp
-                                            {{ !empty($returnedDate) ? \Illuminate\Support\Carbon::parse($returnedDate)->format('M d, Y h:i A') : 'N/A' }}
-                                        </td>
-                                        <td>
-                                            <a href="{{ url($task['url'] ?? ('/notifications/' . $task['id'] . '/read')) }}" class="task-action-btn btn-danger" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;">
-                                                <i class="fas fa-edit"></i>
-                                                Act & Resubmit
-                                            </a>
-                                        </td>
+                                        @if($moduleKey !== 'fund-utilization-batch')
+                                            <td>
+                                                <strong>{{ strtoupper($task['quarter'] ?? 'N/A') }}</strong>
+                                            </td>
+                                            <td>
+                                                <div class="task-message-cell" style="font-style: italic;">{{ $task['message'] }}</div>
+                                            </td>
+                                            <td>
+                                                <div style="font-weight: 600;">{{ $task['returned_by_name'] ?? $task['sender_name'] ?? 'Validator' }}</div>
+                                                @if(!empty($task['returned_by_role']))
+                                                    <div style="font-size: 0.75rem; color: #64748b;">{{ $task['returned_by_role'] }}</div>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $returnedDate = $task['returned_at'] ?? $task['created_at'] ?? null;
+                                                @endphp
+                                                {{ !empty($returnedDate) ? \Illuminate\Support\Carbon::parse($returnedDate)->format('M d, Y h:i A') : 'N/A' }}
+                                            </td>
+                                            <td>
+                                                <a href="{{ url($task['url'] ?? ('/notifications/' . $task['id'] . '/read')) }}" class="task-action-btn btn-danger" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation(); window.open(this.href, '_blank', 'noopener,noreferrer'); return false;">
+                                                    <i class="fas fa-edit"></i>
+                                                    Act & Resubmit
+                                                </a>
+                                            </td>
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -2217,7 +2760,7 @@
 
 <!-- BATCH REVIEW & VALIDATION MODAL -->
 <div id="modal-batch-review-validate" class="task-modal-backdrop" style="z-index: 1060; display: none;" onclick="closeBatchApprovalModalOnBackdrop(event)">
-    <div class="task-modal" style="max-width: 1180px; width: 95vw; max-height: 90vh; border-radius: 20px; box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.4); border: 1px solid rgba(226, 232, 240, 0.9); overflow: hidden; display: flex; flex-direction: column;">
+    <div class="task-modal" style="max-width: 1800px; width: 98vw; max-height: 94vh; border-radius: 20px; box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.4); border: 1px solid rgba(226, 232, 240, 0.9); overflow: hidden; display: flex; flex-direction: column;">
         <!-- Header -->
         <div class="task-modal-header task-modal-header-batch" style="padding: 18px 26px !important;">
             <div class="batch-header-main">
@@ -2296,40 +2839,46 @@
                     </div>
                 </div>
 
-                <!-- 2. Uploaded Documents Section -->
-                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px;">
+                <!-- 2. Document-first validation -->
+                <div style="display: grid; grid-template-columns: minmax(240px, 0.65fr) minmax(0, 1.35fr); gap: 18px; margin-bottom: 20px;">
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
                         <h4 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-paperclip" style="color: #2563eb;"></i>
-                            Uploaded Documents in Batch
+                            Select Document
                         </h4>
                         <span id="bm-docs-count" style="font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 3px 10px; border-radius: 999px;">0 Files</span>
                     </div>
-                    <div id="bm-docs-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                    <div id="bm-docs-container" style="display: flex; flex-direction: column; gap: 10px;">
                         <!-- Dynamically injected doc cards -->
                     </div>
                 </div>
 
-                <!-- 3. Target Projects Section -->
-                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px;">
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
                         <h4 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-folder-tree" style="color: #4f46e5;"></i>
-                            Target Projects Receiving Batch Documents
+                            Projects for Selected Document
                         </h4>
-                        <div style="position: relative; width: 280px;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                        <button type="button" onclick="toggleBatchProjectSelection(true)" style="padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer;">Select all</button>
+                        <button type="button" onclick="toggleBatchProjectSelection(false)" style="padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer;">Clear</button>
+                        <div style="position: relative; width: 220px;">
                             <input type="text" id="bm-project-search" placeholder="Search project title or code..." onkeyup="filterBatchProjects()" style="width: 100%; padding: 8px 12px 8px 34px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; background: #fff;">
                             <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #94a3b8;"></i>
                         </div>
+                        </div>
                     </div>
-                    <div style="max-height: 280px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px;">
-                        <table class="table" style="width: 100%; margin: 0; font-size: 12px; border-collapse: collapse;" id="bm-projects-table">
+                    <div style="max-height: 360px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px;">
+                        <table class="table" style="width: 100%; min-width: 980px; margin: 0; font-size: 12px; border-collapse: collapse; table-layout: auto;" id="bm-projects-table">
                             <thead style="background: #f8fafc; position: sticky; top: 0; z-index: 2;">
                                 <tr style="border-bottom: 2px solid #e2e8f0; text-align: left; color: #475569; font-size: 11px; text-transform: uppercase;">
+                                    <th style="padding: 10px 12px; width: 36px;"></th>
                                     <th style="padding: 10px 12px;">Project Code</th>
                                     <th style="padding: 10px 12px;">Project Title</th>
-                                    <th style="padding: 10px 12px;">Location</th>
-                                    <th style="padding: 10px 12px;">Allocation</th>
+                                    <th style="padding: 10px 12px;">Province</th>
+                                    <th style="padding: 10px 12px;">City/Municipality</th>
+                                    <th style="padding: 10px 12px;">Barangay</th>
                                     <th style="padding: 10px 12px;">Status</th>
                                 </tr>
                             </thead>
@@ -2338,51 +2887,124 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
+                    <div id="bm-selected-document-hint" style="margin-top: 10px; color: #64748b; font-size: 12px;">Select a document on the left to display its projects.</div>
 
-                <!-- 4. Approval History & Timeline -->
-                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 14px; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-history" style="color: #d97706;"></i>
-                        Approval History &amp; Audit Trail
-                    </h4>
-                    <div id="bm-history-container" style="display: flex; flex-direction: column; gap: 10px;">
-                        <!-- Dynamically injected timeline items -->
-                    </div>
-                </div>
-
-                <!-- 5. Decision & Actions Section -->
-                <div id="bm-action-container" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                    <div id="bm-action-form" style="display: none;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
-                            <h4 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
-                                <i class="fas fa-pen-to-square" style="color: #059669;"></i>
-                                Validator Action &amp; Remarks
-                            </h4>
-                            <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 4px 10px;">
-                                <i class="fas fa-shield-halved"></i> Regional Validation Authority (CAR)
-                            </div>
+                    <!-- Individual Document Action Bar (Approve / Return for Selected Document) -->
+                    <div id="bm-document-action-bar" style="margin-top: 16px; padding: 12px 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div style="font-size: 12.5px; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 24px; height: 24px; border-radius: 6px; background: #dbeafe; color: #1d4ed8; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
+                                <i class="fas fa-check-double"></i>
+                            </span>
+                            <span><span id="bm-action-selected-count">0</span> project(s) selected</span>
                         </div>
-                        <div style="margin-bottom: 16px;">
-                            <label for="bm-remarks-input" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
-                                Remarks / Revision Notes <span style="font-weight: 400; color: #64748b;">(Mandatory when returning for revision; optional for approval)</span>
-                            </label>
-                            <textarea id="bm-remarks-input" rows="3" placeholder="Enter findings, validation notes, or revision instructions..." style="width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 14px; font-size: 13px; outline: none; font-family: inherit; resize: vertical;"></textarea>
-                        </div>
-                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap;">
-                            <button type="button" class="btn btn-outline-danger" id="bm-btn-return" onclick="submitBatchDecision('return')" style="padding: 10px 20px; font-size: 13px; font-weight: 700; border-radius: 10px; border: 1px solid #ef4444; color: #dc2626; background: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s ease;">
-                                <i class="fas fa-rotate-left"></i> Return for Revision
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button type="button" id="bm-btn-doc-return" onclick="openDocumentRemarksModal('return')" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid #fca5a5; border-radius: 8px; font-size: 12px; font-weight: 700; background: #ffffff; color: #dc2626; cursor: pointer; transition: all 0.15s ease;">
+                                <i class="fas fa-undo"></i> Return
                             </button>
-                            <button type="button" class="btn btn-success" id="bm-btn-approve" onclick="submitBatchDecision('approve')" style="padding: 10px 24px; font-size: 13px; font-weight: 700; border-radius: 10px; border: none; color: #fff; background: linear-gradient(135deg, #16a34a, #15803d); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3); transition: all 0.2s ease;">
-                                <i class="fas fa-check-circle"></i> <span id="bm-btn-approve-label">Approve &amp; Forward</span>
+                            <button type="button" id="bm-btn-doc-approve" onclick="openDocumentRemarksModal('approve')" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 20px; border: 1px solid #16a34a; border-radius: 8px; font-size: 12px; font-weight: 700; background: #16a34a; color: #ffffff; cursor: pointer; transition: all 0.15s ease; box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);">
+                                <i class="fas fa-check-circle"></i> Approve
                             </button>
                         </div>
                     </div>
-                    <div id="bm-action-readonly" style="display: none; padding: 14px 18px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; color: #1e40af; font-size: 13px;">
-                        <i class="fas fa-info-circle mr-1"></i> You are viewing this batch in read-only mode. Current status: <strong id="bm-readonly-status">Approved</strong>.
-                    </div>
+                </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DOCUMENT REMARKS MODAL (APPROVE / RETURN) -->
+<div id="modal-batch-document-remarks" class="task-modal-backdrop" style="z-index: 1070; display: none;" onclick="closeDocumentRemarksModalOnBackdrop(event)">
+    <div class="task-modal bm-remarks-dialog" onclick="event.stopPropagation()" style="max-width: 550px; width: 92vw; border-radius: 20px; box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(226, 232, 240, 0.85); border: 0; background: #ffffff; overflow: hidden;">
+        
+        <!-- Header -->
+        <div id="bm-remarks-modal-header" style="padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f1f5f9; background: #ffffff;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <div id="bm-remarks-icon-box" style="width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; transition: all 0.2s ease; background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0;">
+                    <i id="bm-remarks-icon" class="fas fa-check-circle"></i>
+                </div>
+                <div>
+                    <h3 id="bm-remarks-modal-title" style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.25; letter-spacing: -0.01em;">
+                        Approve Document
+                    </h3>
+                    <p id="bm-remarks-modal-sub" style="margin: 3px 0 0; font-size: 12px; color: #64748b; font-weight: 500;">
+                        Review remarks & confirm action for selected projects
+                    </p>
                 </div>
             </div>
+            <button type="button" onclick="closeDocumentRemarksModal()" style="width: 32px; height: 32px; border-radius: 50%; border: 0; background: #f1f5f9; color: #64748b; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s ease;" title="Close" onmouseover="this.style.background='#e2e8f0'; this.style.color='#0f172a';" onmouseout="this.style.background='#f1f5f9'; this.style.color='#64748b';">
+                <i class="fas fa-times" style="font-size: 12px;"></i>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 22px 24px; background: #ffffff; display: flex; flex-direction: column; gap: 16px;">
+            
+            <!-- Document Summary Hero Card -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 13px 16px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1;">
+                        <div id="bm-modal-doc-icon-box" style="width: 36px; height: 36px; border-radius: 9px; background: #dbeafe; color: #1d4ed8; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; border: 1px solid #bfdbfe;">
+                            <i id="bm-modal-doc-icon" class="fas fa-file-alt"></i>
+                        </div>
+                        <div style="min-width: 0;">
+                            <div id="bm-modal-doc-category" style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">
+                                Batch Document
+                            </div>
+                            <div id="bm-modal-doc-title" style="font-size: 13.5px; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;">
+                                Selected Document
+                            </div>
+                        </div>
+                    </div>
+                    <span id="bm-modal-selected-count" style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #e0e7ff; color: #4338ca; white-space: nowrap; flex-shrink: 0;">
+                        <i class="fas fa-layer-group"></i> <span>0 Projects</span>
+                    </span>
+                </div>
+
+                <!-- Attached File Row -->
+                <div id="bm-modal-file-row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11.5px; color: #475569; min-width: 0;">
+                    <i id="bm-modal-file-icon" class="fas fa-paperclip" style="color: #64748b; font-size: 11px; flex-shrink: 0;"></i>
+                    <span style="font-weight: 600; color: #64748b; flex-shrink: 0;">Attached:</span>
+                    <span id="bm-modal-doc-filename" style="font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="">
+                        None
+                    </span>
+                </div>
+            </div>
+
+            <!-- Context Notice Alert -->
+            <div id="bm-remarks-context-box" style="padding: 12px 14px; border-radius: 12px; font-size: 12px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; transition: all 0.2s ease; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;">
+                <i id="bm-remarks-context-icon" class="fas fa-shield-alt" style="font-size: 14px; margin-top: 2px; flex-shrink: 0; color: #16a34a;"></i>
+                <div id="bm-remarks-context-text" style="font-size: 12px; line-height: 1.5; flex: 1;"></div>
+            </div>
+
+            <!-- Textarea Section -->
+            <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px;">
+                    <label for="bm-modal-remarks-textarea" style="font-size: 12px; font-weight: 700; color: #334155; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="far fa-comment-dots" style="color: #64748b;"></i>
+                        <span>Remarks / Instructions</span>
+                    </label>
+                    <span id="bm-remarks-requirement-badge" style="font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: #f1f5f9; color: #64748b; transition: all 0.15s ease;">
+                        Optional
+                    </span>
+                </div>
+                <textarea id="bm-modal-remarks-textarea" rows="4" placeholder="Enter remarks..." style="width: 100%; padding: 11px 14px; font-size: 12.5px; line-height: 1.5; border: 1.5px solid #cbd5e1; border-radius: 12px; outline: none; background: #ffffff; color: #1e293b; transition: border-color 0.15s ease, box-shadow 0.15s ease; resize: vertical; box-sizing: border-box; font-family: inherit; min-height: 90px;" spellcheck="false"></textarea>
+                <div id="bm-remarks-error-msg" style="display: none; align-items: center; gap: 6px; color: #dc2626; font-size: 11.5px; font-weight: 600; margin-top: 5px;">
+                    <i class="fas fa-exclamation-circle"></i> <span>Remarks are required when returning a document for revision.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding: 16px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+            <button type="button" onclick="closeDocumentRemarksModal()" style="padding: 9px 18px; border: 1px solid #cbd5e1; border-radius: 10px; background: #ffffff; color: #475569; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s ease;" onmouseover="this.style.background='#f1f5f9'; this.style.color='#1e293b';" onmouseout="this.style.background='#ffffff'; this.style.color='#475569';">
+                Cancel
+            </button>
+            <button type="button" id="bm-btn-confirm-remarks-action" onclick="confirmBatchDocumentAction()" style="display: inline-flex; align-items: center; gap: 7px; padding: 9px 22px; border-radius: 10px; border: 0; font-size: 12px; font-weight: 700; color: #ffffff; cursor: pointer; transition: all 0.15s ease;">
+                <i id="bm-confirm-btn-icon" class="fas fa-check-circle"></i>
+                <span id="bm-confirm-btn-text">Approve Document</span>
+            </button>
         </div>
     </div>
 </div>
@@ -2390,9 +3012,48 @@
 <script>
     let currentBatchCode = '';
     let currentBatchData = null;
+    let selectedBatchDocumentKey = '';
+    let selectedBatchProjectsByDocument = {};
+    const batchReviewStateStorageKey = 'fur-batch-review-state';
+
+    function readBatchReviewState() {
+        try {
+            const savedState = sessionStorage.getItem(batchReviewStateStorageKey);
+            return savedState ? JSON.parse(savedState) : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function saveBatchReviewState() {
+        if (!currentBatchCode) return;
+
+        try {
+            sessionStorage.setItem(batchReviewStateStorageKey, JSON.stringify({
+                batchCode: currentBatchCode,
+                documentKey: selectedBatchDocumentKey,
+                projectsByDocument: selectedBatchProjectsByDocument
+            }));
+        } catch (error) {
+            // Session storage may be unavailable; the in-memory state still works.
+        }
+    }
+
+    function clearBatchReviewState() {
+        try {
+            sessionStorage.removeItem(batchReviewStateStorageKey);
+        } catch (error) {
+            // Ignore storage cleanup failures.
+        }
+    }
 
     function openBatchApprovalModal(batchCode) {
+        const savedState = readBatchReviewState();
+        const restoreState = savedState?.batchCode === batchCode;
+
         currentBatchCode = batchCode;
+        selectedBatchDocumentKey = restoreState ? (savedState.documentKey || '') : '';
+        selectedBatchProjectsByDocument = restoreState ? (savedState.projectsByDocument || {}) : {};
         const modal = document.getElementById('modal-batch-review-validate');
         if (!modal) return;
 
@@ -2432,6 +3093,8 @@
             modal.style.display = 'none';
             document.body.style.overflow = '';
         }
+        closeDocumentRemarksModal();
+        clearBatchReviewState();
     }
 
     function closeBatchApprovalModalOnBackdrop(event) {
@@ -2480,132 +3143,238 @@
         } else {
             docs.forEach(doc => {
                 const card = document.createElement('div');
-                card.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; gap: 10px;';
+                const isActiveDocument = doc.key === selectedBatchDocumentKey;
+                const selectedProjectCount = getSelectedBatchProjects(doc.key).length;
+                const hasSelectedProjects = selectedProjectCount > 0;
+
+                card.className = `bm-doc-card ${isActiveDocument ? 'is-active' : ''} ${hasSelectedProjects ? 'has-selected-projects' : ''}`;
+                card.dataset.documentKey = doc.key;
+                card.setAttribute('role', 'button');
+                card.setAttribute('tabindex', '0');
+                card.setAttribute('aria-selected', isActiveDocument ? 'true' : 'false');
+                card.setAttribute('aria-label', `${doc.field_name || doc.label}${hasSelectedProjects ? `, ${selectedProjectCount} project${selectedProjectCount === 1 ? '' : 's'} selected` : ''}`);
+
+                // Contextual icons based on document category / file type
+                let iconClass = 'fas fa-file-lines';
+                if (doc.is_link) {
+                    iconClass = 'fas fa-arrow-up-right-from-square';
+                } else if (doc.section === 'Written Notices' || (doc.type && doc.type.startsWith('written-notice'))) {
+                    iconClass = 'fas fa-envelope-open-text';
+                } else if (doc.type === 'mov' || (doc.section && doc.section.includes('MOV'))) {
+                    iconClass = 'fas fa-folder-open';
+                } else if (doc.type === 'fdp' || (doc.section && doc.section.includes('FDP'))) {
+                    iconClass = 'fas fa-file-contract';
+                } else if ((doc.file_name || '').toLowerCase().endsWith('.pdf')) {
+                    iconClass = 'fas fa-file-pdf';
+                }
+
+                card.onclick = (event) => {
+                    if (event.target.closest('a,button')) return;
+                    selectBatchDocument(doc.key);
+                };
+                card.onkeydown = (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        selectBatchDocument(doc.key);
+                    }
+                };
+
+                const fileName = doc.file_name || (doc.is_link ? (doc.url || 'External Link') : 'No file attached');
+                const sectionName = doc.section || 'Batch Document';
+                const docLabel = doc.field_name || doc.label || 'Document';
+
                 card.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
-                        <div style="width: 38px; height: 38px; border-radius: 8px; background: #dbeafe; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">
-                            <i class="${doc.is_link ? 'fas fa-link' : 'fas fa-file-lines'}"></i>
+                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+                        <div class="bm-doc-icon">
+                            <i class="${iconClass}"></i>
                         </div>
-                        <div style="min-width: 0;">
-                            <div style="font-size: 13px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${doc.label}">${doc.label}</div>
-                            <div style="font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${doc.file_name}">${doc.file_name}</div>
+                        <div class="bm-doc-info">
+                            <div class="bm-doc-section">${sectionName}</div>
+                            <div class="bm-doc-title" title="${docLabel}">${docLabel}</div>
+                            <div class="bm-doc-file" title="${fileName}">
+                                <i class="${doc.is_link ? 'fas fa-link' : 'fas fa-paperclip'}"></i>
+                                <span class="bm-doc-filename">${fileName}</span>
+                            </div>
                         </div>
                     </div>
-                    <a href="${doc.url}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; background: #2563eb; color: #fff; text-decoration: none; flex-shrink: 0;">
-                        <i class="${doc.is_link ? 'fas fa-external-link-alt' : 'fas fa-eye'}"></i> ${doc.is_link ? 'Open' : 'View'}
-                    </a>
+                    <div class="bm-doc-actions">
+                        <span class="bm-selection-indicator" style="display: ${hasSelectedProjects ? 'inline-flex' : 'none'};">
+                            <i class="fas fa-check-circle"></i> ${selectedProjectCount} Selected
+                        </span>
+                        <button type="button" class="bm-view-document" title="${doc.is_link ? 'Open Link' : 'View Document'}">
+                            <i class="${doc.is_link ? 'fas fa-external-link-alt' : 'fas fa-eye'}"></i> ${doc.is_link ? 'Open' : 'View'}
+                        </button>
+                        <div class="bm-doc-chevron" aria-hidden="true">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </div>
                 `;
                 docsContainer.appendChild(card);
+                card.querySelector('.bm-view-document')?.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (doc.is_link) {
+                        window.open(doc.url, '_blank', 'noopener,noreferrer');
+                    } else if (typeof openGlobalDocPreviewModal === 'function') {
+                        openGlobalDocPreviewModal(doc.url, doc.file_name || doc.label || 'View Document');
+                    } else {
+                        window.open(doc.url, '_blank');
+                    }
+                });
             });
         }
 
-        // Target projects table
+        if (selectedBatchDocumentKey) {
+            selectBatchDocument(selectedBatchDocumentKey);
+        } else if (docs.length) {
+            selectBatchDocument(docs[0].key);
+        }
+
+        // Show the loaded batch even when no document file was attached.
+        document.getElementById('bm-loading').style.display = 'none';
+        document.getElementById('bm-content').style.display = 'block';
+    }
+
+    function selectBatchDocument(documentKey) {
+        saveSelectedBatchProjects();
+        selectedBatchDocumentKey = documentKey;
+        saveBatchReviewState();
+        updateBatchDocumentIndicators();
+
+        const doc = (currentBatchData?.batch?.documents || []).find(item => item.key === documentKey);
+        const hint = document.getElementById('bm-selected-document-hint');
+        if (hint) {
+            hint.textContent = doc ? `${doc.label || doc.field_name}: select the projects to approve or return.` : 'Select a document on the left to display its projects.';
+        }
+
+        renderBatchProjects();
+    }
+
+    function saveSelectedBatchProjects() {
+        if (!selectedBatchDocumentKey) return;
+
+        const projectCheckboxes = document.querySelectorAll('#bm-projects-body .bm-project-checkbox');
+        if (projectCheckboxes.length) {
+            selectedBatchProjectsByDocument[selectedBatchDocumentKey] = Array.from(
+                document.querySelectorAll('#bm-projects-body .bm-project-checkbox:checked')
+            ).map(input => input.value);
+        }
+        saveBatchReviewState();
+        updateBatchDocumentIndicators();
+        updateSelectedProjectsCount();
+    }
+
+    function updateSelectedProjectsCount() {
+        const count = getSelectedBatchProjects(selectedBatchDocumentKey).length;
+        const countEl = document.getElementById('bm-action-selected-count');
+        if (countEl) countEl.textContent = count;
+        const approveBtn = document.getElementById('bm-btn-doc-approve');
+        const returnBtn = document.getElementById('bm-btn-doc-return');
+        if (approveBtn) approveBtn.disabled = count === 0;
+        if (returnBtn) returnBtn.disabled = count === 0;
+    }
+
+    function updateBatchDocumentIndicators() {
+        document.querySelectorAll('#bm-docs-container [data-document-key]').forEach(card => {
+            const documentKey = card.dataset.documentKey;
+            const selectedProjectCount = getSelectedBatchProjects(documentKey).length;
+            const isActiveDocument = documentKey === selectedBatchDocumentKey;
+            const hasSelectedProjects = selectedProjectCount > 0;
+            const indicator = card.querySelector('.bm-selection-indicator');
+
+            // Reset inline border & background so CSS classes take effect cleanly
+            card.style.borderColor = '';
+            card.style.background = '';
+
+            card.classList.toggle('is-active', isActiveDocument);
+            card.classList.toggle('has-selected-projects', hasSelectedProjects);
+            card.setAttribute('aria-selected', isActiveDocument ? 'true' : 'false');
+
+            const documentLabel = (card.getAttribute('aria-label') || '').split(',')[0];
+            card.setAttribute('aria-label', `${documentLabel}${hasSelectedProjects ? `, ${selectedProjectCount} project${selectedProjectCount === 1 ? '' : 's'} selected` : ''}`);
+
+            if (indicator) {
+                if (hasSelectedProjects) {
+                    indicator.style.display = 'inline-flex';
+                    indicator.innerHTML = `<i class="fas fa-check-circle"></i> ${selectedProjectCount} Selected`;
+                } else {
+                    indicator.style.display = 'none';
+                    indicator.innerHTML = '';
+                }
+            }
+        });
+    }
+
+    function getSelectedBatchProjects(documentKey) {
+        return selectedBatchProjectsByDocument[documentKey] || [];
+    }
+
+    function renderBatchProjects() {
+        const data = currentBatchData || {};
+        const batch = data.batch || {};
         const projectsBody = document.getElementById('bm-projects-body');
         projectsBody.innerHTML = '';
-        const projects = batch.projects || [];
+        const projects = currentBatchData?.batch?.projects || [];
+        const doc = (currentBatchData?.batch?.documents || []).find(item => item.key === selectedBatchDocumentKey);
+
+        const actionBar = document.getElementById('bm-document-action-bar');
+        if (actionBar) {
+            actionBar.style.display = doc ? 'flex' : 'none';
+        }
 
         if (projects.length === 0) {
-            projectsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 18px;">No projects found in this batch.</td></tr>';
+            projectsBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #64748b; padding: 18px;">No projects found in this batch.</td></tr>';
         } else {
             projects.forEach(p => {
                 const tr = document.createElement('tr');
-                tr.style.cssText = 'border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease;';
-                tr.dataset.search = `${p.project_code} ${p.project_title} ${p.province} ${p.city_municipality}`.toLowerCase();
-                const allocFormatted = Number(p.allocation || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
+                tr.dataset.search = `${p.project_code} ${p.project_title} ${p.province} ${p.city_municipality} ${p.barangay}`.toLowerCase();
+                const projectStatus = (p.status || 'Ongoing').trim();
+                const approvalStatus = (doc?.statuses?.[p.project_code] || 'pending').toLowerCase();
+                const isAlreadyApproved = approvalStatus === 'approved';
+                const selectedProjects = getSelectedBatchProjects(selectedBatchDocumentKey);
+                const isProjectSelected = !isAlreadyApproved && selectedProjects.includes(p.project_code);
+                tr.style.cssText = `border-bottom: 1px solid #f1f5f9; background: ${isAlreadyApproved ? '#f0fdf4' : isProjectSelected ? '#eff6ff' : '#fff'}; transition: background 0.15s ease;`;
+
+                const statusLabel = projectStatus.replace(/[_-]+/g, ' ');
+                const statusBadge = `<span style="display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1;">${statusLabel}</span>`;
 
                 tr.innerHTML = `
+                    <td style="padding: 10px 12px;">
+                        <div style="display: inline-flex; align-items: center; gap: 7px;">
+                            <input type="checkbox" class="bm-project-checkbox" value="${p.project_code}" ${isProjectSelected ? 'checked' : ''} ${isAlreadyApproved ? 'disabled' : ''}>
+                        </div>
+                    </td>
                     <td style="padding: 10px 12px; font-weight: 700; color: #1e3a8a;">
                         <a href="/fund-utilization/${encodeURIComponent(p.project_code)}?quarter=${encodeURIComponent(batch.quarter)}" target="_blank" style="color: #1d4ed8; text-decoration: underline;" title="View FUR details">
                             ${p.project_code}
                         </a>
                     </td>
-                    <td style="padding: 10px 12px; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${p.project_title}">
+                    <td style="padding: 10px 12px; min-width: 260px; white-space: normal; overflow-wrap: anywhere;" title="${p.project_title}">
                         ${p.project_title}
                     </td>
                     <td style="padding: 10px 12px; color: #475569;">
-                        ${p.city_municipality ? p.city_municipality + ', ' : ''}${p.province || 'CAR'}
+                        ${p.province || 'CAR'}
                     </td>
-                    <td style="padding: 10px 12px; font-weight: 600; color: #0f172a;">
-                        ${allocFormatted}
+                    <td style="padding: 10px 12px; color: #475569;">
+                        ${p.city_municipality || ''}
+                    </td>
+                    <td style="padding: 10px 12px; color: #475569;">
+                        ${p.barangay || ''}
                     </td>
                     <td style="padding: 10px 12px;">
-                        <span style="display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1;">
-                            ${p.status || 'Ongoing'}
-                        </span>
+                        ${statusBadge}
                     </td>
                 `;
                 projectsBody.appendChild(tr);
+                tr.querySelector('.bm-project-checkbox')?.addEventListener('change', () => {
+                    const checkbox = tr.querySelector('.bm-project-checkbox');
+                    const isSelected = checkbox?.checked === true;
+                    tr.style.background = isSelected ? '#eff6ff' : '#fff';
+                    saveSelectedBatchProjects();
+                });
             });
         }
 
-        // History logs
-        const historyContainer = document.getElementById('bm-history-container');
-        historyContainer.innerHTML = '';
-        const logs = batch.logs || [];
-
-        if (logs.length === 0) {
-            historyContainer.innerHTML = '<div style="color: #64748b; font-size: 13px; font-style: italic;">No audit events recorded yet.</div>';
-        } else {
-            logs.forEach(log => {
-                const item = document.createElement('div');
-                item.style.cssText = 'display: flex; gap: 12px; padding: 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;';
-
-                let iconClass = 'fa-check-circle text-emerald-600';
-                if ((log.action || '').toLowerCase().includes('return')) {
-                    iconClass = 'fa-rotate-left text-rose-600';
-                } else if ((log.action || '').toLowerCase().includes('submit')) {
-                    iconClass = 'fa-upload text-blue-600';
-                } else if ((log.action || '').toLowerCase().includes('forward')) {
-                    iconClass = 'fa-share text-indigo-600';
-                }
-
-                item.innerHTML = `
-                    <div style="font-size: 18px; margin-top: 2px;">
-                        <i class="fas ${iconClass}"></i>
-                    </div>
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                            <span style="font-weight: 700; color: #1e293b; font-size: 13px;">
-                                ${log.action} &bull; <span style="font-weight: 600; color: #475569;">${log.actor_name}</span> ${log.actor_role ? '(' + log.actor_role + ')' : ''}
-                            </span>
-                            <span style="font-size: 11px; color: #94a3b8;">${log.created_at}</span>
-                        </div>
-                        <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                            Resulting Status: <strong style="color: #334155;">${log.status || 'N/A'}</strong>
-                        </div>
-                        ${log.remarks ? `
-                            <div style="margin-top: 6px; padding: 6px 12px; background: #fff; border-left: 3px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #334155; font-style: italic;">
-                                "${log.remarks}"
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-                historyContainer.appendChild(item);
-            });
-        }
-
-        // Action Decision Area
-        const actionForm = document.getElementById('bm-action-form');
-        const actionReadonly = document.getElementById('bm-action-readonly');
-        const remarksInput = document.getElementById('bm-remarks-input');
-        remarksInput.value = '';
-
-        if (data.can_approve || data.can_return) {
-            actionForm.style.display = 'block';
-            actionReadonly.style.display = 'none';
-
-            const approveBtn = document.getElementById('bm-btn-approve');
-            const returnBtn = document.getElementById('bm-btn-return');
-            const approveLabel = document.getElementById('bm-btn-approve-label');
-
-            approveBtn.style.display = data.can_approve ? 'inline-flex' : 'none';
-            returnBtn.style.display = data.can_return ? 'inline-flex' : 'none';
-            approveLabel.textContent = data.approval_action_label || 'Approve';
-        } else {
-            actionForm.style.display = 'none';
-            actionReadonly.style.display = 'block';
-            document.getElementById('bm-readonly-status').textContent = batch.status;
-        }
+        updateSelectedProjectsCount();
 
         // Show content, hide loading
         document.getElementById('bm-loading').style.display = 'none';
@@ -2621,37 +3390,244 @@
         });
     }
 
-    function submitBatchDecision(action) {
-        if (!currentBatchCode) return;
+    let currentPendingDocAction = '';
 
-        const remarks = (document.getElementById('bm-remarks-input').value || '').trim();
+    function handleRemarksInput(el) {
+        if ((el?.value || '').trim().length > 0) {
+            const errorMsgEl = document.getElementById('bm-remarks-error-msg');
+            if (errorMsgEl) errorMsgEl.style.display = 'none';
+            if (el) el.style.borderColor = '#cbd5e1';
+        }
+    }
+
+    function openDocumentRemarksModal(action) {
+        if (!currentBatchCode) {
+            alert('No active batch selected.');
+            return;
+        }
+        if (!selectedBatchDocumentKey) {
+            alert('Please select a document from the left list first.');
+            return;
+        }
+
+        const doc = (currentBatchData?.batch?.documents || []).find(item => item.key === selectedBatchDocumentKey);
+        const docLabel = doc?.label || doc?.field_name || 'Selected Document';
+        const selectedProjects = getSelectedBatchProjects(selectedBatchDocumentKey);
+
+        if (!selectedProjects.length) {
+            alert(`Please select at least one project for "${docLabel}".`);
+            return;
+        }
+
+        currentPendingDocAction = action;
+
+        const modal = document.getElementById('modal-batch-document-remarks');
+        const iconBox = document.getElementById('bm-remarks-icon-box');
+        const iconEl = document.getElementById('bm-remarks-icon');
+        const titleEl = document.getElementById('bm-remarks-modal-title');
+        const subtitleEl = document.getElementById('bm-remarks-modal-sub');
+        const docTitleEl = document.getElementById('bm-modal-doc-title');
+        const docCatEl = document.getElementById('bm-modal-doc-category');
+        const docIcon = document.getElementById('bm-modal-doc-icon');
+        const docFileEl = document.getElementById('bm-modal-doc-filename');
+        const docFileIcon = document.getElementById('bm-modal-file-icon');
+        const selectedCountEl = document.getElementById('bm-modal-selected-count');
+        const contextBox = document.getElementById('bm-remarks-context-box');
+        const contextIcon = document.getElementById('bm-remarks-context-icon');
+        const contextText = document.getElementById('bm-remarks-context-text');
+        const badgeEl = document.getElementById('bm-remarks-requirement-badge');
+        const textareaEl = document.getElementById('bm-modal-remarks-textarea');
+        const errorMsgEl = document.getElementById('bm-remarks-error-msg');
+        const confirmBtn = document.getElementById('bm-btn-confirm-remarks-action');
+        const confirmIcon = document.getElementById('bm-confirm-btn-icon');
+        const confirmText = document.getElementById('bm-confirm-btn-text');
+
+        if (docTitleEl) docTitleEl.textContent = docLabel;
+        if (docCatEl) docCatEl.textContent = doc?.category || doc?.section || 'Batch Document';
+        
+        const fileName = doc?.file_name || (doc?.is_link ? (doc?.url || 'External Link') : (doc?.filename || doc?.file_path || 'Attached File'));
+        if (docFileEl) {
+            docFileEl.textContent = fileName;
+            docFileEl.title = fileName;
+        }
+
+        if (docIcon) {
+            let docIconClass = 'fas fa-file-alt';
+            if (doc?.is_link) {
+                docIconClass = 'fas fa-link';
+            } else if (doc?.section === 'Written Notices' || (doc?.type && doc.type.startsWith('written-notice'))) {
+                docIconClass = 'fas fa-envelope-open-text';
+            } else if (doc?.type === 'mov' || (doc?.section && doc.section.includes('MOV'))) {
+                docIconClass = 'fas fa-folder-open';
+            } else if (doc?.type === 'fdp' || (doc?.section && doc.section.includes('FDP'))) {
+                docIconClass = 'fas fa-file-contract';
+            } else if ((fileName || '').toLowerCase().endsWith('.pdf')) {
+                docIconClass = 'fas fa-file-pdf';
+            }
+            docIcon.className = docIconClass;
+        }
+
+        if (docFileIcon) {
+            if (doc?.is_link) {
+                docFileIcon.className = 'fas fa-external-link-alt';
+                docFileIcon.style.color = '#2563eb';
+            } else if ((fileName || '').toLowerCase().endsWith('.pdf')) {
+                docFileIcon.className = 'fas fa-file-pdf';
+                docFileIcon.style.color = '#ef4444';
+            } else {
+                docFileIcon.className = 'fas fa-paperclip';
+                docFileIcon.style.color = '#64748b';
+            }
+        }
+
+        if (selectedCountEl) {
+            selectedCountEl.innerHTML = `<i class="fas fa-layer-group"></i> <span>${selectedProjects.length} Project${selectedProjects.length === 1 ? '' : 's'}</span>`;
+        }
+
+        if (errorMsgEl) errorMsgEl.style.display = 'none';
+        if (textareaEl) {
+            textareaEl.value = '';
+            textareaEl.style.borderColor = '#cbd5e1';
+            textareaEl.oninput = () => handleRemarksInput(textareaEl);
+        }
+
+        if (action === 'approve') {
+            if (iconBox) {
+                iconBox.style.background = '#dcfce7';
+                iconBox.style.color = '#15803d';
+                iconBox.style.border = '1px solid #bbf7d0';
+            }
+            if (iconEl) iconEl.className = 'fas fa-check-circle';
+            if (titleEl) titleEl.textContent = 'Approve Document';
+            if (subtitleEl) subtitleEl.textContent = `Review remarks & confirm approval for ${selectedProjects.length} selected project(s)`;
+            if (badgeEl) {
+                badgeEl.textContent = 'Optional';
+                badgeEl.style.background = '#f1f5f9';
+                badgeEl.style.color = '#64748b';
+            }
+            if (contextBox) {
+                contextBox.style.background = '#f0fdf4';
+                contextBox.style.border = '1px solid #bbf7d0';
+                contextBox.style.color = '#166534';
+            }
+            if (contextIcon) {
+                contextIcon.className = 'fas fa-shield-alt';
+                contextIcon.style.color = '#16a34a';
+            }
+            if (contextText) {
+                contextText.innerHTML = `This document will be saved and tagged as <strong>approved</strong> in each project's individual FUR profile for the <strong>${selectedProjects.length} selected project(s)</strong>, capturing upload & approver timestamps. It will then be removed from this review list.`;
+            }
+            if (textareaEl) {
+                textareaEl.placeholder = 'Add any notes, observations, or instructions for this approval (optional)...';
+            }
+            if (confirmBtn) {
+                confirmBtn.className = 'is-approve';
+                confirmBtn.style.background = '#16a34a';
+                confirmBtn.style.backgroundImage = 'linear-gradient(180deg, #22c55e 0%, #16a34a 100%)';
+                confirmBtn.style.boxShadow = '0 2px 8px rgba(22, 163, 74, 0.35)';
+            }
+            if (confirmIcon) confirmIcon.className = 'fas fa-check-circle';
+            if (confirmText) confirmText.textContent = 'Confirm Approval';
+        } else {
+            if (iconBox) {
+                iconBox.style.background = '#fee2e2';
+                iconBox.style.color = '#b91c1c';
+                iconBox.style.border = '1px solid #fecaca';
+            }
+            if (iconEl) iconEl.className = 'fas fa-undo';
+            if (titleEl) titleEl.textContent = 'Return Document for Revision';
+            if (subtitleEl) subtitleEl.textContent = `Specify required corrections for ${selectedProjects.length} selected project(s)`;
+            if (badgeEl) {
+                badgeEl.textContent = 'Required';
+                badgeEl.style.background = '#fee2e2';
+                badgeEl.style.color = '#b91c1c';
+            }
+            if (contextBox) {
+                contextBox.style.background = '#fef2f2';
+                contextBox.style.border = '1px solid #fecaca';
+                contextBox.style.color = '#991b1b';
+            }
+            if (contextIcon) {
+                contextIcon.className = 'fas fa-exclamation-triangle';
+                contextIcon.style.color = '#dc2626';
+            }
+            if (contextText) {
+                contextText.innerHTML = `This document will be marked as <strong>returned for revision</strong> for the <strong>${selectedProjects.length} selected project(s)</strong>. The encoder will receive your remarks to update and resubmit.`;
+            }
+            if (textareaEl) {
+                textareaEl.placeholder = 'Enter remarks detailing why this document is returned and required corrections...';
+            }
+            if (confirmBtn) {
+                confirmBtn.className = 'is-return';
+                confirmBtn.style.background = '#dc2626';
+                confirmBtn.style.backgroundImage = 'linear-gradient(180deg, #ef4444 0%, #dc2626 100%)';
+                confirmBtn.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.35)';
+            }
+            if (confirmIcon) confirmIcon.className = 'fas fa-undo';
+            if (confirmText) confirmText.textContent = 'Confirm Return';
+        }
+
+        if (modal) {
+            modal.style.display = 'flex';
+            setTimeout(() => textareaEl?.focus(), 60);
+        }
+    }
+
+    function closeDocumentRemarksModal() {
+        const modal = document.getElementById('modal-batch-document-remarks');
+        if (modal) modal.style.display = 'none';
+        currentPendingDocAction = '';
+    }
+
+    function closeDocumentRemarksModalOnBackdrop(event) {
+        if (event.target === event.currentTarget) {
+            closeDocumentRemarksModal();
+        }
+    }
+
+    function confirmBatchDocumentAction() {
+        if (!currentPendingDocAction || !currentBatchCode || !selectedBatchDocumentKey) {
+            closeDocumentRemarksModal();
+            return;
+        }
+
+        const action = currentPendingDocAction;
+        const doc = (currentBatchData?.batch?.documents || []).find(item => item.key === selectedBatchDocumentKey);
+        const docLabel = doc?.label || doc?.field_name || 'Selected Document';
+        const selectedProjects = getSelectedBatchProjects(selectedBatchDocumentKey);
+
+        if (!selectedProjects.length) {
+            alert(`Please select at least one project for "${docLabel}".`);
+            closeDocumentRemarksModal();
+            return;
+        }
+
+        const textareaEl = document.getElementById('bm-modal-remarks-textarea');
+        const remarks = (textareaEl?.value || '').trim();
+        const errorMsgEl = document.getElementById('bm-remarks-error-msg');
 
         if (action === 'return' && !remarks) {
-            alert('Remarks are required when returning a batch submission for revision.');
-            document.getElementById('bm-remarks-input').focus();
+            if (errorMsgEl) errorMsgEl.style.display = 'flex';
+            if (textareaEl) {
+                textareaEl.style.borderColor = '#dc2626';
+                textareaEl.focus();
+            }
             return;
         }
 
-        const isApprove = action === 'approve';
-        const confirmMsg = isApprove
-            ? `Are you sure you want to approve batch submission ${currentBatchCode}?`
-            : `Are you sure you want to return batch submission ${currentBatchCode} for revision?`;
+        const confirmBtn = document.getElementById('bm-btn-confirm-remarks-action');
+        const confirmIcon = document.getElementById('bm-confirm-btn-icon');
+        const confirmText = document.getElementById('bm-confirm-btn-text');
+        const origIconClass = confirmIcon?.className || '';
+        const origText = confirmText?.textContent || '';
 
-        if (!confirm(confirmMsg)) {
-            return;
-        }
+        if (confirmBtn) confirmBtn.disabled = true;
+        if (confirmIcon) confirmIcon.className = 'fas fa-spinner fa-spin';
+        if (confirmText) confirmText.textContent = 'Processing...';
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
-        const endpoint = isApprove
-            ? `/fund-utilization/batch-approvals/${encodeURIComponent(currentBatchCode)}/approve`
-            : `/fund-utilization/batch-approvals/${encodeURIComponent(currentBatchCode)}/return`;
 
-        const approveBtn = document.getElementById('bm-btn-approve');
-        const returnBtn = document.getElementById('bm-btn-return');
-        approveBtn.disabled = true;
-        returnBtn.disabled = true;
-
-        fetch(endpoint, {
+        fetch(`/fund-utilization/batch-approvals/${encodeURIComponent(currentBatchCode)}/document-validation`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2659,23 +3635,94 @@
                 'X-CSRF-TOKEN': csrfToken,
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify({ remarks: remarks })
+            body: JSON.stringify({
+                action: action,
+                document_key: selectedBatchDocumentKey,
+                project_codes: selectedProjects,
+                remarks: remarks
+            })
         })
         .then(res => res.json())
-        .then(result => {
-            if (result.success) {
-                alert(result.message || 'Action executed successfully.');
-                closeBatchApprovalModal();
+        .then(data => {
+            if (confirmBtn) confirmBtn.disabled = false;
+            if (confirmIcon) confirmIcon.className = origIconClass;
+            if (confirmText) confirmText.textContent = origText;
+
+            if (!data.success) {
+                alert(data.message || 'An error occurred while processing the document.');
+                return;
+            }
+
+            closeDocumentRemarksModal();
+            const documentKey = selectedBatchDocumentKey;
+
+            if (action === 'approve') {
+                // Animate and remove the approved document card from the left panel
+                const card = document.querySelector(`#bm-docs-container [data-document-key="${documentKey}"]`);
+                if (card) {
+                    card.style.transition = 'all 0.25s ease';
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(-15px)';
+                    setTimeout(() => {
+                        card.remove();
+
+                        // Remove from in-memory batch documents list
+                        if (currentBatchData?.batch?.documents) {
+                            currentBatchData.batch.documents = currentBatchData.batch.documents.filter(d => d.key !== documentKey);
+                        }
+                        delete selectedBatchProjectsByDocument[documentKey];
+                        saveBatchReviewState();
+
+                        const remainingCards = document.querySelectorAll('#bm-docs-container [data-document-key]');
+                        const docsCountEl = document.getElementById('bm-docs-count');
+                        if (docsCountEl) {
+                            docsCountEl.textContent = `${remainingCards.length} Document${remainingCards.length === 1 ? '' : 's'}`;
+                        }
+
+                        if (remainingCards.length > 0) {
+                            selectBatchDocument(remainingCards[0].dataset.documentKey);
+                        } else {
+                            selectedBatchDocumentKey = '';
+                            const docsContainer = document.getElementById('bm-docs-container');
+                            if (docsContainer) {
+                                docsContainer.innerHTML = `
+                                    <div style="text-align: center; padding: 26px 14px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; color: #166534;">
+                                        <i class="fas fa-check-circle" style="font-size: 30px; color: #16a34a; margin-bottom: 8px; display: block;"></i>
+                                        <div style="font-size: 14px; font-weight: 800;">All Documents Approved!</div>
+                                        <div style="font-size: 11px; color: #15803d; margin-top: 3px;">All batch documents have been validated and saved to individual FUR project profiles.</div>
+                                    </div>
+                                `;
+                            }
+                            const projectsBody = document.getElementById('bm-projects-body');
+                            if (projectsBody) {
+                                projectsBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #166534; font-weight: 700; padding: 28px;"><i class="fas fa-check-circle mr-1"></i> All documents in this batch have been processed.</td></tr>';
+                            }
+                            const hintEl = document.getElementById('bm-selected-document-hint');
+                            if (hintEl) hintEl.textContent = 'All documents processed.';
+                            const actionBar = document.getElementById('bm-document-action-bar');
+                            if (actionBar) actionBar.style.display = 'none';
+                        }
+                    }, 250);
+                }
+
+                alert(data.message || `Document "${docLabel}" approved and saved to individual FUR project profiles.`);
             } else {
-                alert(result.message || 'An error occurred during submission.');
-                approveBtn.disabled = false;
-                returnBtn.disabled = false;
+                // Returned: update statuses and re-render
+                if (doc && data.statuses) {
+                    doc.statuses = data.statuses;
+                }
+                selectedBatchProjectsByDocument[documentKey] = [];
+                saveBatchReviewState();
+                updateBatchDocumentIndicators();
+                renderBatchProjects();
+                alert(data.message || `Document "${docLabel}" returned.`);
             }
         })
         .catch(err => {
+            if (confirmBtn) confirmBtn.disabled = false;
+            if (confirmIcon) confirmIcon.className = origIconClass;
+            if (confirmText) confirmText.textContent = origText;
             alert(err.message || 'Network error occurred while submitting decision.');
-            approveBtn.disabled = false;
-            returnBtn.disabled = false;
         });
     }
 
@@ -2683,8 +3730,9 @@
     document.addEventListener('DOMContentLoaded', function () {
         const urlParams = new URLSearchParams(window.location.search);
         const openBatch = urlParams.get('open_batch');
-        if (openBatch) {
-            openBatchApprovalModal(openBatch);
+        const savedState = readBatchReviewState();
+        if (openBatch || savedState?.batchCode) {
+            openBatchApprovalModal(openBatch || savedState.batchCode);
         }
     });
 </script>
@@ -2764,11 +3812,33 @@
     // Close modals on Escape key
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
+            const remarksModal = document.getElementById('modal-batch-document-remarks');
+            if (remarksModal && remarksModal.style.display === 'flex') {
+                closeDocumentRemarksModal();
+                event.stopPropagation();
+                return;
+            }
+
+            const batchModal = document.getElementById('modal-batch-review-validate');
+            if (batchModal && batchModal.style.display === 'flex') {
+                closeBatchApprovalModal();
+                return;
+            }
+
             const openModals = document.querySelectorAll('.task-modal-backdrop[style*="display: flex"]');
             openModals.forEach(modal => {
                 closeTaskModal(modal.id);
             });
         }
     });
+
+    function toggleBatchProjectSelection(selectAll) {
+        document.querySelectorAll('#bm-projects-body .bm-project-checkbox:not(:disabled)').forEach(input => {
+            input.checked = selectAll;
+            input.closest('tr').style.background = selectAll ? '#f0fdf4' : '#fff';
+        });
+        saveSelectedBatchProjects();
+    }
+
 </script>
 @endsection

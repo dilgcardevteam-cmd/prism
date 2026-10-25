@@ -793,7 +793,7 @@
     <!-- Reports Card -->
     <div class="report-table-card" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
         <div class="report-table-scroll">
-            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; min-width: 1600px;">
+            <table id="fund-utilization-table" style="width: 100%; border-collapse: collapse; table-layout: fixed;">
             <thead>
                 <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
                     <th style="padding: 12px; text-align: left; color: #374151; font-weight: 600; font-size: 14px; width: 220px; max-width: 220px;">Project Details</th>
@@ -2103,6 +2103,8 @@
         const FUND_UTILIZATION_BARANGAY_MAP = @json($cityBarangayMap ?? []);
         const BATCH_UPLOAD_SELECTION_STORAGE_KEY = 'fund-utilization-batch-upload-selected-projects';
         const BATCH_UPLOAD_MODAL_OPEN_STORAGE_KEY = 'fund-utilization-batch-upload-modal-open';
+        const BATCH_UPLOAD_STATE_STORAGE_KEY = 'fund-utilization-batch-upload-state';
+        const BATCH_UPLOAD_CATEGORY_DOCUMENT_STORE_KEY = 'category-documents';
         const BATCH_UPLOAD_DOCUMENT_DB_NAME = 'fund-utilization-batch-upload';
         const BATCH_UPLOAD_DOCUMENT_STORE_NAME = 'modal-state';
         const BATCH_UPLOAD_DOCUMENT_STORE_KEY = 'selected-documents';
@@ -2139,6 +2141,7 @@
             },
             previewState: {
                 fileKey: '',
+                temporaryObjectUrl: '',
             },
             submitRequest: {
                 isSubmitting: false,
@@ -2170,6 +2173,20 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function showBatchUploadToast(message, type = 'info', duration = 4200) {
+            const normalizedMessage = String(message || 'An unexpected error occurred.');
+            if (window.AppUI && typeof window.AppUI.toast === 'function') {
+                window.AppUI.toast(normalizedMessage, type, duration);
+                return;
+            }
+
+            const toast = document.createElement('div');
+            toast.textContent = normalizedMessage;
+            toast.style.cssText = 'position:fixed;top:24px;right:24px;z-index:3000;max-width:360px;padding:12px 16px;border-radius:8px;background:#991b1b;color:#fff;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(15,23,42,.2);';
+            document.body.appendChild(toast);
+            window.setTimeout(() => toast.remove(), duration);
+        }
+
         function readBatchUploadModalOpenState() {
             try {
                 return window.sessionStorage.getItem(BATCH_UPLOAD_MODAL_OPEN_STORAGE_KEY) === '1';
@@ -2187,6 +2204,37 @@
                 }
             } catch (error) {
                 // Ignore browser storage failures and keep the modal usable.
+            }
+        }
+
+        function readBatchUploadState() {
+            try {
+                const value = window.sessionStorage.getItem(BATCH_UPLOAD_STATE_STORAGE_KEY);
+                const state = value ? JSON.parse(value) : null;
+                return state && typeof state === 'object' ? state : null;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function writeBatchUploadState() {
+            try {
+                const quarter = document.getElementById('batchUploadCategoryQuarter')?.value || '';
+                const postingLink = document.getElementById('batchUploadCategoryPostingLink')?.value || '';
+                window.sessionStorage.setItem(BATCH_UPLOAD_STATE_STORAGE_KEY, JSON.stringify({
+                    uploadMode: batchUploadModalCache.uploadMode || '',
+                    categoryOpen: batchUploadModalCache.uploadMode === 'category',
+                    quarter,
+                    postingLink,
+                }));
+            } catch (error) {
+            }
+        }
+
+        function clearBatchUploadState() {
+            try {
+                window.sessionStorage.removeItem(BATCH_UPLOAD_STATE_STORAGE_KEY);
+            } catch (error) {
             }
         }
 
@@ -2283,7 +2331,7 @@
             return persistence.queue;
         }
 
-        async function readPersistedBatchUploadDocuments() {
+        async function readPersistedBatchUploadDocuments(storeKey = BATCH_UPLOAD_DOCUMENT_STORE_KEY) {
             const database = await getBatchUploadDocumentDatabase();
             if (!database) {
                 return [];
@@ -2293,7 +2341,7 @@
                 try {
                     const transaction = database.transaction(BATCH_UPLOAD_DOCUMENT_STORE_NAME, 'readonly');
                     const store = transaction.objectStore(BATCH_UPLOAD_DOCUMENT_STORE_NAME);
-                    const request = store.get(BATCH_UPLOAD_DOCUMENT_STORE_KEY);
+                    const request = store.get(storeKey);
                     let settled = false;
                     const finalize = (value) => {
                         if (settled) {
@@ -2313,7 +2361,7 @@
             });
         }
 
-        async function writePersistedBatchUploadDocuments(records) {
+        async function writePersistedBatchUploadDocuments(records, storeKey = BATCH_UPLOAD_DOCUMENT_STORE_KEY) {
             const database = await getBatchUploadDocumentDatabase();
             if (!database) {
                 return;
@@ -2324,8 +2372,8 @@
                     const transaction = database.transaction(BATCH_UPLOAD_DOCUMENT_STORE_NAME, 'readwrite');
                     const store = transaction.objectStore(BATCH_UPLOAD_DOCUMENT_STORE_NAME);
                     const request = records.length > 0
-                        ? store.put(records, BATCH_UPLOAD_DOCUMENT_STORE_KEY)
-                        : store.delete(BATCH_UPLOAD_DOCUMENT_STORE_KEY);
+                        ? store.put(records, storeKey)
+                        : store.delete(storeKey);
                     let settled = false;
                     const finalize = () => {
                         if (settled) {
@@ -2357,6 +2405,47 @@
             }));
 
             return queueBatchUploadDocumentPersistence(() => writePersistedBatchUploadDocuments(snapshot));
+        }
+
+        function persistBatchUploadCategoryDocuments() {
+            const snapshot = Array.from(document.querySelectorAll('.fur-batch-category-file-input'))
+                .map((inputElement) => {
+                    const file = inputElement.files?.[0];
+                    if (!file) {
+                        return null;
+                    }
+
+                    return {
+                        field: inputElement.id,
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                        lastModified: file.lastModified,
+                        blob: file,
+                    };
+                })
+                .filter(Boolean);
+
+            return queueBatchUploadDocumentPersistence(() => writePersistedBatchUploadDocuments(
+                snapshot,
+                BATCH_UPLOAD_CATEGORY_DOCUMENT_STORE_KEY
+            ));
+        }
+
+        async function restorePersistedBatchUploadCategoryDocuments() {
+            const records = await readPersistedBatchUploadDocuments(BATCH_UPLOAD_CATEGORY_DOCUMENT_STORE_KEY);
+            return records.reduce((files, record) => {
+                if (record?.field && record.blob instanceof Blob) {
+                    try {
+                        files[record.field] = new File([record.blob], record.name, {
+                            type: record.type || record.blob.type || '',
+                            lastModified: Number(record.lastModified) || Date.now(),
+                        });
+                    } catch (error) {
+                    }
+                }
+                return files;
+            }, {});
         }
 
         async function restorePersistedBatchUploadDocuments() {
@@ -2422,6 +2511,7 @@
 
             initializeBatchUploadIndividualCategoryModal();
             updateBatchUploadIndividualCategoryPreparedUi();
+            writeBatchUploadState();
 
             if (filterForm) {
                 const hasActiveFilters = Boolean(@json(!empty($activeFilters['search']) || !empty($activeFilters['program']) || !empty($activeFilters['funding_year']) || !empty($activeFilters['project_status']) || !empty($activeFilters['province'])));
@@ -2446,6 +2536,7 @@
             modal.setAttribute('aria-hidden', 'true');
             document.body.classList.remove('fur-batch-modal-open');
             writeBatchUploadModalOpenState(false);
+            clearBatchUploadState();
         }
 
         function setBatchUploadDocumentMode(mode) {
@@ -2479,6 +2570,7 @@
             });
 
             updateBatchUploadIndividualCategoryPreparedUi();
+            writeBatchUploadState();
         }
 
         function resetBatchUploadDocumentState() {
@@ -2521,6 +2613,7 @@
             batchUploadDocumentPanel?.classList.remove('has-files');
             persistBatchUploadDocuments([]);
             setBatchUploadDocumentMode('');
+            clearBatchUploadState();
         }
 
         function resetBatchUploadFilters() {
@@ -2680,6 +2773,10 @@
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             batchUploadModalCache.previewState.fileKey = '';
+            if (batchUploadModalCache.previewState.temporaryObjectUrl) {
+                URL.revokeObjectURL(batchUploadModalCache.previewState.temporaryObjectUrl);
+                batchUploadModalCache.previewState.temporaryObjectUrl = '';
+            }
 
             if (previewContent) {
                 previewContent.innerHTML = '';
@@ -2696,6 +2793,12 @@
             const previewName = document.getElementById('batchUploadDocumentPreviewName');
             if (!modal || !previewContent || !file || !objectUrl) {
                 return;
+            }
+
+            if (batchUploadModalCache.previewState.temporaryObjectUrl
+                && batchUploadModalCache.previewState.temporaryObjectUrl !== objectUrl) {
+                URL.revokeObjectURL(batchUploadModalCache.previewState.temporaryObjectUrl);
+                batchUploadModalCache.previewState.temporaryObjectUrl = '';
             }
 
             const normalizedType = String(file.type || '').toLowerCase();
@@ -3057,22 +3160,44 @@
                 return;
             }
 
+            let fileButton = inputElement.parentElement?.querySelector('.fur-batch-category-file-button');
+            if (!fileButton && inputElement.id) {
+                fileButton = document.createElement('label');
+                fileButton.className = 'fur-batch-category-file-button';
+                fileButton.htmlFor = inputElement.id;
+                inputElement.parentElement?.insertBefore(fileButton, inputElement);
+            }
+
             const targetId = inputElement.dataset.batchCategoryFileNameTarget || '';
             const output = targetId ? document.getElementById(targetId) : null;
             if (!output) {
                 return;
             }
 
-            const escapeBatchUploadHtml = (value) => String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-
             const file = inputElement.files && inputElement.files[0] ? inputElement.files[0] : null;
+            if (fileButton) {
+                fileButton.textContent = file ? 'Replace File' : 'Choose File';
+            }
+
             if (file) {
-                output.innerHTML = `<i class="fas fa-check-circle" style="color: #10b981; margin-right: 4px;"></i><span style="font-weight: 700; color: #047857;">${escapeBatchUploadHtml(file.name)}</span> <span style="color: #64748b; font-size: 10px; font-weight: normal;">(${formatBatchUploadDocumentSize(file.size)})</span>`;
+                output.innerHTML = `
+                    <i class="fas fa-check-circle" style="color: #10b981; margin-right: 4px;"></i>
+                    <button type="button" class="fur-batch-category-view-file">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                        View File
+                    </button>
+                    <span style="color: #64748b; font-size: 10px; font-weight: normal;">
+                        (${formatBatchUploadDocumentSize(file.size)})
+                    </span>
+                `;
+                const viewButton = output.querySelector('.fur-batch-category-view-file');
+                if (viewButton) {
+                    viewButton.addEventListener('click', () => {
+                        const objectUrl = URL.createObjectURL(file);
+                        batchUploadModalCache.previewState.temporaryObjectUrl = objectUrl;
+                        openBatchUploadDocumentPreviewModal(file, objectUrl);
+                    });
+                }
                 output.classList.add('has-file');
             } else {
                 output.textContent = 'No file selected.';
@@ -3098,6 +3223,7 @@
 
             syncBatchUploadIndividualCategoryDocumentsFromInputs();
             updateBatchUploadIndividualCategoryPreparedUi();
+            persistBatchUploadCategoryDocuments();
         }
 
         function resetBatchUploadIndividualCategoryModal() {
@@ -3119,6 +3245,7 @@
                 inputElement.value = '';
                 syncBatchUploadIndividualCategoryFileName(inputElement);
             });
+            persistBatchUploadCategoryDocuments();
 
             document.querySelectorAll('.fur-batch-category-document-card, .fur-batch-category-written-card').forEach((card) => {
                 card.classList.remove('has-attached-file');
@@ -3167,18 +3294,18 @@
             const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
 
             if (!hasPreparedIndividualCategoryDocuments()) {
-                alert('Please upload or provide at least one individual document first.');
+                showBatchUploadToast('Please upload or provide at least one individual document first.', 'warning');
                 return;
             }
 
             if (preparedState.quarter === '') {
                 document.getElementById('batchUploadCategoryQuarter')?.focus();
-                alert('Please select a quarter first.');
+                showBatchUploadToast('Please select a quarter first.', 'warning');
                 return;
             }
 
             if (selectedProjectCodes.length === 0) {
-                alert('Please select at least one project first.');
+                showBatchUploadToast('Please select at least one project first.', 'warning');
                 return;
             }
 
@@ -3221,10 +3348,10 @@
 
                 resetBatchUploadModalState();
                 closeBatchUploadModal();
-                alert(payload?.message || 'Individual documents uploaded successfully.');
+                showBatchUploadToast(payload?.message || 'Individual documents uploaded successfully.', 'success');
                 window.location.reload();
             } catch (error) {
-                alert(error?.message || 'Individual document batch upload failed. Please try again.');
+                showBatchUploadToast(error?.message || 'Individual document batch upload failed. Please try again.', 'error');
             } finally {
                 batchUploadModalCache.individualSubmitRequest.isSubmitting = false;
                 if (submitButton) {
@@ -3247,6 +3374,7 @@
                 quarterSelect.addEventListener('change', () => {
                     syncBatchUploadIndividualCategoryDocumentsFromInputs();
                     updateBatchUploadIndividualCategoryPreparedUi();
+                    writeBatchUploadState();
                 });
             }
 
@@ -3270,6 +3398,7 @@
                     syncPostingBadge();
                     syncBatchUploadIndividualCategoryDocumentsFromInputs();
                     updateBatchUploadIndividualCategoryPreparedUi();
+                    writeBatchUploadState();
                 });
                 syncPostingBadge();
             }
@@ -3282,6 +3411,7 @@
                 inputElement.dataset.batchCategoryFileBound = '1';
                 inputElement.addEventListener('change', () => {
                     syncBatchUploadIndividualCategoryFileName(inputElement);
+                    persistBatchUploadCategoryDocuments();
                 });
                 syncBatchUploadIndividualCategoryFileName(inputElement);
             });
@@ -3418,19 +3548,19 @@
             }
 
             if (selectedFiles.length === 0) {
-                alert('Please select at least one PDF document first.');
+                showBatchUploadToast('Please select at least one PDF document first.', 'warning');
                 closeBatchUploadSubmitConfirmModal();
                 return;
             }
 
             if (selectedFiles.some((file) => !isValidBatchUploadDocumentFile(file))) {
-                alert('Only PDF files up to 50 MB can be submitted for batch upload.');
+                showBatchUploadToast('Only PDF files up to 50 MB can be submitted for batch upload.', 'warning');
                 closeBatchUploadSubmitConfirmModal();
                 return;
             }
 
             if (selectedProjectCodes.length === 0) {
-                alert('Please select at least one project first.');
+                showBatchUploadToast('Please select at least one project first.', 'warning');
                 closeBatchUploadSubmitConfirmModal();
                 return;
             }
@@ -3470,10 +3600,10 @@
                 resetBatchUploadModalState();
                 await persistBatchUploadDocuments([]);
                 closeBatchUploadModal();
-                alert(payload?.message || 'Batch upload completed successfully.');
+                showBatchUploadToast(payload?.message || 'Batch upload completed successfully.', 'success');
                 window.location.reload();
             } catch (error) {
-                alert(error?.message || 'Batch upload failed. Please try again.');
+                showBatchUploadToast(error?.message || 'Batch upload failed. Please try again.', 'error');
             } finally {
                 batchUploadModalCache.submitRequest.isSubmitting = false;
                 if (confirmButton) {
@@ -4661,7 +4791,7 @@
             const quarter = document.getElementById('quarter').value;
 
             if (!quarter) {
-                alert('Please select a quarter.');
+                showBatchUploadToast('Please select a quarter.', 'warning');
                 return;
             }
 
@@ -4885,7 +5015,7 @@
 
                     if (rejectedFiles.length > 0) {
                         const rejectedFileNames = rejectedFiles.map((file) => file.name).join(', ');
-                        alert(`Only PDF files up to 50 MB are allowed. Rejected: ${rejectedFileNames}`);
+                        showBatchUploadToast(`Only PDF files up to 50 MB are allowed. Rejected: ${rejectedFileNames}`, 'warning');
                     }
 
                     if (acceptedFiles.length === 0) {
@@ -5016,7 +5146,7 @@
                         return;
                     }
 
-                    closeBatchUploadModal();
+                    resetAndCloseBatchUploadModal();
                 }
             });
 
@@ -5039,6 +5169,38 @@
             initializeBatchUploadDocumentPreviewModal();
             initializeBatchUploadIndividualCategoryModal();
             initializeBatchUploadSubmitConfirmModal();
+
+            restorePersistedBatchUploadCategoryDocuments().then((filesByField) => {
+                Object.entries(filesByField).forEach(([fieldId, file]) => {
+                    const inputElement = document.getElementById(fieldId);
+                    if (!inputElement || typeof DataTransfer !== 'function') {
+                        return;
+                    }
+
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    inputElement.files = dataTransfer.files;
+                    syncBatchUploadIndividualCategoryFileName(inputElement);
+                });
+                updateBatchUploadIndividualCategoryPreparedUi();
+            });
+
+            const persistedBatchUploadState = readBatchUploadState();
+            if (persistedBatchUploadState) {
+                const quarterSelect = document.getElementById('batchUploadCategoryQuarter');
+                const postingLinkInput = document.getElementById('batchUploadCategoryPostingLink');
+                if (quarterSelect) {
+                    quarterSelect.value = persistedBatchUploadState.quarter || '';
+                }
+                if (postingLinkInput) {
+                    postingLinkInput.value = persistedBatchUploadState.postingLink || '';
+                }
+                batchUploadModalCache.submitState.quarter = persistedBatchUploadState.quarter || '';
+                if (persistedBatchUploadState.categoryOpen || persistedBatchUploadState.uploadMode === 'category') {
+                    setBatchUploadDocumentMode('category');
+                }
+                updateBatchUploadIndividualCategoryPreparedUi();
+            }
 
             if (shouldAutoOpenBatchUploadModal || readBatchUploadModalOpenState()) {
                 openBatchUploadModal();
@@ -5381,13 +5543,148 @@
         }
 
         .report-table-scroll {
-            overflow-x: auto;
+            width: 100%;
+            overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
         }
 
         table td,
         table th {
             vertical-align: top;
+        }
+
+        #fund-utilization-table {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        #fund-utilization-table th,
+        #fund-utilization-table td {
+            min-width: 0 !important;
+            max-width: none !important;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        #fund-utilization-table th:nth-child(1),
+        #fund-utilization-table td:nth-child(1) {
+            width: 16%;
+        }
+
+        #fund-utilization-table th:nth-child(2),
+        #fund-utilization-table td:nth-child(2) {
+            width: 14%;
+        }
+
+        #fund-utilization-table th:nth-child(3),
+        #fund-utilization-table td:nth-child(3) {
+            width: 13%;
+        }
+
+        #fund-utilization-table th:nth-child(4),
+        #fund-utilization-table td:nth-child(4) {
+            width: 18%;
+        }
+
+        #fund-utilization-table th:nth-child(5),
+        #fund-utilization-table td:nth-child(5) {
+            width: 12%;
+        }
+
+        #fund-utilization-table th:nth-child(6),
+        #fund-utilization-table td:nth-child(6) {
+            width: 10%;
+        }
+
+        #fund-utilization-table th:nth-child(7),
+        #fund-utilization-table td:nth-child(7) {
+            width: 9%;
+        }
+
+        #fund-utilization-table th:nth-child(8),
+        #fund-utilization-table td:nth-child(8) {
+            width: 8%;
+        }
+
+        @media (max-width: 900px) {
+            .report-table-card {
+                padding: 16px !important;
+            }
+
+            #fund-utilization-table {
+                display: block;
+                table-layout: auto;
+            }
+
+            #fund-utilization-table thead {
+                display: none;
+            }
+
+            #fund-utilization-table tbody,
+            #fund-utilization-table tr,
+            #fund-utilization-table td {
+                display: block;
+                width: auto !important;
+            }
+
+            #fund-utilization-table tr {
+                margin-bottom: 14px;
+                padding: 8px;
+                border: 1px solid #e5e7eb;
+                border-radius: 10px;
+                box-sizing: border-box;
+            }
+
+            #fund-utilization-table td {
+                position: relative;
+                padding: 10px 10px 10px 38% !important;
+                border-bottom: 1px solid #e5e7eb;
+                min-height: 42px;
+                box-sizing: border-box;
+            }
+
+            #fund-utilization-table td:last-child {
+                border-bottom: none;
+            }
+
+            #fund-utilization-table td::before {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                width: 34%;
+                color: #374151;
+                font-size: 11px;
+                font-weight: 700;
+                line-height: 1.3;
+                text-transform: uppercase;
+                overflow-wrap: anywhere;
+            }
+
+            #fund-utilization-table td:nth-child(1)::before { content: 'Project Details'; }
+            #fund-utilization-table td:nth-child(2)::before { content: 'Location'; }
+            #fund-utilization-table td:nth-child(3)::before { content: 'Funding / Status'; }
+            #fund-utilization-table td:nth-child(4)::before { content: 'Validation / Progress'; }
+            #fund-utilization-table td:nth-child(5)::before { content: 'Approval Status'; }
+            #fund-utilization-table td:nth-child(6)::before { content: 'Date Submitted'; }
+            #fund-utilization-table td:nth-child(7)::before { content: 'Validation Level'; }
+            #fund-utilization-table td:nth-child(8)::before { content: 'Actions'; }
+        }
+
+        @media (max-width: 480px) {
+            .report-table-card {
+                padding: 10px !important;
+                border-radius: 8px !important;
+            }
+
+            #fund-utilization-table td {
+                padding-left: 36% !important;
+                font-size: 12px !important;
+            }
+
+            #fund-utilization-table td::before {
+                width: 32%;
+                font-size: 10px;
+            }
         }
 
         input[type="text"]:focus,
@@ -6931,6 +7228,43 @@
             box-sizing: border-box;
         }
 
+        .fur-batch-category-file-input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .fur-batch-category-file-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            max-width: 100%;
+            border: 1px solid #002C76;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            background: #002C76;
+            color: #ffffff;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .fur-batch-category-file-button:hover,
+        .fur-batch-category-file-button:focus-visible {
+            background: #1d4ed8;
+            color: #ffffff;
+            border-color: #1d4ed8;
+            outline: none;
+        }
+
         .fur-batch-category-file-input:hover {
             border-color: #002C76;
             background: #f8fafc;
@@ -6982,6 +7316,28 @@
             align-items: center;
             gap: 4px;
             margin-top: 5px;
+        }
+
+        .fur-batch-category-view-file {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid #047857;
+            border-radius: 6px;
+            padding: 4px 9px;
+            background: #047857;
+            color: #ffffff;
+            font-size: 11px;
+            font-style: normal;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .fur-batch-category-view-file:hover,
+        .fur-batch-category-view-file:focus-visible {
+            background: #065f46;
+            border-color: #065f46;
+            outline: none;
         }
 
         .fur-batch-category-written-recipient-shell {

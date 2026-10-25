@@ -14,6 +14,7 @@ class FURWrittenNotice extends Model
     protected $fillable = [
         'project_code',
         'quarter',
+        'batch_code',
         'secretary_dbm_path',
         'secretary_dilg_path',
         'speaker_house_path',
