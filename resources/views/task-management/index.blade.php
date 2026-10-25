@@ -549,6 +549,572 @@
         text-overflow: clip;
     }
 
+    /* ==========================================================================
+       FUND UTILIZATION REPORT - BATCH UPLOAD APPROVALS POOL (CAR REGIONAL)
+       ========================================================================== */
+    .task-modal-batch-wide {
+        max-width: 1280px !important;
+        width: 96vw !important;
+        border-radius: 20px;
+        box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.35);
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        overflow: hidden;
+    }
+
+    .task-modal-header-batch {
+        background: linear-gradient(135deg, #091e42 0%, #0f3460 45%, #0284c7 100%) !important;
+        color: #ffffff !important;
+        padding: 20px 28px !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .batch-header-main {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .batch-header-icon-box {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        flex-shrink: 0;
+    }
+
+    .batch-header-titles {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .batch-header-pill-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .batch-modal-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: -0.01em;
+        line-height: 1.25;
+    }
+
+    .batch-scope-badge-header {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(56, 189, 248, 0.22);
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        color: #e0f2fe;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 999px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+
+    .batch-scope-badge-header i {
+        color: #7dd3fc;
+        font-size: 10px;
+    }
+
+    .batch-modal-subtitle {
+        margin: 0;
+        font-size: 12px;
+        color: rgba(241, 245, 249, 0.85);
+        line-height: 1.4;
+    }
+
+    .task-modal-close-batch {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #ffffff !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .task-modal-close-batch:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: scale(1.05);
+    }
+
+    /* KPI Summary Strip */
+    .batch-pool-kpi-bar {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        padding: 14px 24px;
+    }
+
+    .batch-kpi-pill {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .batch-kpi-pill:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+    }
+
+    .batch-kpi-pill-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+
+    .batch-kpi-pill-icon.icon-blue { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .batch-kpi-pill-icon.icon-emerald { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .batch-kpi-pill-icon.icon-amber { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    .batch-kpi-pill-icon.icon-violet { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+
+    .batch-kpi-pill-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .batch-kpi-pill-num {
+        font-size: 17px;
+        font-weight: 800;
+        color: #0f172a;
+        line-height: 1.1;
+    }
+
+    .batch-kpi-pill-lbl {
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Modal Filter Bar Search */
+    .modal-filter-search-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 220px;
+        max-width: 360px;
+    }
+
+    .modal-filter-search-wrap i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-size: 13px;
+        pointer-events: none;
+    }
+
+    .modal-filter-search-wrap .modal-search-input {
+        width: 100%;
+        padding: 9px 12px 9px 36px;
+        font-size: 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 9px;
+        outline: none;
+        background: #ffffff;
+        color: #0f172a;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .modal-filter-search-wrap .modal-search-input:focus {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    /* Table Layout & Proportions */
+    .task-table-fund-utilization-batch {
+        table-layout: auto !important;
+        min-width: 1140px;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+
+    .task-table-fund-utilization-batch thead th {
+        background: #f1f5f9;
+        color: #475569;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 12px 14px;
+        border-bottom: 2px solid #e2e8f0;
+        white-space: nowrap;
+    }
+
+    .task-table-fund-utilization-batch tbody td {
+        padding: 13px 14px;
+        vertical-align: middle;
+        border-bottom: 1px solid #f1f5f9;
+        color: #334155;
+    }
+
+    .task-table-fund-utilization-batch tbody tr {
+        transition: background-color 0.15s ease;
+    }
+
+    .task-table-fund-utilization-batch tbody tr:hover {
+        background-color: #f8fafc;
+    }
+
+    /* Column Widths & Minimums */
+    .task-table-fund-utilization-batch th:nth-child(1),
+    .task-table-fund-utilization-batch td:nth-child(1) { width: 15%; min-width: 160px; }
+    .task-table-fund-utilization-batch th:nth-child(2),
+    .task-table-fund-utilization-batch td:nth-child(2) { width: 9%; min-width: 95px; }
+    .task-table-fund-utilization-batch th:nth-child(3),
+    .task-table-fund-utilization-batch td:nth-child(3) { width: 11%; min-width: 110px; }
+    .task-table-fund-utilization-batch th:nth-child(4),
+    .task-table-fund-utilization-batch td:nth-child(4) { width: 22%; min-width: 200px; }
+    .task-table-fund-utilization-batch th:nth-child(5),
+    .task-table-fund-utilization-batch td:nth-child(5) { width: 15%; min-width: 150px; }
+    .task-table-fund-utilization-batch th:nth-child(6),
+    .task-table-fund-utilization-batch td:nth-child(6) { width: 11%; min-width: 115px; }
+    .task-table-fund-utilization-batch th:nth-child(7),
+    .task-table-fund-utilization-batch td:nth-child(7) { width: 9%; min-width: 95px; }
+    .task-table-fund-utilization-batch th:nth-child(8),
+    .task-table-fund-utilization-batch td:nth-child(8) { width: 12%; min-width: 150px; text-align: center; }
+
+    /* Badge Components */
+    .batch-code-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        color: #1e293b;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 5px 9px;
+        border-radius: 7px;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+
+    .batch-code-pill i {
+        color: #0284c7;
+        font-size: 12px;
+    }
+
+    /* Quarter Tag */
+    .batch-quarter-tag {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-weight: 800;
+        font-size: 11px;
+        line-height: 1.15;
+        border-width: 1px;
+        border-style: solid;
+        min-width: 62px;
+    }
+
+    .batch-quarter-tag .q-label {
+        letter-spacing: 0.05em;
+    }
+
+    .batch-quarter-tag .q-year {
+        font-size: 9px;
+        font-weight: 700;
+        opacity: 0.85;
+    }
+
+    .batch-quarter-tag.q1 { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+    .batch-quarter-tag.q2 { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .batch-quarter-tag.q3 { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+    .batch-quarter-tag.q4 { background: #faf5ff; border-color: #e9d5ff; color: #7e22ce; }
+
+    /* Scope Chip */
+    .batch-scope-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #334155;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 5px 10px;
+        border-radius: 9999px;
+        white-space: nowrap;
+    }
+
+    .batch-scope-chip i {
+        color: #10b981;
+        font-size: 11px;
+    }
+
+    .batch-scope-chip strong {
+        color: #0f172a;
+        font-weight: 800;
+    }
+
+    /* Summary cell */
+    .batch-doc-summary {
+        max-width: 260px;
+    }
+
+    .batch-summary-text {
+        font-size: 12px;
+        font-weight: 600;
+        color: #1e293b;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .batch-returned-remarks {
+        font-size: 12px;
+        font-style: italic;
+        color: #b91c1c;
+        font-weight: 600;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* Uploader Wrap */
+    .batch-uploader-wrap {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+    .batch-uploader-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #0284c7;
+        font-size: 11px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #bae6fd;
+        flex-shrink: 0;
+    }
+
+    .batch-uploader-avatar.avatar-returned {
+        background: #fee2e2;
+        color: #dc2626;
+        border-color: #fca5a5;
+    }
+
+    .batch-uploader-info {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .batch-uploader-name {
+        font-size: 12px;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 130px;
+    }
+
+    .batch-uploader-sub {
+        font-size: 10px;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        white-space: nowrap;
+    }
+
+    .batch-uploader-sub i {
+        font-size: 9px;
+        color: #94a3b8;
+    }
+
+    /* Date Cell */
+    .batch-date-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .batch-date-day {
+        font-size: 12px;
+        font-weight: 600;
+        color: #1e293b;
+        white-space: nowrap;
+    }
+
+    .batch-date-time {
+        font-size: 10px;
+        color: #64748b;
+        white-space: nowrap;
+    }
+
+    /* Status Pill */
+    .batch-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+
+    .status-indicator-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+    }
+
+    .status-pending {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .status-pending .status-indicator-dot {
+        background: #f59e0b;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+    }
+
+    .status-approved {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+    }
+    .status-approved .status-indicator-dot {
+        background: #10b981;
+    }
+
+    .status-returned {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+    }
+    .status-returned .status-indicator-dot {
+        background: #ef4444;
+    }
+
+    /* Action Buttons */
+    .batch-action-validate-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+        color: #ffffff !important;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        white-space: nowrap;
+        box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+    }
+
+    .batch-action-validate-btn:hover {
+        background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
+        box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .batch-action-validate-btn:active {
+        transform: translateY(0);
+    }
+
+    .batch-action-view-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        background: #ffffff;
+        color: #dc2626 !important;
+        border: 1px solid #f87171;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 7px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.15s ease;
+    }
+
+    .batch-action-view-btn:hover {
+        background: #fee2e2;
+        border-color: #ef4444;
+        color: #b91c1c !important;
+    }
+
+    @media (max-width: 900px) {
+        .batch-pool-kpi-bar {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 520px) {
+        .batch-pool-kpi-bar {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .task-table-fund-utilization .task-uploader-cell {
         min-width: 0;
         gap: 4px;
@@ -649,6 +1215,7 @@
     // Module icon mapper based on label/key
     $moduleIcons = [
         'fund-utilization' => 'fas fa-coins',
+        'fund-utilization-batch' => 'fas fa-layer-group',
         'pre-implementation' => 'fas fa-file-signature',
         'road-maintenance-status' => 'fas fa-road',
         'rbis-annual-certification' => 'fas fa-award',
@@ -881,32 +1448,112 @@
             $years = $tasks->pluck('year')->filter()->unique()->sortDesc();
         @endphp
         <div id="{{ $slug }}" class="task-modal-backdrop" onclick="closeTaskModalOnBackdrop(event, '{{ $slug }}')">
-            <div class="task-modal">
+            <div class="task-modal{{ $moduleKey === 'fund-utilization-batch' ? ' task-modal-batch-wide' : '' }}">
                 <!-- Modal Header -->
-                <div class="task-modal-header">
-                    <h3 class="task-modal-title">
-                        <i class="{{ $iconClass }}"></i>
-                        @if($approvalLevel === 'cmlgoo')
-                            <span>{{ $moduleLabel }} - C/MLGOO Approvals Pool ({{ $user->office }})</span>
-                        @elseif($approvalLevel === 'provincial')
-                            <span>{{ $moduleLabel }} - Provincial Approvals Pool ({{ $user->province }})</span>
-                        @elseif($approvalLevel === 'regional')
-                            <span>{{ $moduleLabel }} - Regional Approvals Pool (CAR)</span>
-                        @else
-                            <span>{{ $moduleLabel }} - Approvals Pool</span>
-                        @endif
-                    </h3>
-                    <button class="task-modal-close" onclick="closeTaskModal('{{ $slug }}')">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
+                @if($moduleKey === 'fund-utilization-batch')
+                    <div class="task-modal-header task-modal-header-batch">
+                        <div class="batch-header-main">
+                            <div class="batch-header-icon-box">
+                                <i class="fas fa-layer-group"></i>
+                            </div>
+                            <div class="batch-header-titles">
+                                <div class="batch-header-pill-group">
+                                    <h3 class="batch-modal-title">
+                                        Fund Utilization Report &bull; Batch Upload
+                                    </h3>
+                                    <span class="batch-scope-badge-header">
+                                        <i class="fas fa-shield-halved"></i>
+                                        @if($approvalLevel === 'regional')
+                                            Regional Approvals Pool (CAR)
+                                        @elseif($approvalLevel === 'provincial')
+                                            Provincial Approvals Pool ({{ $user->province ?? 'CAR' }})
+                                        @elseif($approvalLevel === 'cmlgoo')
+                                            C/MLGOO Approvals Pool ({{ $user->office ?? 'LGU' }})
+                                        @else
+                                            Approvals Pool
+                                        @endif
+                                    </span>
+                                </div>
+                                <p class="batch-modal-subtitle">
+                                    Executive validation and decision queue for quarterly multi-project FUR submissions across Cordillera Administrative Region.
+                                </p>
+                            </div>
+                        </div>
+                        <button type="button" class="task-modal-close task-modal-close-batch" onclick="closeTaskModal('{{ $slug }}')" title="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <!-- 4-Card KPI Summary Strip -->
+                    @php
+                        $totalBatches = $tasks->count();
+                        $totalProjects = $tasks->sum('project_count');
+                        $pendingBatches = $tasks->filter(function($t) {
+                            $st = strtolower($t['batch_status'] ?? $t['status'] ?? '');
+                            return !str_contains($st, 'returned') && !str_contains($st, 'approved');
+                        })->count();
+                        $provCount = $provinces->count();
+                    @endphp
+                    <div class="batch-pool-kpi-bar">
+                        <div class="batch-kpi-pill">
+                            <div class="batch-kpi-pill-icon icon-blue"><i class="fas fa-layer-group"></i></div>
+                            <div class="batch-kpi-pill-text">
+                                <span class="batch-kpi-pill-num">{{ number_format($totalBatches) }}</span>
+                                <span class="batch-kpi-pill-lbl">Batch Submissions</span>
+                            </div>
+                        </div>
+                        <div class="batch-kpi-pill">
+                            <div class="batch-kpi-pill-icon icon-emerald"><i class="fas fa-cubes"></i></div>
+                            <div class="batch-kpi-pill-text">
+                                <span class="batch-kpi-pill-num">{{ number_format($totalProjects) }}</span>
+                                <span class="batch-kpi-pill-lbl">Projects Covered</span>
+                            </div>
+                        </div>
+                        <div class="batch-kpi-pill">
+                            <div class="batch-kpi-pill-icon icon-amber"><i class="fas fa-hourglass-half"></i></div>
+                            <div class="batch-kpi-pill-text">
+                                <span class="batch-kpi-pill-num">{{ number_format($pendingBatches) }}</span>
+                                <span class="batch-kpi-pill-lbl">Awaiting Validation</span>
+                            </div>
+                        </div>
+                        <div class="batch-kpi-pill">
+                            <div class="batch-kpi-pill-icon icon-violet"><i class="fas fa-map-location-dot"></i></div>
+                            <div class="batch-kpi-pill-text">
+                                <span class="batch-kpi-pill-num">{{ number_format($provCount) }}</span>
+                                <span class="batch-kpi-pill-lbl">Active Provinces</span>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <div class="task-modal-header">
+                        <h3 class="task-modal-title">
+                            <i class="{{ $iconClass }}"></i>
+                            @if($approvalLevel === 'cmlgoo')
+                                <span>{{ $moduleLabel }} - C/MLGOO Approvals Pool ({{ $user->office }})</span>
+                            @elseif($approvalLevel === 'provincial')
+                                <span>{{ $moduleLabel }} - Provincial Approvals Pool ({{ $user->province }})</span>
+                            @elseif($approvalLevel === 'regional')
+                                <span>{{ $moduleLabel }} - Regional Approvals Pool (CAR)</span>
+                            @else
+                                <span>{{ $moduleLabel }} - Approvals Pool</span>
+                            @endif
+                        </h3>
+                        <button class="task-modal-close" onclick="closeTaskModal('{{ $slug }}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                @endif
                 
                 <!-- Filter Bar inside Modal -->
-                <div class="task-modal-filter-bar">
+                <div class="task-modal-filter-bar{{ $moduleKey === 'fund-utilization-batch' ? ' filter-bar-batch' : '' }}">
+                    <div class="modal-filter-search-wrap">
+                        <i class="fas fa-search"></i>
+                        <input type="text" class="modal-search-input" placeholder="{{ $moduleKey === 'fund-utilization-batch' ? 'Search batch code, submitter, province...' : 'Search task details...' }}" oninput="filterModalRows('{{ $slug }}')">
+                    </div>
                     @if($provinces->isNotEmpty())
                         <div class="modal-filter-field">
                             <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
-                            <select class="modal-select-filter" data-filter="province" aria-label="Filter by province">
+                            <select class="modal-select-filter" data-filter="province" aria-label="Filter by province" onchange="filterModalRows('{{ $slug }}')">
                                 <option value="">All Provinces</option>
                                 @foreach($provinces as $prov)
                                     <option value="{{ $prov }}">{{ $prov }}</option>
@@ -917,7 +1564,7 @@
                     @if($moduleKey === 'fund-utilization' && $cityMunicipalities->isNotEmpty())
                         <div class="modal-filter-field">
                             <i class="fas fa-city" aria-hidden="true"></i>
-                            <select class="modal-select-filter" data-filter="cityMunicipality" aria-label="Filter by city or municipality">
+                            <select class="modal-select-filter" data-filter="cityMunicipality" aria-label="Filter by city or municipality" onchange="filterModalRows('{{ $slug }}')">
                                 <option value="">All Cities/Municipalities</option>
                                 @foreach($cityMunicipalities as $cityMunicipality)
                                     <option value="{{ $cityMunicipality }}">{{ $cityMunicipality }}</option>
@@ -928,7 +1575,7 @@
                     @if($periods->isNotEmpty())
                         <div class="modal-filter-field">
                             <i class="fas fa-calendar-days" aria-hidden="true"></i>
-                            <select class="modal-select-filter" data-filter="period" aria-label="Filter by period">
+                            <select class="modal-select-filter" data-filter="period" aria-label="Filter by period" onchange="filterModalRows('{{ $slug }}')">
                                 <option value="">All Periods</option>
                                 @foreach($periods as $period)
                                     <option value="{{ $period }}">{{ $period }}</option>
@@ -939,7 +1586,7 @@
                     @if($moduleKey !== 'fund-utilization' && $years->isNotEmpty())
                         <div class="modal-filter-field">
                             <i class="fas fa-calendar-check" aria-hidden="true"></i>
-                            <select class="modal-select-filter" data-filter="year" aria-label="Filter by year">
+                            <select class="modal-select-filter" data-filter="year" aria-label="Filter by year" onchange="filterModalRows('{{ $slug }}')">
                                 <option value="">All Years</option>
                                 @foreach($years as $year)
                                     <option value="{{ $year }}">{{ $year }}</option>
@@ -960,37 +1607,135 @@
                 <!-- Modal Body -->
                 <div class="task-modal-body">
                     <div class="table-container">
-                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : '' }}">
+                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : ($moduleKey === 'fund-utilization-batch' ? ' task-table-fund-utilization-batch' : '') }}">
                             <thead>
                                 <tr>
-                                    @if($moduleKey === 'fund-utilization')
-                                        <th>Project Code</th>
-                                        <th>Project Title</th>
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
-                                    @elseif($moduleKey === 'pre-implementation')
-                                        <th>Project Code</th>
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
-                                    @elseif($moduleKey === 'monitoring-evaluation-lfp')
-                                        <th>Province</th>
-                                    @elseif($moduleKey === 'local-project-monitoring-committee')
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
+                                    @if($moduleKey === 'fund-utilization-batch')
+                                        <th>Batch Approval Code</th>
+                                        <th>Quarter</th>
+                                        <th>Target Scope</th>
+                                        <th>Documents Summary</th>
+                                        <th>Submitted By</th>
+                                        <th>Date Received</th>
+                                        <th>Status</th>
+                                        <th style="text-align: center;">Action</th>
                                     @else
-                                        <th>Office</th>
+                                        @if($moduleKey === 'fund-utilization')
+                                            <th>Project Code</th>
+                                            <th>Project Title</th>
+                                            <th>Province</th>
+                                            <th>City/Municipality</th>
+                                        @elseif($moduleKey === 'pre-implementation')
+                                            <th>Project Code</th>
+                                            <th>Province</th>
+                                            <th>City/Municipality</th>
+                                        @elseif($moduleKey === 'monitoring-evaluation-lfp')
+                                            <th>Province</th>
+                                        @elseif($moduleKey === 'local-project-monitoring-committee')
+                                            <th>Province</th>
+                                            <th>City/Municipality</th>
+                                        @else
+                                            <th>Office</th>
+                                        @endif
+                                        <th>Period</th>
+                                        <th>Task Details</th>
+                                        <th>Submitted By</th>
+                                        <th>Date Received</th>
+                                        <th>Action</th>
                                     @endif
-                                    <th>Period</th>
-                                    <th>Task Details</th>
-                                    <th>Submitted By</th>
-                                    <th>Date Received</th>
-                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($tasks as $task)
                                     <tr data-province="{{ $task['province'] ?? '' }}" data-city-municipality="{{ $task['city_municipality'] ?? '' }}" data-period="{{ $task['period'] ?? $task['quarter'] ?? '' }}" data-year="{{ $task['year'] ?? '' }}">
-                                        @if($moduleKey === 'fund-utilization')
+                                        @if($moduleKey === 'fund-utilization-batch')
+                                            <td>
+                                                <div class="batch-code-pill" title="Batch Approval Code: {{ $task['batch_code'] ?? $task['project_code'] }}">
+                                                    <i class="fas fa-barcode"></i>
+                                                    <span>{{ $task['batch_code'] ?? $task['project_code'] }}</span>
+                                                </div>
+                                            </td>
+                                            @php
+                                                $qRaw = strtolower($task['quarter'] ?? $task['period'] ?? 'q1');
+                                                $qClass = str_contains($qRaw, '1') ? 'q1' : (str_contains($qRaw, '2') ? 'q2' : (str_contains($qRaw, '3') ? 'q3' : 'q4'));
+                                            @endphp
+                                            <td>
+                                                <div class="batch-quarter-tag {{ $qClass }}">
+                                                    <span class="q-label">{{ strtoupper($task['quarter'] ?? 'N/A') }}</span>
+                                                    @if(!empty($task['year']))
+                                                        <span class="q-year">{{ $task['year'] }}</span>
+                                                    @endif
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="batch-scope-chip" title="{{ $task['project_count'] ?? 0 }} projects covered in this submission">
+                                                    <i class="fas fa-cubes"></i>
+                                                    <strong>{{ $task['project_count'] ?? 0 }}</strong>
+                                                    <span class="chip-label">Projects</span>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="batch-doc-summary" title="{{ $task['message'] }}">
+                                                    <div class="batch-summary-text">
+                                                        <i class="fas fa-file-shield text-blue-500 mr-1"></i>
+                                                        {{ $task['message'] }}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $uploaderName = $task['sender_name'] ?: 'Unknown Submitter';
+                                                    $initials = collect(explode(' ', $uploaderName))->map(fn($part) => strtoupper(substr($part, 0, 1)))->take(2)->implode('');
+                                                @endphp
+                                                <div class="batch-uploader-wrap">
+                                                    <div class="batch-uploader-avatar" title="{{ $uploaderName }}">
+                                                        {{ $initials ?: 'U' }}
+                                                    </div>
+                                                    <div class="batch-uploader-info">
+                                                        <span class="batch-uploader-name" title="{{ $uploaderName }}">{{ $uploaderName }}</span>
+                                                        @if(!empty($task['uploader_province']) || !empty($task['province']))
+                                                            <span class="batch-uploader-sub">
+                                                                <i class="fas fa-map-marker-alt"></i>
+                                                                {{ $task['uploader_province'] ?? $task['province'] }}
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $dt = !empty($task['created_at']) ? \Illuminate\Support\Carbon::parse($task['created_at']) : null;
+                                                @endphp
+                                                @if($dt)
+                                                    <div class="batch-date-cell">
+                                                        <span class="batch-date-day">{{ $dt->format('M d, Y') }}</span>
+                                                        <span class="batch-date-time">{{ $dt->format('h:i A') }}</span>
+                                                    </div>
+                                                @else
+                                                    <span class="text-slate-400">N/A</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $st = $task['batch_status'] ?? $task['status'] ?? 'Pending';
+                                                    $stLower = strtolower($st);
+                                                    $isApproved = str_contains($stLower, 'approved');
+                                                    $isReturned = str_contains($stLower, 'returned');
+                                                    $statusKind = $isApproved ? 'approved' : ($isReturned ? 'returned' : 'pending');
+                                                    $statusDisplay = ucwords(str_replace('_', ' ', $st));
+                                                @endphp
+                                                <span class="batch-status-pill status-{{ $statusKind }}">
+                                                    <span class="status-indicator-dot"></span>
+                                                    <span>{{ $statusDisplay }}</span>
+                                                </span>
+                                            </td>
+                                            <td style="text-align: center;">
+                                                <button type="button" class="batch-action-validate-btn" onclick="openBatchApprovalModal('{{ $task['batch_code'] ?? $task['project_code'] }}')" title="Open review & validation drawer">
+                                                    <i class="fas fa-clipboard-check"></i>
+                                                    <span>Review &amp; Validate</span>
+                                                </button>
+                                            </td>
+                                        @elseif($moduleKey === 'fund-utilization')
                                             <td>
                                                 <div class="proj-title-cell" title="{{ $task['project_code'] ?? '' }}">{{ $task['project_code'] ?: 'N/A' }}</div>
                                             </td>
@@ -1089,17 +1834,39 @@
             $periods = $tasks->pluck('period')->filter()->unique()->sort();
         @endphp
         <div id="{{ $slug }}" class="task-modal-backdrop" onclick="closeTaskModalOnBackdrop(event, '{{ $slug }}')">
-            <div class="task-modal">
+            <div class="task-modal{{ $moduleKey === 'fund-utilization-batch' ? ' task-modal-batch-wide' : '' }}">
                 <!-- Modal Header -->
-                <div class="task-modal-header">
-                    <h3 class="task-modal-title">
-                        <i class="{{ $iconClass }}" style="color: #dc2626;"></i>
-                        <span>{{ $moduleLabel }} - Returned Documents</span>
-                    </h3>
-                    <button class="task-modal-close" onclick="closeTaskModal('{{ $slug }}')">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
+                @if($moduleKey === 'fund-utilization-batch')
+                    <div class="task-modal-header" style="background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 50%, #b91c1c 100%); color: #fff; padding: 20px 28px; border-bottom: 1px solid rgba(255,255,255,0.12);">
+                        <div class="batch-header-main">
+                            <div class="batch-header-icon-box" style="background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.3);">
+                                <i class="fas fa-rotate-left"></i>
+                            </div>
+                            <div class="batch-header-titles">
+                                <div class="batch-header-pill-group">
+                                    <h3 class="batch-modal-title">Fund Utilization Report &bull; Batch Upload</h3>
+                                    <span class="batch-scope-badge-header" style="background: rgba(254, 202, 202, 0.25); border-color: rgba(252, 165, 165, 0.4); color: #fee2e2;">
+                                        Returned Submissions
+                                    </span>
+                                </div>
+                                <p class="batch-modal-subtitle">Submissions returned for revision with feedback from Regional / Provincial Validators.</p>
+                            </div>
+                        </div>
+                        <button type="button" class="task-modal-close task-modal-close-batch" onclick="closeTaskModal('{{ $slug }}')" title="Close">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                @else
+                    <div class="task-modal-header">
+                        <h3 class="task-modal-title">
+                            <i class="{{ $iconClass }}" style="color: #dc2626;"></i>
+                            <span>{{ $moduleLabel }} - Returned Documents</span>
+                        </h3>
+                        <button class="task-modal-close" onclick="closeTaskModal('{{ $slug }}')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                @endif
                 
                 <!-- Filter Bar inside Modal -->
                 <div class="task-modal-filter-bar">
@@ -1142,28 +1909,114 @@
                 <!-- Modal Body -->
                 <div class="task-modal-body">
                     <div class="table-container">
-                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : '' }}">
+                        <table class="task-table{{ $moduleKey === 'fund-utilization' ? ' task-table-fund-utilization' : ($moduleKey === 'fund-utilization-batch' ? ' task-table-fund-utilization-batch' : '') }}">
                             <thead>
                                 <tr>
-                                    @if($moduleKey === 'fund-utilization')
-                                        <th>Project Code</th>
-                                        <th>Project Title</th>
-                                        <th>Province</th>
-                                        <th>City/Municipality</th>
+                                    @if($moduleKey === 'fund-utilization-batch')
+                                        <th>Batch Approval Code</th>
+                                        <th>Quarter</th>
+                                        <th>Target Scope</th>
+                                        <th>Instructions / Remarks</th>
+                                        <th>Returned By</th>
+                                        <th>Date Returned</th>
+                                        <th>Status</th>
+                                        <th style="text-align: center;">Action</th>
                                     @else
-                                        <th>Project / Location</th>
+                                        @if($moduleKey === 'fund-utilization')
+                                            <th>Project Code</th>
+                                            <th>Project Title</th>
+                                            <th>Province</th>
+                                            <th>City/Municipality</th>
+                                        @else
+                                            <th>Project / Location</th>
+                                        @endif
+                                        <th>Period</th>
+                                        <th>Instructions / Remarks</th>
+                                        <th>Returned By</th>
+                                        <th>Date Returned</th>
+                                        <th>Action</th>
                                     @endif
-                                    <th>Period</th>
-                                    <th>Instructions / Remarks</th>
-                                    <th>Returned By</th>
-                                    <th>Date Returned</th>
-                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($tasks as $task)
                                     <tr data-province="{{ $task['province'] ?? '' }}" data-city-municipality="{{ $task['city_municipality'] ?? '' }}" data-period="{{ $task['period'] ?? $task['quarter'] ?? '' }}">
-                                        @if($moduleKey === 'fund-utilization')
+                                        @if($moduleKey === 'fund-utilization-batch')
+                                            <td>
+                                                <div class="batch-code-pill" title="Batch Approval Code: {{ $task['batch_code'] ?? $task['project_code'] }}">
+                                                    <i class="fas fa-barcode"></i>
+                                                    <span>{{ $task['batch_code'] ?? $task['project_code'] }}</span>
+                                                </div>
+                                            </td>
+                                            @php
+                                                $qRaw = strtolower($task['quarter'] ?? $task['period'] ?? 'q1');
+                                                $qClass = str_contains($qRaw, '1') ? 'q1' : (str_contains($qRaw, '2') ? 'q2' : (str_contains($qRaw, '3') ? 'q3' : 'q4'));
+                                            @endphp
+                                            <td>
+                                                <div class="batch-quarter-tag {{ $qClass }}">
+                                                    <span class="q-label">{{ strtoupper($task['quarter'] ?? 'N/A') }}</span>
+                                                    @if(!empty($task['year']))
+                                                        <span class="q-year">{{ $task['year'] }}</span>
+                                                    @endif
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="batch-scope-chip" title="{{ $task['project_count'] ?? 0 }} projects covered">
+                                                    <i class="fas fa-cubes"></i>
+                                                    <strong>{{ $task['project_count'] ?? 0 }}</strong>
+                                                    <span class="chip-label">Projects</span>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="batch-returned-remarks" title="{{ $task['approval_remarks'] ?? $task['message'] }}">
+                                                    <i class="fas fa-comment-dots text-rose-500 mr-1"></i>
+                                                    <span>{{ $task['approval_remarks'] ?? $task['message'] }}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $returnerName = $task['returned_by_name'] ?? $task['sender_name'] ?? 'Validator';
+                                                    $rInitials = collect(explode(' ', $returnerName))->map(fn($part) => strtoupper(substr($part, 0, 1)))->take(2)->implode('');
+                                                @endphp
+                                                <div class="batch-uploader-wrap">
+                                                    <div class="batch-uploader-avatar avatar-returned" title="{{ $returnerName }}">
+                                                        {{ $rInitials ?: 'V' }}
+                                                    </div>
+                                                    <div class="batch-uploader-info">
+                                                        <span class="batch-uploader-name" title="{{ $returnerName }}">{{ $returnerName }}</span>
+                                                        @if(!empty($task['returned_by_role']))
+                                                            <span class="batch-uploader-sub">{{ $task['returned_by_role'] }}</span>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @php
+                                                    $returnedDate = $task['returned_at'] ?? $task['created_at'] ?? null;
+                                                    $dt = !empty($returnedDate) ? \Illuminate\Support\Carbon::parse($returnedDate) : null;
+                                                @endphp
+                                                @if($dt)
+                                                    <div class="batch-date-cell">
+                                                        <span class="batch-date-day">{{ $dt->format('M d, Y') }}</span>
+                                                        <span class="batch-date-time">{{ $dt->format('h:i A') }}</span>
+                                                    </div>
+                                                @else
+                                                    <span class="text-slate-400">N/A</span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <span class="batch-status-pill status-returned">
+                                                    <span class="status-indicator-dot"></span>
+                                                    <span>Returned</span>
+                                                </span>
+                                            </td>
+                                            <td style="text-align: center;">
+                                                <button type="button" class="batch-action-view-btn" onclick="openBatchApprovalModal('{{ $task['batch_code'] ?? $task['project_code'] }}')" title="View batch submission details">
+                                                    <i class="fas fa-eye"></i>
+                                                    <span>View Details</span>
+                                                </button>
+                                            </td>
+                                        @elseif($moduleKey === 'fund-utilization')
                                             <td>
                                                 <div class="proj-title-cell" title="{{ $task['project_code'] ?? '' }}">{{ $task['project_code'] ?: 'N/A' }}</div>
                                             </td>
@@ -1362,6 +2215,479 @@
     @endforeach
 @endif
 
+<!-- BATCH REVIEW & VALIDATION MODAL -->
+<div id="modal-batch-review-validate" class="task-modal-backdrop" style="z-index: 1060; display: none;" onclick="closeBatchApprovalModalOnBackdrop(event)">
+    <div class="task-modal" style="max-width: 1180px; width: 95vw; max-height: 90vh; border-radius: 20px; box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.4); border: 1px solid rgba(226, 232, 240, 0.9); overflow: hidden; display: flex; flex-direction: column;">
+        <!-- Header -->
+        <div class="task-modal-header task-modal-header-batch" style="padding: 18px 26px !important;">
+            <div class="batch-header-main">
+                <div class="batch-header-icon-box">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div>
+                    <div class="batch-header-pill-group">
+                        <h3 class="batch-modal-title">
+                            Batch Review &amp; Validation
+                        </h3>
+                        <span id="bm-header-code" class="batch-code-pill" style="background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.35); color: #fff;">
+                            FUR-BATCH
+                        </span>
+                        <span class="batch-scope-badge-header">
+                            <i class="fas fa-shield-halved"></i>
+                            @if($approvalLevel === 'regional')
+                                Regional Approvals Pool (CAR)
+                            @elseif($approvalLevel === 'provincial')
+                                Provincial Approvals Pool ({{ $user->province ?? 'CAR' }})
+                            @elseif($approvalLevel === 'cmlgoo')
+                                C/MLGOO Approvals Pool ({{ $user->office ?? 'LGU' }})
+                            @else
+                                Submission Details
+                            @endif
+                        </span>
+                    </div>
+                    <p class="batch-modal-subtitle">
+                        Fund Utilization Report &bull; Comprehensive batch inspection, target projects scope verification, and approval decision.
+                    </p>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <span id="bm-header-status" style="padding: 6px 16px; border-radius: 999px; font-size: 11px; font-weight: 800; background: #fff; color: #1e3a8a; box-shadow: 0 2px 6px rgba(0,0,0,0.12); letter-spacing: 0.02em;">
+                    Status
+                </span>
+                <button type="button" class="task-modal-close task-modal-close-batch" onclick="closeBatchApprovalModal()" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="task-modal-body" style="padding: 24px; overflow-y: auto; background: #f8fafc; flex: 1;">
+            <!-- Loading indicator -->
+            <div id="bm-loading" style="text-align: center; padding: 60px 20px;">
+                <i class="fas fa-circle-notch fa-spin" style="font-size: 34px; color: #2563eb;"></i>
+                <div style="margin-top: 14px; font-size: 14px; font-weight: 600; color: #475569;">Loading batch details and target projects...</div>
+            </div>
+
+            <!-- Error container -->
+            <div id="bm-error" style="display: none; padding: 20px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 12px; color: #991b1b; margin-bottom: 20px;">
+                <i class="fas fa-triangle-exclamation mr-2"></i> <span id="bm-error-msg">An error occurred while loading batch details.</span>
+            </div>
+
+            <!-- Content container -->
+            <div id="bm-content" style="display: none;">
+                <!-- 1. Metadata Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em;"><i class="fas fa-calendar-alt text-blue-500 mr-1"></i> Quarter &amp; Year</div>
+                        <div id="bm-meta-quarter" style="font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 4px;">Q1 2026</div>
+                    </div>
+                    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em;"><i class="fas fa-user-circle text-indigo-500 mr-1"></i> Submitted By</div>
+                        <div id="bm-meta-uploader" style="font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Juan Dela Cruz</div>
+                        <div id="bm-meta-uploader-sub" style="font-size: 11px; color: #64748b; margin-top: 2px;">LGU Submitter &bull; Province of Abra</div>
+                    </div>
+                    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em;"><i class="fas fa-clock text-amber-500 mr-1"></i> Date Submitted</div>
+                        <div id="bm-meta-date" style="font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 4px;">Oct 22, 2026 03:00 PM</div>
+                    </div>
+                    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em;"><i class="fas fa-cubes text-emerald-500 mr-1"></i> Target Scope</div>
+                        <div id="bm-meta-count" style="font-size: 16px; font-weight: 800; color: #059669; margin-top: 4px;">12 Projects</div>
+                    </div>
+                </div>
+
+                <!-- 2. Uploaded Documents Section -->
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                        <h4 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-paperclip" style="color: #2563eb;"></i>
+                            Uploaded Documents in Batch
+                        </h4>
+                        <span id="bm-docs-count" style="font-size: 11px; font-weight: 700; background: #e0f2fe; color: #0369a1; padding: 3px 10px; border-radius: 999px;">0 Files</span>
+                    </div>
+                    <div id="bm-docs-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                        <!-- Dynamically injected doc cards -->
+                    </div>
+                </div>
+
+                <!-- 3. Target Projects Section -->
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                        <h4 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-folder-tree" style="color: #4f46e5;"></i>
+                            Target Projects Receiving Batch Documents
+                        </h4>
+                        <div style="position: relative; width: 280px;">
+                            <input type="text" id="bm-project-search" placeholder="Search project title or code..." onkeyup="filterBatchProjects()" style="width: 100%; padding: 8px 12px 8px 34px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; background: #fff;">
+                            <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #94a3b8;"></i>
+                        </div>
+                    </div>
+                    <div style="max-height: 280px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px;">
+                        <table class="table" style="width: 100%; margin: 0; font-size: 12px; border-collapse: collapse;" id="bm-projects-table">
+                            <thead style="background: #f8fafc; position: sticky; top: 0; z-index: 2;">
+                                <tr style="border-bottom: 2px solid #e2e8f0; text-align: left; color: #475569; font-size: 11px; text-transform: uppercase;">
+                                    <th style="padding: 10px 12px;">Project Code</th>
+                                    <th style="padding: 10px 12px;">Project Title</th>
+                                    <th style="padding: 10px 12px;">Location</th>
+                                    <th style="padding: 10px 12px;">Allocation</th>
+                                    <th style="padding: 10px 12px;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bm-projects-body">
+                                <!-- Dynamically injected rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. Approval History & Timeline -->
+                <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px 20px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 14px; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-history" style="color: #d97706;"></i>
+                        Approval History &amp; Audit Trail
+                    </h4>
+                    <div id="bm-history-container" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Dynamically injected timeline items -->
+                    </div>
+                </div>
+
+                <!-- 5. Decision & Actions Section -->
+                <div id="bm-action-container" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                    <div id="bm-action-form" style="display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+                            <h4 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-pen-to-square" style="color: #059669;"></i>
+                                Validator Action &amp; Remarks
+                            </h4>
+                            <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 4px 10px;">
+                                <i class="fas fa-shield-halved"></i> Regional Validation Authority (CAR)
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 16px;">
+                            <label for="bm-remarks-input" style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">
+                                Remarks / Revision Notes <span style="font-weight: 400; color: #64748b;">(Mandatory when returning for revision; optional for approval)</span>
+                            </label>
+                            <textarea id="bm-remarks-input" rows="3" placeholder="Enter findings, validation notes, or revision instructions..." style="width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 14px; font-size: 13px; outline: none; font-family: inherit; resize: vertical;"></textarea>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-outline-danger" id="bm-btn-return" onclick="submitBatchDecision('return')" style="padding: 10px 20px; font-size: 13px; font-weight: 700; border-radius: 10px; border: 1px solid #ef4444; color: #dc2626; background: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s ease;">
+                                <i class="fas fa-rotate-left"></i> Return for Revision
+                            </button>
+                            <button type="button" class="btn btn-success" id="bm-btn-approve" onclick="submitBatchDecision('approve')" style="padding: 10px 24px; font-size: 13px; font-weight: 700; border-radius: 10px; border: none; color: #fff; background: linear-gradient(135deg, #16a34a, #15803d); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3); transition: all 0.2s ease;">
+                                <i class="fas fa-check-circle"></i> <span id="bm-btn-approve-label">Approve &amp; Forward</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="bm-action-readonly" style="display: none; padding: 14px 18px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; color: #1e40af; font-size: 13px;">
+                        <i class="fas fa-info-circle mr-1"></i> You are viewing this batch in read-only mode. Current status: <strong id="bm-readonly-status">Approved</strong>.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentBatchCode = '';
+    let currentBatchData = null;
+
+    function openBatchApprovalModal(batchCode) {
+        currentBatchCode = batchCode;
+        const modal = document.getElementById('modal-batch-review-validate');
+        if (!modal) return;
+
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        // Show loading, hide error & content
+        document.getElementById('bm-loading').style.display = 'block';
+        document.getElementById('bm-error').style.display = 'none';
+        document.getElementById('bm-content').style.display = 'none';
+
+        fetch(`/fund-utilization/batch-approvals/${encodeURIComponent(batchCode)}`, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+            return res.json();
+        })
+        .then(data => {
+            if (!data.success) throw new Error(data.message || 'Failed to load batch.');
+            currentBatchData = data;
+            populateBatchApprovalModal(data);
+        })
+        .catch(err => {
+            document.getElementById('bm-loading').style.display = 'none';
+            document.getElementById('bm-error').style.display = 'block';
+            document.getElementById('bm-error-msg').textContent = err.message || 'Error loading batch submission.';
+        });
+    }
+
+    function closeBatchApprovalModal() {
+        const modal = document.getElementById('modal-batch-review-validate');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    }
+
+    function closeBatchApprovalModalOnBackdrop(event) {
+        if (event.target === event.currentTarget) {
+            closeBatchApprovalModal();
+        }
+    }
+
+    function populateBatchApprovalModal(data) {
+        const batch = data.batch;
+
+        // Header info
+        document.getElementById('bm-header-code').textContent = batch.batch_code;
+        const statusEl = document.getElementById('bm-header-status');
+        statusEl.textContent = batch.status;
+
+        const stLower = (batch.status || '').toLowerCase();
+        if (stLower.includes('approved')) {
+            statusEl.style.background = '#dcfce7';
+            statusEl.style.color = '#166534';
+        } else if (stLower.includes('returned')) {
+            statusEl.style.background = '#fee2e2';
+            statusEl.style.color = '#991b1b';
+        } else {
+            statusEl.style.background = '#fef3c7';
+            statusEl.style.color = '#92400e';
+        }
+
+        // Metadata grid
+        document.getElementById('bm-meta-quarter').textContent = `${batch.quarter} ${batch.year || ''}`;
+        document.getElementById('bm-meta-uploader').textContent = batch.uploader_name || 'Unknown Uploader';
+        const roleLabel = (batch.uploader_role || 'UPLOADER').toUpperCase();
+        const provLabel = batch.uploader_province || batch.uploader_office || 'CAR';
+        document.getElementById('bm-meta-uploader-sub').textContent = `${roleLabel} • ${provLabel}`;
+        document.getElementById('bm-meta-date').textContent = batch.submitted_at || 'N/A';
+        document.getElementById('bm-meta-count').textContent = `${batch.project_count || (batch.projects ? batch.projects.length : 0)} Projects`;
+
+        // Uploaded documents
+        const docsContainer = document.getElementById('bm-docs-container');
+        docsContainer.innerHTML = '';
+        const docs = batch.documents || [];
+        document.getElementById('bm-docs-count').textContent = `${docs.length} Document${docs.length === 1 ? '' : 's'}`;
+
+        if (docs.length === 0) {
+            docsContainer.innerHTML = '<div style="color: #64748b; font-size: 13px; font-style: italic; padding: 10px 0;">No document files attached in this batch.</div>';
+        } else {
+            docs.forEach(doc => {
+                const card = document.createElement('div');
+                card.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; gap: 10px;';
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+                        <div style="width: 38px; height: 38px; border-radius: 8px; background: #dbeafe; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;">
+                            <i class="${doc.is_link ? 'fas fa-link' : 'fas fa-file-lines'}"></i>
+                        </div>
+                        <div style="min-width: 0;">
+                            <div style="font-size: 13px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${doc.label}">${doc.label}</div>
+                            <div style="font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${doc.file_name}">${doc.file_name}</div>
+                        </div>
+                    </div>
+                    <a href="${doc.url}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; background: #2563eb; color: #fff; text-decoration: none; flex-shrink: 0;">
+                        <i class="${doc.is_link ? 'fas fa-external-link-alt' : 'fas fa-eye'}"></i> ${doc.is_link ? 'Open' : 'View'}
+                    </a>
+                `;
+                docsContainer.appendChild(card);
+            });
+        }
+
+        // Target projects table
+        const projectsBody = document.getElementById('bm-projects-body');
+        projectsBody.innerHTML = '';
+        const projects = batch.projects || [];
+
+        if (projects.length === 0) {
+            projectsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 18px;">No projects found in this batch.</td></tr>';
+        } else {
+            projects.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.style.cssText = 'border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease;';
+                tr.dataset.search = `${p.project_code} ${p.project_title} ${p.province} ${p.city_municipality}`.toLowerCase();
+                const allocFormatted = Number(p.allocation || 0).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
+
+                tr.innerHTML = `
+                    <td style="padding: 10px 12px; font-weight: 700; color: #1e3a8a;">
+                        <a href="/fund-utilization/${encodeURIComponent(p.project_code)}?quarter=${encodeURIComponent(batch.quarter)}" target="_blank" style="color: #1d4ed8; text-decoration: underline;" title="View FUR details">
+                            ${p.project_code}
+                        </a>
+                    </td>
+                    <td style="padding: 10px 12px; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${p.project_title}">
+                        ${p.project_title}
+                    </td>
+                    <td style="padding: 10px 12px; color: #475569;">
+                        ${p.city_municipality ? p.city_municipality + ', ' : ''}${p.province || 'CAR'}
+                    </td>
+                    <td style="padding: 10px 12px; font-weight: 600; color: #0f172a;">
+                        ${allocFormatted}
+                    </td>
+                    <td style="padding: 10px 12px;">
+                        <span style="display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1;">
+                            ${p.status || 'Ongoing'}
+                        </span>
+                    </td>
+                `;
+                projectsBody.appendChild(tr);
+            });
+        }
+
+        // History logs
+        const historyContainer = document.getElementById('bm-history-container');
+        historyContainer.innerHTML = '';
+        const logs = batch.logs || [];
+
+        if (logs.length === 0) {
+            historyContainer.innerHTML = '<div style="color: #64748b; font-size: 13px; font-style: italic;">No audit events recorded yet.</div>';
+        } else {
+            logs.forEach(log => {
+                const item = document.createElement('div');
+                item.style.cssText = 'display: flex; gap: 12px; padding: 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;';
+
+                let iconClass = 'fa-check-circle text-emerald-600';
+                if ((log.action || '').toLowerCase().includes('return')) {
+                    iconClass = 'fa-rotate-left text-rose-600';
+                } else if ((log.action || '').toLowerCase().includes('submit')) {
+                    iconClass = 'fa-upload text-blue-600';
+                } else if ((log.action || '').toLowerCase().includes('forward')) {
+                    iconClass = 'fa-share text-indigo-600';
+                }
+
+                item.innerHTML = `
+                    <div style="font-size: 18px; margin-top: 2px;">
+                        <i class="fas ${iconClass}"></i>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                            <span style="font-weight: 700; color: #1e293b; font-size: 13px;">
+                                ${log.action} &bull; <span style="font-weight: 600; color: #475569;">${log.actor_name}</span> ${log.actor_role ? '(' + log.actor_role + ')' : ''}
+                            </span>
+                            <span style="font-size: 11px; color: #94a3b8;">${log.created_at}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                            Resulting Status: <strong style="color: #334155;">${log.status || 'N/A'}</strong>
+                        </div>
+                        ${log.remarks ? `
+                            <div style="margin-top: 6px; padding: 6px 12px; background: #fff; border-left: 3px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #334155; font-style: italic;">
+                                "${log.remarks}"
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                historyContainer.appendChild(item);
+            });
+        }
+
+        // Action Decision Area
+        const actionForm = document.getElementById('bm-action-form');
+        const actionReadonly = document.getElementById('bm-action-readonly');
+        const remarksInput = document.getElementById('bm-remarks-input');
+        remarksInput.value = '';
+
+        if (data.can_approve || data.can_return) {
+            actionForm.style.display = 'block';
+            actionReadonly.style.display = 'none';
+
+            const approveBtn = document.getElementById('bm-btn-approve');
+            const returnBtn = document.getElementById('bm-btn-return');
+            const approveLabel = document.getElementById('bm-btn-approve-label');
+
+            approveBtn.style.display = data.can_approve ? 'inline-flex' : 'none';
+            returnBtn.style.display = data.can_return ? 'inline-flex' : 'none';
+            approveLabel.textContent = data.approval_action_label || 'Approve';
+        } else {
+            actionForm.style.display = 'none';
+            actionReadonly.style.display = 'block';
+            document.getElementById('bm-readonly-status').textContent = batch.status;
+        }
+
+        // Show content, hide loading
+        document.getElementById('bm-loading').style.display = 'none';
+        document.getElementById('bm-content').style.display = 'block';
+    }
+
+    function filterBatchProjects() {
+        const query = (document.getElementById('bm-project-search').value || '').trim().toLowerCase();
+        const rows = document.querySelectorAll('#bm-projects-body tr');
+        rows.forEach(r => {
+            const searchData = r.dataset.search || '';
+            r.style.display = searchData.includes(query) ? '' : 'none';
+        });
+    }
+
+    function submitBatchDecision(action) {
+        if (!currentBatchCode) return;
+
+        const remarks = (document.getElementById('bm-remarks-input').value || '').trim();
+
+        if (action === 'return' && !remarks) {
+            alert('Remarks are required when returning a batch submission for revision.');
+            document.getElementById('bm-remarks-input').focus();
+            return;
+        }
+
+        const isApprove = action === 'approve';
+        const confirmMsg = isApprove
+            ? `Are you sure you want to approve batch submission ${currentBatchCode}?`
+            : `Are you sure you want to return batch submission ${currentBatchCode} for revision?`;
+
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        const endpoint = isApprove
+            ? `/fund-utilization/batch-approvals/${encodeURIComponent(currentBatchCode)}/approve`
+            : `/fund-utilization/batch-approvals/${encodeURIComponent(currentBatchCode)}/return`;
+
+        const approveBtn = document.getElementById('bm-btn-approve');
+        const returnBtn = document.getElementById('bm-btn-return');
+        approveBtn.disabled = true;
+        returnBtn.disabled = true;
+
+        fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ remarks: remarks })
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                alert(result.message || 'Action executed successfully.');
+                closeBatchApprovalModal();
+            } else {
+                alert(result.message || 'An error occurred during submission.');
+                approveBtn.disabled = false;
+                returnBtn.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert(err.message || 'Network error occurred while submitting decision.');
+            approveBtn.disabled = false;
+            returnBtn.disabled = false;
+        });
+    }
+
+    // Auto-open batch modal if ?open_batch=CODE is in query string
+    document.addEventListener('DOMContentLoaded', function () {
+        const urlParams = new URLSearchParams(window.location.search);
+        const openBatch = urlParams.get('open_batch');
+        if (openBatch) {
+            openBatchApprovalModal(openBatch);
+        }
+    });
+</script>
 <script>
     function openTaskModal(id) {
         const modal = document.getElementById(id);
@@ -1419,14 +2745,8 @@
         
         const rows = modal.querySelectorAll('.task-table tbody tr');
         rows.forEach(row => {
-            const projTitleEl = row.querySelector('.proj-title-cell');
-            const projCode = projTitleEl ? projTitleEl.textContent.toLowerCase() : '';
-            const projMetaElement = row.querySelector('.proj-meta-cell');
-            const projMeta = projMetaElement ? projMetaElement.textContent.toLowerCase() : '';
-            const messageEl = row.querySelector('.task-message-cell');
-            const details = messageEl ? messageEl.textContent.toLowerCase() : '';
-            
-            const matchesSearch = projCode.includes(searchVal) || projMeta.includes(searchVal) || details.includes(searchVal);
+            const rowText = (row.innerText || '').toLowerCase();
+            const matchesSearch = !searchVal || rowText.includes(searchVal);
             const matchesFilters = Object.entries(selectedFilters).every(([filterName, filterValue]) => {
                 if (filterValue === '') return true;
 

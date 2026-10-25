@@ -1132,19 +1132,31 @@
                     <form id="batchUploadFilterForm" method="GET" action="{{ route('fund-utilization.index') }}">
                         <input type="hidden" name="batch_upload" value="1">
                         <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
-                        <div class="fur-batch-filter-form">
-                            <button type="button" class="fur-batch-filter-toggle" onclick="toggleBatchUploadFilterPanel(this)" aria-expanded="true" aria-controls="batch-upload-filter-panel">
+                        @php
+                            $hasBatchFilterApplied = !empty(trim((string)($activeFilters['search'] ?? '')))
+                                || !empty($activeFilters['program'] ?? [])
+                                || !empty($activeFilters['funding_year'] ?? [])
+                                || !empty($activeFilters['project_status'] ?? [])
+                                || !empty($activeFilters['province'] ?? [])
+                                || !empty($activeFilters['city'] ?? [])
+                                || !empty($activeFilters['barangay'] ?? []);
+                        @endphp
+                        <div class="fur-batch-filter-form {{ $hasBatchFilterApplied ? '' : 'collapsed' }}">
+                            <button type="button" class="fur-batch-filter-toggle" onclick="toggleBatchUploadFilterPanel(this)" aria-expanded="{{ $hasBatchFilterApplied ? 'true' : 'false' }}" aria-controls="batch-upload-filter-panel">
                                 <span class="fur-batch-filter-toggle-copy">
                                     <span class="fur-batch-filter-icon-badge"><i class="fas fa-filter" aria-hidden="true"></i></span>
                                     <span class="fur-batch-filter-toggle-title">Filter Projects Queue</span>
                                     <span class="fur-batch-filter-toggle-hint">(Optional — narrow the list of available projects)</span>
+                                    @if($hasBatchFilterApplied)
+                                        <span class="fur-batch-active-filter-badge"><i class="fas fa-check" aria-hidden="true"></i> Filters Applied</span>
+                                    @endif
                                 </span>
                                 <span class="fur-batch-filter-chevron">
                                     <i class="fas fa-chevron-up" aria-hidden="true"></i>
                                 </span>
                             </button>
 
-                            <div id="batch-upload-filter-panel" class="fur-batch-filter-panel">
+                            <div id="batch-upload-filter-panel" class="fur-batch-filter-panel" {{ $hasBatchFilterApplied ? '' : 'hidden' }}>
                                 <div class="fur-batch-modal-body">
                                     <div class="dashboard-filter-grid" style="display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap: 12px 16px; align-items: end;">
                                         <div>
@@ -1268,17 +1280,23 @@
                     </form>
 
                     <div class="fur-batch-workspace">
-                    <section class="fur-batch-document-panel" aria-labelledby="batchUploadDocumentTitle">
-                        <div class="fur-batch-document-panel-header">
-                            <div class="fur-batch-section-header-left">
+                    <section class="fur-batch-step-container fur-batch-step1-container fur-batch-document-panel" aria-labelledby="batchUploadDocumentTitle">
+                        <div class="fur-batch-container-header">
+                            <div class="fur-batch-container-header-left">
                                 <span class="fur-batch-step-badge">1</span>
                                 <div>
-                                    <h4 id="batchUploadDocumentTitle" class="fur-batch-section-title">Upload Documents</h4>
-                                    <p class="fur-batch-section-desc">Select submission quarter and attach files to apply to selected projects.</p>
+                                    <h4 id="batchUploadDocumentTitle" class="fur-batch-container-title">Upload Documents</h4>
+                                    <p class="fur-batch-container-desc">Select submission quarter and attach at least one document or public link.</p>
                                 </div>
                             </div>
-                            <span class="fur-batch-document-pill"><i class="fas fa-file-invoice" aria-hidden="true"></i> Category Mode</span>
+                            <div class="fur-batch-container-header-right">
+                                <span class="fur-batch-document-pill"><i class="fas fa-file-shield" aria-hidden="true"></i> Required Docs</span>
+                                <span id="batchUploadStep1StatusBadge" class="fur-batch-step-badge-status fur-batch-step-badge-status-pending">
+                                    <i class="fas fa-clock" aria-hidden="true"></i> Step 1 Incomplete
+                                </span>
+                            </div>
                         </div>
+                        <div class="fur-batch-container-body">
 
                         <div class="fur-batch-document-mode-actions" role="group" aria-label="Choose batch upload mode" style="display: none;">
                             <button
@@ -1333,37 +1351,53 @@
 
                         <div class="fur-batch-document-mode-card fur-batch-category-inline-panel" id="batchUploadDocumentCategoryPanel">
                             <div class="fur-batch-category-body">
-                                <div class="fur-batch-category-summary-card">
-                                    <div class="fur-batch-category-summary-grid">
-                                        <div class="fur-batch-category-summary-block fur-batch-summary-projects">
-                                            <div class="fur-batch-summary-icon">
-                                                <i class="fas fa-folder-tree" aria-hidden="true"></i>
-                                            </div>
-                                            <div class="fur-batch-summary-info">
-                                                <div class="fur-batch-category-summary-label">Target Projects</div>
-                                                <div class="fur-batch-summary-count-wrap">
-                                                    <span id="batchUploadCategoryProjectCount" class="fur-batch-category-summary-value">0</span>
-                                                    <span class="fur-batch-summary-unit">selected</span>
-                                                </div>
-                                                <div id="batchUploadCategoryProjectPreview" class="fur-batch-category-summary-copy">No projects selected yet.</div>
-                                            </div>
-                                        </div>
-                                        <div class="fur-batch-category-summary-block fur-batch-summary-quarter">
-                                            <div class="fur-batch-summary-quarter-header">
+                                <div class="fur-batch-category-summary-card fur-batch-quarter-card">
+                                    <div class="fur-batch-summary-quarter-header">
+                                        <div class="fur-batch-quarter-header-left">
+                                            <span class="fur-batch-quarter-icon-wrap">
+                                                <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                                            </span>
+                                            <div class="fur-batch-quarter-title-group">
                                                 <label for="batchUploadCategoryQuarter" class="fur-batch-category-summary-label">
-                                                    <i class="fas fa-calendar-check" aria-hidden="true"></i> Quarter
+                                                    Select Quarter
                                                 </label>
-                                                <span class="fur-batch-required-badge">Required</span>
+                                                <span class="fur-batch-quarter-subtitle">Reporting period for this batch upload</span>
                                             </div>
-                                            <select id="batchUploadCategoryQuarter" class="fur-batch-quarter-select fur-batch-category-quarter-select">
-                                                <option value="">Select Quarter</option>
-                                                <option value="Q1">Q1 (January - March)</option>
-                                                <option value="Q2">Q2 (April - June)</option>
-                                                <option value="Q3">Q3 (July - September)</option>
-                                                <option value="Q4">Q4 (October - December)</option>
-                                            </select>
                                         </div>
+                                        <span id="batchUploadCategoryQuarterBadge" class="fur-batch-required-badge">Required</span>
                                     </div>
+
+                                    <div class="fur-batch-quarter-pills-grid" role="group" aria-label="Quick Select Quarter">
+                                        <button type="button" class="fur-batch-quarter-pill fur-batch-qp-q1" data-quarter-val="Q1" title="Select Quarter 1 (January - March)">
+                                            <span class="fur-batch-qp-tag">Q1</span>
+                                            <span class="fur-batch-qp-text">Jan – Mar</span>
+                                        </button>
+                                        <button type="button" class="fur-batch-quarter-pill fur-batch-qp-q2" data-quarter-val="Q2" title="Select Quarter 2 (April - June)">
+                                            <span class="fur-batch-qp-tag">Q2</span>
+                                            <span class="fur-batch-qp-text">Apr – Jun</span>
+                                        </button>
+                                        <button type="button" class="fur-batch-quarter-pill fur-batch-qp-q3" data-quarter-val="Q3" title="Select Quarter 3 (July - September)">
+                                            <span class="fur-batch-qp-tag">Q3</span>
+                                            <span class="fur-batch-qp-text">Jul – Sep</span>
+                                        </button>
+                                        <button type="button" class="fur-batch-quarter-pill fur-batch-qp-q4" data-quarter-val="Q4" title="Select Quarter 4 (October - December)">
+                                            <span class="fur-batch-qp-tag">Q4</span>
+                                            <span class="fur-batch-qp-text">Oct – Dec</span>
+                                        </button>
+                                    </div>
+
+                                    <div class="fur-batch-quarter-select-shell" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; overflow: hidden;" aria-hidden="true">
+                                        <select id="batchUploadCategoryQuarter" class="fur-batch-quarter-select fur-batch-category-quarter-select" tabindex="-1">
+                                            <option value="">Choose Quarter from dropdown...</option>
+                                            <option value="Q1">🔷 Q1 (January - March)</option>
+                                            <option value="Q2">🟢 Q2 (April - June)</option>
+                                            <option value="Q3">🔶 Q3 (July - September)</option>
+                                            <option value="Q4">🟣 Q4 (October - December)</option>
+                                        </select>
+                                    </div>
+
+                                    <span id="batchUploadCategoryProjectCount" hidden>0</span>
+                                    <span id="batchUploadCategoryProjectPreview" hidden></span>
                                 </div>
 
                                 <div class="fur-batch-category-individual-shell">
@@ -1526,17 +1560,43 @@
                         </div>
                     </section>
 
-                    <div class="fur-batch-project-list">
-                        <div class="fur-batch-project-panel-header">
-                            <div class="fur-batch-section-header-left">
-                                <span class="fur-batch-step-badge">2</span>
+                    <section class="fur-batch-step-container fur-batch-step2-container fur-batch-project-list is-locked" id="batchUploadStep2Container" aria-labelledby="batchUploadProjectsTitle">
+                        <div class="fur-batch-container-header">
+                            <div class="fur-batch-container-header-left">
+                                <span class="fur-batch-step-badge fur-batch-step2-badge" id="batchUploadStep2Badge">2</span>
                                 <div>
-                                    <h4 class="fur-batch-section-title">Select Target Projects</h4>
-                                    <p class="fur-batch-section-desc">Move projects from Available list to Selected queue</p>
+                                    <h4 id="batchUploadProjectsTitle" class="fur-batch-container-title">Select Target Projects</h4>
+                                    <p class="fur-batch-container-desc">Move projects from Available queue to Selected queue.</p>
                                 </div>
                             </div>
-                            <span class="fur-batch-document-pill"><i class="fas fa-arrow-right-arrow-left" aria-hidden="true"></i> Shuttle Queue</span>
+                            <div class="fur-batch-container-header-right">
+                                <span class="fur-batch-document-pill"><i class="fas fa-arrow-right-arrow-left" aria-hidden="true"></i> Shuttle Queue</span>
+                                <span id="batchUploadStep2StatusBadge" class="fur-batch-step-badge-status fur-batch-step-badge-status-locked">
+                                    <i class="fas fa-lock" aria-hidden="true"></i> Locked
+                                </span>
+                            </div>
                         </div>
+
+                        <div class="fur-batch-container-body fur-batch-step2-body">
+                            <div id="batchUploadStep2LockedNotice" class="fur-batch-step2-locked-overlay">
+                                <div class="fur-batch-step2-locked-card">
+                                    <div class="fur-batch-step2-locked-icon">
+                                        <i class="fas fa-lock" aria-hidden="true"></i>
+                                    </div>
+                                    <h5>Step 2 is Locked</h5>
+                                    <p>Complete <strong>Step 1</strong> on the left to unlock target project selection.</p>
+                                    <div class="fur-batch-step2-requirements">
+                                        <div id="batchUploadReqQuarter" class="fur-batch-req-item fur-batch-req-item-invalid">
+                                            <i class="fas fa-circle-xmark" aria-hidden="true"></i>
+                                            <span>Select a Quarter in Step 1</span>
+                                        </div>
+                                        <div id="batchUploadReqDoc" class="fur-batch-req-item fur-batch-req-item-invalid">
+                                            <i class="fas fa-circle-xmark" aria-hidden="true"></i>
+                                            <span>Upload at least 1 document (or set link) in Step 1</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                         <div class="fur-batch-shuttle" data-batch-shuttle>
                             <input type="hidden" id="batch_upload_selected_project_codes" name="selected_project_codes_json" value="[]">
@@ -1609,25 +1669,13 @@
                                         No projects selected yet.<br><span style="font-size: 11px; font-weight: normal; color: #94a3b8;">Select items from Available Projects and click &rarr;</span>
                                     </div>
                                 </div>
-                                <div class="fur-batch-selected-documents-summary" id="batchUploadSelectedDocumentsSummary" hidden>
-                                    <div class="fur-batch-selected-documents-summary-header">
-                                        <div>
-                                            <div class="fur-batch-selected-documents-summary-title">
-                                                <i class="fas fa-check-double" style="color: #10b981; margin-right: 6px;"></i> Prepared Documents Ready
-                                            </div>
-                                            <div class="fur-batch-selected-documents-summary-copy" id="batchUploadSelectedDocumentsSummaryCopy">
-                                                No prepared category documents yet.
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="fur-batch-selected-documents-summary-list" id="batchUploadSelectedDocumentsSummaryList"></div>
-                                </div>
                             </section>
                         </div>
                     </div>
-                    </div>
+                </section>
                 </div>
             </div>
+        </div>
 
             <div class="fur-batch-modal-footer">
                 <div class="fur-batch-modal-footer-info">
@@ -1637,8 +1685,8 @@
                     <button type="button" class="fur-batch-modal-footer-cancel" data-batch-upload-close>
                         <i class="fas fa-times" aria-hidden="true"></i> Close
                     </button>
-                    <div class="fur-batch-document-submit-row" id="batchUploadDocumentSubmitRow" hidden>
-                        <button type="button" id="batchUploadDocumentSubmitBtn" class="fur-batch-document-submit-btn">
+                    <div class="fur-batch-document-submit-row" id="batchUploadDocumentSubmitRow">
+                        <button type="button" id="batchUploadDocumentSubmitBtn" class="fur-batch-document-submit-btn" disabled>
                             <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i>
                             <span>Submit Documents</span>
                         </button>
@@ -2070,18 +2118,6 @@
                     'barangay' => trim((string) data_get($p, 'barangay', '')),
                     'funding_year' => trim((string) data_get($p, 'funding_year', '')),
                     'open_url' => route('fund-utilization.show', data_get($p, 'project_code')),
-                    'q1_bg' => data_get($p, 'quarter_q1_bg') ?: (data_get($p, 'quarter_q1_bg') ?? '#f3f4f6'),
-                    'q2_bg' => data_get($p, 'quarter_q2_bg') ?: (data_get($p, 'quarter_q2_bg') ?? '#f3f4f6'),
-                    'q3_bg' => data_get($p, 'quarter_q3_bg') ?: (data_get($p, 'quarter_q3_bg') ?? '#f3f4f6'),
-                    'q4_bg' => data_get($p, 'quarter_q4_bg') ?: (data_get($p, 'quarter_q4_bg') ?? '#f3f4f6'),
-                    'q1_pct' => data_get($p, 'quarter_q1_percentage') ?? 0,
-                    'q2_pct' => data_get($p, 'quarter_q2_percentage') ?? 0,
-                    'q3_pct' => data_get($p, 'quarter_q3_percentage') ?? 0,
-                    'q4_pct' => data_get($p, 'quarter_q4_percentage') ?? 0,
-                    'q1_tooltip' => data_get($p, 'quarter_q1_tooltip') ?? '',
-                    'q2_tooltip' => data_get($p, 'quarter_q2_tooltip') ?? '',
-                    'q3_tooltip' => data_get($p, 'quarter_q3_tooltip') ?? '',
-                    'q4_tooltip' => data_get($p, 'quarter_q4_tooltip') ?? '',
                 ];
             });
         @endphp
@@ -2124,6 +2160,15 @@
         };
         let pendingBatchUploadDocumentInput = null;
         let batchUploadShuttleInitialized = false;
+
+        function escapeBatchUploadHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
 
         function readBatchUploadModalOpenState() {
             try {
@@ -2375,6 +2420,9 @@
                 initializeBatchUploadShuttle();
             }
 
+            initializeBatchUploadIndividualCategoryModal();
+            updateBatchUploadIndividualCategoryPreparedUi();
+
             if (filterForm) {
                 const hasActiveFilters = Boolean(@json(!empty($activeFilters['search']) || !empty($activeFilters['program']) || !empty($activeFilters['funding_year']) || !empty($activeFilters['project_status']) || !empty($activeFilters['province'])));
                 filterForm.classList.toggle('collapsed', !hasActiveFilters);
@@ -2463,7 +2511,7 @@
             }
 
             if (batchUploadDocumentSubmitRow) {
-                batchUploadDocumentSubmitRow.hidden = true;
+                batchUploadDocumentSubmitRow.hidden = false;
             }
 
             if (batchUploadDocumentSubmitBtn) {
@@ -2832,45 +2880,91 @@
         }
 
         function updateBatchUploadSelectedDocumentsSummary() {
-            const summaryCard = document.getElementById('batchUploadSelectedDocumentsSummary');
-            const summaryCopy = document.getElementById('batchUploadSelectedDocumentsSummaryCopy');
-            const summaryList = document.getElementById('batchUploadSelectedDocumentsSummaryList');
-            const selectedProjectCodes = getSelectedBatchUploadProjectCodes();
+            // Prepared documents summary in Selected Projects column has been removed as requested
+        }
+
+        function updateBatchUploadStepGatingUi() {
             const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
-            const preparedEntries = getPreparedIndividualCategoryDocumentEntries();
-            const shouldShowSummary = preparedEntries.length > 0;
-            const escapeBatchUploadHtml = (value) => String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            const hasQuarter = Boolean(preparedState.quarter);
+            const hasAtLeastOneDoc = preparedState.fileCount > 0 || Boolean(preparedState.postingLink);
+            const isStep1Fulfilled = hasQuarter && hasAtLeastOneDoc;
 
-            if (!summaryCard || !summaryCopy || !summaryList) {
-                return;
+            const step1Badge = document.getElementById('batchUploadStep1StatusBadge');
+            const step2Container = document.getElementById('batchUploadStep2Container');
+            const step2Badge = document.getElementById('batchUploadStep2StatusBadge');
+            const reqQuarter = document.getElementById('batchUploadReqQuarter');
+            const reqDoc = document.getElementById('batchUploadReqDoc');
+            const lockedNotice = document.getElementById('batchUploadStep2LockedNotice');
+
+            // Update Step 1 Status Badge
+            if (step1Badge) {
+                if (isStep1Fulfilled) {
+                    step1Badge.className = 'fur-batch-step-badge-status fur-batch-step-badge-status-success';
+                    step1Badge.innerHTML = '<i class="fas fa-circle-check" aria-hidden="true"></i> Step 1 Complete';
+                } else {
+                    step1Badge.className = 'fur-batch-step-badge-status fur-batch-step-badge-status-pending';
+                    step1Badge.innerHTML = '<i class="fas fa-clock" aria-hidden="true"></i> Step 1 Incomplete';
+                }
             }
 
-            if (!shouldShowSummary) {
-                summaryCard.hidden = true;
-                summaryList.innerHTML = '';
-                summaryCopy.textContent = 'No prepared category documents yet.';
-                return;
+            // Update Requirement Checklist in Step 2 Overlay
+            if (reqQuarter) {
+                if (hasQuarter) {
+                    reqQuarter.className = 'fur-batch-req-item fur-batch-req-item-valid';
+                    reqQuarter.innerHTML = '<i class="fas fa-circle-check" aria-hidden="true" style="color: #10b981;"></i> <span>Quarter Selected (<strong>' + escapeBatchUploadHtml(preparedState.quarter) + '</strong>)</span>';
+                } else {
+                    reqQuarter.className = 'fur-batch-req-item fur-batch-req-item-invalid';
+                    reqQuarter.innerHTML = '<i class="fas fa-circle-xmark" aria-hidden="true" style="color: #ef4444;"></i> <span>Select a Quarter in Step 1 (Required)</span>';
+                }
             }
 
-            summaryCard.hidden = false;
-            const quarterLabel = preparedState.quarter !== '' ? `Quarter ${preparedState.quarter}` : 'Selected documents';
-            summaryCopy.textContent = selectedProjectCodes.length > 0
-                ? `${quarterLabel}: these uploaded documents will be submitted to the same individual-document fields of ${selectedProjectCodes.length} selected project${selectedProjectCodes.length === 1 ? '' : 's'}.`
-                : `${quarterLabel}: these uploaded documents are ready. Select projects from the table to submit them to the same individual-document fields.`;
-            summaryList.innerHTML = preparedEntries.map((entry) => `
-                <div class="fur-batch-selected-documents-summary-item">
-                    <div class="fur-batch-selected-documents-summary-item-copy">
-                        <div class="fur-batch-selected-documents-summary-item-title">${escapeBatchUploadHtml(entry.label)}</div>
-                        <div class="fur-batch-selected-documents-summary-item-meta">${escapeBatchUploadHtml(entry.meta)}</div>
-                    </div>
-                    <div class="fur-batch-selected-documents-summary-item-status">${escapeBatchUploadHtml(entry.status)}</div>
-                </div>
-            `).join('');
+            if (reqDoc) {
+                if (hasAtLeastOneDoc) {
+                    const countText = preparedState.fileCount > 0
+                        ? (preparedState.fileCount + ' file' + (preparedState.fileCount === 1 ? '' : 's') + ' attached' + (preparedState.postingLink ? ' + link' : ''))
+                        : 'Public posting link set';
+                    reqDoc.className = 'fur-batch-req-item fur-batch-req-item-valid';
+                    reqDoc.innerHTML = '<i class="fas fa-circle-check" aria-hidden="true" style="color: #10b981;"></i> <span>' + escapeBatchUploadHtml(countText) + '</span>';
+                } else {
+                    reqDoc.className = 'fur-batch-req-item fur-batch-req-item-invalid';
+                    reqDoc.innerHTML = '<i class="fas fa-circle-xmark" aria-hidden="true" style="color: #ef4444;"></i> <span>Upload at least 1 document or link in Step 1</span>';
+                }
+            }
+
+            // Update Step 2 Container & Controls
+            if (step2Container) {
+                step2Container.classList.toggle('is-locked', !isStep1Fulfilled);
+            }
+
+            if (lockedNotice) {
+                lockedNotice.hidden = isStep1Fulfilled;
+            }
+
+            if (step2Badge) {
+                if (isStep1Fulfilled) {
+                    step2Badge.className = 'fur-batch-step-badge-status fur-batch-step-badge-status-unlocked';
+                    step2Badge.innerHTML = '<i class="fas fa-lock-open" aria-hidden="true"></i> Ready to Select';
+                } else {
+                    step2Badge.className = 'fur-batch-step-badge-status fur-batch-step-badge-status-locked';
+                    step2Badge.innerHTML = '<i class="fas fa-lock" aria-hidden="true"></i> Locked';
+                }
+            }
+
+            // Toggle shuttle buttons
+            const shuttleButtons = document.querySelectorAll('.fur-batch-shuttle-btn');
+            shuttleButtons.forEach((btn) => {
+                btn.disabled = !isStep1Fulfilled;
+            });
+
+            // Toggle toggle-all checkboxes
+            const toggleAllAvailable = document.getElementById('batchUploadAvailableToggleAll');
+            if (toggleAllAvailable) {
+                toggleAllAvailable.disabled = !isStep1Fulfilled;
+            }
+            const toggleAllSelected = document.getElementById('batchUploadSelectedToggleAll');
+            if (toggleAllSelected) {
+                toggleAllSelected.disabled = !isStep1Fulfilled;
+            }
         }
 
         function updateBatchUploadSharedSubmitUi() {
@@ -2888,7 +2982,7 @@
             );
 
             if (submitRow) {
-                submitRow.hidden = !shouldShowSubmit;
+                submitRow.hidden = false;
             }
 
             if (submitButton) {
@@ -2898,21 +2992,62 @@
             const footerHint = document.getElementById('batchUploadFooterHint');
             if (footerHint) {
                 const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
-                if (!hasSelectedProjects && !hasCategoryDocuments) {
-                    footerHint.innerHTML = '<i class="fas fa-info-circle" style="color: #002C76;"></i> Attach documents on the left and select target projects from the queue.';
+                const hasQuarter = Boolean(preparedState.quarter);
+                const hasAtLeastOneDoc = preparedState.fileCount > 0 || Boolean(preparedState.postingLink);
+                const isStep1Fulfilled = hasQuarter && hasAtLeastOneDoc;
+
+                if (!isStep1Fulfilled) {
+                    if (!hasQuarter && !hasAtLeastOneDoc) {
+                        footerHint.innerHTML = '<i class="fas fa-lock" style="color: #64748b;"></i> <strong>Step 1:</strong> Select a Quarter and upload at least one document on the left to unlock project selection.';
+                    } else if (!hasQuarter) {
+                        footerHint.innerHTML = '<i class="fas fa-calendar-exclamation" style="color: #f59e0b;"></i> Document attached, but <strong>Quarter is missing</strong>. Select a Quarter in Step 1 to unlock Step 2.';
+                    } else {
+                        footerHint.innerHTML = '<i class="fas fa-file-circle-exclamation" style="color: #f59e0b;"></i> Quarter selected, but <strong>no documents attached</strong>. Attach at least one file or URL in Step 1 to unlock Step 2.';
+                    }
                 } else if (!hasSelectedProjects) {
-                    footerHint.innerHTML = '<i class="fas fa-arrow-right" style="color: #2563eb;"></i> Documents attached. Please select at least one project from the queue.';
-                } else if (!hasCategoryDocuments) {
-                    footerHint.innerHTML = `<i class="fas fa-arrow-left" style="color: #2563eb;"></i> <strong>${selectedProjectCodes.length}</strong> project(s) selected. Please attach at least one document on the left.`;
-                } else if (!preparedState.quarter) {
-                    footerHint.innerHTML = '<i class="fas fa-calendar-exclamation" style="color: #f59e0b;"></i> Please select a submission quarter in the dropdown above.';
+                    footerHint.innerHTML = '<i class="fas fa-unlock" style="color: #2563eb;"></i> <strong>Step 1 Complete!</strong> Step 2 is now unlocked. Select target projects from the Available queue.';
                 } else {
-                    footerHint.innerHTML = `<i class="fas fa-check-circle" style="color: #10b981;"></i> Ready to submit documents to <strong>${selectedProjectCodes.length}</strong> project(s) for <strong>Quarter ${preparedState.quarter}</strong>.`;
+                    footerHint.innerHTML = `<i class="fas fa-check-circle" style="color: #10b981;"></i> Ready to submit! <strong>${selectedProjectCodes.length}</strong> project(s) selected for <strong>Quarter ${escapeBatchUploadHtml(preparedState.quarter)}</strong>.`;
+                }
+            }
+        }
+
+        function syncBatchUploadQuarterPillsUi() {
+            const quarterSelect = document.getElementById('batchUploadCategoryQuarter');
+            const selectedQuarter = (quarterSelect?.value || '').trim();
+            const badge = document.getElementById('batchUploadCategoryQuarterBadge');
+            const card = quarterSelect?.closest('.fur-batch-quarter-card');
+
+            document.querySelectorAll('.fur-batch-quarter-pill').forEach((btn) => {
+                const val = btn.dataset.quarterVal || '';
+                const isSelected = val === selectedQuarter && Boolean(selectedQuarter);
+                btn.classList.toggle('is-selected', isSelected);
+                btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+            });
+
+            if (card) {
+                card.dataset.selectedQuarter = selectedQuarter;
+            }
+
+            if (quarterSelect) {
+                quarterSelect.dataset.selectedQuarter = selectedQuarter;
+                quarterSelect.classList.toggle('has-quarter-selected', Boolean(selectedQuarter));
+            }
+
+            if (badge) {
+                if (selectedQuarter) {
+                    badge.className = `fur-batch-quarter-active-badge fur-batch-q-badge-${selectedQuarter.toLowerCase()}`;
+                    badge.innerHTML = `<i class="fas fa-check-circle" aria-hidden="true"></i> ${selectedQuarter} Selected`;
+                } else {
+                    badge.className = 'fur-batch-required-badge';
+                    badge.textContent = 'Required';
                 }
             }
         }
 
         function updateBatchUploadIndividualCategoryPreparedUi() {
+            syncBatchUploadQuarterPillsUi();
+            updateBatchUploadStepGatingUi();
             updateBatchUploadSelectedDocumentsSummary();
             updateBatchUploadSharedSubmitUi();
         }
@@ -3150,6 +3285,21 @@
                 });
                 syncBatchUploadIndividualCategoryFileName(inputElement);
             });
+
+            document.querySelectorAll('.fur-batch-quarter-pill').forEach((btn) => {
+                if (btn.dataset.batchQuarterPillBound === '1') {
+                    return;
+                }
+                btn.dataset.batchQuarterPillBound = '1';
+                btn.addEventListener('click', () => {
+                    const quarterVal = btn.dataset.quarterVal || '';
+                    if (quarterSelect) {
+                        quarterSelect.value = quarterVal;
+                        quarterSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+            });
+            syncBatchUploadQuarterPillsUi();
         }
 
         function closeBatchUploadSubmitConfirmModal() {
@@ -3678,6 +3828,12 @@
                 }
 
                 const movingToSelected = direction === 'right';
+                if (movingToSelected) {
+                    const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+                    if (!preparedState.quarter || (preparedState.fileCount === 0 && !preparedState.postingLink)) {
+                        return;
+                    }
+                }
                 const sourceLookup = movingToSelected ? availableRowLookup : selectedRowLookup;
                 const targetLookup = movingToSelected ? selectedRowLookup : availableRowLookup;
                 const sourceBody = movingToSelected ? availableBody : selectedBody;
@@ -3731,6 +3887,11 @@
             const handleRowToggle = (event, checkedSet, checkboxSelector) => {
                 const row = event.target.closest('tr[data-project-code]');
                 if (!row || event.target.closest('input, button, a, label, select, textarea')) {
+                    return;
+                }
+
+                const preparedState = getBatchUploadPreparedIndividualCategoryDocuments();
+                if (!preparedState.quarter || (preparedState.fileCount === 0 && !preparedState.postingLink)) {
                     return;
                 }
 
@@ -5251,7 +5412,7 @@
             display: none;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 16px;
         }
 
         .fur-batch-modal.is-open {
@@ -5679,13 +5840,13 @@
         .fur-batch-modal-dialog {
             position: relative;
             z-index: 1;
-            width: min(1480px, 96vw);
-            max-height: min(94vh, 940px);
+            width: min(1660px, calc(100vw - 36px));
+            max-height: min(94vh, 920px);
             overflow: hidden;
             display: flex;
             flex-direction: column;
             background: #ffffff;
-            border-radius: 20px;
+            border-radius: 18px;
             box-shadow: 0 25px 60px -15px rgba(0, 20, 60, 0.35), 0 0 0 1px rgba(0, 44, 118, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.2);
             contain: layout paint;
@@ -5892,6 +6053,20 @@
             color: #64748b;
         }
 
+        .fur-batch-active-filter-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+            font-size: 10px;
+            font-weight: 700;
+            margin-left: 6px;
+        }
+
         .fur-batch-filter-chevron {
             color: #64748b;
             font-size: 13px;
@@ -5968,38 +6143,110 @@
         /* Workspace Grid */
         .fur-batch-workspace {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+            grid-template-columns: 460px minmax(0, 1fr);
             gap: 20px;
-            align-items: start;
-            padding: 20px 28px;
+            align-items: stretch;
+            padding: 16px 24px 20px;
             background: #f8fafc;
         }
 
-        .fur-batch-document-panel,
-        .fur-batch-project-list {
+        /* Step Containers */
+        .fur-batch-step-container {
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
             min-width: 0;
+            height: 640px;
+            max-height: 640px;
             contain: layout paint;
         }
 
-        .fur-batch-document-panel-header,
-        .fur-batch-project-panel-header {
+        .fur-batch-step-container:hover {
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+        }
+
+        .fur-batch-container-header {
+            padding: 12px 18px;
+            background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+            border-bottom: 1px solid #e2e8f0;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            margin-bottom: 12px;
+            flex-shrink: 0;
         }
 
-        .fur-batch-section-header-left {
+        .fur-batch-container-header-left {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             min-width: 0;
         }
 
+        .fur-batch-container-header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+
+        .fur-batch-container-title {
+            margin: 0;
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+        }
+
+        .fur-batch-container-desc {
+            margin: 2px 0 0;
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        .fur-batch-container-body {
+            padding: 14px 16px;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .fur-batch-step1-container .fur-batch-container-body {
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .fur-batch-step2-body {
+            position: relative;
+            padding: 12px;
+            height: calc(100% - 58px);
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .fur-batch-step2-container .fur-batch-shuttle {
+            height: 100%;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* Step Badges */
         .fur-batch-step-badge {
-            width: 28px;
-            height: 28px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             background: linear-gradient(135deg, #002C76 0%, #1d4ed8 100%);
             color: #ffffff;
@@ -6010,21 +6257,50 @@
             justify-content: center;
             flex-shrink: 0;
             box-shadow: 0 2px 6px rgba(0, 44, 118, 0.25);
+            transition: all 0.2s ease;
         }
 
-        .fur-batch-section-title {
-            margin: 0;
-            color: #0f172a;
-            font-size: 15px;
-            font-weight: 800;
-            letter-spacing: -0.01em;
+        .fur-batch-step2-container.is-locked .fur-batch-step2-badge {
+            background: #94a3b8;
+            box-shadow: none;
+            opacity: 0.85;
         }
 
-        .fur-batch-section-desc {
-            margin: 2px 0 0;
+        /* Step Badge Status */
+        .fur-batch-step-badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            transition: all 0.2s ease;
+        }
+
+        .fur-batch-step-badge-status-pending {
+            background: #fffbeb;
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+
+        .fur-batch-step-badge-status-success {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+        .fur-batch-step-badge-status-locked {
+            background: #f1f5f9;
             color: #64748b;
-            font-size: 12px;
-            line-height: 1.35;
+            border: 1px solid #cbd5e1;
+        }
+
+        .fur-batch-step-badge-status-unlocked {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
         }
 
         .fur-batch-document-pill {
@@ -6043,106 +6319,226 @@
             white-space: nowrap;
         }
 
-        /* Step 1: Summary Card (Projects + Quarter) */
-        .fur-batch-category-summary-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            background: #ffffff;
-            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
-            margin-bottom: 14px;
-            overflow: hidden;
+        /* Step 2 Locked Overlay & Gating */
+        .fur-batch-step2-container.is-locked .fur-batch-shuttle {
+            pointer-events: none;
+            user-select: none;
+            opacity: 0.35;
+            filter: grayscale(0.5);
+            transition: opacity 0.25s ease, filter 0.25s ease;
         }
 
-        .fur-batch-category-summary-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-            gap: 16px;
-            padding: 14px 16px;
+        .fur-batch-step2-container:not(.is-locked) .fur-batch-step2-locked-overlay {
+            display: none !important;
         }
 
-        .fur-batch-category-summary-block {
-            min-width: 0;
-        }
-
-        .fur-batch-summary-projects {
+        .fur-batch-step2-locked-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            background: rgba(248, 250, 252, 0.94);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
             display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding-right: 12px;
-            border-right: 1px solid #f1f5f9;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+            border-radius: 0 0 16px 16px;
+            transition: opacity 0.25s ease;
         }
 
-        .fur-batch-summary-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            background: #eff6ff;
-            color: #1d4ed8;
-            font-size: 18px;
+        .fur-batch-step2-locked-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 28px 24px;
+            max-width: 440px;
+            width: 100%;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+            animation: furBatchFadeIn 0.25s ease;
+        }
+
+        @keyframes furBatchFadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fur-batch-step2-locked-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: #fef2f2;
+            border: 1px solid #fee2e2;
+            color: #ef4444;
+            font-size: 20px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
-            box-shadow: 0 2px 6px rgba(29, 78, 216, 0.1);
+            margin: 0 auto 12px;
         }
 
-        .fur-batch-summary-info {
-            min-width: 0;
-        }
-
-        .fur-batch-category-summary-label {
-            display: block;
-            color: #64748b;
-            font-size: 11px;
+        .fur-batch-step2-locked-card h5 {
+            margin: 0 0 6px;
+            font-size: 16px;
             font-weight: 800;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            margin-bottom: 4px;
+            color: #0f172a;
         }
 
-        .fur-batch-summary-count-wrap {
-            display: flex;
-            align-items: baseline;
-            gap: 6px;
-        }
-
-        .fur-batch-category-summary-value {
-            color: #002C76;
-            font-size: 26px;
-            font-weight: 900;
-            line-height: 1;
-        }
-
-        .fur-batch-summary-unit {
+        .fur-batch-step2-locked-card p {
+            margin: 0 0 16px;
+            font-size: 13px;
             color: #64748b;
-            font-size: 12px;
-            font-weight: 600;
+            line-height: 1.45;
         }
 
-        .fur-batch-category-summary-copy {
-            margin-top: 4px;
-            color: #64748b;
-            font-size: 11px;
-            line-height: 1.4;
-            overflow-wrap: anywhere;
-        }
-
-        .fur-batch-summary-quarter {
+        .fur-batch-step2-requirements {
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            gap: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 12px 14px;
+            text-align: left;
+        }
+
+        .fur-batch-req-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            transition: color 0.15s ease;
+        }
+
+        .fur-batch-req-item.fur-batch-req-item-valid {
+            color: #047857;
+        }
+
+        .fur-batch-req-item.fur-batch-req-item-invalid {
+            color: #dc2626;
+        }
+
+        /* Step 1: Colored Quarter Card */
+        .fur-batch-category-summary-card,
+        .fur-batch-quarter-card {
+            border: 1.5px solid #c7d2fe;
+            border-left: 5px solid #6366f1;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #fbfaff 0%, #ffffff 50%, #f0f7ff 100%);
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.08);
+            margin-bottom: 14px;
+            padding: 14px 16px 16px;
+            transition: all 0.25s ease;
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q1"] {
+            border-color: #93c5fd;
+            border-left-color: #2563eb;
+            background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 55%, #eff6ff 100%);
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q2"] {
+            border-color: #86efac;
+            border-left-color: #059669;
+            background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 55%, #ecfdf5 100%);
+            box-shadow: 0 4px 14px rgba(5, 150, 105, 0.12);
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q3"] {
+            border-color: #fde68a;
+            border-left-color: #d97706;
+            background: linear-gradient(135deg, #fffbeb 0%, #ffffff 55%, #fef3c7 100%);
+            box-shadow: 0 4px 14px rgba(217, 119, 6, 0.12);
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q4"] {
+            border-color: #d8b4fe;
+            border-left-color: #7c3aed;
+            background: linear-gradient(135deg, #faf5ff 0%, #ffffff 55%, #f3e8ff 100%);
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.12);
         }
 
         .fur-batch-summary-quarter-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 6px;
+            gap: 12px;
+            margin-bottom: 10px;
         }
 
-        .fur-batch-summary-quarter-header .fur-batch-category-summary-label {
+        .fur-batch-quarter-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .fur-batch-quarter-icon-wrap {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+            color: #6366f1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(99, 102, 241, 0.18);
+            transition: all 0.25s ease;
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q1"] .fur-batch-quarter-icon-wrap {
+            background: #dbeafe;
+            color: #1d4ed8;
+            box-shadow: 0 2px 6px rgba(29, 78, 216, 0.22);
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q2"] .fur-batch-quarter-icon-wrap {
+            background: #d1fae5;
+            color: #047857;
+            box-shadow: 0 2px 6px rgba(4, 120, 87, 0.22);
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q3"] .fur-batch-quarter-icon-wrap {
+            background: #fef3c7;
+            color: #b45309;
+            box-shadow: 0 2px 6px rgba(180, 83, 9, 0.22);
+        }
+
+        .fur-batch-quarter-card[data-selected-quarter="Q4"] .fur-batch-quarter-icon-wrap {
+            background: #ede9fe;
+            color: #6d28d9;
+            box-shadow: 0 2px 6px rgba(109, 40, 217, 0.22);
+        }
+
+        .fur-batch-quarter-title-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .fur-batch-category-summary-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #1e1b4b;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: -0.01em;
             margin-bottom: 0;
+        }
+
+        .fur-batch-quarter-subtitle {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 500;
+            line-height: 1.25;
+            margin-top: 1px;
         }
 
         .fur-batch-required-badge {
@@ -6151,10 +6547,177 @@
             border: 1px solid #fecaca;
             font-size: 9px;
             font-weight: 800;
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 3px 8px;
+            border-radius: 999px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+
+        .fur-batch-quarter-active-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 3px 9px;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .fur-batch-q-badge-q1 {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+
+        .fur-batch-q-badge-q2 {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+
+        .fur-batch-q-badge-q3 {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fcd34d;
+        }
+
+        .fur-batch-q-badge-q4 {
+            background: #ede9fe;
+            color: #5b21b6;
+            border: 1px solid #c4b5fd;
+        }
+
+        /* 4 Colored Interactive Quarter Pills */
+        .fur-batch-quarter-pills-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin: 8px 0 10px;
+        }
+
+        .fur-batch-quarter-pill {
+            appearance: none;
+            -webkit-appearance: none;
+            border-radius: 10px;
+            padding: 8px 6px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            text-align: center;
+            outline: none;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .fur-batch-qp-tag {
+            font-size: 14px;
+            font-weight: 900;
+            line-height: 1.1;
+            letter-spacing: 0.02em;
+        }
+
+        .fur-batch-quarter-pill.is-selected .fur-batch-qp-tag::after {
+            content: " \2713";
+            font-size: 11px;
+            font-weight: 900;
+            opacity: 0.95;
+        }
+
+        .fur-batch-qp-text {
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1;
+            letter-spacing: 0.01em;
+            opacity: 0.88;
+        }
+
+        /* Pill Q1: Vibrant Sapphire Blue */
+        .fur-batch-qp-q1 {
+            background: #f0f7ff;
+            border: 1.5px solid #bfdbfe;
+            color: #1d4ed8;
+        }
+        .fur-batch-qp-q1:hover {
+            background: #dbeafe;
+            border-color: #60a5fa;
+            transform: translateY(-1px);
+        }
+        .fur-batch-qp-q1.is-selected {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border-color: #1e40af;
+            color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+            transform: translateY(-1px);
+        }
+
+        /* Pill Q2: Vibrant Emerald Green */
+        .fur-batch-qp-q2 {
+            background: #f0fdf4;
+            border: 1.5px solid #bbf7d0;
+            color: #047857;
+        }
+        .fur-batch-qp-q2:hover {
+            background: #dcfce7;
+            border-color: #4ade80;
+            transform: translateY(-1px);
+        }
+        .fur-batch-qp-q2.is-selected {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border-color: #065f46;
+            color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.35);
+            transform: translateY(-1px);
+        }
+
+        /* Pill Q3: Vibrant Amber / Warm Orange */
+        .fur-batch-qp-q3 {
+            background: #fffbeb;
+            border: 1.5px solid #fde68a;
+            color: #b45309;
+        }
+        .fur-batch-qp-q3:hover {
+            background: #fef3c7;
+            border-color: #fbbf24;
+            transform: translateY(-1px);
+        }
+        .fur-batch-qp-q3.is-selected {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            border-color: #92400e;
+            color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
+            transform: translateY(-1px);
+        }
+
+        /* Pill Q4: Vibrant Royal Purple */
+        .fur-batch-qp-q4 {
+            background: #faf5ff;
+            border: 1.5px solid #e9d5ff;
+            color: #7e22ce;
+        }
+        .fur-batch-qp-q4:hover {
+            background: #f3e8ff;
+            border-color: #c084fc;
+            transform: translateY(-1px);
+        }
+        .fur-batch-qp-q4.is-selected {
+            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            border-color: #5b21b6;
+            color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+            transform: translateY(-1px);
+        }
+
+        /* Dropdown Select */
+        .fur-batch-quarter-select-shell {
+            position: relative;
         }
 
         .fur-batch-quarter-select {
@@ -6164,17 +6727,42 @@
             border: 1.5px solid #cbd5e1;
             background: #ffffff;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
             color: #1e293b;
-            padding: 0 10px;
-            transition: all 0.15s ease;
+            padding: 0 12px;
+            transition: all 0.2s ease;
             box-sizing: border-box;
+            cursor: pointer;
         }
 
         .fur-batch-quarter-select:focus {
             outline: none;
-            border-color: #002C76;
-            box-shadow: 0 0 0 3px rgba(0, 44, 118, 0.12);
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+        }
+
+        .fur-batch-quarter-select[data-selected-quarter="Q1"] {
+            border-color: #93c5fd;
+            background: #f8faff;
+            color: #1d4ed8;
+        }
+
+        .fur-batch-quarter-select[data-selected-quarter="Q2"] {
+            border-color: #86efac;
+            background: #f8fefb;
+            color: #047857;
+        }
+
+        .fur-batch-quarter-select[data-selected-quarter="Q3"] {
+            border-color: #fde68a;
+            background: #fffdf7;
+            color: #b45309;
+        }
+
+        .fur-batch-quarter-select[data-selected-quarter="Q4"] {
+            border-color: #d8b4fe;
+            background: #faf8ff;
+            color: #7e22ce;
         }
 
         /* Step 1: Category Document Cards */
@@ -6355,22 +6943,22 @@
         }
 
         .fur-batch-category-file-input::file-selector-button {
-            border: 1px solid #cbd5e1;
+            border: 1px solid #002C76;
             border-radius: 6px;
             padding: 5px 12px;
             font-size: 11px;
             font-weight: 700;
-            background: #f1f5f9;
-            color: #1e293b;
+            background: #002C76;
+            color: #ffffff;
             cursor: pointer;
             margin-right: 10px;
             transition: all 0.15s ease;
         }
 
         .fur-batch-category-file-input::file-selector-button:hover {
-            background: #002C76;
+            background: #1d4ed8;
             color: #ffffff;
-            border-color: #002C76;
+            border-color: #1d4ed8;
         }
 
         .fur-batch-category-file-name {
@@ -6386,6 +6974,14 @@
             color: #047857;
             font-style: normal;
             font-weight: 600;
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            border-radius: 6px;
+            padding: 3px 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 5px;
         }
 
         .fur-batch-category-written-recipient-shell {
@@ -6625,8 +7221,10 @@
 
         .fur-batch-shuttle-table-wrap {
             position: relative;
-            height: 520px;
-            max-height: 520px;
+            flex: 1;
+            min-height: 0;
+            height: 480px;
+            max-height: 480px;
             overflow-y: auto;
             overflow-x: hidden;
             contain: layout paint;
@@ -6661,7 +7259,6 @@
             font-size: 11px;
             vertical-align: middle;
             background: #ffffff;
-            transition: background-color 0.1s ease;
         }
 
         .fur-batch-shuttle-table tbody tr:hover td {
@@ -6681,13 +7278,15 @@
             flex-direction: column;
             gap: 2px;
             min-width: 0;
+            width: 100%;
         }
 
         .fur-batch-shuttle-card-top {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-start;
             gap: 6px;
+            flex-wrap: wrap;
         }
 
         .fur-batch-project-code {
@@ -6709,11 +7308,13 @@
             align-items: center;
             gap: 3px;
             font-size: 10px;
-            font-weight: 600;
-            color: #64748b;
-            background: #f1f5f9;
-            padding: 2px 6px;
+            font-weight: 700;
+            color: #0369a1;
+            background: #e0f2fe;
+            border: 1px solid #bae6fd;
+            padding: 1px 6px;
             border-radius: 4px;
+            margin-left: auto;
         }
 
         .fur-batch-shuttle-title {
@@ -6735,9 +7336,9 @@
             display: flex;
             align-items: center;
             gap: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            min-width: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
             margin-top: 2px;
         }
 
@@ -6759,7 +7360,7 @@
             font-weight: 700;
             text-decoration: none;
             border: 1px solid #bfdbfe;
-            transition: all 0.15s ease;
+            transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
             white-space: nowrap;
         }
 
@@ -6774,8 +7375,9 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 60px 0 0;
+            align-self: center;
+            gap: 10px;
+            padding: 0;
         }
 
         .fur-batch-shuttle-btn {
@@ -6791,19 +7393,117 @@
             justify-content: center;
             font-size: 13px;
             box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04);
-            transition: all 0.15s ease;
+            transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+            contain: layout paint;
         }
 
         .fur-batch-shuttle-btn:hover {
             border-color: #002C76;
             background: #002C76;
             color: #ffffff;
-            transform: scale(1.05);
-            box-shadow: 0 4px 10px rgba(0, 44, 118, 0.25);
         }
 
-        .fur-batch-shuttle-btn:active {
-            transform: scale(0.96);
+        .fur-batch-shuttle-table th:first-child,
+        .fur-batch-shuttle-table td:first-child {
+            width: 38px;
+            padding-left: 8px;
+            padding-right: 8px;
+            text-align: center;
+        }
+
+        .fur-batch-shuttle-panel-selected .fur-batch-shuttle-table th:last-child,
+        .fur-batch-shuttle-panel-selected .fur-batch-shuttle-table td:last-child {
+            width: 70px;
+            padding-left: 6px;
+            padding-right: 6px;
+            text-align: center;
+        }
+
+        .fur-batch-shuttle-panel-selected .fur-batch-shuttle-table td:nth-child(2) {
+            min-width: 0;
+        }
+
+        @media (max-width: 1100px) {
+            .fur-batch-workspace {
+                grid-template-columns: 1fr;
+            }
+
+            .fur-batch-step-container {
+                height: auto;
+                max-height: none;
+            }
+
+            .fur-batch-step1-container .fur-batch-container-body {
+                max-height: 520px;
+            }
+
+            .fur-batch-step2-body {
+                height: 560px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .fur-batch-modal-header-main {
+                gap: 10px;
+            }
+
+            .fur-batch-modal-header-icon {
+                width: 38px;
+                height: 38px;
+                font-size: 16px;
+            }
+
+            .fur-batch-modal-header h3 {
+                font-size: 16px;
+            }
+
+            .fur-batch-modal-header p {
+                font-size: 11px;
+            }
+
+            .fur-batch-container-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .fur-batch-container-header-right {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .fur-batch-shuttle-panel-header {
+                padding: 10px;
+            }
+
+            .fur-batch-shuttle-title-group h4 {
+                font-size: 12px;
+            }
+
+            .fur-batch-shuttle-title-group p {
+                font-size: 10px;
+            }
+
+            .fur-batch-shuttle-table thead th,
+            .fur-batch-shuttle-table tbody td {
+                padding: 7px 6px;
+            }
+
+            .fur-batch-shuttle-card-top {
+                align-items: flex-start;
+            }
+
+            .fur-batch-shuttle-year {
+                margin-left: 0;
+            }
+
+            .fur-batch-shuttle-controls {
+                gap: 6px;
+            }
+
+            .fur-batch-shuttle-btn {
+                width: 34px;
+                height: 34px;
+            }
         }
 
         .fur-batch-empty-state {
@@ -6813,81 +7513,6 @@
             font-size: 12px;
             font-weight: 600;
             line-height: 1.5;
-        }
-
-        .fur-batch-selected-documents-summary {
-            margin: 0 14px 14px;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            background: #ffffff;
-            overflow: hidden;
-        }
-
-        .fur-batch-selected-documents-summary-header {
-            padding: 10px 14px;
-            border-bottom: 1px solid #f1f5f9;
-            background: #f8fafc;
-        }
-
-        .fur-batch-selected-documents-summary-title {
-            color: #0f172a;
-            font-size: 12px;
-            font-weight: 700;
-        }
-
-        .fur-batch-selected-documents-summary-copy {
-            color: #64748b;
-            font-size: 11px;
-            margin-top: 2px;
-            line-height: 1.4;
-        }
-
-        .fur-batch-selected-documents-summary-list {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .fur-batch-selected-documents-summary-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 10px 14px;
-            border-top: 1px solid #f1f5f9;
-        }
-
-        .fur-batch-selected-documents-summary-item:first-child {
-            border-top: none;
-        }
-
-        .fur-batch-selected-documents-summary-item-copy {
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .fur-batch-selected-documents-summary-item-title {
-            color: #0f172a;
-            font-size: 11px;
-            font-weight: 700;
-        }
-
-        .fur-batch-selected-documents-summary-item-meta {
-            color: #64748b;
-            font-size: 10px;
-        }
-
-        .fur-batch-selected-documents-summary-item-status {
-            display: inline-flex;
-            align-items: center;
-            padding: 3px 8px;
-            border-radius: 999px;
-            background: #ecfdf5;
-            color: #047857;
-            font-size: 10px;
-            font-weight: 700;
-            white-space: nowrap;
         }
 
         /* Modal Footer Action Bar */
@@ -7046,15 +7671,8 @@
                 padding: 16px;
             }
 
-            .fur-batch-category-summary-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .fur-batch-summary-projects {
-                border-right: none;
-                border-bottom: 1px solid #f1f5f9;
-                padding-right: 0;
-                padding-bottom: 12px;
+            .fur-batch-quarter-pills-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
 
             .fur-batch-category-written-grid {

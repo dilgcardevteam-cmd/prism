@@ -62,6 +62,12 @@ Route::middleware(['auth'])->group(function () {
         })->name('fund-utilization.batch-upload-documents.get');
         Route::post('/batch-upload-documents', [FundUtilizationReportController::class, 'uploadBatchDocumentsBulk'])->name('fund-utilization.batch-upload-documents');
         Route::post('/batch-upload-individual-documents', [FundUtilizationReportController::class, 'uploadIndividualDocumentsBulk'])->name('fund-utilization.batch-upload-individual-documents');
+
+        // Batch Approvals
+        Route::get('/batch-approvals/{batchCode}', [\App\Modules\FundUtilization\Controllers\FundUtilizationBatchApprovalController::class, 'show'])->name('fund-utilization.batch-approval.show');
+        Route::post('/batch-approvals/{batchCode}/approve', [\App\Modules\FundUtilization\Controllers\FundUtilizationBatchApprovalController::class, 'approve'])->name('fund-utilization.batch-approval.approve');
+        Route::post('/batch-approvals/{batchCode}/return', [\App\Modules\FundUtilization\Controllers\FundUtilizationBatchApprovalController::class, 'returnBatch'])->name('fund-utilization.batch-approval.return');
+
         Route::get('/{projectCode}', [FundUtilizationReportController::class, 'show'])->name('fund-utilization.show');
         Route::get('/{projectCode}/edit', [FundUtilizationReportController::class, 'edit'])->name('fund-utilization.edit');
         Route::put('/{projectCode}', [FundUtilizationReportController::class, 'update'])->name('fund-utilization.update');

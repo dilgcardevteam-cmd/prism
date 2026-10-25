@@ -26,7 +26,9 @@ class PreImplementationDocumentController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:pre_implementation_documents,view')->only(['index', 'show']);
-        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['save', 'deleteDocument', 'deleteDocumentFile', 'uploadMultiDocument']);
+        $this->middleware('crud_permission:pre_implementation_documents,add')->only(['save', 'uploadMultiDocument']);
+        $this->middleware('crud_permission:pre_implementation_documents,delete')->only(['deleteDocument', 'deleteDocumentFile']);
+        $this->middleware('crud_permission:pre_implementation_documents,view')->only(['viewDocument', 'viewDocumentFile']);
         $this->middleware('crud_permission:pre_implementation_documents,update')->only(['validateDocument', 'validateDocumentFile']);
     }
 
@@ -342,8 +344,13 @@ class PreImplementationDocumentController extends Controller
             }
 
             $file = $request->file($field);
+            abort_unless($file && $file->isValid(), 422, 'The uploaded file is invalid.');
             $originalName = $file->getClientOriginalName();
-            $path = $file->storeAs($folder, $originalName, 'public');
+            $storedName = Str::uuid()->toString() . '.' . strtolower($file->getClientOriginalExtension());
+            $path = $file->storeAs($folder, $storedName, 'public');
+            if ($path === false) {
+                abort(500, 'The uploaded file could not be stored.');
+            }
 
             $document->{$field} = $path;
             $fileRecord->file_path = $path;
@@ -422,8 +429,13 @@ class PreImplementationDocumentController extends Controller
         $isProvincialDilgUploader = ($initialStatus === LguReportorialWorkflowService::STATUS_PENDING_RO);
         $isMlgooUploader = ($initialStatus === LguReportorialWorkflowService::STATUS_PENDING_PO && $currentUser->isMlgooUser());
         $file = $validated['document_file'];
+        abort_unless($file->isValid(), 422, 'The uploaded file is invalid.');
         $originalName = $file->getClientOriginalName();
-        $path = $file->storeAs($folder, $originalName, 'public');
+        $storedName = Str::uuid()->toString() . '.' . strtolower($file->getClientOriginalExtension());
+        $path = $file->storeAs($folder, $storedName, 'public');
+        if ($path === false) {
+            abort(500, 'The uploaded file could not be stored.');
+        }
 
         $fileRecord = new PreImplementationDocumentFile();
         $fileRecord->project_code = $project->project_code;

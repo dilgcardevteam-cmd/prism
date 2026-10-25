@@ -28,7 +28,7 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $this->middleware('crud_permission:local_project_monitoring_committee,view')->only(['index', 'show', 'edit', 'viewDocument', 'export']);
         $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:local_project_monitoring_committee,update')->only(['update', 'approveDocument']);
-        $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy']);
+        $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy', 'deleteDocumentFile']);
         $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
@@ -1109,8 +1109,8 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $officeName = $id;
         $request->validate([
-            'document' => ['required'],
-            'document.*' => ['file', 'mimes:pdf', 'max:25600'],
+            'document' => ['required', 'array', 'min:1'],
+            'document.*' => ['required', 'file', 'mimes:pdf', 'max:25600'],
             'doc_type' => ['required', 'string', 'max:50'],
             'year' => ['nullable', 'integer'],
             'quarter' => ['nullable', 'in:Q1,Q2,Q3,Q4'],
@@ -1198,8 +1198,13 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         $firstFile = true;
         foreach ($uploadedFiles as $file) {
+            abort_unless($file && $file->isValid(), 422, 'One or more uploaded files are invalid.');
             $originalName = $file->getClientOriginalName();
-            $path = $file->storeAs('lpmc/' . $officeSlug, $originalName, 'public');
+            $storedName = Str::uuid()->toString() . '.' . strtolower($file->getClientOriginalExtension());
+            $path = $file->storeAs('lpmc/' . $officeSlug, $storedName, 'public');
+            if ($path === false) {
+                abort(500, 'The uploaded file could not be stored.');
+            }
 
             LpmcDocumentFile::create([
                 'lpmc_document_id' => $document->id,

@@ -15,6 +15,8 @@ use App\Http\Requests\FundUtilizationWrittenNoticeUploadRequest;
 use App\Models\ApprovalLog;
 use App\Models\FundUtilizationReport;
 use App\Models\FundUtilizationApprovalWorkflow;
+use App\Models\FundUtilizationBatchApproval;
+use App\Models\FundUtilizationBatchApprovalLog;
 use App\Models\LocallyFundedProject;
 use App\Models\FURBatchDocument;
 use App\Models\FURMovUpload;
@@ -97,14 +99,19 @@ class FundUtilizationReportController extends Controller
         $now = now();
 
         LocallyFundedProject::query()
-            ->whereRaw('UPPER(TRIM(COALESCE(fund_source, ""))) <> ?', ['SGLGIF'])
-            ->whereRaw('UPPER(TRIM(COALESCE(subaybayan_project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
+            ->leftJoin('subay_project_profiles as spp', 'spp.project_code', '=', 'locally_funded_projects.subaybayan_project_code')
+            ->whereRaw('UPPER(TRIM(COALESCE(locally_funded_projects.fund_source, ""))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(locally_funded_projects.subaybayan_project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('tbfur')
                     ->whereColumn('tbfur.project_code', 'locally_funded_projects.subaybayan_project_code');
             })
-            ->orderBy('id')
+            ->select([
+                'locally_funded_projects.*',
+                DB::raw("COALESCE(NULLIF(spp.funding_year, ''), locally_funded_projects.funding_year) as resolved_funding_year"),
+            ])
+            ->orderBy('locally_funded_projects.id')
             ->chunkById(200, function ($projects) use ($now) {
                 $rows = [];
 
@@ -120,7 +127,7 @@ class FundUtilizationReportController extends Controller
                         'implementing_unit' => $project->implementing_unit,
                         'barangay' => $project->barangay,
                         'fund_source' => $project->fund_source,
-                        'funding_year' => $project->funding_year,
+                        'funding_year' => $project->resolved_funding_year ?: $project->funding_year,
                         'project_title' => $project->project_name,
                         'allocation' => $project->lgsf_allocation,
                         'contract_amount' => $project->contract_amount,
@@ -133,7 +140,7 @@ class FundUtilizationReportController extends Controller
                 if (!empty($rows)) {
                     DB::table('tbfur')->insertOrIgnore($rows);
                 }
-            });
+            }, 'locally_funded_projects.id');
 
         $this->syncMissingSubayReports();
     }
@@ -277,8 +284,8 @@ class FundUtilizationReportController extends Controller
         }
 
         if (!in_array('funding_year', $exclude, true) && !empty($fundingYears)) {
-            $furQuery->whereIn(DB::raw('TRIM(COALESCE(tbfur.funding_year, ""))'), $fundingYears);
-            $lfpQuery->whereIn(DB::raw('TRIM(COALESCE(locally_funded_projects.funding_year, ""))'), $fundingYears);
+            $furQuery->whereIn(DB::raw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(tbfur.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), ''))"), $fundingYears);
+            $lfpQuery->whereIn(DB::raw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), ''))"), $fundingYears);
         }
 
         if (!in_array('project_status', $exclude, true) && !empty($projectStatuses)) {
@@ -1088,7 +1095,16 @@ class FundUtilizationReportController extends Controller
         });
 
         $sortedReports = $cachedIndexData['reports'];
-        $batchUploadProjects = $sortedReports;
+        $batchUploadProjects = $sortedReports->map(static function ($project): array {
+            return [
+                'project_code' => trim((string) data_get($project, 'project_code', '')),
+                'project_title' => trim((string) data_get($project, 'project_title', '')),
+                'province' => trim((string) data_get($project, 'province', '')),
+                'city_municipality' => trim((string) (data_get($project, 'city_municipality') ?: data_get($project, 'implementing_unit', ''))),
+                'barangay' => trim((string) data_get($project, 'barangay', '')),
+                'funding_year' => trim((string) data_get($project, 'funding_year', '')),
+            ];
+        })->values();
         $quarterlyDashboard = $cachedIndexData['quarterlyDashboard'];
 
         $currentPage = max(1, (int) $request->query('page', 1));
@@ -1731,7 +1747,7 @@ class FundUtilizationReportController extends Controller
                 'tbfur.province',
                 'tbfur.implementing_unit',
                 'tbfur.barangay',
-                'tbfur.funding_year',
+                DB::raw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(tbfur.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), '')) as funding_year"),
                 'tbfur.fund_source',
                 'tbfur.allocation',
                 'tbfur.contract_amount',
@@ -1758,7 +1774,7 @@ class FundUtilizationReportController extends Controller
                 'locally_funded_projects.province',
                 'locally_funded_projects.implementing_unit',
                 'locally_funded_projects.barangay',
-                'locally_funded_projects.funding_year',
+                DB::raw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), '')) as funding_year"),
                 'locally_funded_projects.fund_source',
                 'locally_funded_projects.lgsf_allocation as allocation',
                 'locally_funded_projects.contract_amount',
@@ -2013,8 +2029,8 @@ class FundUtilizationReportController extends Controller
             ->pluck('funding_year')
             ->concat(
                 $fundingYearLfpQuery
-                    ->selectRaw("TRIM(COALESCE(locally_funded_projects.funding_year, '')) as funding_year")
-                    ->whereRaw("TRIM(COALESCE(locally_funded_projects.funding_year, '')) <> ''")
+                    ->selectRaw("TRIM(COALESCE(spp.funding_year, locally_funded_projects.funding_year, '')) as funding_year")
+                    ->whereRaw("TRIM(COALESCE(spp.funding_year, locally_funded_projects.funding_year, '')) <> ''")
                     ->distinct()
                     ->pluck('funding_year')
             )
@@ -3304,14 +3320,68 @@ class FundUtilizationReportController extends Controller
         $oldFilePaths = [];
         $processedCount = 0;
 
+        $year = (int) date('Y');
+        $quarter = $validated['quarter'];
+        $batchCode = FundUtilizationBatchApproval::generateBatchCode($year, $quarter);
+
+        $uploaderRole = $user->isProvincialDilgAssignment() ? User::ROLE_PROVINCIAL : ($user->isLguUser() ? User::ROLE_LGU : $user->normalizedRole());
+        $initialLevel = $user->isProvincialDilgAssignment() ? 2 : 1;
+        $initialStatus = $initialLevel === 2 ? 'Pending Level 2 - Regional Officer' : 'Pending Level 1 - Provincial Officer';
+
+        $uploaderProvince = trim((string) ($user->province ?: ''));
+        $uploaderOffice = trim((string) ($user->office ?: ''));
+        if ($uploaderProvince === '') {
+            $firstProject = LocallyFundedProject::whereIn('subaybayan_project_code', $projectCodes)->first();
+            $uploaderProvince = trim((string) ($firstProject?->province ?? ''));
+            if ($uploaderOffice === '') {
+                $uploaderOffice = trim((string) ($firstProject?->city_municipality ?? ''));
+            }
+        }
+
+        $documentsManifest = [
+            'mode' => 'single',
+            'files_count' => count($uploadedFiles),
+            'files' => array_map(fn ($f) => ['name' => basename((string) $f->getClientOriginalName()), 'size' => $f->getSize()], $uploadedFiles),
+        ];
+
         try {
+            $batchApproval = FundUtilizationBatchApproval::create([
+                'batch_code' => $batchCode,
+                'quarter' => $quarter,
+                'year' => $year,
+                'uploader_id' => $user->idno ?? $user->getKey(),
+                'uploader_role' => $uploaderRole,
+                'uploader_province' => $uploaderProvince,
+                'uploader_office' => $uploaderOffice,
+                'project_codes' => $projectCodes->values()->all(),
+                'project_count' => $projectCodes->count(),
+                'documents_manifest' => $documentsManifest,
+                'current_approval_level' => $initialLevel,
+                'last_approved_level' => 0,
+                'status' => $initialStatus,
+                'submitted_at' => now(),
+            ]);
+
+            FundUtilizationBatchApprovalLog::create([
+                'batch_id' => $batchApproval->id,
+                'batch_code' => $batchCode,
+                'actor_id' => $user->idno ?? $user->getKey(),
+                'action' => 'Submitted',
+                'approval_level' => $initialLevel,
+                'previous_status' => null,
+                'new_status' => $initialStatus,
+                'remarks' => "Batch documents uploaded for {$projectCodes->count()} projects.",
+                'created_at' => now(),
+            ]);
+
             foreach ($projectCodes as $projectCode) {
                 $result = $this->storeBatchDocumentsForProject(
                     $projectCode,
                     $validated['quarter'],
                     $uploadedFiles,
                     $user,
-                    $workflowService
+                    $workflowService,
+                    $batchCode
                 );
 
                 $processedCount++;
@@ -3344,12 +3414,14 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        $message = $processedCount === 1
-            ? 'Batch document uploaded successfully for 1 project.'
-            : "Batch document uploaded successfully for {$processedCount} projects.";
+        $message = "Batch document uploaded successfully for {$processedCount} projects under Batch Approval Code: {$batchCode}.";
 
         return $request->expectsJson()
-            ? response()->json(['message' => $message, 'processed_count' => $processedCount])
+            ? response()->json([
+                'message' => $message,
+                'batch_code' => $batchCode,
+                'processed_count' => $processedCount,
+            ])
             : back()->with('success', $message);
     }
 
@@ -3400,28 +3472,103 @@ class FundUtilizationReportController extends Controller
         $oldFilePaths = [];
         $processedCount = 0;
 
+        $year = (int) date('Y');
+        $quarter = $validated['quarter'];
+        $batchCode = FundUtilizationBatchApproval::generateBatchCode($year, $quarter);
+
+        $uploaderRole = $user->isProvincialDilgAssignment() ? User::ROLE_PROVINCIAL : ($user->isLguUser() ? User::ROLE_LGU : $user->normalizedRole());
+        $initialLevel = $user->isProvincialDilgAssignment() ? 2 : 1;
+        $initialStatus = $initialLevel === 2 ? 'Pending Level 2 - Regional Officer' : 'Pending Level 1 - Provincial Officer';
+
+        $uploaderProvince = trim((string) ($user->province ?: ''));
+        $uploaderOffice = trim((string) ($user->office ?: ''));
+        if ($uploaderProvince === '') {
+            $firstProject = LocallyFundedProject::whereIn('subaybayan_project_code', $projectCodes)->first();
+            $uploaderProvince = trim((string) ($firstProject?->province ?? ''));
+            if ($uploaderOffice === '') {
+                $uploaderOffice = trim((string) ($firstProject?->city_municipality ?? ''));
+            }
+        }
+
+        $documentsManifest = [
+            'mode' => 'category',
+        ];
+        if ($movFile) {
+            $documentsManifest['mov'] = [
+                'name' => basename((string) $movFile->getClientOriginalName()),
+                'size' => $movFile->getSize(),
+            ];
+        }
+        if (!empty($writtenNoticeFiles)) {
+            $documentsManifest['written_notice'] = [];
+            foreach ($writtenNoticeFiles as $fName => $fObj) {
+                $documentsManifest['written_notice'][$fName] = [
+                    'name' => basename((string) $fObj->getClientOriginalName()),
+                    'size' => $fObj->getSize(),
+                ];
+            }
+        }
+        if ($fdpFile) {
+            $documentsManifest['fdp'] = [
+                'name' => basename((string) $fdpFile->getClientOriginalName()),
+                'size' => $fdpFile->getSize(),
+            ];
+        }
+        if ($postingLink !== null) {
+            $documentsManifest['posting_link'] = $postingLink;
+        }
+
         try {
+            $batchApproval = FundUtilizationBatchApproval::create([
+                'batch_code' => $batchCode,
+                'quarter' => $quarter,
+                'year' => $year,
+                'uploader_id' => $user->idno ?? $user->getKey(),
+                'uploader_role' => $uploaderRole,
+                'uploader_province' => $uploaderProvince,
+                'uploader_office' => $uploaderOffice,
+                'project_codes' => $projectCodes->values()->all(),
+                'project_count' => $projectCodes->count(),
+                'documents_manifest' => $documentsManifest,
+                'current_approval_level' => $initialLevel,
+                'last_approved_level' => 0,
+                'status' => $initialStatus,
+                'submitted_at' => now(),
+            ]);
+
+            FundUtilizationBatchApprovalLog::create([
+                'batch_id' => $batchApproval->id,
+                'batch_code' => $batchCode,
+                'actor_id' => $user->idno ?? $user->getKey(),
+                'action' => 'Submitted',
+                'approval_level' => $initialLevel,
+                'previous_status' => null,
+                'new_status' => $initialStatus,
+                'remarks' => "Batch upload submitted for {$projectCodes->count()} projects.",
+                'created_at' => now(),
+            ]);
+
             foreach ($projectCodes as $projectCode) {
                 if ($movFile) {
-                    $result = $this->storeMovForProject($projectCode, $validated['quarter'], $movFile, $user, $workflowService);
+                    $result = $this->storeMovForProject($projectCode, $validated['quarter'], $movFile, $user, $workflowService, $batchCode);
                     $newFilePaths = array_merge($newFilePaths, $result['newFilePaths'] ?? []);
                     $oldFilePaths = array_merge($oldFilePaths, $result['oldFilePaths'] ?? []);
                 }
 
                 if (!empty($writtenNoticeFiles)) {
-                    $result = $this->storeWrittenNoticeFilesForProject($projectCode, $validated['quarter'], $writtenNoticeFiles, $user, $workflowService);
+                    $result = $this->storeWrittenNoticeFilesForProject($projectCode, $validated['quarter'], $writtenNoticeFiles, $user, $workflowService, $batchCode);
                     $newFilePaths = array_merge($newFilePaths, $result['newFilePaths'] ?? []);
                     $oldFilePaths = array_merge($oldFilePaths, $result['oldFilePaths'] ?? []);
                 }
 
                 if ($fdpFile) {
-                    $result = $this->storeFdpForProject($projectCode, $validated['quarter'], $fdpFile, $user, $workflowService);
+                    $result = $this->storeFdpForProject($projectCode, $validated['quarter'], $fdpFile, $user, $workflowService, $batchCode);
                     $newFilePaths = array_merge($newFilePaths, $result['newFilePaths'] ?? []);
                     $oldFilePaths = array_merge($oldFilePaths, $result['oldFilePaths'] ?? []);
                 }
 
                 if ($postingLink !== null) {
-                    $this->storePostingLinkForProject($projectCode, $validated['quarter'], $postingLink, $user, $workflowService);
+                    $this->storePostingLinkForProject($projectCode, $validated['quarter'], $postingLink, $user, $workflowService, $batchCode);
                 }
 
                 $processedCount++;
@@ -3452,16 +3599,18 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        $message = $processedCount === 1
-            ? 'Individual documents uploaded successfully for 1 project.'
-            : "Individual documents uploaded successfully for {$processedCount} projects.";
+        $message = "Documents uploaded successfully for {$processedCount} projects under Batch Approval Code: {$batchCode}.";
 
         return $request->expectsJson()
-            ? response()->json(['message' => $message, 'processed_count' => $processedCount])
+            ? response()->json([
+                'message' => $message,
+                'batch_code' => $batchCode,
+                'processed_count' => $processedCount,
+            ])
             : back()->with('success', $message);
     }
 
-    private function storeMovForProject(string $projectCode, string $quarter, $file, $user, FundUtilizationWorkflowService $workflowService): array
+    private function storeMovForProject(string $projectCode, string $quarter, $file, $user, FundUtilizationWorkflowService $workflowService, ?string $batchCode = null): array
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $existingRecord = FURMovUpload::where('project_code', $projectCode)
@@ -3472,7 +3621,7 @@ class FundUtilizationReportController extends Controller
         $path = $file->storeAs('fur/mov/' . $projectCode, $originalName, 'public');
 
         try {
-            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService) {
+            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService, $batchCode) {
                 $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
                 $updates = [
@@ -3483,6 +3632,10 @@ class FundUtilizationReportController extends Controller
                     'mov_encoder_id' => auth()->id(),
                     'status' => 'pending',
                 ];
+
+                if ($batchCode) {
+                    $updates['batch_code'] = $batchCode;
+                }
 
                 if (!$existingRecord) {
                     $updates['created_at'] = $secureTimestamp;
@@ -3512,7 +3665,7 @@ class FundUtilizationReportController extends Controller
         ];
     }
 
-    private function storeWrittenNoticeFilesForProject(string $projectCode, string $quarter, array $files, $user, FundUtilizationWorkflowService $workflowService): array
+    private function storeWrittenNoticeFilesForProject(string $projectCode, string $quarter, array $files, $user, FundUtilizationWorkflowService $workflowService, ?string $batchCode = null): array
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $existingRecord = FURWrittenNotice::where('project_code', $projectCode)
@@ -3545,6 +3698,9 @@ class FundUtilizationReportController extends Controller
             $updates[$fieldConfig['encoder_id']] = auth()->id();
             $updates[$fieldConfig['status']] = 'pending';
             $updates['status'] = 'pending';
+            if ($batchCode) {
+                $updates['batch_code'] = $batchCode;
+            }
 
             $shortFieldName = str_replace('secretary_', '', $requestField);
             SecureTimestampService::logUploadTimestamp('written-notice-' . $shortFieldName, $projectCode, $quarter, $secureTimestamp, [
@@ -3588,7 +3744,7 @@ class FundUtilizationReportController extends Controller
         ];
     }
 
-    private function storeFdpForProject(string $projectCode, string $quarter, $file, $user, FundUtilizationWorkflowService $workflowService): array
+    private function storeFdpForProject(string $projectCode, string $quarter, $file, $user, FundUtilizationWorkflowService $workflowService, ?string $batchCode = null): array
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $existingRecord = FURFDP::where('project_code', $projectCode)
@@ -3599,7 +3755,7 @@ class FundUtilizationReportController extends Controller
         $path = $file->storeAs('fur/fdp/' . $projectCode, $originalName, 'public');
 
         try {
-            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService) {
+            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService, $batchCode) {
                 $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
                 $updates = [
@@ -3611,6 +3767,10 @@ class FundUtilizationReportController extends Controller
                     'fdp_status' => 'pending',
                     'status' => 'pending',
                 ];
+
+                if ($batchCode) {
+                    $updates['batch_code'] = $batchCode;
+                }
 
                 if (!$existingRecord) {
                     $updates['created_at'] = $secureTimestamp;
@@ -3640,20 +3800,25 @@ class FundUtilizationReportController extends Controller
         ];
     }
 
-    private function storePostingLinkForProject(string $projectCode, string $quarter, string $postingLink, $user, FundUtilizationWorkflowService $workflowService): void
+    private function storePostingLinkForProject(string $projectCode, string $quarter, string $postingLink, $user, FundUtilizationWorkflowService $workflowService, ?string $batchCode = null): void
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
-        DB::transaction(function () use ($projectCode, $quarter, $postingLink, $secureTimestamp, $report, $user, $workflowService) {
+        DB::transaction(function () use ($projectCode, $quarter, $postingLink, $secureTimestamp, $report, $user, $workflowService, $batchCode) {
+            $updates = [
+                'posting_link' => $postingLink,
+                'posting_uploaded_at' => $secureTimestamp,
+                'posting_encoder_id' => auth()->id(),
+                'posting_status' => 'pending',
+            ];
+            if ($batchCode) {
+                $updates['batch_code'] = $batchCode;
+            }
+
             $record = FURFDP::updateOrCreate(
                 ['project_code' => $projectCode, 'quarter' => $quarter],
-                [
-                    'posting_link' => $postingLink,
-                    'posting_uploaded_at' => $secureTimestamp,
-                    'posting_encoder_id' => auth()->id(),
-                    'posting_status' => 'pending',
-                ]
+                $updates
             );
 
             $workflowService->submitOrResubmit($report, $quarter, 'posting-link', $record, $user);
@@ -3671,7 +3836,7 @@ class FundUtilizationReportController extends Controller
         ]);
     }
 
-    private function storeBatchDocumentsForProject(string $projectCode, string $quarter, array $files, $user, FundUtilizationWorkflowService $workflowService): array
+    private function storeBatchDocumentsForProject(string $projectCode, string $quarter, array $files, $user, FundUtilizationWorkflowService $workflowService, ?string $batchCode = null): array
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $existingRecord = FURBatchDocument::where('project_code', $projectCode)
@@ -3702,7 +3867,7 @@ class FundUtilizationReportController extends Controller
             $newFilePaths[] = $file->storeAs($storageDirectory, $storedFileName, 'public');
         }
 
-        $record = DB::transaction(function () use ($existingRecord, $projectCode, $quarter, $newFilePaths, $report, $user, $workflowService) {
+        $record = DB::transaction(function () use ($existingRecord, $projectCode, $quarter, $newFilePaths, $report, $user, $workflowService, $batchCode) {
             $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
             $updates = [
@@ -3712,6 +3877,10 @@ class FundUtilizationReportController extends Controller
                 'batch_document_encoder_id' => auth()->id(),
                 'status' => 'pending',
             ];
+
+            if ($batchCode) {
+                $updates['batch_code'] = $batchCode;
+            }
 
             if (!$existingRecord) {
                 $updates['created_at'] = $secureTimestamp;

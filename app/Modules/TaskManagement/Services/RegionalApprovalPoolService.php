@@ -197,6 +197,20 @@ class RegionalApprovalPoolService
 
         // Fund Utilization Workflows
         if (Schema::hasTable('fund_utilization_approval_workflows')) {
+            // Find projects managed under an active pending batch approval to prevent double-counting
+            $activeBatchProjectQuarterKeys = [];
+            if (Schema::hasTable('fund_utilization_batch_approvals')) {
+                $activeBatches = DB::table('fund_utilization_batch_approvals')
+                    ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'pending level %'")
+                    ->get(['quarter', 'project_codes']);
+                foreach ($activeBatches as $ab) {
+                    $codes = json_decode((string) $ab->project_codes, true) ?: [];
+                    foreach ($codes as $c) {
+                        $activeBatchProjectQuarterKeys[trim((string) $c) . '|' . strtoupper(trim((string) $ab->quarter))] = true;
+                    }
+                }
+            }
+
             $workflowQuery = DB::table('fund_utilization_approval_workflows')
                 ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'pending level %'");
 
@@ -212,6 +226,12 @@ class RegionalApprovalPoolService
                 foreach ($workflowQuery->orderByDesc('updated_at')->get() as $workflow) {
                     $projectCode = trim((string) $workflow->project_code);
                     $quarter = trim((string) $workflow->quarter);
+
+                    // Skip if project is already handled under an active batch approval
+                    if (isset($activeBatchProjectQuarterKeys[$projectCode . '|' . strtoupper($quarter)])) {
+                        continue;
+                    }
+
                     $documentType = trim((string) $workflow->document_type);
                     $uploader = $this->resolveUploader($workflow->uploader_id ?? null);
                     $displayDocumentType = $this->documentDisplayLabel($documentType);
@@ -264,6 +284,80 @@ class RegionalApprovalPoolService
             }
         }
     }
+
+        // Fund Utilization Batch Approvals
+        if (Schema::hasTable('fund_utilization_batch_approvals')) {
+            $batchQuery = DB::table('fund_utilization_batch_approvals')
+                ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'pending level %'");
+
+            if ($approvalLevel === 'regional') {
+                $batchQuery->where('current_approval_level', '>=', 2);
+            } elseif ($approvalLevel === 'provincial') {
+                $batchQuery->where('current_approval_level', 1);
+            } else {
+                $batchQuery = null;
+            }
+
+            if ($batchQuery) {
+                foreach ($batchQuery->orderByDesc('updated_at')->get() as $batch) {
+                    $batchCode = trim((string) $batch->batch_code);
+                    $quarter = trim((string) $batch->quarter);
+                    $uploader = $this->resolveUploader($batch->uploader_id ?? null);
+
+                    $batchProvince = trim((string) ($batch->uploader_province ?? ''));
+                    $batchOffice = trim((string) ($batch->uploader_office ?? ''));
+                    if ($batchProvince === '' && $batchOffice !== '') {
+                        $batchProvince = $this->resolveProvinceFromOffice($batchOffice);
+                    }
+                    if ($batchProvince === '') {
+                        $batchProvince = $uploader['province'];
+                    }
+
+                    if ($approvalLevel === 'provincial') {
+                        if ($batchProvince === '' || !$this->matchesProvince($batchProvince, $user->province)) {
+                            continue;
+                        }
+                    }
+
+                    $batchQueueKey = ((int) $batch->current_approval_level >= 2) ? 'pending_regional' : 'pending_provincial';
+                    if ($approvalLevel === 'provincial' && $batchQueueKey !== 'pending_provincial') {
+                        continue;
+                    }
+                    if ($approvalLevel === 'regional' && $batchQueueKey !== 'pending_regional') {
+                        continue;
+                    }
+
+                    $manifest = json_decode((string) $batch->documents_manifest, true) ?: [];
+                    $filesSummary = $this->summarizeBatchManifest($manifest);
+
+                    $tasks->push([
+                        'id' => 'status-fund-utilization-batch-' . $batch->id,
+                        'task_title' => 'Batch Approval (' . $batchCode . ')',
+                        'message' => 'Batch submission for ' . $batch->project_count . ' projects (' . $filesSummary . ') awaiting validation.',
+                        'url' => route('fund-utilization.batch-approval.show', ['batchCode' => $batchCode]),
+                        'document_type' => 'Batch Upload',
+                        'document_label' => 'Batch Upload (' . $batch->project_count . ' Projects)',
+                        'quarter' => $quarter,
+                        'period' => $quarter,
+                        'year' => (string) ($batch->year ?? ''),
+                        'sender_name' => $uploader['name'],
+                        'uploader_province' => $batchProvince,
+                        'created_at' => $batch->submitted_at ?? $batch->updated_at ?? $batch->created_at,
+                        'project_code' => $batchCode,
+                        'project_title' => $batch->project_count . ' Target Projects',
+                        'province' => $batchProvince,
+                        'city_municipality' => $batchOffice ?: 'Various LGUs',
+                        'module_key' => 'fund-utilization-batch',
+                        'module_label' => 'Fund Utilization Report - Batch Upload',
+                        'queue_key' => $batchQueueKey,
+                        'batch_code' => $batchCode,
+                        'project_count' => (int) $batch->project_count,
+                        'batch_status' => $batch->status,
+                        'current_approval_level' => (int) $batch->current_approval_level,
+                    ]);
+                }
+            }
+        }
 
         return $tasks->unique(fn (array $task): string => implode('|', [
             $task['module_key'],
@@ -400,12 +494,31 @@ class RegionalApprovalPoolService
 
         // Returned Fund Utilization Workflows
         if (Schema::hasTable('fund_utilization_approval_workflows')) {
+            $returnedBatchProjectQuarterKeys = [];
+            if (Schema::hasTable('fund_utilization_batch_approvals')) {
+                $returnedBatches = DB::table('fund_utilization_batch_approvals')
+                    ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'returned by %'")
+                    ->get(['quarter', 'project_codes']);
+                foreach ($returnedBatches as $rb) {
+                    $codes = json_decode((string) $rb->project_codes, true) ?: [];
+                    foreach ($codes as $c) {
+                        $returnedBatchProjectQuarterKeys[trim((string) $c) . '|' . strtoupper(trim((string) $rb->quarter))] = true;
+                    }
+                }
+            }
+
             $workflowQuery = DB::table('fund_utilization_approval_workflows')
                 ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'returned by %'");
 
             foreach ($workflowQuery->orderByDesc('updated_at')->get() as $workflow) {
                 $projectCode = trim((string) $workflow->project_code);
                 $quarter = trim((string) $workflow->quarter);
+
+                // Skip if project is already handled under an active returned batch approval
+                if (isset($returnedBatchProjectQuarterKeys[$projectCode . '|' . strtoupper($quarter)])) {
+                    continue;
+                }
+
                 $documentType = trim((string) $workflow->document_type);
                 $uploader = $this->resolveUploader($workflow->uploader_id ?? null);
                 $displayDocumentType = $this->documentDisplayLabel($documentType);
@@ -478,6 +591,83 @@ class RegionalApprovalPoolService
                     'module_key' => 'fund-utilization',
                     'module_label' => 'Fund Utilization Report',
                     'queue_key' => 'returned',
+                ]);
+            }
+        }
+
+        // Returned Fund Utilization Batch Approvals
+        if (Schema::hasTable('fund_utilization_batch_approvals')) {
+            $batchQuery = DB::table('fund_utilization_batch_approvals')
+                ->whereRaw("LOWER(TRIM(COALESCE(status, ''))) LIKE 'returned by %'");
+
+            foreach ($batchQuery->orderByDesc('updated_at')->get() as $batch) {
+                $batchCode = trim((string) $batch->batch_code);
+                $quarter = trim((string) $batch->quarter);
+                $uploader = $this->resolveUploader($batch->uploader_id ?? null);
+
+                $batchProvince = trim((string) ($batch->uploader_province ?? ''));
+                $batchOffice = trim((string) ($batch->uploader_office ?? ''));
+                if ($batchProvince === '' && $batchOffice !== '') {
+                    $batchProvince = $this->resolveProvinceFromOffice($batchOffice);
+                }
+                if ($batchProvince === '') {
+                    $batchProvince = $uploader['province'];
+                }
+
+                $isUploader = ((int) ($batch->uploader_id ?? 0) === (int) ($user->idno ?? $user->getKey()));
+
+                // Scope to user's office and level
+                if ($user->isLguUser() || $user->isMlgooUser()) {
+                    if (!$isUploader) {
+                        if ($batchOffice !== '' && !$user->matchesAssignedOffice($batchOffice)) {
+                            continue;
+                        }
+                        if ($batchProvince !== '' && $user->normalizedProvince() !== '' && !$this->matchesProvince($batchProvince, $user->province)) {
+                            continue;
+                        }
+                    }
+                } elseif ($user->isProvincialUser()) {
+                    if ($batchProvince === '' || !$this->matchesProvince($batchProvince, $user->province)) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                $returner = $this->resolveBatchReturner($batch);
+                $manifest = json_decode((string) $batch->documents_manifest, true) ?: [];
+                $filesSummary = $this->summarizeBatchManifest($manifest);
+
+                $tasks->push([
+                    'id' => 'returned-fund-utilization-batch-' . $batch->id,
+                    'task_title' => 'Batch Approval (' . $batchCode . ')',
+                    'message' => 'Returned: ' . ($batch->approval_remarks ?: $batch->status),
+                    'url' => route('fund-utilization.batch-approval.show', ['batchCode' => $batchCode]),
+                    'document_type' => 'Batch Upload',
+                    'document_label' => 'Batch Upload (' . $batch->project_count . ' Projects)',
+                    'quarter' => $quarter,
+                    'period' => $quarter,
+                    'year' => (string) ($batch->year ?? ''),
+                    'sender_name' => $returner['name'],
+                    'returned_by_name' => $returner['name'],
+                    'returned_by_role' => $returner['role'],
+                    'returned_by_province' => $returner['province'],
+                    'returned_at' => $returner['returned_at'] ?: $batch->updated_at,
+                    'uploader_name' => $uploader['name'],
+                    'uploader_province' => $batchProvince,
+                    'created_at' => $returner['returned_at'] ?: $batch->updated_at,
+                    'project_code' => $batchCode,
+                    'project_title' => $batch->project_count . ' Target Projects',
+                    'province' => $batchProvince,
+                    'city_municipality' => $batchOffice ?: 'Various LGUs',
+                    'module_key' => 'fund-utilization-batch',
+                    'module_label' => 'Fund Utilization Report - Batch Upload',
+                    'queue_key' => 'returned',
+                    'batch_code' => $batchCode,
+                    'project_count' => (int) $batch->project_count,
+                    'batch_status' => $batch->status,
+                    'approval_remarks' => $batch->approval_remarks,
+                    'current_approval_level' => (int) $batch->current_approval_level,
                 ]);
             }
         }
@@ -775,6 +965,74 @@ class RegionalApprovalPoolService
             'province' => '',
             'returned_at' => null,
         ];
+    }
+
+    /**
+     * Resolve the validator who returned the Fund Utilization batch submission.
+     *
+     * @return array{name: string, role: string, province: string, returned_at: mixed}
+     */
+    private function resolveBatchReturner(object $batch): array
+    {
+        $batchId = (int) ($batch->id ?? 0);
+        if ($batchId > 0 && Schema::hasTable('fund_utilization_batch_approval_logs')) {
+            try {
+                $log = DB::table('fund_utilization_batch_approval_logs')
+                    ->where('batch_id', $batchId)
+                    ->whereRaw("LOWER(TRIM(COALESCE(action, ''))) LIKE '%return%'")
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($log && !empty($log->actor_id)) {
+                    $user = $this->resolveUser($log->actor_id);
+                    if ($user['name'] !== 'Unknown') {
+                        $user['returned_at'] = $log->created_at;
+                        return $user;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Fallback gracefully
+            }
+        }
+
+        $status = strtolower((string) ($batch->status ?? ''));
+        $role = str_contains($status, 'regional') ? 'Regional Validator' : 'Provincial Validator';
+
+        return [
+            'name' => $role,
+            'role' => $role,
+            'province' => '',
+            'returned_at' => $batch->updated_at ?? null,
+        ];
+    }
+
+    /**
+     * Summarize documents present in a batch manifest.
+     */
+    private function summarizeBatchManifest(array $manifest): string
+    {
+        $mode = $manifest['mode'] ?? 'batch';
+        if ($mode === 'single' || $mode === 'batch') {
+            $count = (int) ($manifest['files_count'] ?? count($manifest['files'] ?? []));
+            return $count . ' Batch ' . Str::plural('Document', max(1, $count));
+        }
+
+        $parts = [];
+        if (!empty($manifest['mov'])) {
+            $parts[] = 'MOV';
+        }
+        if (!empty($manifest['written_notice'])) {
+            $count = count($manifest['written_notice']);
+            $parts[] = 'Written Notice (' . $count . ')';
+        }
+        if (!empty($manifest['fdp'])) {
+            $parts[] = 'FDP';
+        }
+        if (!empty($manifest['posting_link'])) {
+            $parts[] = 'Posting Link';
+        }
+
+        return !empty($parts) ? implode(', ', $parts) : 'Uploaded Documents';
     }
 
     /**
