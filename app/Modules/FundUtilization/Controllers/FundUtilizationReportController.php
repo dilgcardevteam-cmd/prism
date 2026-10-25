@@ -570,23 +570,64 @@ class FundUtilizationReportController extends Controller
 
     private function normalizeBatchDocumentFilePaths($value): array
     {
-        if (is_string($value)) {
-            $decoded = json_decode($value, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                $value = $decoded;
-            } elseif (trim($value) !== '') {
-                $value = [$value];
-            } else {
-                $value = [];
+        $paths = [];
+        $queue = [$value];
+
+        while (!empty($queue)) {
+            $current = array_pop($queue);
+
+            if ($current === null || $current === '') {
+                continue;
+            }
+
+            if (is_string($current)) {
+                $trimmed = trim($current);
+                if ($trimmed === '') {
+                    continue;
+                }
+
+                $decoded = json_decode($trimmed, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $queue[] = $decoded;
+                    continue;
+                }
+
+                $paths[] = $trimmed;
+                continue;
+            }
+
+            if (is_array($current)) {
+                foreach (array_reverse($current) as $item) {
+                    $queue[] = $item;
+                }
+                continue;
+            }
+
+            if (is_object($current)) {
+                foreach (['path', 'file_path', 'url', 'href', 'value'] as $key) {
+                    if (isset($current->{$key})) {
+                        $queue[] = $current->{$key};
+                    }
+                }
+
+                if (isset($current->name) && is_string($current->name)) {
+                    $queue[] = $current->name;
+                }
             }
         }
 
-        if (!is_array($value)) {
-            return [];
-        }
+        return collect($paths)
+            ->map(function ($path) {
+                if (is_array($path)) {
+                    return null;
+                }
 
-        return collect($value)
-            ->map(fn ($path) => trim((string) $path))
+                if (is_object($path)) {
+                    $path = json_encode($path);
+                }
+
+                return trim((string) $path);
+            })
             ->filter()
             ->unique()
             ->values()

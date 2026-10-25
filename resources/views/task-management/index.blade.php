@@ -1550,9 +1550,9 @@
     ];
 
     // Theme color palette per program/module (Cards color coding)
-    // IMPORTANT: 'fund-utilization' and 'fund-utilization-batch' share the EXACT same color coding!
+    // Theme colors are intentionally distinct for each task card type.
     $moduleThemes = [
-        // 1. Fund Utilization Report (FUR & FUR Batch share the same Emerald theme)
+        // 1. Fund Utilization Report (Emerald)
         'fund-utilization' => [
             'accent' => '#059669',
             'icon_bg' => '#ecfdf5',
@@ -1563,42 +1563,43 @@
             'shadow' => 'rgba(5, 150, 105, 0.18)',
             'bg_subtle' => 'rgba(16, 185, 129, 0.05)',
         ],
+        // 2. Fund Utilization Report - Batch Upload (Red)
         'fund-utilization-batch' => [
-            'accent' => '#059669',
-            'icon_bg' => '#ecfdf5',
-            'border' => '#a7f3d0',
-            'badge_bg' => '#d1fae5',
-            'badge_text' => '#065f46',
-            'badge_border' => '#6ee7b7',
-            'shadow' => 'rgba(5, 150, 105, 0.18)',
-            'bg_subtle' => 'rgba(16, 185, 129, 0.05)',
+            'accent' => '#dc2626',
+            'icon_bg' => '#fef2f2',
+            'border' => '#fecaca',
+            'badge_bg' => '#fee2e2',
+            'badge_text' => '#991b1b',
+            'badge_border' => '#fca5a5',
+            'shadow' => 'rgba(220, 38, 38, 0.18)',
+            'bg_subtle' => 'rgba(239, 68, 68, 0.05)',
         ],
 
-        // 2. Pre-Implementation Documents (Indigo)
+        // 3. Pre-Implementation Documents (Purple)
         'pre-implementation' => [
-            'accent' => '#4f46e5',
-            'icon_bg' => '#eef2ff',
-            'border' => '#c7d2fe',
-            'badge_bg' => '#e0e7ff',
-            'badge_text' => '#3730a3',
-            'badge_border' => '#a5b4fc',
-            'shadow' => 'rgba(79, 70, 229, 0.18)',
-            'bg_subtle' => 'rgba(99, 102, 241, 0.05)',
+            'accent' => '#9333ea',
+            'icon_bg' => '#faf5ff',
+            'border' => '#e9d5ff',
+            'badge_bg' => '#f3e8ff',
+            'badge_text' => '#6b21a8',
+            'badge_border' => '#d8b4fe',
+            'shadow' => 'rgba(147, 51, 234, 0.18)',
+            'bg_subtle' => 'rgba(168, 85, 247, 0.05)',
         ],
 
-        // 3. Local Project Monitoring Committee - LPMC (Teal)
+        // 4. Local Project Monitoring Committee - LPMC (Orange)
         'local-project-monitoring-committee' => [
-            'accent' => '#0d9488',
-            'icon_bg' => '#f0fdfa',
-            'border' => '#99f6e4',
-            'badge_bg' => '#ccfbf1',
-            'badge_text' => '#115e59',
-            'badge_border' => '#5eead4',
-            'shadow' => 'rgba(13, 148, 136, 0.18)',
-            'bg_subtle' => 'rgba(20, 184, 166, 0.05)',
+            'accent' => '#ea580c',
+            'icon_bg' => '#fff7ed',
+            'border' => '#fed7aa',
+            'badge_bg' => '#ffedd5',
+            'badge_text' => '#9a3412',
+            'badge_border' => '#fdba74',
+            'shadow' => 'rgba(234, 88, 12, 0.18)',
+            'bg_subtle' => 'rgba(249, 115, 22, 0.05)',
         ],
 
-        // 4. Road Maintenance Status (Amber)
+        // 5. Road Maintenance Status (Amber)
         'road-maintenance-status' => [
             'accent' => '#d97706',
             'icon_bg' => '#fffbeb',
@@ -1610,7 +1611,7 @@
             'bg_subtle' => 'rgba(245, 158, 11, 0.05)',
         ],
 
-        // 5. RBIS Annual Certification (Rose)
+        // 6. RBIS Annual Certification (Rose)
         'rbis-annual-certification' => [
             'accent' => '#e11d48',
             'icon_bg' => '#fff1f2',
@@ -1622,7 +1623,7 @@
             'bg_subtle' => 'rgba(244, 63, 94, 0.05)',
         ],
 
-        // 6. Annual Maintenance Work Program - AMWP (Gold / Bronze)
+        // 7. Annual Maintenance Work Program - AMWP (Gold / Bronze)
         'annual-maintenance-work-program' => [
             'accent' => '#b45309',
             'icon_bg' => '#fefce8',
@@ -1634,7 +1635,7 @@
             'bg_subtle' => 'rgba(234, 179, 8, 0.05)',
         ],
 
-        // 7. LGSF Project Completion Reports (Sky Blue)
+        // 8. LGSF Project Completion Reports (Sky Blue)
         'lgsf-pcr' => [
             'accent' => '#0284c7',
             'icon_bg' => '#f0f9ff',
@@ -1646,7 +1647,7 @@
             'bg_subtle' => 'rgba(14, 165, 233, 0.05)',
         ],
 
-        // 8. SGLGIF Project Completion Reports (Purple)
+        // 9. SGLGIF Project Completion Reports (Purple)
         'sglgif-pcr' => [
             'accent' => '#9333ea',
             'icon_bg' => '#faf5ff',
@@ -1658,7 +1659,7 @@
             'bg_subtle' => 'rgba(168, 85, 247, 0.05)',
         ],
 
-        // 9. PD No. PBBM-2025-1572-1573 (Red)
+        // 10. PD No. PBBM-2025-1572-1573 (Red)
         'pd-no-pbbm-2025-1572-1573' => [
             'accent' => '#dc2626',
             'icon_bg' => '#fef2f2',
@@ -1670,7 +1671,7 @@
             'bg_subtle' => 'rgba(239, 68, 68, 0.05)',
         ],
 
-        // 10. Monitoring Evaluation Monthly - LFP / RLIP-LIME (Royal Blue)
+        // 11. Monitoring Evaluation Monthly - LFP / RLIP-LIME (Royal Blue)
         'monitoring-evaluation-lfp' => [
             'accent' => '#2563eb',
             'icon_bg' => '#eff6ff',
@@ -1682,7 +1683,7 @@
             'bg_subtle' => 'rgba(59, 130, 246, 0.05)',
         ],
 
-        // 11. SWA Annex F (Orange)
+        // 12. SWA Annex F (Orange)
         'swa-annex-f' => [
             'accent' => '#ea580c',
             'icon_bg' => '#fff7ed',
@@ -1694,7 +1695,7 @@
             'bg_subtle' => 'rgba(249, 115, 22, 0.05)',
         ],
 
-        // 12. RPMES Forms
+        // 13. RPMES Forms
         'rpmes-form-2' => [
             'accent' => '#c026d3',
             'icon_bg' => '#fdf4ff',
@@ -1751,7 +1752,9 @@
 
     $getTheme = function($key, $label = '') use ($moduleThemes) {
         $slug = Str::slug($label);
-        // Explicit rule: FUR and FUR Batch share the EXACT same color coding!
+        if (str_contains($slug, 'fund-utilization') && str_contains($slug, 'batch')) {
+            return $moduleThemes['fund-utilization-batch'];
+        }
         if (str_contains($slug, 'fund-utilization') || str_contains($slug, 'fur')) {
             return $moduleThemes['fund-utilization'];
         }

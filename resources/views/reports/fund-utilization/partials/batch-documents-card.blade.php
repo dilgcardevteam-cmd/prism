@@ -15,7 +15,33 @@
         }
 
         $storedBatchDocumentFiles = collect($storedBatchDocumentFiles)
-            ->map(fn ($path) => trim((string) $path))
+            ->flatMap(function ($entry) {
+                if (is_array($entry)) {
+                    return $entry;
+                }
+
+                if (is_object($entry)) {
+                    $entry = collect($entry)->toArray();
+                }
+
+                if (is_string($entry)) {
+                    $decodedEntry = json_decode($entry, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decodedEntry)) {
+                        return $decodedEntry;
+                    }
+
+                    return [$entry];
+                }
+
+                return [$entry];
+            })
+            ->map(function ($path) {
+                if (is_array($path) || is_object($path)) {
+                    $path = data_get($path, 'path', data_get($path, 'file_path', data_get($path, 'url', data_get($path, 'name', ''))));
+                }
+
+                return trim((string) $path);
+            })
             ->filter()
             ->unique()
             ->values()
