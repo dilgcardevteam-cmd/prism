@@ -2596,7 +2596,7 @@ $url = route('locally-funded-project.show', $project, false);
             $rawFilterState['fund_source'] = $this->normalizeLocallyFundedFundSourceFilter($rawFilterState['fund_source']);
         }
         $filterHash = md5(serialize($rawFilterState));
-        $cacheKey = "lfp_index_v17:{$userId}:{$filterHash}";
+        $cacheKey = "lfp_index_v18:{$userId}:{$filterHash}";
 
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
@@ -2783,17 +2783,8 @@ $url = route('locally-funded-project.show', $project, false);
             ? 'spp.accomplishment_num'
             : "NULLIF(REPLACE(spp.total_accomplishment, ',', ''), '')";
 
-        $latestSubayUpdateByProjectQuery = DB::table('subay_project_profiles as spp_date')
-            ->selectRaw($subayProjectCodeKeyExpr('spp_date') . ' as project_code_key')
-            ->selectRaw('MAX(' . $subayParsedDateExpr('spp_date') . ') as latest_update_date')
-            ->whereRaw($subayProjectCodeKeyExpr('spp_date') . " <> ''")
-            ->groupBy(DB::raw($subayProjectCodeKeyExpr('spp_date')));
-
         // Build query from SubayBAYAN data with role-based filtering
         $query = DB::table('subay_project_profiles as spp')
-            ->leftJoinSub($latestSubayUpdateByProjectQuery, 'spp_latest_update', function ($join) use ($subayProjectCodeKeyExpr) {
-                $join->on(DB::raw($subayProjectCodeKeyExpr('spp')), '=', 'spp_latest_update.project_code_key');
-            })
             ->leftJoin('locally_funded_projects as lfp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
             ->leftJoin('locally_funded_physical_updates as lpu', function ($join) use ($currentYear, $currentMonth) {
                 $join->on('lpu.project_id', '=', 'lfp.id')
@@ -3113,6 +3104,15 @@ $url = route('locally-funded-project.show', $project, false);
         if ($filters['project_update_status'] !== '') {
             $normalizedUpdateStatus = strtoupper(preg_replace('/[^A-Z]/', '', $filters['project_update_status']) ?? '');
             if (in_array($normalizedUpdateStatus, ['HIGHRISK', 'LOWRISK', 'NORISK'], true)) {
+                $latestSubayUpdateByProjectQuery = DB::table('subay_project_profiles as spp_date')
+                    ->selectRaw($subayProjectCodeKeyExpr('spp_date') . ' as project_code_key')
+                    ->selectRaw('MAX(' . $subayParsedDateExpr('spp_date') . ') as latest_update_date')
+                    ->whereRaw($subayProjectCodeKeyExpr('spp_date') . " <> ''")
+                    ->groupBy(DB::raw($subayProjectCodeKeyExpr('spp_date')));
+
+                $query->leftJoinSub($latestSubayUpdateByProjectQuery, 'spp_latest_update', function ($join) use ($subayProjectCodeKeyExpr) {
+                    $join->on(DB::raw($subayProjectCodeKeyExpr('spp')), '=', 'spp_latest_update.project_code_key');
+                });
                 $query->whereNotNull('spp_latest_update.latest_update_date');
                 $query->whereRaw("{$normalizedStatusExpression} <> 'completed'");
 
