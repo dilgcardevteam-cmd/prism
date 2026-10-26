@@ -29,7 +29,7 @@ class LocallyFundedProjectController extends Controller
     public function __construct()
     {
         $this->middleware('auth')->except(['mobileDashboardSummary', 'mobileExpectedCompletionThisMonth', 'mobileAggregatedDashboard', 'mobileIndex', 'viewMobileGalleryImage', 'mobileUploadGalleryImage', 'mobileDeleteGalleryImage', 'mobileUpdateGalleryImage']);
-        $this->middleware('crud_permission:locally_funded_projects,view')->only(['index', 'show', 'showSubaybayan', 'viewPcrMov', 'ensureFromSubay']);
+        $this->middleware('crud_permission:locally_funded_projects,view')->only(['index', 'show', 'showByProjectCode', 'showSubaybayan', 'viewPcrMov', 'ensureFromSubay']);
         $this->middleware('crud_permission:locally_funded_projects,add')->only(['create', 'store']);
         $this->middleware('crud_permission:locally_funded_projects,update')->only(['edit', 'update']);
         $this->middleware('crud_permission:locally_funded_projects,delete')->only(['destroy']);
@@ -2595,6 +2595,7 @@ $url = route('locally-funded-project.show', $project, false);
         if (array_key_exists('fund_source', $rawFilterState)) {
             $rawFilterState['fund_source'] = $this->normalizeLocallyFundedFundSourceFilter($rawFilterState['fund_source']);
         }
+        $rawFilterState['project_group'] = request('project_group', 'modern');
         $filterHash = md5(serialize($rawFilterState));
         $cacheKey = "lfp_index_v18:{$userId}:{$filterHash}";
 
@@ -2629,7 +2630,6 @@ $url = route('locally-funded-project.show', $project, false);
                     ->setPath(request()->url())
                     ->appends(array_filter([
                         'search' => $cachedFilters['search'] ?? '',
-                        'project_group' => $cachedFilters['project_group'] ?? '',
                         'project_code' => $cachedFilters['project_code'] ?? '',
                         'funding_year' => $cachedFilters['funding_year'] ?? '',
                         'fund_source' => $cachedFilters['fund_source'] ?? '',
@@ -2891,6 +2891,9 @@ $url = route('locally-funded-project.show', $project, false);
             'status' => trim((string) request('status', '')),
             'project_update_status' => trim((string) request('project_update_status', '')),
         ];
+        $listRouteName = $filters['project_group'] === 'legacy'
+            ? 'projects.locally-funded.legacy'
+            : 'projects.locally-funded.modern';
 
         if ($filters['project_group'] === 'legacy') {
             $query->whereRaw("{$subayFundingYearNumExpr} IS NULL OR {$subayFundingYearNumExpr} <= 2024");
@@ -3272,7 +3275,6 @@ $url = route('locally-funded-project.show', $project, false);
             ->orderBy('spp.project_code')
             ->paginate($perPage)
             ->appends(array_filter([
-                'project_group' => $filters['project_group'],
                 'search' => $filters['search'],
                 'project_code' => $filters['project_code'],
                 'funding_year' => $filters['funding_year'],
@@ -3447,7 +3449,10 @@ $url = route('locally-funded-project.show', $project, false);
         if ($existing) {
             $this->authorizeLocallyFundedProjectAccess($existing);
             $this->ensureFundUtilizationReport($existing);
-            return redirect()->route('locally-funded-project.show', $existing);
+            return redirect()->route(
+                (int) $existing->funding_year >= 2025 ? 'locally-funded-project.modern.show' : 'locally-funded-project.legacy.show',
+                ['projectCode' => $existing->subaybayan_project_code]
+            );
         }
 
         if (!Schema::hasTable('subay_project_profiles')) {
@@ -3596,15 +3601,20 @@ $url = route('locally-funded-project.show', $project, false);
             if ($project) {
                 $this->authorizeLocallyFundedProjectAccess($project);
                 $this->ensureFundUtilizationReport($project);
-                return redirect()->route('locally-funded-project.show', $project);
+                return redirect()->route(
+                    (int) $project->funding_year >= 2025 ? 'locally-funded-project.modern.show' : 'locally-funded-project.legacy.show',
+                    ['projectCode' => $project->subaybayan_project_code]
+                );
             }
             throw $e;
         }
 
         $this->ensureFundUtilizationReport($project);
 
-        return redirect()->route('locally-funded-project.show', $project)
-            ->with('success', 'Locally funded project created from SubayBAYAN data.');
+        return redirect()->route(
+            $fundingYear >= 2025 ? 'locally-funded-project.modern.show' : 'locally-funded-project.legacy.show',
+            ['projectCode' => $project->subaybayan_project_code]
+        );
     }
 
     /**
@@ -3643,6 +3653,14 @@ $url = route('locally-funded-project.show', $project, false);
     public function show(LocallyFundedProject $project)
     {
         $this->authorizeLocallyFundedProjectAccess($project);
+
+        $expectedDetailRoute = (int) $project->funding_year >= 2025
+            ? 'locally-funded-project.modern.show'
+            : 'locally-funded-project.legacy.show';
+
+        if (!request()->routeIs($expectedDetailRoute)) {
+            return redirect()->route($expectedDetailRoute, ['projectCode' => $project->subaybayan_project_code]);
+        }
 
         $currentYear = now()->year;
         $currentMonth = now()->month;
@@ -4626,6 +4644,13 @@ $url = route('locally-funded-project.show', $project, false);
         }
 
         return view('projects.locally-funded-show', compact('project', 'provinces', 'provinceMunicipalities', 'fundSources', 'fundingYears', 'physicalByMonth', 'physicalTimelineByPeriod', 'currentPhysical', 'currentYear', 'currentMonth', 'actualCompletionUpdatedByName', 'financialByMonth', 'financialTotals', 'financialBalance', 'financialUtilizationRate', 'physicalRemarksUpdatedByName', 'physicalRemarksEncodedByName', 'financialRemarksUpdatedByName', 'financialRemarksEncodedByName', 'poMonitoringDateUpdatedByName', 'poFinalInspectionUpdatedByName', 'poRemarksUpdatedByName', 'roMonitoringDateUpdatedByName', 'roFinalInspectionUpdatedByName', 'roRemarksUpdatedByName', 'pcrSubmissionDeadlineUpdatedByName', 'pcrDateSubmittedToPoUpdatedByName', 'pcrMovUploadedByName', 'pcrDateReceivedByRoUpdatedByName', 'pcrRemarksUpdatedByName', 'rssaReportDeadlineUpdatedByName', 'rssaSubmissionStatusUpdatedByName', 'rssaDateSubmittedToPoUpdatedByName', 'rssaDateReceivedByRoUpdatedByName', 'rssaDateSubmittedToCoUpdatedByName', 'rssaRemarksUpdatedByName', 'activityLogs', 'effectivePcrSubmissionDeadline', 'effectiveRssaReportDeadline', 'galleryImages'));
+    }
+
+    public function showByProjectCode(string $projectCode)
+    {
+        $project = LocallyFundedProject::where('subaybayan_project_code', trim($projectCode))->firstOrFail();
+
+        return $this->show($project);
     }
 
     public function viewPcrMov(LocallyFundedProject $project)

@@ -49,12 +49,22 @@ Route::patch('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [Loc
 // ====================== AUTHENTICATED PROJECT ROUTES =====================
 Route::middleware(['auth'])->group(function () {
     Route::get('/projects/locally-funded', [LocallyFundedProjectController::class, 'index'])->name('projects.locally-funded');
+    Route::get('/projects/locally-funded/2024-and-below', [LocallyFundedProjectController::class, 'index'])
+        ->defaults('project_group', 'legacy')
+        ->name('projects.locally-funded.legacy');
+    Route::get('/projects/locally-funded/2025-and-above', [LocallyFundedProjectController::class, 'index'])
+        ->defaults('project_group', 'modern')
+        ->name('projects.locally-funded.modern');
     Route::get('/projects/locally-funded/export', [LocallyFundedProjectController::class, 'export'])->name('projects.locally-funded.export');
     Route::get('/projects/locally-funded/subay/{projectCode}', [LocallyFundedProjectController::class, 'showSubaybayan'])->name('locally-funded-project.subay-show');
     Route::get('/projects/locally-funded/create', [LocallyFundedProjectController::class, 'create'])->name('locally-funded-project.create');
     Route::get('/projects/locally-funded/ensure/{projectCode}', [LocallyFundedProjectController::class, 'ensureFromSubay'])
         ->name('locally-funded-project.ensure');
     Route::post('/projects/locally-funded', [LocallyFundedProjectController::class, 'store'])->name('locally-funded-project.store');
+    Route::get('/projects/locally-funded/2024-and-below/{projectCode}', [LocallyFundedProjectController::class, 'showByProjectCode'])
+        ->name('locally-funded-project.legacy.show');
+    Route::get('/projects/locally-funded/2025-and-beyond/{projectCode}', [LocallyFundedProjectController::class, 'showByProjectCode'])
+        ->name('locally-funded-project.modern.show');
     Route::get('/projects/locally-funded/{project}', [LocallyFundedProjectController::class, 'show'])
         ->missing(function () {
             return redirect()
@@ -210,4 +220,3 @@ Route::middleware(['auth'])->group(function () {
             ->name('system-management.upload-rlip-lime.delete');
     });
 });
-

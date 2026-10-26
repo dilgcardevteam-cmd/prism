@@ -72,6 +72,108 @@
             line-height: 1.05;
         }
 
+        .lfp-project-breadcrumb {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 0 0 12px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .lfp-project-breadcrumb strong {
+            color: #1d4ed8;
+        }
+
+        .lfp-project-header {
+            padding: 22px 24px;
+            border: 1px solid #dbeafe;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%);
+        }
+
+        .lfp-project-header-title {
+            margin: 0 0 10px;
+            color: #0f3b82;
+            font-size: clamp(22px, 3vw, 32px);
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .lfp-project-header-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 18px;
+            color: #475569;
+            font-size: 13px;
+        }
+
+        .lfp-project-header-meta strong {
+            color: #1e293b;
+        }
+
+        .lfp-project-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 12px;
+            margin: 18px 0 22px;
+        }
+
+        .lfp-project-summary-card {
+            min-width: 0;
+            padding: 14px 16px;
+            border: 1px solid #dbeafe;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
+        }
+
+        .lfp-project-summary-label {
+            display: block;
+            margin-bottom: 6px;
+            color: #64748b;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+        }
+
+        .lfp-project-summary-value {
+            display: block;
+            color: #0f172a;
+            font-size: 16px;
+            font-weight: 800;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .lfp-project-summary-value--status {
+            color: #1d4ed8;
+        }
+
+        .lfp-project-workspace-label {
+            margin: 0 0 8px;
+            color: #0f3b82;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 900px) {
+            .lfp-project-summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 600px) {
+            .lfp-project-summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .lfp-mobile-shell,
         .lfp-mobile-canvas {
             width: 100%;
@@ -1097,6 +1199,29 @@
             && $userProvince === 'Regional Office'
             && Auth::user()->isSuperAdmin();
         $viewErrors = $errors ?? session('errors') ?? null;
+        $currentProjectStatus = trim((string) (
+            data_get($currentPhysical, 'status_project_ro')
+            ?: data_get($currentPhysical, 'status_project_fou')
+            ?: 'Pending'
+        ));
+        $currentPhysicalProgress = data_get($currentPhysical, 'accomplishment_pct_ro')
+            ?? data_get($currentPhysical, 'accomplishment_pct');
+        $currentPhysicalProgress = is_numeric($currentPhysicalProgress)
+            ? number_format((float) $currentPhysicalProgress, 2) . '%'
+            : 'No data';
+        $currentFinancialProgress = is_numeric($financialUtilizationRate ?? null)
+            ? number_format((float) $financialUtilizationRate, 2) . '%'
+            : 'No data';
+        $allocationSummary = $financialTotals['allocation'] ?? $project->lgsf_allocation ?? null;
+        $allocationSummary = is_numeric($allocationSummary)
+            ? '₱ ' . number_format((float) $allocationSummary, 2)
+            : 'No data';
+        $lastUpdatedAt = $project->physical_remarks_updated_at
+            ?? $project->updated_at
+            ?? null;
+        $lastUpdatedSummary = $lastUpdatedAt
+            ? \Illuminate\Support\Carbon::parse($lastUpdatedAt)->format('M d, Y')
+            : 'No data';
     @endphp
 
     <div class="lfp-mobile-shell">
@@ -1107,7 +1232,7 @@
             <p>Full record for the selected locally funded project.</p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-            <a href="{{ route('projects.locally-funded') }}" class="lfp-header-action lfp-header-action--primary">
+            <a href="{{ ($project->funding_year ?? 0) >= 2025 ? route('projects.locally-funded.modern') : route('projects.locally-funded.legacy') }}" class="lfp-header-action lfp-header-action--primary">
                 <i class="fas fa-arrow-left"></i>
                 Back to List
             </a>
@@ -1143,8 +1268,16 @@
     @endif
 
     <div style="background: #f8fafc; padding: 24px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        
-        <h1 class="project-main-title" style="font-weight: 700; color: #002C76; font-size: 32px;">{{ $project->project_name }}</h1>
+        <div class="lfp-project-breadcrumb" aria-label="Breadcrumb">
+            <span>Project Monitoring</span>
+            <span aria-hidden="true">/</span>
+            <strong>{{ ($project->funding_year ?? 0) >= 2025 ? '2025 and Above' : '2024 and Below' }}</strong>
+            <span aria-hidden="true">/</span>
+            <span>Project Details</span>
+        </div>
+
+        <div class="lfp-project-header">
+        <h1 class="project-main-title lfp-project-header-title">{{ $project->project_name }}</h1>
         <div style="
             display: flex;
             flex-direction: row;
@@ -1175,6 +1308,29 @@
                     </span>
                     {{ $project->fund_source }}
                 </span>
+            </div>
+        </div>
+
+        <div class="lfp-project-summary-grid" aria-label="Project summary">
+            <div class="lfp-project-summary-card">
+                <span class="lfp-project-summary-label">Project Status</span>
+                <span class="lfp-project-summary-value lfp-project-summary-value--status">{{ $currentProjectStatus }}</span>
+            </div>
+            <div class="lfp-project-summary-card">
+                <span class="lfp-project-summary-label">Physical Progress</span>
+                <span class="lfp-project-summary-value">{{ $currentPhysicalProgress }}</span>
+            </div>
+            <div class="lfp-project-summary-card">
+                <span class="lfp-project-summary-label">Financial Progress</span>
+                <span class="lfp-project-summary-value">{{ $currentFinancialProgress }}</span>
+            </div>
+            <div class="lfp-project-summary-card">
+                <span class="lfp-project-summary-label">LGSF Allocation</span>
+                <span class="lfp-project-summary-value">{{ $allocationSummary }}</span>
+            </div>
+            <div class="lfp-project-summary-card">
+                <span class="lfp-project-summary-label">Last Updated</span>
+                <span class="lfp-project-summary-value">{{ $lastUpdatedSummary }}</span>
             </div>
         </div>
 
@@ -1221,7 +1377,8 @@
             </div>
         </div> -->
 
-        <div class="project-tabs" role="tablist" aria-label="Project detail sections" style="margin-top: 40px;">
+        <div class="lfp-project-workspace-label">Project Workspace</div>
+        <div class="project-tabs" role="tablist" aria-label="Project workspace sections" style="margin-top: 0;">
             <button type="button" class="project-tab is-active" id="tab-project-profile" data-project-tab-target="projectProfileSection" role="tab" aria-controls="projectProfileSection" aria-selected="true">Project Profile</button>
             <button type="button" class="project-tab" id="tab-contract-info" data-project-tab-target="contractInfoSection" role="tab" aria-controls="contractInfoSection" aria-selected="false">Contract Information</button>
             <button type="button" class="project-tab" id="tab-physical-accomplishment" data-project-tab-target="physicalAccomplishmentSection" role="tab" aria-controls="physicalAccomplishmentSection" aria-selected="false">Physical Accomplishment</button>
@@ -3505,6 +3662,179 @@
 
         .project-copy-button i {
             font-size: 11px;
+        }
+
+        .lfp-mobile-canvas {
+            --lfp-ink: #17233c;
+            --lfp-muted: #64748b;
+            --lfp-navy: #173b72;
+            --lfp-blue: #2563a6;
+            --lfp-teal: #0f766e;
+            --lfp-border: #d9e2ee;
+            --lfp-surface: #ffffff;
+            color: var(--lfp-ink);
+            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 14px;
+            letter-spacing: 0.005em;
+        }
+
+        .lfp-mobile-canvas .content-header h1 {
+            color: var(--lfp-navy) !important;
+            font-size: clamp(24px, 3vw, 32px) !important;
+            font-weight: 750 !important;
+            letter-spacing: -0.025em;
+        }
+
+        .lfp-mobile-canvas .content-header p {
+            color: var(--lfp-muted);
+            font-size: 13px;
+        }
+
+        .lfp-mobile-canvas > div[style*="background: #f8fafc"] {
+            border: 1px solid #e6edf5;
+            background: #f8fafc !important;
+            box-shadow: 0 12px 30px rgba(23, 59, 114, 0.07) !important;
+        }
+
+        .lfp-mobile-canvas .lfp-project-breadcrumb {
+            color: #8090a5;
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .lfp-mobile-canvas .lfp-project-breadcrumb strong {
+            color: var(--lfp-blue);
+        }
+
+        .lfp-mobile-canvas .lfp-project-header {
+            border-color: #d7e5f3;
+            background: linear-gradient(135deg, #f1f7fc 0%, #ffffff 66%, #f5faf9 100%);
+            box-shadow: inset 4px 0 0 #2b79a7;
+        }
+
+        .lfp-mobile-canvas .lfp-project-header-title {
+            color: var(--lfp-navy);
+            font-weight: 750;
+            letter-spacing: -0.025em;
+        }
+
+        .lfp-mobile-canvas .lfp-project-header-meta {
+            color: #52657d;
+            font-size: 12px;
+        }
+
+        .lfp-mobile-canvas .lfp-project-header-meta strong {
+            color: var(--lfp-ink);
+            font-weight: 700;
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-card {
+            border-color: var(--lfp-border);
+            border-top: 3px solid #9bbbd5;
+            border-radius: 10px;
+            background: var(--lfp-surface);
+            box-shadow: 0 4px 12px rgba(23, 59, 114, 0.05);
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-card:first-child {
+            border-top-color: #2b79a7;
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-card:nth-child(3) {
+            border-top-color: #0f766e;
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-card:nth-child(4) {
+            border-top-color: #c28b35;
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-card:nth-child(5) {
+            border-top-color: #7c8da6;
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-label {
+            color: #8090a5;
+            font-size: 10px;
+            font-weight: 750;
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-value {
+            color: var(--lfp-ink);
+            font-size: 15px;
+            font-weight: 750;
+        }
+
+        .lfp-mobile-canvas .lfp-project-summary-value--status {
+            color: var(--lfp-blue);
+        }
+
+        .lfp-mobile-canvas .lfp-project-workspace-label {
+            color: var(--lfp-navy);
+            font-size: 11px;
+            font-weight: 750;
+            letter-spacing: 0.1em;
+        }
+
+        .lfp-mobile-canvas .project-tabs {
+            gap: 6px;
+            padding: 5px;
+            border: 1px solid var(--lfp-border);
+            border-radius: 12px;
+            background: #eef4f9;
+        }
+
+        .lfp-mobile-canvas .project-tab {
+            border-color: transparent;
+            background: transparent;
+            color: #52657d;
+            border-radius: 8px;
+            box-shadow: none;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .lfp-mobile-canvas .project-tab:hover {
+            border-color: #c7d8e8;
+            background: #ffffff;
+            color: var(--lfp-blue);
+            box-shadow: 0 3px 8px rgba(23, 59, 114, 0.08);
+        }
+
+        .lfp-mobile-canvas .project-tab.is-active {
+            border-color: var(--lfp-navy);
+            background: var(--lfp-navy);
+            color: #ffffff;
+            box-shadow: 0 4px 10px rgba(23, 59, 114, 0.2);
+        }
+
+        .lfp-mobile-canvas .lfp-header-action--primary {
+            background: var(--lfp-navy);
+            border-color: var(--lfp-navy);
+            box-shadow: 0 5px 12px rgba(23, 59, 114, 0.18);
+        }
+
+        .lfp-mobile-canvas .lfp-header-action--primary:hover {
+            background: #24538f;
+            border-color: #24538f;
+        }
+
+        .lfp-mobile-canvas .lfp-header-action--secondary {
+            border-color: #c5d5e5;
+            color: var(--lfp-navy);
+            box-shadow: 0 4px 10px rgba(23, 59, 114, 0.06);
+        }
+
+        .lfp-mobile-canvas .lfp-header-action--secondary:hover {
+            background: #edf7f6;
+            border-color: #8bc7c0;
+            color: var(--lfp-teal);
+        }
+
+        .lfp-mobile-canvas .project-copy-button {
+            border-color: #b9d1e4;
+            background: #edf5fb;
+            color: var(--lfp-blue);
         }
 
         .lfp-header-action {

@@ -9,12 +9,7 @@
         <p>{{ $pageDescription ?? 'Manage and review locally funded project records.' }}</p>
     </div>
 
-    <div style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-        <!-- Header with Create Button -->
-        <div class="projects-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="color: #002C76; font-size: 18px; margin: 0;">{{ $tableTitle ?? 'Projects' }}</h2>
-        </div>
-
+    <div class="lfp-project-list-shell" style="background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         @php
             $listRouteName = $listRouteName ?? 'projects.locally-funded';
             $forceFundSource = trim((string) ($forceFundSource ?? ''));
@@ -169,19 +164,51 @@
                     ->values()
                     ->all();
             };
+
+            $activeFilterCount = collect($activeFilters)
+                ->filter(fn ($value) => trim((string) $value) !== '')
+                ->count();
+            $projectTotal = method_exists($projects, 'total') ? $projects->total() : $projects->count();
         @endphp
+
+        <div class="lfp-overview-strip" aria-label="Project list overview">
+            <div class="lfp-overview-intro">
+                <span class="lfp-overview-eyebrow">Project Registry</span>
+                <h2>{{ $tableTitle ?? 'Projects' }}</h2>
+                <p>Review project identity, funding, progress, and implementation status.</p>
+            </div>
+            <div class="lfp-overview-metrics">
+                <div class="lfp-overview-metric">
+                    <span class="lfp-overview-metric-label">Total Projects</span>
+                    <strong>{{ number_format($projectTotal) }}</strong>
+                </div>
+                <div class="lfp-overview-metric">
+                    <span class="lfp-overview-metric-label">Showing</span>
+                    <strong>{{ $projects->count() }}</strong>
+                </div>
+                <div class="lfp-overview-metric lfp-overview-metric--accent">
+                    <span class="lfp-overview-metric-label">Active Filters</span>
+                    <strong>{{ $activeFilterCount }}</strong>
+                </div>
+            </div>
+        </div>
 
         <details id="lfp-filters-panel" class="lfp-filters-panel" open>
             <summary class="lfp-filters-summary">
-                <span>Filters</span>
+                <span class="lfp-filters-summary-title">
+                    <i class="fas fa-sliders" aria-hidden="true"></i>
+                    <span>Filter Projects</span>
+                    @if($activeFilterCount > 0)
+                        <span class="lfp-filter-count">{{ $activeFilterCount }} active</span>
+                    @endif
+                </span>
                 <span class="lfp-filters-summary-icon" aria-hidden="true"></span>
             </summary>
             <div class="lfp-filters-body">
                 <form id="lfp-filters-form" method="GET" action="{{ route($listRouteName) }}" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px;">
                     <input type="hidden" name="sort_by" value="{{ $sortBy ?? 'funding_year' }}">
-                    <input type="hidden" name="sort_dir" value="{{ $sortDir ?? 'asc' }}">
+                    <input type="hidden" name="sort_dir" value="{{ $sortDir ?? 'desc' }}">
                     <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
-                    <input type="hidden" name="project_group" value="{{ $activeFilters['project_group'] ?? 'modern' }}">
                     @if($forceFundSource !== '')
                         <input type="hidden" name="fund_source" value="{{ $forceFundSource }}">
                     @endif
@@ -273,7 +300,7 @@
                     <button type="submit" style="padding: 8px 12px; background-color: #1d4ed8; color: white; border: 0; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
                         Apply Filter
                     </button>
-                    <a href="{{ route($listRouteName, ['sort_by' => $sortBy ?? 'funding_year', 'sort_dir' => $sortDir ?? 'asc', 'per_page' => $perPage ?? 10]) }}" style="padding: 8px 12px; background-color: #6b7280; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">
+                    <a href="{{ route($listRouteName, ['sort_by' => $sortBy ?? 'funding_year', 'sort_dir' => $sortDir ?? 'desc', 'per_page' => $perPage ?? 10]) }}" style="padding: 8px 12px; background-color: #6b7280; color: white; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">
                         Clear
                     </a>
                     <button type="button" onclick="openLocallyFundedExportModal()" style="padding: 8px 12px; background-color: #10b981; color: white; border: 0; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; margin-left: auto;">
@@ -294,7 +321,7 @@
         @else
             @php
                 $currentSortBy = $sortBy ?? request('sort_by', 'default');
-                $currentSortDir = $sortDir ?? request('sort_dir', 'asc');
+                $currentSortDir = $sortDir ?? request('sort_dir', 'desc');
                 $currentSortDir = strtolower((string) $currentSortDir) === 'desc' ? 'desc' : 'asc';
 
                 $nextSortDirection = function (string $column, string $defaultDirection = 'asc') use ($currentSortBy, $currentSortDir): string {
@@ -433,14 +460,16 @@
                             @endphp
                             @php
                                 $hasLfp = !empty($lfpId);
+                                $projectGroup = ($activeFilters['project_group'] ?? 'modern') === 'legacy' ? 'legacy' : 'modern';
+                                $detailRoute = $projectGroup === 'legacy'
+                                    ? 'locally-funded-project.legacy.show'
+                                    : 'locally-funded-project.modern.show';
                                 $viewUrl = $hasLfp
-                                    ? route('locally-funded-project.show', $lfpId)
-                                    : route('locally-funded-project.ensure', $project->subaybayan_project_code);
+                                    ? route($detailRoute, ['projectCode' => $project->subaybayan_project_code])
+                                    : route('locally-funded-project.ensure', ['projectCode' => $project->subaybayan_project_code, 'project_group' => $projectGroup]);
                             @endphp
                             <tr
                                 style="border-bottom: 1px solid #e5e7eb; transition: background-color 0.2s ease; cursor: pointer;"
-                                onmouseover="this.style.backgroundColor='#f9fafb'"
-                                onmouseout="this.style.backgroundColor='white'"
                                 data-project-code="{{ e($project->subaybayan_project_code) }}"
                                 data-project-title="{{ e($project->project_name) }}"
                                 data-province="{{ e($project->province) }}"
@@ -554,9 +583,13 @@
                             ? $physicalStatuses[$lfpId]['accomplishment_pct_ro']
                             : ($project->subay_accomplishment_pct ?? null);
                         $hasLfp = !empty($lfpId);
+                        $projectGroup = ($activeFilters['project_group'] ?? 'modern') === 'legacy' ? 'legacy' : 'modern';
+                        $detailRoute = $projectGroup === 'legacy'
+                            ? 'locally-funded-project.legacy.show'
+                            : 'locally-funded-project.modern.show';
                             $viewUrl = $hasLfp
-                            ? route('locally-funded-project.show', $lfpId)
-                            : route('locally-funded-project.ensure', $project->subaybayan_project_code);
+                            ? route($detailRoute, ['projectCode' => $project->subaybayan_project_code])
+                            : route('locally-funded-project.ensure', ['projectCode' => $project->subaybayan_project_code, 'project_group' => $projectGroup]);
                         $barangays = $parseBarangays($project->barangay);
                     @endphp
                     <details class="lfp-mobile-card">
@@ -705,11 +738,12 @@
         }
 
         .lfp-filters-panel {
-            margin-bottom: 16px;
-            border: 1px solid #d1d5db;
-            border-radius: 10px;
-            background: #ffffff;
+            margin-bottom: 18px;
+            border: 1px solid #d9e2ee;
+            border-radius: 12px;
+            background: #fbfdff;
             overflow: hidden;
+            box-shadow: 0 4px 12px rgba(23, 59, 114, 0.04);
         }
 
         .lfp-filters-summary {
@@ -718,7 +752,7 @@
             justify-content: space-between;
             gap: 12px;
             padding: 14px 16px;
-            color: #1f2937;
+            color: #173b72;
             font-size: 13px;
             font-weight: 700;
             cursor: pointer;
@@ -730,6 +764,27 @@
             display: none;
         }
 
+        .lfp-filters-summary-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .lfp-filters-summary-title i {
+            color: #2563a6;
+            font-size: 12px;
+        }
+
+        .lfp-filter-count {
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #e6f4f2;
+            color: #0f766e;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+        }
+
         .lfp-filters-summary-icon::before {
             content: '+';
             display: inline-flex;
@@ -738,14 +793,14 @@
             width: 22px;
             height: 22px;
             border-radius: 999px;
-            background: #e5e7eb;
-            color: #374151;
+            background: #e8f0f7;
+            color: #2563a6;
             font-size: 16px;
             line-height: 1;
         }
 
         .lfp-filters-panel[open] .lfp-filters-summary {
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #d9e2ee;
         }
 
         .lfp-filters-panel[open] .lfp-filters-summary-icon::before {
@@ -753,7 +808,88 @@
         }
 
         .lfp-filters-body {
-            padding: 16px;
+            padding: 18px;
+            background: #ffffff;
+        }
+
+        .lfp-overview-strip {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 24px;
+            margin: 0 0 22px;
+            padding: 22px 24px;
+            border: 1px solid #d7e5f3;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #f1f7fc 0%, #ffffff 68%, #f5faf9 100%);
+            box-shadow: inset 4px 0 0 #2b79a7;
+        }
+
+        .lfp-overview-intro {
+            min-width: 0;
+        }
+
+        .lfp-overview-eyebrow {
+            display: block;
+            margin-bottom: 6px;
+            color: #2563a6;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .lfp-overview-intro h2 {
+            margin: 0;
+            color: #173b72;
+            font-size: clamp(22px, 3vw, 29px);
+            font-weight: 750;
+            letter-spacing: -0.025em;
+        }
+
+        .lfp-overview-intro p {
+            margin: 7px 0 0;
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .lfp-overview-metrics {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .lfp-overview-metric {
+            min-width: 104px;
+            padding: 10px 13px;
+            border: 1px solid #d9e2ee;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.86);
+        }
+
+        .lfp-overview-metric-label {
+            display: block;
+            margin-bottom: 3px;
+            color: #8090a5;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .lfp-overview-metric strong {
+            color: #17233c;
+            font-size: 21px;
+            font-weight: 750;
+        }
+
+        .lfp-overview-metric--accent {
+            border-color: #b7ddd8;
+            background: #f0faf8;
+        }
+
+        .lfp-overview-metric--accent strong {
+            color: #0f766e;
         }
 
         .lfp-table-wrap {
@@ -766,6 +902,12 @@
             border: 1px solid #e5e7eb;
             border-radius: 8px;
             background: #ffffff;
+        }
+
+        .lfp-table-wrap {
+            border-color: #d9e2ee;
+            border-radius: 12px;
+            box-shadow: 0 8px 22px rgba(23, 59, 114, 0.06);
         }
 
         .lfp-table-preferences {
@@ -1057,14 +1199,73 @@
             white-space: nowrap !important;
             word-break: normal !important;
             overflow-wrap: normal !important;
-            padding: 8px !important;
+            padding: 10px 12px !important;
+            border-bottom: 1px solid #e8eef5;
         }
 
         #lfp-table thead th {
             position: sticky;
             top: 0;
             z-index: 2;
-            background: #f3f4f6;
+            background: #f1f5f9;
+            color: #52657d !important;
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.045em;
+            text-transform: uppercase;
+            line-height: 1.25;
+            border-bottom: 2px solid #cbd8e6;
+        }
+
+        #lfp-table thead th:first-child {
+            border-top-left-radius: 10px;
+        }
+
+        #lfp-table thead th:last-child {
+            border-top-right-radius: 10px;
+        }
+
+        #lfp-table tbody tr {
+            background: #ffffff;
+            transition: background-color 0.16s ease;
+        }
+
+        #lfp-table tbody tr:nth-child(even) {
+            background: #fbfdff;
+        }
+
+        #lfp-table tbody tr:hover {
+            background: #f0f7fc;
+        }
+
+        #lfp-table tbody td {
+            color: #334155;
+            font-size: 12px;
+            vertical-align: middle;
+        }
+
+        #lfp-table tbody td:nth-child(1),
+        #lfp-table tbody td:nth-child(2) {
+            color: #17233c;
+        }
+
+        #lfp-table tbody td:nth-child(2) {
+            font-weight: 650;
+        }
+
+        #lfp-table th:nth-child(4),
+        #lfp-table td:nth-child(4),
+        #lfp-table th:nth-child(7),
+        #lfp-table td:nth-child(7),
+        #lfp-table th:nth-child(11),
+        #lfp-table td:nth-child(11) {
+            border-left: 2px solid #d9e7f2;
+        }
+
+        #lfp-table thead th:nth-child(4),
+        #lfp-table thead th:nth-child(7),
+        #lfp-table thead th:nth-child(11) {
+            background: #e9f1f7;
         }
 
         #lfp-table .lfp-frozen-col {
@@ -1072,16 +1273,16 @@
             left: 0;
             background: #ffffff;
             z-index: 1;
-            box-shadow: 1px 0 0 #e5e7eb, 8px 0 12px -12px rgba(15, 23, 42, 0.3);
+            box-shadow: 1px 0 0 #d9e2ee, 8px 0 12px -12px rgba(23, 59, 114, 0.24);
         }
 
         #lfp-table thead .lfp-frozen-col {
             z-index: 4;
-            background: #f3f4f6;
+            background: #e9f1f7;
         }
 
         #lfp-table tbody tr:hover .lfp-frozen-col {
-            background: #f9fafb;
+            background: #f0f7fc;
         }
 
         #lfp-table th:nth-child(2),
@@ -1115,10 +1316,21 @@
 
         .lfp-sort-indicator {
             font-size: 10px;
-            color: #6b7280;
+            color: #2563a6;
             min-width: 10px;
             display: inline-block;
             text-align: center;
+        }
+
+        .lfp-sort-link {
+            display: inline-flex !important;
+            align-items: center;
+            gap: 6px !important;
+            color: inherit;
+        }
+
+        .lfp-sort-link:hover {
+            color: #173b72;
         }
 
         .lfp-search-field {
@@ -1161,6 +1373,18 @@
             gap: 12px;
         }
 
+        .lfp-project-list-shell {
+            border: 1px solid #e6edf5;
+            box-shadow: 0 12px 30px rgba(23, 59, 114, 0.07) !important;
+        }
+
+        .lfp-project-list-shell .projects-header h2 {
+            color: #173b72 !important;
+            font-size: 19px !important;
+            font-weight: 750;
+            letter-spacing: -0.015em;
+        }
+
         #lfp-table tbody tr {
             cursor: pointer;
         }
@@ -1180,9 +1404,31 @@
                 flex-direction: column;
                 align-items: flex-start;
             }
+
+            .lfp-overview-strip {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .lfp-overview-metrics {
+                width: 100%;
+            }
         }
 
         @media (max-width: 768px) {
+            .lfp-overview-strip {
+                padding: 18px;
+            }
+
+            .lfp-overview-metrics {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .lfp-overview-metric {
+                min-width: 0;
+            }
+
             .lfp-table-preferences {
                 display: none;
             }

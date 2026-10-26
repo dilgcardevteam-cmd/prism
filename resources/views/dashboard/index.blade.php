@@ -5467,11 +5467,11 @@
                         dropdownMenu.appendChild(optionButton);
                     });
 
-                    const activeSearchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
-                    if (activeSearchInput && dropdownMenu.classList.contains('is-open')) {
+                    const renderedSearchInput = dropdownMenu.querySelector('.dashboard-stacked-filter-search-input');
+                    if (renderedSearchInput && dropdownMenu.classList.contains('is-open')) {
                         requestAnimationFrame(() => {
-                            activeSearchInput.focus();
-                            activeSearchInput.setSelectionRange(activeSearchInput.value.length, activeSearchInput.value.length);
+                            renderedSearchInput.focus();
+                            renderedSearchInput.setSelectionRange(renderedSearchInput.value.length, renderedSearchInput.value.length);
                         });
                     }
                 };

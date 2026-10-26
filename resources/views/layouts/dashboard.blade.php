@@ -2682,7 +2682,8 @@
                             @php
                                 $locallyFundedMenuActive = request()->routeIs('projects.locally-funded*')
                                     || request()->routeIs('locally-funded-project.*');
-                                $locallyFundedGroup = request()->query('project_group', 'modern') === 'legacy'
+                                $locallyFundedGroup = request()->routeIs('projects.locally-funded.legacy')
+                                    || request()->query('project_group', 'modern') === 'legacy'
                                     ? 'legacy'
                                     : 'modern';
                             @endphp
@@ -2694,14 +2695,14 @@
                                 </a>
                                 <ul id="locallyFundedMenu" class="submenu" style="display: {{ $locallyFundedMenuActive ? 'block' : 'none' }};">
                                     <li>
-                                        <a href="{{ route('projects.locally-funded', ['project_group' => 'legacy']) }}"
+                                        <a href="{{ route('projects.locally-funded.legacy') }}"
                                            class="@if($locallyFundedMenuActive && $locallyFundedGroup === 'legacy') active @endif">
                                             <i class="fas fa-clock-rotate-left"></i>
                                             <span>2024 and Below</span>
                                         </a>
                                     </li>
                                     <li>
-                                        <a href="{{ route('projects.locally-funded', ['project_group' => 'modern']) }}"
+                                        <a href="{{ route('projects.locally-funded.modern') }}"
                                            class="@if($locallyFundedMenuActive && $locallyFundedGroup === 'modern') active @endif">
                                             <i class="fas fa-calendar-check"></i>
                                             <span>2025 and Above</span>
