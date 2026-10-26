@@ -653,6 +653,22 @@ class FundUtilizationBatchApprovalController extends Controller
 
                     $this->syncIndividualProjectWorkflow($projectCode, $quarter, 'batch-document', $isApprove, $level, $approverId, $remarks);
                 }
+
+                if ($isApprove) {
+                    $approvedProjectCount = FURBatchDocument::query()
+                        ->where('quarter', $quarter)
+                        ->whereIn('project_code', $projectCodes->all())
+                        ->where('status', 'approved')
+                        ->count();
+
+                    if ($approvedProjectCount === $projectCodes->count()) {
+                        FURBatchDocument::query()
+                            ->where('batch_code', $batchCode)
+                            ->where('quarter', $quarter)
+                            ->whereIn('project_code', $projectCodes->all())
+                            ->update(['batch_code' => null]);
+                    }
+                }
             }
 
             FundUtilizationBatchApprovalLog::create([

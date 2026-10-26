@@ -662,6 +662,7 @@ class SystemManagementController extends Controller
                     'subaybayan_dataset_group' => '2025_above',
                 ],
                 'snapshotScope' => 'subaybayan_2025_above',
+                'yearRange' => ['min' => 2025],
             ];
         }
 
@@ -707,6 +708,7 @@ class SystemManagementController extends Controller
             'customHeaderMap' => [],
             'rowDefaults' => [],
             'snapshotScope' => 'subaybayan',
+            'yearRange' => ['max' => 2024],
         ];
     }
 
@@ -1003,6 +1005,8 @@ class SystemManagementController extends Controller
                     continue;
                 }
 
+                $this->validateImportedFundingYear($row, $uploadPage, $rowIndex + 1);
+
                 $projectCode = $this->normalizeProjectCode($row['project_code'] ?? null);
                 if ($projectCode !== '') {
                     $row['project_code'] = trim((string) $row['project_code']);
@@ -1033,6 +1037,27 @@ class SystemManagementController extends Controller
     private function normalizeProjectCode($value): string
     {
         return strtolower(trim((string) $value));
+    }
+
+    private function validateImportedFundingYear(array $row, array $uploadPage, int $rowNumber): void
+    {
+        $range = $uploadPage['yearRange'] ?? null;
+        if (!is_array($range)) {
+            return;
+        }
+
+        $rawYear = trim((string) ($row['funding_year'] ?? ''));
+        if (!preg_match('/^\d{4}$/', $rawYear)) {
+            throw new \RuntimeException("Row {$rowNumber} must contain a valid four-digit funding year.");
+        }
+
+        $year = (int) $rawYear;
+        if (isset($range['min']) && $year < (int) $range['min']) {
+            throw new \RuntimeException("Row {$rowNumber} contains funding year {$year}; this upload accepts {$range['min']} and above projects only.");
+        }
+        if (isset($range['max']) && $year > (int) $range['max']) {
+            throw new \RuntimeException("Row {$rowNumber} contains funding year {$year}; this upload accepts 2024 and below projects only.");
+        }
     }
 
     private function upsertProjectProfileRow(string $dataTable, string $projectCode, array $row, $now): void

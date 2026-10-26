@@ -181,6 +181,7 @@
                     <input type="hidden" name="sort_by" value="{{ $sortBy ?? 'funding_year' }}">
                     <input type="hidden" name="sort_dir" value="{{ $sortDir ?? 'asc' }}">
                     <input type="hidden" name="per_page" value="{{ $perPage ?? 10 }}">
+                    <input type="hidden" name="project_group" value="{{ $activeFilters['project_group'] ?? 'modern' }}">
                     @if($forceFundSource !== '')
                         <input type="hidden" name="fund_source" value="{{ $forceFundSource }}">
                     @endif

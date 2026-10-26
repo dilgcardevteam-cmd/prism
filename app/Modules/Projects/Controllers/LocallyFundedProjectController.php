@@ -2591,12 +2591,12 @@ $url = route('locally-funded-project.show', $project, false);
     {
         // Cache key: user + filters (5min TTL)
         $userId = Auth::id();
-        $rawFilterState = request()->only(['search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'barangay', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir', 'page']);
+        $rawFilterState = request()->only(['project_group', 'search', 'project_code', 'funding_year', 'fund_source', 'province', 'city', 'barangay', 'procurement', 'status', 'project_update_status', 'per_page', 'sort_by', 'sort_dir', 'page']);
         if (array_key_exists('fund_source', $rawFilterState)) {
             $rawFilterState['fund_source'] = $this->normalizeLocallyFundedFundSourceFilter($rawFilterState['fund_source']);
         }
         $filterHash = md5(serialize($rawFilterState));
-        $cacheKey = "lfp_index_v11:{$userId}:{$filterHash}";
+        $cacheKey = "lfp_index_v17:{$userId}:{$filterHash}";
 
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
@@ -2620,7 +2620,7 @@ $url = route('locally-funded-project.show', $project, false);
                     $cachedPerPage = 10;
                 }
                 $cachedSortBy = trim((string) ($cachedViewData['sortBy'] ?? request('sort_by', 'funding_year')));
-                $cachedSortDir = strtolower(trim((string) ($cachedViewData['sortDir'] ?? request('sort_dir', 'asc'))));
+                $cachedSortDir = strtolower(trim((string) ($cachedViewData['sortDir'] ?? request('sort_dir', 'desc'))));
                 if (!in_array($cachedSortDir, ['asc', 'desc'], true)) {
                     $cachedSortDir = 'asc';
                 }
@@ -2629,6 +2629,7 @@ $url = route('locally-funded-project.show', $project, false);
                     ->setPath(request()->url())
                     ->appends(array_filter([
                         'search' => $cachedFilters['search'] ?? '',
+                        'project_group' => $cachedFilters['project_group'] ?? '',
                         'project_code' => $cachedFilters['project_code'] ?? '',
                         'funding_year' => $cachedFilters['funding_year'] ?? '',
                         'fund_source' => $cachedFilters['fund_source'] ?? '',
@@ -2885,6 +2886,9 @@ $url = route('locally-funded-project.show', $project, false);
         }
 
         $filters = [
+            'project_group' => in_array(request('project_group'), ['legacy', 'modern'], true)
+                ? request('project_group')
+                : 'modern',
             'search' => trim((string) request('search', '')),
             'project_code' => trim((string) request('project_code', '')),
             'funding_year' => trim((string) request('funding_year', '')),
@@ -2897,12 +2901,22 @@ $url = route('locally-funded-project.show', $project, false);
             'project_update_status' => trim((string) request('project_update_status', '')),
         ];
 
+        if ($filters['project_group'] === 'legacy') {
+            $query->whereRaw("{$subayFundingYearNumExpr} IS NULL OR {$subayFundingYearNumExpr} <= 2024");
+        } else {
+            $query->whereRaw("{$subayFundingYearNumExpr} >= 2025");
+        }
+
         $scopedLocationOptionsQuery = clone $query;
-        $scopedOptionsCacheKey = "lfp_index_scoped_options_v4:{$userId}:{$currentYear}:{$currentMonth}";
+        $scopedOptionsCacheKey = "lfp_index_scoped_options_v5:{$userId}:{$currentYear}:{$currentMonth}:{$filters['project_group']}";
 
         $normalizedFundSourceExpression = "COALESCE(NULLIF(UPPER(TRIM(COALESCE(lfp.fund_source, ''))), ''), {$subayFundSourceKeyExpr})";
         $normalizedProcurementExpression = "COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.mode_of_procurement, ''))), ''), {$subayProcurementKeyExpr})";
-        $normalizedStatusExpression = "COALESCE(NULLIF(LOWER(TRIM(COALESCE(lpu.status_project_ro, ''))), ''), {$subayStatusKeyExpr})";
+        $normalizedStatusExpression = "COALESCE(
+            NULLIF(LOWER(TRIM(COALESCE(lpu.status_project_fou, ''))), ''),
+            NULLIF(LOWER(TRIM(COALESCE(lpu.status_project_ro, ''))), ''),
+            {$subayStatusKeyExpr}
+        )";
         $scopedOptions = Cache::remember($scopedOptionsCacheKey, now()->addMinutes(10), function () use (
             $scopedLocationOptionsQuery,
             $projectProvinceExpression,
@@ -3113,7 +3127,7 @@ $url = route('locally-funded-project.show', $project, false);
         }
 
         $sortBy = trim((string) request('sort_by', 'funding_year'));
-        $sortDir = strtolower(trim((string) request('sort_dir', 'asc')));
+        $sortDir = strtolower(trim((string) request('sort_dir', 'desc')));
         if (!in_array($sortDir, ['asc', 'desc'], true)) {
             $sortDir = 'asc';
         }
@@ -3143,10 +3157,21 @@ $url = route('locally-funded-project.show', $project, false);
                 ? "COALESCE(lfp.reverted_amount, {$subayLiquidationsNumExpr})"
                 : $subayLiquidationsNumExpr);
         $utilizationExpr = "CASE WHEN ({$allocationExpr} + 0) = 0 THEN NULL ELSE ((COALESCE({$disbursedExpr}, 0) + COALESCE({$revertedExpr}, 0)) / ({$allocationExpr} + 0)) * 100 END";
+        $normalizedActualStatusExpression = "LOWER(TRIM(COALESCE(lpu.status_project_fou, '')))";
+        $normalizedSubaybayanStatusExpression = "LOWER(TRIM(COALESCE(lpu.status_project_ro, '')))";
         $effectiveStatusExpr = $normalizedStatusExpression;
-
-        // Keep completed projects at the bottom regardless of active column sort.
-        $query->orderByRaw("CASE WHEN {$effectiveStatusExpr} = 'completed' THEN 1 ELSE 0 END");
+        $statusSortExpr = "CASE
+            WHEN REPLACE(REPLACE(REPLACE({$normalizedActualStatusExpression}, '-', ''), ' ', ''), '_', '') = 'completed'
+                OR REPLACE(REPLACE(REPLACE({$normalizedSubaybayanStatusExpression}, '-', ''), ' ', ''), '_', '') = 'completed'
+                OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$subayStatusKeyExpr}, ''))), '-', ''), ' ', ''), '_', '') = 'completed' THEN 3
+            WHEN REPLACE(REPLACE(REPLACE({$normalizedActualStatusExpression}, '-', ''), ' ', ''), '_', '') = 'ongoing'
+                OR REPLACE(REPLACE(REPLACE({$normalizedSubaybayanStatusExpression}, '-', ''), ' ', ''), '_', '') = 'ongoing'
+                OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$subayStatusKeyExpr}, ''))), '-', ''), ' ', ''), '_', '') = 'ongoing' THEN 2
+            WHEN REPLACE(REPLACE(REPLACE({$normalizedActualStatusExpression}, '-', ''), ' ', ''), '_', '') IN ('notyetstarted', 'notstarted')
+                OR REPLACE(REPLACE(REPLACE({$normalizedSubaybayanStatusExpression}, '-', ''), ' ', ''), '_', '') IN ('notyetstarted', 'notstarted')
+                OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$subayStatusKeyExpr}, ''))), '-', ''), ' ', ''), '_', '') IN ('notyetstarted', 'notstarted') THEN 0
+            ELSE 1
+        END";
 
         switch ($sortBy) {
             case 'project_code':
@@ -3168,6 +3193,7 @@ $url = route('locally-funded-project.show', $project, false);
                 break;
             case 'funding_year':
                 $query
+                    ->orderByRaw("{$statusSortExpr} ASC")
                     ->orderByRaw("CASE WHEN {$subayFundingYearKeyExpr} IS NULL OR {$subayFundingYearKeyExpr} = '' THEN 1 ELSE 0 END")
                     ->orderByRaw("{$subayFundingYearNumExpr} {$sortDir}");
                 break;
@@ -3213,13 +3239,15 @@ $url = route('locally-funded-project.show', $project, false);
                 break;
             case 'status_actual':
                 $query
-                    ->orderByRaw("CASE WHEN lpu.status_project_fou IS NULL OR TRIM(lpu.status_project_fou) = '' THEN 1 ELSE 0 END")
-                    ->orderBy('lpu.status_project_fou', $sortDir);
+                    ->orderByRaw("{$statusSortExpr} ASC")
+                    ->orderByRaw("CASE WHEN {$subayFundingYearKeyExpr} IS NULL OR {$subayFundingYearKeyExpr} = '' THEN 1 ELSE 0 END")
+                    ->orderByRaw("{$subayFundingYearNumExpr} DESC");
                 break;
             case 'status_subaybayan':
                 $query
-                    ->orderByRaw("CASE WHEN {$normalizedStatusExpression} IS NULL OR {$normalizedStatusExpression} = '' THEN 1 ELSE 0 END")
-                    ->orderByRaw("{$normalizedStatusExpression} {$sortDir}");
+                    ->orderByRaw("{$statusSortExpr} ASC")
+                    ->orderByRaw("CASE WHEN {$subayFundingYearKeyExpr} IS NULL OR {$subayFundingYearKeyExpr} = '' THEN 1 ELSE 0 END")
+                    ->orderByRaw("{$subayFundingYearNumExpr} DESC");
                 break;
             case 'last_updated':
                 $query
@@ -3228,10 +3256,11 @@ $url = route('locally-funded-project.show', $project, false);
                 break;
             default:
                 $sortBy = 'funding_year';
-                $sortDir = 'asc';
+                $sortDir = 'desc';
                 $query
+                    ->orderByRaw("{$statusSortExpr} ASC")
                     ->orderByRaw("CASE WHEN {$subayFundingYearKeyExpr} IS NULL OR {$subayFundingYearKeyExpr} = '' THEN 1 ELSE 0 END")
-                    ->orderByRaw("{$subayFundingYearNumExpr} ASC")
+                    ->orderByRaw("{$subayFundingYearNumExpr} DESC")
                     ->orderByRaw("CASE WHEN {$subayCityKeyExpr} IS NULL OR {$subayCityKeyExpr} = '' THEN 1 ELSE 0 END")
                     ->orderByRaw("{$subayCityKeyExpr} ASC")
                     ->orderByRaw("CASE WHEN {$subayProvinceKeyExpr} IS NULL OR {$subayProvinceKeyExpr} = '' THEN 1 ELSE 0 END")
@@ -3243,6 +3272,7 @@ $url = route('locally-funded-project.show', $project, false);
             ->orderBy('spp.project_code')
             ->paginate($perPage)
             ->appends(array_filter([
+                'project_group' => $filters['project_group'],
                 'search' => $filters['search'],
                 'project_code' => $filters['project_code'],
                 'funding_year' => $filters['funding_year'],
@@ -6043,7 +6073,17 @@ $url = route('locally-funded-project.show', $project, false);
         $utilizationExpr = "CASE WHEN ({$allocationExpr} + 0) = 0 THEN NULL ELSE ((COALESCE({$disbursedExpr}, 0) + COALESCE({$revertedExpr}, 0)) / ({$allocationExpr} + 0)) * 100 END";
         $effectiveStatusExpr = $normalizedStatusExpression;
 
-        $query->orderByRaw("CASE WHEN {$effectiveStatusExpr} = 'completed' THEN 1 ELSE 0 END");
+        $statusSortExpr = "CASE
+            WHEN REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$effectiveStatusExpr}, ''))), '-', ''), ' ', ''), '_', '') IN ('notyetstarted', 'notstarted') THEN 0
+            WHEN REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$effectiveStatusExpr}, ''))), '-', ''), ' ', ''), '_', '') = 'ongoing' THEN 2
+            WHEN REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$effectiveStatusExpr}, ''))), '-', ''), ' ', ''), '_', '') = 'completed' THEN 3
+            ELSE 1
+        END";
+
+        $query
+            ->orderByRaw("{$statusSortExpr} ASC")
+            ->orderByRaw("CASE WHEN {$subayFundingYearKeyExpr} IS NULL OR {$subayFundingYearKeyExpr} = '' THEN 1 ELSE 0 END")
+            ->orderByRaw("{$subayFundingYearNumExpr} DESC");
         $query->orderBy('spp.project_code');
 
         $projects = $query->get();

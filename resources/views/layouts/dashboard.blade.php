@@ -2669,7 +2669,8 @@
                             request()->routeIs('projects.*')
                             && !request()->routeIs('projects.rssa')
                             && !$dashboardTabRouteActive
-                        ) || request()->routeIs('projects.at-risk');
+                        ) || request()->routeIs('projects.at-risk')
+                            || request()->routeIs('locally-funded-project.*');
                     @endphp
                     <a href="#" class="@if($projectsMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'projectsMenu')">
                         <i class="fas fa-project-diagram"></i>
@@ -2678,11 +2679,35 @@
                     </a>
                     <ul id="projectsMenu" class="submenu" style="display: {{ $projectsMenuActive ? 'block' : 'none' }};">
                         @if($canViewLocallyFundedProjects)
+                            @php
+                                $locallyFundedMenuActive = request()->routeIs('projects.locally-funded*')
+                                    || request()->routeIs('locally-funded-project.*');
+                                $locallyFundedGroup = request()->query('project_group', 'modern') === 'legacy'
+                                    ? 'legacy'
+                                    : 'modern';
+                            @endphp
                             <li>
-                                <a href="{{ route('projects.locally-funded') }}" class="@if(Route::currentRouteName() == 'projects.locally-funded') active @endif">
+                                <a href="#" class="@if($locallyFundedMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'locallyFundedMenu')" aria-expanded="{{ $locallyFundedMenuActive ? 'true' : 'false' }}">
                                     <i class="fas fa-hand-holding-usd"></i>
                                     <span>Locally Funded Projects</span>
+                                    <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
                                 </a>
+                                <ul id="locallyFundedMenu" class="submenu" style="display: {{ $locallyFundedMenuActive ? 'block' : 'none' }};">
+                                    <li>
+                                        <a href="{{ route('projects.locally-funded', ['project_group' => 'legacy']) }}"
+                                           class="@if($locallyFundedMenuActive && $locallyFundedGroup === 'legacy') active @endif">
+                                            <i class="fas fa-clock-rotate-left"></i>
+                                            <span>2024 and Below</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="{{ route('projects.locally-funded', ['project_group' => 'modern']) }}"
+                                           class="@if($locallyFundedMenuActive && $locallyFundedGroup === 'modern') active @endif">
+                                            <i class="fas fa-calendar-check"></i>
+                                            <span>2025 and Above</span>
+                                        </a>
+                                    </li>
+                                </ul>
                             </li>
                         @endif
                         @if($canViewRlipLimeProjects)

@@ -3659,7 +3659,7 @@
             closeDocumentRemarksModal();
             const documentKey = selectedBatchDocumentKey;
 
-            if (action === 'approve') {
+            if (action === 'approve' && data.is_fully_approved) {
                 // Animate and remove the approved document card from the left panel
                 const card = document.querySelector(`#bm-docs-container [data-document-key="${documentKey}"]`);
                 if (card) {
@@ -3710,7 +3710,8 @@
 
                 alert(data.message || `Document "${docLabel}" approved and saved to individual FUR project profiles.`);
             } else {
-                // Returned: update statuses and re-render
+                // Partial approvals and returns keep the document visible with the
+                // remaining project statuses available for the next action.
                 if (doc && data.statuses) {
                     doc.statuses = data.statuses;
                 }
@@ -3718,7 +3719,11 @@
                 saveBatchReviewState();
                 updateBatchDocumentIndicators();
                 renderBatchProjects();
-                alert(data.message || `Document "${docLabel}" returned.`);
+                alert(data.message || (
+                    action === 'approve'
+                        ? `Document "${docLabel}" was partially approved.`
+                        : `Document "${docLabel}" returned.`
+                ));
             }
         })
         .catch(err => {
