@@ -220,8 +220,8 @@
                     <div>
                         <label style="display: block; margin-bottom: 8px; color: #374151; font-weight: 500; font-size: 14px;">Status <span style="color: #dc2626;">*</span></label>
                         <select name="status" required style="width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; @error('status') border-color: #dc2626; @enderror">
-                            <option value="active" @selected($user->status === 'active')>Active</option>
-                            <option value="inactive" @selected($user->status === 'inactive')>Inactive</option>
+                            <option value="active" @selected($user->isActive())>Active</option>
+                            <option value="inactive" @selected(!$user->isActive())>Inactive</option>
                         </select>
                         @error('status')
                             <p style="color: #dc2626; font-size: 12px; margin-top: 4px;">{{ $message }}</p>

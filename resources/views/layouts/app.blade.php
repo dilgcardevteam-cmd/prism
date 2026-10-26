@@ -317,7 +317,6 @@
                 e.stopPropagation();
                 const message = resolveMessage(target, form);
                 window.openConfirmationModal(message, function() {
-                    target.dataset.confirmed = 'true';
                     const targetTag = target.tagName ? target.tagName.toUpperCase() : '';
                     const explicitType = (target.getAttribute('type') || '').toLowerCase();
                     const resolvedType = (target.type || explicitType || '').toLowerCase();
@@ -325,6 +324,7 @@
                     const isSubmitInput = targetTag === 'INPUT' && resolvedType === 'submit';
 
                     if (form && (isSubmitButton || isSubmitInput)) {
+                        form.dataset.confirmed = 'true';
                         window.withNativeConfirmBypass(function() {
                             if (typeof form.requestSubmit === 'function') {
                                 form.requestSubmit(target);
@@ -335,6 +335,7 @@
                         return;
                     }
 
+                    target.dataset.confirmed = 'true';
                     window.withNativeConfirmBypass(function() {
                         target.click();
                     });
@@ -374,7 +375,7 @@
                 e.stopPropagation();
                 const message = resolveMessage(submitter, form);
                 window.openConfirmationModal(message, function() {
-                    submitter.dataset.confirmed = 'true';
+                    form.dataset.confirmed = 'true';
                     window.withNativeConfirmBypass(function() {
                         if (typeof form.requestSubmit === 'function') {
                             form.requestSubmit(submitter);

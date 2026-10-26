@@ -110,4 +110,28 @@ class UserManagementIndexTabPersistenceTest extends TestCase
         $response->assertSee('Role-Based Access', false);
         $response->assertDontSee('class="user-filters-form"', false);
     }
+
+    public function test_user_with_noncanonical_inactive_status_is_shown_as_activatable_and_can_be_activated(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $user = User::factory()->create([
+            'status' => ' INACTIVE ',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('users.index'))
+            ->assertOk()
+            ->assertSee('fa-user-check', false)
+            ->assertSee('Activate this user?', false);
+
+        $this->actingAs($admin)
+            ->put(route('users.block', $user->idno))
+            ->assertRedirect(route('users.index'))
+            ->assertSessionHas('success', 'User activated successfully.');
+
+        $this->assertSame('active', $user->fresh()->status);
+    }
 }

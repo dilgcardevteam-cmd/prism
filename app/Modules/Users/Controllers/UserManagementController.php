@@ -400,9 +400,9 @@ class UserManagementController extends Controller
             return back()->with('error', 'You cannot change the status of your own account.');
         }
 
-        $isInactive = strtolower(trim((string) $user->status)) === 'inactive';
-        $fromStatus = $isInactive ? 'inactive' : 'active';
-        $toStatus = $isInactive ? 'active' : 'inactive';
+        $isActive = $user->isActive();
+        $fromStatus = $isActive ? 'active' : 'inactive';
+        $toStatus = $isActive ? 'inactive' : 'active';
 
         $user->update([
             'status' => $toStatus,
@@ -423,7 +423,7 @@ class UserManagementController extends Controller
             ],
         );
 
-        if ($isInactive) {
+        if (!$isActive) {
             return redirect()->route('users.index')->with('success', 'User activated successfully.');
         }
 

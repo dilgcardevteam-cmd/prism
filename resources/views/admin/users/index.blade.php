@@ -218,9 +218,9 @@
                                 </td>
                                 <td style="padding: 15px 12px;">
                                     <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
-                                        @if($user->status === 'active') background-color: #d1fae5; color: #065f46;
+                                        @if($user->isActive()) background-color: #d1fae5; color: #065f46;
                                         @else background-color: #fed7aa; color: #92400e; @endif">
-                                        {{ ucfirst($user->status) }}
+                                        {{ $user->isActive() ? 'Active' : 'Inactive' }}
                                     </span>
                                 </td>
                                 <td style="padding: 15px 12px; text-align: center;">
@@ -228,10 +228,10 @@
                                         <i class="fas fa-eye"></i> View
                                     </a>
                                     @if($user->idno !== Auth::id())
-                                        <form action="{{ route('users.block', $user->idno) }}" method="POST" style="display: inline;" onsubmit="return confirm('{{ $user->status === 'inactive' ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
+                                        <form action="{{ route('users.block', $user->idno) }}" method="POST" style="display: inline;" onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
                                             @csrf
                                             @method('PUT')
-                                            @if($user->status === 'inactive')
+                                            @if(!$user->isActive())
                                                 <button type="submit" style="padding: 6px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.3s ease;">
                                                     <i class="fas fa-user-check"></i> Activate
                                                 </button>
@@ -277,9 +277,9 @@
                                             {{ $user->roleLabel() }}
                                         </span>
                                         <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
-                                            @if($user->status === 'active') background-color: #d1fae5; color: #065f46;
+                                            @if($user->isActive()) background-color: #d1fae5; color: #065f46;
                                             @else background-color: #fed7aa; color: #92400e; @endif">
-                                            {{ ucfirst($user->status) }}
+                                            {{ $user->isActive() ? 'Active' : 'Inactive' }}
                                         </span>
                                     </div>
                                     <span class="user-mobile-card__chevron" aria-hidden="true">
@@ -306,10 +306,10 @@
                                     <i class="fas fa-eye"></i> View
                                 </a>
                                 @if($user->idno !== Auth::id())
-                                    <form action="{{ route('users.block', $user->idno) }}" method="POST" class="user-mobile-card__form" onsubmit="return confirm('{{ $user->status === 'inactive' ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
+                                    <form action="{{ route('users.block', $user->idno) }}" method="POST" class="user-mobile-card__form" onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
                                         @csrf
                                         @method('PUT')
-                                        @if($user->status === 'inactive')
+                                        @if(!$user->isActive())
                                             <button type="submit" class="user-mobile-card__action user-mobile-card__action--unblock">
                                                 <i class="fas fa-user-check"></i> Activate
                                             </button>
