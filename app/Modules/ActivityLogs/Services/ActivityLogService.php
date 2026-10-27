@@ -145,7 +145,10 @@ class ActivityLogService
         }
 
         $routeName = (string) $route->getName();
-        if ($routeName !== '' && in_array($routeName, self::EXPLICIT_ROUTE_NAMES, true)) {
+        if (
+            $routeName === 'users.block'
+            || ($routeName !== '' && in_array($routeName, self::EXPLICIT_ROUTE_NAMES, true))
+        ) {
             return true;
         }
 
@@ -364,4 +367,3 @@ class ActivityLogService
         return $this->activityLogTableExists;
     }
 }
-

@@ -419,6 +419,13 @@ class UserManagementController extends Controller
     public function block(User $user)
     {
         if ($user->idno === Auth::id()) {
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You cannot change the status of your own account.',
+                ], 422);
+            }
+
             return back()->with('error', 'You cannot change the status of your own account.');
         }
 
@@ -445,11 +452,19 @@ class UserManagementController extends Controller
             ],
         );
 
-        if (!$isActive) {
-            return redirect()->route('users.index')->with('success', 'User activated successfully.');
+        $message = !$isActive
+            ? 'User activated successfully.'
+            : 'User deactivated successfully.';
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'status' => $toStatus,
+            ]);
         }
 
-        return redirect()->route('users.index')->with('success', 'User deactivated successfully.');
+        return redirect()->route('users.index')->with('success', $message);
     }
 
     public function updateAccess(Request $request, User $user)

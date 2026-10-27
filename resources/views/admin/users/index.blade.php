@@ -199,7 +199,7 @@
                     </thead>
                     <tbody>
                         @forelse($users as $user)
-                            <tr style="border-bottom: 1px solid #e5e7eb; transition: background-color 0.2s ease;">
+                            <tr data-user-status-row="{{ $user->idno }}" style="border-bottom: 1px solid #e5e7eb; transition: background-color 0.2s ease;">
                                 <td style="padding: 15px 12px; color: #374151;">
                                     <strong>{{ $user->fname }} {{ $user->lname }}</strong>
                                 </td>
@@ -217,7 +217,7 @@
                                     </span>
                                 </td>
                                 <td style="padding: 15px 12px;">
-                                    <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+                                    <span data-user-status-badge style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
                                         @if($user->isActive()) background-color: #d1fae5; color: #065f46;
                                         @else background-color: #fed7aa; color: #92400e; @endif">
                                         {{ $user->isActive() ? 'Active' : 'Inactive' }}
@@ -228,7 +228,7 @@
                                         <i class="fas fa-eye"></i> View
                                     </a>
                                     @if($user->idno !== Auth::id())
-                                        <form action="{{ route('users.block', $user->idno) }}" method="POST" style="display: inline;" onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
+                                        <form action="{{ route('users.block', $user->idno) }}" method="POST" data-user-status-form style="display: inline;" onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
                                             @csrf
                                             @method('PUT')
                                             @if(!$user->isActive())
@@ -258,7 +258,7 @@
 
             <div class="user-mobile-cards">
                 @forelse($users as $user)
-                    <article class="user-mobile-card" data-user-mobile-card>
+                    <article class="user-mobile-card" data-user-mobile-card data-user-status-row="{{ $user->idno }}">
                         <button type="button" class="user-mobile-card__toggle" data-user-mobile-toggle aria-expanded="false">
                             <div class="user-mobile-card__top">
                                 <div>
@@ -276,7 +276,7 @@
                                             @else background-color: #dcfce7; color: #166534; @endif">
                                             {{ $user->roleLabel() }}
                                         </span>
-                                        <span style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+                                        <span data-user-status-badge style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
                                             @if($user->isActive()) background-color: #d1fae5; color: #065f46;
                                             @else background-color: #fed7aa; color: #92400e; @endif">
                                             {{ $user->isActive() ? 'Active' : 'Inactive' }}
@@ -306,7 +306,7 @@
                                     <i class="fas fa-eye"></i> View
                                 </a>
                                 @if($user->idno !== Auth::id())
-                                    <form action="{{ route('users.block', $user->idno) }}" method="POST" class="user-mobile-card__form" onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
+                                    <form action="{{ route('users.block', $user->idno) }}" method="POST" class="user-mobile-card__form" data-user-status-form onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
                                         @csrf
                                         @method('PUT')
                                         @if(!$user->isActive())
@@ -1365,6 +1365,89 @@
     </style>
 
     <script>
+        (function attachUserStatusForms() {
+            const statusForms = document.querySelectorAll('[data-user-status-form]');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+            function showToast(message, type) {
+                if (window.AppUI && typeof window.AppUI.toast === 'function') {
+                    window.AppUI.toast(message, type);
+                }
+            }
+
+            function updateUserStatus(userId, status) {
+                const isActive = status === 'active';
+
+                document.querySelectorAll('[data-user-status-row="' + userId + '"]').forEach((row) => {
+                    row.querySelectorAll('[data-user-status-badge]').forEach((badge) => {
+                        badge.textContent = isActive ? 'Active' : 'Inactive';
+                        badge.style.backgroundColor = isActive ? '#d1fae5' : '#fed7aa';
+                        badge.style.color = isActive ? '#065f46' : '#92400e';
+                    });
+
+                    row.querySelectorAll('[data-user-status-form]').forEach((form) => {
+                        const button = form.querySelector('button[type="submit"]');
+                        if (!button) return;
+
+                        if (isActive) {
+                            button.innerHTML = '<i class="fas fa-user-slash"></i> Deactivate';
+                            button.style.backgroundColor = '#ef4444';
+                            button.classList.remove('user-mobile-card__action--unblock');
+                            button.classList.add('user-mobile-card__action--block');
+                            form.dataset.confirm = 'Deactivate this user? They will no longer be able to log in.';
+                        } else {
+                            button.innerHTML = '<i class="fas fa-user-check"></i> Activate';
+                            button.style.backgroundColor = '#10b981';
+                            button.classList.remove('user-mobile-card__action--block');
+                            button.classList.add('user-mobile-card__action--unblock');
+                            form.dataset.confirm = 'Activate this user? They will be able to log in again.';
+                        }
+                    });
+                });
+            }
+
+            statusForms.forEach((form) => {
+                form.addEventListener('submit', async function (event) {
+                    event.preventDefault();
+
+                    if (form.dataset.requestPending === 'true') return;
+
+                    const button = form.querySelector('button[type="submit"]');
+                    if (!csrfToken || !button) {
+                        showToast('Unable to update user status. Please reload the page and try again.', 'error');
+                        return;
+                    }
+
+                    form.dataset.requestPending = 'true';
+                    button.disabled = true;
+
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'PUT',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': csrfToken,
+                            },
+                        });
+                        const result = await response.json();
+
+                        if (!response.ok || !result.success) {
+                            throw new Error(result.message || 'Unable to update user status.');
+                        }
+
+                        updateUserStatus(form.closest('[data-user-status-row]').dataset.userStatusRow, result.status);
+                        showToast(result.message, 'success');
+                    } catch (error) {
+                        showToast(error.message || 'Unable to update user status. Please try again.', 'error');
+                    } finally {
+                        delete form.dataset.requestPending;
+                        button.disabled = false;
+                    }
+                });
+            });
+        }());
+
         (function attachUserMobileCards() {
             const cards = Array.from(document.querySelectorAll('[data-user-mobile-card]'));
 

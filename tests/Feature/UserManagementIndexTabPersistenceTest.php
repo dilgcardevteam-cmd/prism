@@ -140,6 +140,34 @@ class UserManagementIndexTabPersistenceTest extends TestCase
         $this->assertSame('active', $user->fresh()->status);
     }
 
+    public function test_status_toggle_returns_json_without_rendering_user_management_page(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+        $user = User::factory()->create([
+            'status' => 'inactive',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->putJson(route('users.block', $user->idno));
+
+        $response->assertOk()
+            ->assertExactJson([
+                'success' => true,
+                'message' => 'User activated successfully.',
+                'status' => 'active',
+            ]);
+        $this->assertSame('active', $user->fresh()->status);
+
+        $this->putJson(route('users.block', $user->idno))
+            ->assertOk()
+            ->assertJsonPath('message', 'User deactivated successfully.')
+            ->assertJsonPath('status', 'inactive');
+        $this->assertSame('inactive', $user->fresh()->status);
+    }
+
     public function test_location_filter_options_are_invalidated_when_user_locations_change(): void
     {
         $admin = User::factory()->create([
