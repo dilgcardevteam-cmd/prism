@@ -1851,7 +1851,7 @@
     <script>
         let statsModalFilteredData = [];
 
-        function showStatsModal(type) {
+        async function showStatsModal(type) {
             const modal = document.getElementById('statsDetailModal');
             const container = document.getElementById('statsDetailModalContainer');
             const titleEl = document.getElementById('statsDetailModalTitle');
@@ -1860,6 +1860,13 @@
             const searchInput = document.getElementById('statsDetailModalSearch');
             
             if (!modal) return;
+
+            try {
+                await ensureBatchUploadProjects();
+            } catch (error) {
+                showBatchUploadToast(error.message || 'Unable to load project details.', 'error');
+                return;
+            }
             
             if (searchInput) searchInput.value = '';
 
@@ -2048,6 +2055,7 @@
 
         let selectedFormat = '';
         const shouldAutoOpenBatchUploadModal = @json($batchUploadOpen);
+        const BATCH_UPLOAD_PROJECTS_ROUTE = @json(route('fund-utilization.batch-upload-projects'));
         const BATCH_UPLOAD_BULK_ROUTE = @json(route('fund-utilization.batch-upload-documents'));
         const BATCH_UPLOAD_INDIVIDUAL_ROUTE = @json(route('fund-utilization.batch-upload-individual-documents'));
         const BATCH_UPLOAD_CSRF_TOKEN = @json(csrf_token());
@@ -2109,21 +2117,45 @@
         const BATCH_UPLOAD_DOCUMENT_STORE_NAME = 'modal-state';
         const BATCH_UPLOAD_DOCUMENT_STORE_KEY = 'selected-documents';
         const BATCH_UPLOAD_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
-        @php
-            $rawProjects = collect($batchUploadProjects ?? []);
-            $serializedProjects = $rawProjects->map(function ($p) {
-                return [
-                    'project_code' => trim((string) data_get($p, 'project_code', '')),
-                    'project_title' => trim((string) data_get($p, 'project_title', '')),
-                    'province' => trim((string) data_get($p, 'province', '')),
-                    'city_municipality' => trim((string) (data_get($p, 'city_municipality') ?: data_get($p, 'implementing_unit', ''))),
-                    'barangay' => trim((string) data_get($p, 'barangay', '')),
-                    'funding_year' => trim((string) data_get($p, 'funding_year', '')),
-                    'open_url' => route('fund-utilization.show', data_get($p, 'project_code')),
-                ];
-            });
-        @endphp
-        const BATCH_UPLOAD_PROJECTS = @json($serializedProjects);
+        let BATCH_UPLOAD_PROJECTS = null;
+        let batchUploadProjectsPromise = null;
+
+        async function ensureBatchUploadProjects() {
+            if (Array.isArray(BATCH_UPLOAD_PROJECTS)) {
+                return BATCH_UPLOAD_PROJECTS;
+            }
+
+            if (!batchUploadProjectsPromise) {
+                const url = new URL(BATCH_UPLOAD_PROJECTS_ROUTE, window.location.origin);
+                new URLSearchParams(window.location.search).forEach((value, key) => {
+                    url.searchParams.append(key, value);
+                });
+
+                batchUploadProjectsPromise = fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                }).then(async (response) => {
+                    const result = await response.json();
+                    if (!response.ok) {
+                        throw new Error(result.message || 'Unable to load project details.');
+                    }
+                    if (!Array.isArray(result.projects)) {
+                        throw new Error('The project list response was invalid.');
+                    }
+
+                    BATCH_UPLOAD_PROJECTS = result.projects;
+                    return BATCH_UPLOAD_PROJECTS;
+                }).catch((error) => {
+                    batchUploadProjectsPromise = null;
+                    throw error;
+                });
+            }
+
+            return batchUploadProjectsPromise;
+        }
         const batchUploadModalCache = {
             elements: null,
             documents: {
@@ -2488,7 +2520,7 @@
             return batchUploadModalCache.elements;
         }
 
-        function openBatchUploadModal() {
+        async function openBatchUploadModal() {
             const modalElements = getBatchUploadModalElements();
             if (!modalElements) {
                 return;
@@ -2506,6 +2538,12 @@
             }
 
             if (!batchUploadShuttleInitialized) {
+                try {
+                    await ensureBatchUploadProjects();
+                } catch (error) {
+                    showBatchUploadToast(error.message || 'Unable to load project details.', 'error');
+                    return;
+                }
                 initializeBatchUploadShuttle();
             }
 
@@ -5149,20 +5187,6 @@
                     resetAndCloseBatchUploadModal();
                 }
             });
-
-            if (!shouldAutoOpenBatchUploadModal && BATCH_UPLOAD_PROJECTS.length > 0) {
-                const warmupBatchUploadShuttle = () => {
-                    if (!batchUploadShuttleInitialized) {
-                        initializeBatchUploadShuttle();
-                    }
-                };
-
-                if (typeof window.requestIdleCallback === 'function') {
-                    window.requestIdleCallback(warmupBatchUploadShuttle, { timeout: 1000 });
-                } else {
-                    window.setTimeout(warmupBatchUploadShuttle, 180);
-                }
-            }
 
             initializeBatchUploadDocumentChecklist();
             initializeBatchUploadQuarterModal();

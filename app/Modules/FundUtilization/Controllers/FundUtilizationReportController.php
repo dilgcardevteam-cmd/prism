@@ -30,6 +30,7 @@ use App\Models\User;
 use App\Services\FundUtilizationWorkflowService;
 use App\Services\SecureTimestampService;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Support\ProjectLocationFilterHelper;
 use Illuminate\Support\Facades\Auth;
@@ -1106,46 +1107,9 @@ class FundUtilizationReportController extends Controller
             $perPage = 10;
         }
 
-        $applyListingOrder = function ($query) {
-            return $query
-                ->orderBy('validation_priority')
-                ->orderByRaw("CASE WHEN project_status IS NULL OR TRIM(project_status) = '' THEN 1 ELSE 0 END")
-                ->orderBy('project_status')
-                ->orderByRaw('CAST(funding_year AS UNSIGNED) DESC')
-                ->orderByRaw("CASE WHEN city_municipality IS NULL OR TRIM(city_municipality) = '' THEN 1 ELSE 0 END")
-                ->orderBy('city_municipality')
-                ->orderByRaw("CASE WHEN province IS NULL OR TRIM(province) = '' THEN 1 ELSE 0 END")
-                ->orderBy('province')
-                ->orderBy('project_code');
-        };
-
-        $cacheKey = 'fur_index_data_v2:' . md5(serialize([
-            'user' => Auth::id(),
-            'query' => $request->query(),
-        ]));
-        $cachedIndexData = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($applyListingOrder, $reportsQuery) {
-            $reportsCollection = $this->attachFundUtilizationListingData(
-                $applyListingOrder($reportsQuery)->get()
-            );
-            $sortedReports = $this->sortFundUtilizationReportsForListing($reportsCollection);
-
-            return [
-                'reports' => $sortedReports,
-                'quarterlyDashboard' => $this->buildQuarterlySubmissionDashboard($sortedReports),
-            ];
-        });
+        $cachedIndexData = $this->getFundUtilizationIndexData($request, $reportsQuery);
 
         $sortedReports = $cachedIndexData['reports'];
-        $batchUploadProjects = $sortedReports->map(static function ($project): array {
-            return [
-                'project_code' => trim((string) data_get($project, 'project_code', '')),
-                'project_title' => trim((string) data_get($project, 'project_title', '')),
-                'province' => trim((string) data_get($project, 'province', '')),
-                'city_municipality' => trim((string) (data_get($project, 'city_municipality') ?: data_get($project, 'implementing_unit', ''))),
-                'barangay' => trim((string) data_get($project, 'barangay', '')),
-                'funding_year' => trim((string) data_get($project, 'funding_year', '')),
-            ];
-        })->values();
         $quarterlyDashboard = $cachedIndexData['quarterlyDashboard'];
 
         $currentPage = max(1, (int) $request->query('page', 1));
@@ -1160,7 +1124,61 @@ class FundUtilizationReportController extends Controller
             ]
         );
 
-        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'batchUploadProjects', 'quarterlyDashboard'));
+        return view('reports.fund-utilization.index', compact('reports', 'filters', 'filterOptions', 'perPage', 'quarterlyDashboard'));
+    }
+
+    public function batchUploadProjects(Request $request): JsonResponse
+    {
+        [$reportsQuery] = $this->buildFilteredReportsQuery($request);
+        $indexData = $this->getFundUtilizationIndexData($request, $reportsQuery);
+
+        $projects = $indexData['reports']->map(static function ($project): array {
+            return [
+                'project_code' => trim((string) data_get($project, 'project_code', '')),
+                'project_title' => trim((string) data_get($project, 'project_title', '')),
+                'province' => trim((string) data_get($project, 'province', '')),
+                'city_municipality' => trim((string) (data_get($project, 'city_municipality') ?: data_get($project, 'implementing_unit', ''))),
+                'barangay' => trim((string) data_get($project, 'barangay', '')),
+                'funding_year' => trim((string) data_get($project, 'funding_year', '')),
+                'open_url' => route('fund-utilization.show', data_get($project, 'project_code')),
+            ];
+        })->values();
+
+        return response()->json(['projects' => $projects]);
+    }
+
+    private function getFundUtilizationIndexData(Request $request, $reportsQuery): array
+    {
+        $cacheKey = 'fur_index_data_v2:' . md5(serialize([
+            'user' => Auth::id(),
+            'query' => $request->query(),
+        ]));
+
+        return Cache::remember($cacheKey, now()->addSeconds(30), function () use ($reportsQuery) {
+            $reportsCollection = $this->attachFundUtilizationListingData(
+                $this->applyFundUtilizationListingOrder($reportsQuery)->get()
+            );
+            $sortedReports = $this->sortFundUtilizationReportsForListing($reportsCollection);
+
+            return [
+                'reports' => $sortedReports,
+                'quarterlyDashboard' => $this->buildQuarterlySubmissionDashboard($sortedReports),
+            ];
+        });
+    }
+
+    private function applyFundUtilizationListingOrder($query)
+    {
+        return $query
+            ->orderBy('validation_priority')
+            ->orderByRaw("CASE WHEN project_status IS NULL OR TRIM(project_status) = '' THEN 1 ELSE 0 END")
+            ->orderBy('project_status')
+            ->orderByRaw('CAST(funding_year AS UNSIGNED) DESC')
+            ->orderByRaw("CASE WHEN city_municipality IS NULL OR TRIM(city_municipality) = '' THEN 1 ELSE 0 END")
+            ->orderBy('city_municipality')
+            ->orderByRaw("CASE WHEN province IS NULL OR TRIM(province) = '' THEN 1 ELSE 0 END")
+            ->orderBy('province')
+            ->orderBy('project_code');
     }
 
     /**

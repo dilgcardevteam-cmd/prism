@@ -10,11 +10,7 @@
         $lastUpdatedBy = $maintenanceState['updated_by_name'] ?? 'Superadmin';
     @endphp
 
-    <div id="maintenance-toggle-feedback" role="status" aria-live="polite" @if (!session('success')) hidden @endif style="margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; border: 1px solid #a7f3d0; background: #ecfdf5; color: #166534; font-size: 13px; font-weight: 600;">
-        @if (session('success'))
-            {{ session('success') }}
-        @endif
-    </div>
+    <div id="maintenance-toggle-feedback" role="status" aria-live="polite" hidden style="margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; border: 1px solid #fecaca; background: #fff7f7; color: #991b1b; font-size: 13px; font-weight: 600;"></div>
 
     @if ($errors->any())
         <div style="margin-bottom: 18px; padding: 14px 16px; border-radius: 10px; border: 1px solid #fecaca; background: #fff7f7; color: #991b1b;">
@@ -191,6 +187,17 @@
                     element.textContent = value;
                 }
             };
+            const showToggleToast = (message, type) => {
+                if (typeof window.AppUI?.toast === 'function') {
+                    window.AppUI.toast(message, type);
+                    return;
+                }
+
+                if (feedback) {
+                    feedback.textContent = message;
+                    feedback.hidden = false;
+                }
+            };
 
             const applyState = (state) => {
                 const enabled = Boolean(state.enabled);
@@ -252,9 +259,12 @@
 
                 const enabling = enabledInput.value === '1';
                 const confirmation = enabling
-                    ? 'Enable maintenance mode? Only superadmin accounts will be able to sign in and access PRISM.'
-                    : 'Disable maintenance mode and restore regular access for all users?';
-                if (!window.confirm(confirmation)) {
+                    ? 'Only superadmin accounts will be able to sign in and access PRISM while maintenance mode is enabled.'
+                    : 'Regular access for all users will be restored.';
+                const confirmed = typeof window.AppUI?.confirm === 'function'
+                    ? await window.AppUI.confirm(confirmation)
+                    : window.confirm(confirmation);
+                if (!confirmed) {
                     return;
                 }
 
@@ -294,20 +304,14 @@
                     }
 
                     applyState(result.maintenanceState);
-                    if (feedback) {
-                        feedback.textContent = result.message;
-                        feedback.hidden = false;
-                    }
+                    showToggleToast(result.message, 'success');
                 } catch (error) {
-                    if (feedback) {
-                        feedback.textContent = error instanceof Error
+                    showToggleToast(
+                        error instanceof Error
                             ? error.message
-                            : 'Unable to update maintenance mode. Please try again.';
-                        feedback.hidden = false;
-                        feedback.style.borderColor = '#fecaca';
-                        feedback.style.background = '#fff7f7';
-                        feedback.style.color = '#991b1b';
-                    }
+                            : 'Unable to update maintenance mode. Please try again.',
+                        'error'
+                    );
                     if (buttonLabel) {
                         buttonLabel.textContent = originalLabel;
                     }

@@ -46,6 +46,9 @@ Route::middleware(['auth'])->group(function () {
         };
 
         Route::get('/', [FundUtilizationReportController::class, 'index'])->name('fund-utilization.index');
+        Route::get('/batch-upload-projects', [FundUtilizationReportController::class, 'batchUploadProjects'])
+            ->middleware('crud_permission:fund_utilization_reports,view')
+            ->name('fund-utilization.batch-upload-projects');
         Route::get('/export', [FundUtilizationReportController::class, 'export'])->name('fund-utilization.export');
         Route::get('/create', [FundUtilizationReportController::class, 'create'])->name('fund-utilization.create');
         Route::get('/get-municipalities/{province}', [FundUtilizationReportController::class, 'getMunicipalities'])->name('fund-utilization.get-municipalities');

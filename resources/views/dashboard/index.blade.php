@@ -465,15 +465,6 @@
         $selectedProgramFilters = array_values($filters['programs'] ?? []);
         $selectedFundSourceFilters = array_values($filters['fund_source'] ?? []);
         $selectedFundingYearFilters = array_values($filters['funding_year'] ?? []);
-        $fundingYearMode = $filters['funding_year_mode'] ?? 'years';
-        $fundingYearFrom = $filters['funding_year_from'] ?? null;
-        $fundingYearTo = $filters['funding_year_to'] ?? null;
-        $dashboardNumericFundingYearOptions = collect($filterOptions['funding_years'] ?? [])
-            ->map(fn ($year) => trim((string) $year))
-            ->filter(fn ($year) => preg_match('/^\d{4}$/D', $year) === 1)
-            ->unique()
-            ->sort()
-            ->values();
         $selectedProjectTypeFilters = array_values($filters['project_type'] ?? []);
         $selectedProjectStatusFilters = array_values($filters['project_status'] ?? []);
         $dashboardProvinceCityMap = collect($filterOptions['province_city_map'] ?? []);
@@ -561,7 +552,7 @@
     </script>
 
     <div class="dashboard-main-layout">
-        <form method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
+        <form id="dashboard-project-filter-form" method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
             <input type="hidden" name="tab" value="{{ $activeProjectTab }}">
             <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="true" aria-controls="project-filter-body">
                 <span style="font-size: 20px;">🔍</span>
@@ -613,42 +604,29 @@
                         </select>
                     </div>
 
-                    <div>
-                        <label for="funding_year_mode" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year Selection</label>
-                        <select id="funding_year_mode" name="funding_year_mode" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                            <option value="years" @selected($fundingYearMode === 'years')>Select year(s)</option>
-                            <option value="range" @selected($fundingYearMode === 'range')>Select a year range</option>
-                        </select>
-                    </div>
-
-                    <div data-funding-year-selection="years">
-                        <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year(s)</label>
-                        <select id="funding_year" name="funding_year[]" multiple size="4" aria-describedby="funding-year-help" style="width: 100%; min-height: 100px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 6px 10px;">
-                            @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
-                                <option value="{{ $option }}" @selected(in_array((string) $option, $selectedFundingYearFilters, true))>{{ $option }}</option>
-                            @endforeach
-                        </select>
-                        <small id="funding-year-help" style="display: block; margin-top: 5px; color: #6b7280;">Select one or more years.</small>
-                    </div>
-
-                    <div data-funding-year-selection="range" hidden>
-                        <label for="funding_year_from" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">From year</label>
-                        <select id="funding_year_from" name="funding_year_from" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                            <option value="">No minimum</option>
-                            @foreach ($dashboardNumericFundingYearOptions as $option)
-                                <option value="{{ $option }}" @selected((string) $fundingYearFrom === (string) $option)>{{ $option }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div data-funding-year-selection="range" hidden>
-                        <label for="funding_year_to" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">To year</label>
-                        <select id="funding_year_to" name="funding_year_to" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                            <option value="">No maximum</option>
-                            @foreach ($dashboardNumericFundingYearOptions as $option)
-                                <option value="{{ $option }}" @selected((string) $fundingYearTo === (string) $option)>{{ $option }}</option>
-                            @endforeach
-                        </select>
+                    <div class="dashboard-funding-year-filter">
+                        <label for="funding-year-dropdown-toggle" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year(s)</label>
+                        <button id="funding-year-dropdown-toggle" type="button" class="dashboard-funding-year-toggle" aria-expanded="false" aria-controls="funding-year-dropdown-menu">
+                            <span id="funding-year-dropdown-label" class="dashboard-funding-year-toggle-label">{{ count($selectedFundingYearFilters) ? implode(', ', $selectedFundingYearFilters) : 'All years' }}</span>
+                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                        </button>
+                        <div id="funding-year-dropdown-menu" class="dashboard-funding-year-menu" role="group" aria-label="Select funding years" hidden>
+                            <div class="dashboard-funding-year-menu-header">
+                                <span>Select one or more years</span>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <button type="button" class="dashboard-funding-year-select-all">Select all</button>
+                                    <button type="button" class="dashboard-funding-year-clear">Clear</button>
+                                </div>
+                            </div>
+                            <div class="dashboard-funding-year-options">
+                                @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
+                                    <label class="dashboard-funding-year-option">
+                                        <input type="checkbox" name="funding_year[]" form="dashboard-project-filter-form" value="{{ $option }}" @checked(in_array((string) $option, $selectedFundingYearFilters, true))>
+                                        <span>{{ $option }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
                     </div>
 
                     <div>
@@ -690,50 +668,85 @@
 
         <script>
             (function () {
-                const modeSelect = document.getElementById('funding_year_mode');
-                const yearsSelect = document.getElementById('funding_year');
-                const yearRangeSelects = [
-                    document.getElementById('funding_year_from'),
-                    document.getElementById('funding_year_to')
-                ];
-                const yearSelectionSections = {
-                    years: document.querySelectorAll('[data-funding-year-selection="years"]'),
-                    range: document.querySelectorAll('[data-funding-year-selection="range"]')
-                };
+                const toggle = document.getElementById('funding-year-dropdown-toggle');
+                const menu = document.getElementById('funding-year-dropdown-menu');
+                const label = document.getElementById('funding-year-dropdown-label');
+                const clearButton = menu?.querySelector('.dashboard-funding-year-clear');
+                const selectAllButton = menu?.querySelector('.dashboard-funding-year-select-all');
 
-                if (!modeSelect || !yearsSelect || yearRangeSelects.some((select) => !select)) {
+                if (!toggle || !menu || !label || !clearButton || !selectAllButton) {
                     return;
                 }
 
-                const updateFundingYearSelection = () => {
-                    const useRange = modeSelect.value === 'range';
-                    yearSelectionSections.years.forEach((section) => {
-                        section.hidden = useRange;
-                    });
-                    yearSelectionSections.range.forEach((section) => {
-                        section.hidden = !useRange;
-                    });
-                    yearsSelect.disabled = useRange;
-                    yearRangeSelects.forEach((select) => {
-                        select.disabled = !useRange;
-                    });
-                };
+                document.body.appendChild(menu);
 
-                modeSelect.addEventListener('change', () => {
-                    if (modeSelect.value === 'range') {
-                        Array.from(yearsSelect.options).forEach((option) => {
-                            option.selected = false;
-                        });
-                    } else {
-                        yearRangeSelects.forEach((select) => {
-                            select.value = '';
-                        });
+                const selectedYears = () => Array.from(menu.querySelectorAll('input[name="funding_year[]"]:checked'));
+                const updateLabel = () => {
+                    const selected = selectedYears();
+                    label.textContent = selected.length ? selected.map((checkbox) => checkbox.value).join(', ') : 'All years';
+                };
+                const positionMenu = () => {
+                    if (menu.hidden) {
+                        return;
                     }
 
-                    updateFundingYearSelection();
-                });
+                    const margin = 8;
+                    const gap = 4;
+                    const rect = toggle.getBoundingClientRect();
+                    const width = Math.min(Math.max(rect.width, 220), window.innerWidth - margin * 2);
+                    const height = Math.min(menu.scrollHeight, 260, window.innerHeight - margin * 2);
+                    const openAbove = window.innerHeight - rect.bottom < height + gap && rect.top > window.innerHeight - rect.bottom;
+                    menu.style.width = `${width}px`;
+                    menu.style.left = `${Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))}px`;
+                    menu.style.top = `${openAbove ? Math.max(margin, rect.top - height - gap) : Math.min(window.innerHeight - height - margin, rect.bottom + gap)}px`;
+                    menu.style.maxHeight = `${height}px`;
+                };
+                const closeMenu = (restoreFocus = false) => {
+                    menu.hidden = true;
+                    toggle.setAttribute('aria-expanded', 'false');
+                    if (restoreFocus) {
+                        toggle.focus();
+                    }
+                };
+                const openMenu = () => {
+                    menu.hidden = false;
+                    toggle.setAttribute('aria-expanded', 'true');
+                    positionMenu();
+                };
 
-                updateFundingYearSelection();
+                toggle.addEventListener('click', () => {
+                    if (menu.hidden) {
+                        openMenu();
+                    } else {
+                        closeMenu();
+                    }
+                });
+                menu.addEventListener('change', updateLabel);
+                selectAllButton.addEventListener('click', () => {
+                    menu.querySelectorAll('input[name="funding_year[]"]').forEach((checkbox) => {
+                        checkbox.checked = true;
+                    });
+                    updateLabel();
+                });
+                clearButton.addEventListener('click', () => {
+                    menu.querySelectorAll('input[name="funding_year[]"]').forEach((checkbox) => {
+                        checkbox.checked = false;
+                    });
+                    updateLabel();
+                });
+                document.addEventListener('click', (event) => {
+                    if (!menu.hidden && !menu.contains(event.target) && !toggle.contains(event.target)) {
+                        closeMenu();
+                    }
+                });
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && !menu.hidden) {
+                        closeMenu(true);
+                    }
+                });
+                window.addEventListener('resize', positionMenu);
+                document.addEventListener('scroll', positionMenu, true);
+                updateLabel();
             })();
         </script>
 
@@ -2385,6 +2398,111 @@
 
         .dashboard-stacked-filter-source {
             display: none;
+        }
+
+        .dashboard-funding-year-filter {
+            min-width: 0;
+            position: relative;
+        }
+
+        .dashboard-funding-year-toggle {
+            width: 100%;
+            height: 38px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #374151;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .dashboard-funding-year-toggle:focus-visible,
+        .dashboard-funding-year-toggle[aria-expanded="true"] {
+            outline: 0;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+        }
+
+        .dashboard-funding-year-toggle-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 13px;
+        }
+
+        .dashboard-funding-year-menu {
+            position: fixed;
+            z-index: 980;
+            width: min(320px, calc(100vw - 16px));
+            max-height: 260px;
+            overflow-y: auto;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #ffffff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+            padding: 8px;
+        }
+
+        .dashboard-funding-year-menu[hidden] {
+            display: none;
+        }
+
+        .dashboard-funding-year-menu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 2px 3px 7px;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .dashboard-funding-year-clear {
+            border: 0;
+            background: transparent;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .dashboard-funding-year-select-all {
+            border: 0;
+            background: transparent;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .dashboard-funding-year-options {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 2px 8px;
+        }
+
+        .dashboard-funding-year-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 30px;
+            padding: 3px;
+            color: #111827;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .dashboard-funding-year-option input {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: #003a99;
         }
 
         .dashboard-stacked-filter-dropdown {
