@@ -85,6 +85,36 @@ class ProjectDashboardController extends Controller
                     ->all();
             };
 
+            $legacyFundingYearRange = trim((string) request()->input('funding_year_range', ''));
+            if (!in_array($legacyFundingYearRange, ['2024-and-below', '2025-and-beyond'], true)) {
+                $legacyFundingYearRange = '';
+            }
+
+            $requestedFundingYearMode = trim((string) request()->input('funding_year_mode', ''));
+            $fundingYearMode = in_array($requestedFundingYearMode, ['years', 'range'], true)
+                ? $requestedFundingYearMode
+                : ($legacyFundingYearRange !== '' ? 'range' : 'years');
+            $parseFundingYearBoundary = function (string $inputName): ?int {
+                $value = trim((string) request()->input($inputName, ''));
+                if ($value === '') {
+                    return null;
+                }
+
+                $year = filter_var($value, FILTER_VALIDATE_INT);
+
+                return $year !== false && $year > 0 ? $year : null;
+            };
+            $fundingYearFrom = $fundingYearMode === 'range' ? $parseFundingYearBoundary('funding_year_from') : null;
+            $fundingYearTo = $fundingYearMode === 'range' ? $parseFundingYearBoundary('funding_year_to') : null;
+            if ($fundingYearMode === 'range' && $legacyFundingYearRange === '2024-and-below' && $fundingYearTo === null) {
+                $fundingYearTo = 2024;
+            } elseif ($fundingYearMode === 'range' && $legacyFundingYearRange === '2025-and-beyond' && $fundingYearFrom === null) {
+                $fundingYearFrom = 2025;
+            }
+            if ($fundingYearFrom !== null && $fundingYearTo !== null && $fundingYearFrom > $fundingYearTo) {
+                [$fundingYearFrom, $fundingYearTo] = [$fundingYearTo, $fundingYearFrom];
+            }
+
             $filters = [
                 'search' => $normalizeFilterValue(request()->input('search', '')),
                 'province' => $parseRequestedFilterValues('province'),
@@ -92,7 +122,10 @@ class ProjectDashboardController extends Controller
                 'barangay' => $parseRequestedFilterValues('barangay'),
                 'programs' => $parseRequestedFilterValues('program'),
                 'fund_source' => $parseRequestedFilterValues('fund_source'),
-                'funding_year' => $parseRequestedFilterValues('funding_year'),
+                'funding_year' => $fundingYearMode === 'years' ? $parseRequestedFilterValues('funding_year') : [],
+                'funding_year_mode' => $fundingYearMode,
+                'funding_year_from' => $fundingYearFrom,
+                'funding_year_to' => $fundingYearTo,
                 'project_type' => $parseRequestedFilterValues('project_type'),
                 'project_status' => $parseRequestedFilterValues('project_status'),
             ];
@@ -169,6 +202,18 @@ class ProjectDashboardController extends Controller
             $subayFundingYearOrderExpr = $hasSubayFundingYearNumColumn
                 ? 'spp.funding_year_num'
                 : 'CAST(spp.funding_year AS UNSIGNED)';
+            $subayFundingYearRangeExpr = $hasSubayFundingYearNumColumn
+                ? 'spp.funding_year_num'
+                : 'CASE WHEN TRIM(COALESCE(spp.funding_year, "")) REGEXP "^[0-9]+$" THEN CAST(TRIM(spp.funding_year) AS UNSIGNED) ELSE NULL END';
+            $applyFundingYearRangeFilter = function ($query, string $fundingYearExpression, ?int $from, ?int $to): void {
+                if ($from !== null) {
+                    $query->whereRaw("{$fundingYearExpression} >= ?", [$from]);
+                }
+
+                if ($to !== null) {
+                    $query->whereRaw("{$fundingYearExpression} <= ?", [$to]);
+                }
+            };
 
             $normalizeComparableLocationValue = function ($value): string {
                 return \App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($value);
@@ -325,13 +370,14 @@ class ProjectDashboardController extends Controller
                     ->whereRaw('UPPER(TRIM(COALESCE(fund_source, ""))) <> ?', ['SGLGIF']);
             };
 
-            $applyDashboardFiltersToSubay = function ($query) use ($filters, $applyExactMultiFilterToSubay, $applyDelimitedMultiFilterToSubay, $applyComparableLocationMultiFilterToSubay, $fundSourceFromProjectCodeExpr, $subayProvinceFilterExpr, $subayFundingYearFilterExpr, $subayStatusFilterExpr, $subayProjectCodeFilterExpr) {
+            $applyDashboardFiltersToSubay = function ($query) use ($filters, $applyExactMultiFilterToSubay, $applyDelimitedMultiFilterToSubay, $applyComparableLocationMultiFilterToSubay, $applyFundingYearRangeFilter, $fundSourceFromProjectCodeExpr, $subayProvinceFilterExpr, $subayFundingYearFilterExpr, $subayFundingYearRangeExpr, $subayStatusFilterExpr, $subayProjectCodeFilterExpr) {
                 $applyExactMultiFilterToSubay($query, $subayProvinceFilterExpr, $filters['province']);
                 $applyComparableLocationMultiFilterToSubay($query, 'spp.city_municipality', $filters['city_municipality']);
                 $applyDelimitedMultiFilterToSubay($query, 'spp.barangay', $filters['barangay']);
                 $applyExactMultiFilterToSubay($query, 'spp.program', $filters['programs']);
                 $applyExactMultiFilterToSubay($query, $fundSourceFromProjectCodeExpr, $filters['fund_source']);
                 $applyExactMultiFilterToSubay($query, $subayFundingYearFilterExpr, $filters['funding_year']);
+                $applyFundingYearRangeFilter($query, $subayFundingYearRangeExpr, $filters['funding_year_from'], $filters['funding_year_to']);
                 $applyExactMultiFilterToSubay($query, 'spp.type_of_project', $filters['project_type']);
                 $applyExactMultiFilterToSubay($query, $subayStatusFilterExpr, $filters['project_status']);
 
@@ -1695,6 +1741,12 @@ class ProjectDashboardController extends Controller
                 }
                 $applyExactMultiFilterToSubay($fallbackQuery, 'fund_source', $filters['fund_source']);
                 $applyExactMultiFilterToSubay($fallbackQuery, 'funding_year', $filters['funding_year']);
+                $applyFundingYearRangeFilter(
+                    $fallbackQuery,
+                    'CASE WHEN TRIM(COALESCE(funding_year, "")) REGEXP "^[0-9]+$" THEN CAST(TRIM(funding_year) AS UNSIGNED) ELSE NULL END',
+                    $filters['funding_year_from'],
+                    $filters['funding_year_to'],
+                );
                 $applyExactMultiFilterToSubay($fallbackQuery, 'project_type', $filters['project_type']);
                 $applyExactMultiFilterToSubay($fallbackQuery, 'status', $filters['project_status']);
 

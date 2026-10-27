@@ -465,6 +465,15 @@
         $selectedProgramFilters = array_values($filters['programs'] ?? []);
         $selectedFundSourceFilters = array_values($filters['fund_source'] ?? []);
         $selectedFundingYearFilters = array_values($filters['funding_year'] ?? []);
+        $fundingYearMode = $filters['funding_year_mode'] ?? 'years';
+        $fundingYearFrom = $filters['funding_year_from'] ?? null;
+        $fundingYearTo = $filters['funding_year_to'] ?? null;
+        $dashboardNumericFundingYearOptions = collect($filterOptions['funding_years'] ?? [])
+            ->map(fn ($year) => trim((string) $year))
+            ->filter(fn ($year) => preg_match('/^\d{4}$/D', $year) === 1)
+            ->unique()
+            ->sort()
+            ->values();
         $selectedProjectTypeFilters = array_values($filters['project_type'] ?? []);
         $selectedProjectStatusFilters = array_values($filters['project_status'] ?? []);
         $dashboardProvinceCityMap = collect($filterOptions['province_city_map'] ?? []);
@@ -605,11 +614,39 @@
                     </div>
 
                     <div>
-                        <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year</label>
-                        <select id="funding_year" name="funding_year" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
-                            <option value="">All</option>
+                        <label for="funding_year_mode" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year Selection</label>
+                        <select id="funding_year_mode" name="funding_year_mode" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="years" @selected($fundingYearMode === 'years')>Select year(s)</option>
+                            <option value="range" @selected($fundingYearMode === 'range')>Select a year range</option>
+                        </select>
+                    </div>
+
+                    <div data-funding-year-selection="years">
+                        <label for="funding_year" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">Funding Year(s)</label>
+                        <select id="funding_year" name="funding_year[]" multiple size="4" aria-describedby="funding-year-help" style="width: 100%; min-height: 100px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 6px 10px;">
                             @foreach (($filterOptions['funding_years'] ?? collect()) as $option)
-                                <option value="{{ $option }}" @selected($dashboardSingleFilterValue($selectedFundingYearFilters) === (string) $option)>{{ $option }}</option>
+                                <option value="{{ $option }}" @selected(in_array((string) $option, $selectedFundingYearFilters, true))>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                        <small id="funding-year-help" style="display: block; margin-top: 5px; color: #6b7280;">Select one or more years.</small>
+                    </div>
+
+                    <div data-funding-year-selection="range" hidden>
+                        <label for="funding_year_from" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">From year</label>
+                        <select id="funding_year_from" name="funding_year_from" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">No minimum</option>
+                            @foreach ($dashboardNumericFundingYearOptions as $option)
+                                <option value="{{ $option }}" @selected((string) $fundingYearFrom === (string) $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div data-funding-year-selection="range" hidden>
+                        <label for="funding_year_to" style="display: block; color: #1f2937; font-size: 13px; font-weight: 700; margin-bottom: 6px;">To year</label>
+                        <select id="funding_year_to" name="funding_year_to" style="width: 100%; height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; color: #111827; padding: 0 10px;">
+                            <option value="">No maximum</option>
+                            @foreach ($dashboardNumericFundingYearOptions as $option)
+                                <option value="{{ $option }}" @selected((string) $fundingYearTo === (string) $option)>{{ $option }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -650,6 +687,55 @@
                 </div>
             </div>
         </form>
+
+        <script>
+            (function () {
+                const modeSelect = document.getElementById('funding_year_mode');
+                const yearsSelect = document.getElementById('funding_year');
+                const yearRangeSelects = [
+                    document.getElementById('funding_year_from'),
+                    document.getElementById('funding_year_to')
+                ];
+                const yearSelectionSections = {
+                    years: document.querySelectorAll('[data-funding-year-selection="years"]'),
+                    range: document.querySelectorAll('[data-funding-year-selection="range"]')
+                };
+
+                if (!modeSelect || !yearsSelect || yearRangeSelects.some((select) => !select)) {
+                    return;
+                }
+
+                const updateFundingYearSelection = () => {
+                    const useRange = modeSelect.value === 'range';
+                    yearSelectionSections.years.forEach((section) => {
+                        section.hidden = useRange;
+                    });
+                    yearSelectionSections.range.forEach((section) => {
+                        section.hidden = !useRange;
+                    });
+                    yearsSelect.disabled = useRange;
+                    yearRangeSelects.forEach((select) => {
+                        select.disabled = !useRange;
+                    });
+                };
+
+                modeSelect.addEventListener('change', () => {
+                    if (modeSelect.value === 'range') {
+                        Array.from(yearsSelect.options).forEach((option) => {
+                            option.selected = false;
+                        });
+                    } else {
+                        yearRangeSelects.forEach((select) => {
+                            select.value = '';
+                        });
+                    }
+
+                    updateFundingYearSelection();
+                });
+
+                updateFundingYearSelection();
+            })();
+        </script>
 
         <div id="dashboard-overview-export-modal" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
@@ -1135,7 +1221,7 @@
             </div>
         </div>
 
-        <div class="dashboard-card expected-completion-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); height: 583px; display: flex; flex-direction: column;">
+        <div class="dashboard-card expected-completion-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column;">
             @php
                 $dueProjects = $projectsExpectedCompletionThisMonth ?? collect();
             @endphp
@@ -4394,6 +4480,80 @@
             }
         }
 
+        /* Keep the dashboard compact and predictable across screen sizes. */
+        .dashboard-main-layout {
+            gap: 18px;
+            padding: clamp(14px, 1.8vw, 24px);
+        }
+
+        .dashboard-main-layout .dashboard-card,
+        .dashboard-status-row .dashboard-card {
+            min-width: 0;
+        }
+
+        .dashboard-main-layout .dashboard-card:hover,
+        .dashboard-status-row .dashboard-card:hover {
+            transform: none !important;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.1) !important;
+        }
+
+        .dashboard-status-row {
+            gap: 16px;
+            padding: 18px !important;
+        }
+
+        .dashboard-status-stack {
+            gap: 16px;
+        }
+
+        .expected-completion-card {
+            height: auto !important;
+            min-height: 360px;
+            max-height: 583px;
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-main-layout {
+                gap: 16px;
+            }
+
+            .dashboard-status-row {
+                padding: 16px !important;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .dashboard-main-layout {
+                gap: 14px;
+                padding: 12px;
+            }
+
+            .dashboard-main-layout-filter,
+            .dashboard-main-layout .dashboard-card,
+            .dashboard-status-row .dashboard-card {
+                border-radius: 12px !important;
+            }
+
+            .dashboard-main-layout .dashboard-card,
+            .dashboard-status-row .dashboard-card {
+                padding: 16px !important;
+            }
+
+            .dashboard-status-row {
+                gap: 14px;
+                padding: 12px !important;
+            }
+
+            .expected-completion-card {
+                min-height: 0;
+                max-height: none;
+            }
+
+            .expected-completion-list {
+                max-height: min(55vh, 380px);
+            }
+        }
+
     </style>
 
     <script>
@@ -5760,7 +5920,7 @@
 
             const filters = [];
             dashboardForm.querySelectorAll('select').forEach((selectEl) => {
-                if (selectEl.dataset.filterHelper === '1') {
+                if (selectEl.disabled || selectEl.dataset.filterHelper === '1') {
                     return;
                 }
 

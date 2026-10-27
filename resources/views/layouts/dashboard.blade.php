@@ -2505,11 +2505,35 @@
                     $dashboardTabRouteActive = request()->routeIs('projects.rlip-lime.dashboard')
                         || request()->routeIs('projects.sglgif');
                     $dashboardMenuActive = Route::currentRouteName() == 'dashboard' || $dashboardTabRouteActive;
+                    $dashboardYearRange = request()->query('funding_year_range', '');
+                    $dashboardOlderYearsActive = request()->routeIs('dashboard') && $dashboardYearRange === '2024-and-below';
+                    $dashboardNewerYearsActive = request()->routeIs('dashboard') && $dashboardYearRange === '2025-and-beyond';
                 @endphp
-                <a href="{{ route('dashboard') }}" class="@if($dashboardMenuActive) active @endif">
+                <a href="#" class="@if($dashboardMenuActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'dashboardMenu')" aria-expanded="{{ $dashboardMenuActive ? 'true' : 'false' }}">
                     <i class="fas fa-chart-line"></i>
                     <span>Dashboard</span>
+                    <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 12px;"></i>
                 </a>
+                <ul id="dashboardMenu" class="submenu" style="display: {{ $dashboardMenuActive ? 'block' : 'none' }};">
+                    <li>
+                        <a href="{{ route('dashboard') }}" class="@if(request()->routeIs('dashboard') && $dashboardYearRange === '') active @endif">
+                            <i class="fas fa-layer-group"></i>
+                            <span>All Years</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('dashboard', ['funding_year_range' => '2024-and-below']) }}" class="@if($dashboardOlderYearsActive) active @endif">
+                            <i class="fas fa-clock-rotate-left"></i>
+                            <span>2024 and Below</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('dashboard', ['funding_year_range' => '2025-and-beyond']) }}" class="@if($dashboardNewerYearsActive) active @endif">
+                            <i class="fas fa-calendar-check"></i>
+                            <span>2025 and Beyond</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
             <li>
                 @php
@@ -2576,7 +2600,7 @@
                 @endphp
                 <a href="{{ route('task-management.index') }}" class="@if($taskMgmtMenuActive) active @endif">
                     <i class="fas fa-list-check"></i>
-                    <span>Task Management</span>
+                    <span>Approval Management</span>
                     @if($totalTaskMgmtCount > 0)
                         <span class="sidebar-menu-badge" style="background: #dc2626;">
                             {{ $totalTaskMgmtCount }}
@@ -2615,13 +2639,9 @@
                     || $canViewQuarterlyDilgMc201830
                     || $canViewAnyQuarterlyRpmesForm;
                 $canViewConfirmationOfFundReceipt = Auth::user()->hasCrudPermission('confirmation_of_fund_receipt', 'view');
-                $canViewLgsfProjectCompletionReports = Auth::user()->hasCrudPermission('lgsf_project_completion_reports', 'view');
-                $canViewSglgifProjectCompletionReports = Auth::user()->hasCrudPermission('sglgif_project_completion_reports', 'view');
                 $canViewPisatReports = Auth::user()->hasCrudPermission('pisat_reports', 'view');
-                $canViewAnyProjectCompletionReport = $canViewLgsfProjectCompletionReports || $canViewSglgifProjectCompletionReports;
                 $canViewAnyOneTimeReport = $canViewConfirmationOfFundReceipt
                     || $canViewPreImplementationDocuments
-                    || $canViewAnyProjectCompletionReport
                     || $canViewPisatReports;
                 $canViewDilgMonitoringEvaluation = Auth::user()->hasCrudPermission('dilg_deliverables_monitoring_evaluation', 'view');
                 $canViewDilgRlipLimeMonthly = Auth::user()->hasCrudPermission('dilg_deliverables_rlip_lime_monthly', 'view');
@@ -2799,7 +2819,6 @@
                         || $reportsDilgMonitoringEvaluationActive
                         || $reportsDilgRlipLimeActive
                         || $reportsDilgQaarActive;
-                    $reportsProjectCompletionActive = request()->routeIs('reports.one-time.project-completion-reports.*');
                     $reportsOneTimeActive = request()->routeIs('reports.one-time.*');
                     $reportsMonthlyActive = $reportsMonthlyReportActive || $reportsSwaAnnexFActive;
                     $reportsMenuActive = Route::currentRouteName() == 'reports'
@@ -3057,33 +3076,6 @@
                                         <i class="fas fa-folder-tree"></i>
                                         <span>Project Documents</span>
                                     </a>
-                                </li>
-                            @endif
-                            @if($canViewAnyProjectCompletionReport)
-                                <li>
-                                    <a href="#" class="@if($reportsProjectCompletionActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsProjectCompletionMenu')">
-                                        <i class="fas fa-flag-checkered"></i>
-                                        <span>Project Completion Reports</span>
-                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
-                                    </a>
-                                    <ul id="reportsProjectCompletionMenu" class="submenu" style="display: {{ $reportsProjectCompletionActive ? 'block' : 'none' }};">
-                                        @if($canViewLgsfProjectCompletionReports)
-                                            <li>
-                                                <a href="{{ route('reports.one-time.project-completion-reports.falgu-gef-sbdp') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.falgu-gef-sbdp*')) active @endif">
-                                                    <i class="fas fa-file-alt"></i>
-                                                    <span>LGSF</span>
-                                                </a>
-                                            </li>
-                                        @endif
-                                        @if($canViewSglgifProjectCompletionReports)
-                                            <li>
-                                                <a href="{{ route('reports.one-time.project-completion-reports.sglgif') }}" class="@if(request()->routeIs('reports.one-time.project-completion-reports.sglgif*')) active @endif">
-                                                    <i class="fas fa-file-alt"></i>
-                                                    <span>SGLGIF</span>
-                                                </a>
-                                            </li>
-                                        @endif
-                                    </ul>
                                 </li>
                             @endif
                             @if($canViewPisatReports)

@@ -7,6 +7,8 @@ use App\Models\LgsfProjectCompletionReportFile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class ProjectCompletionReportAccessTest extends TestCase
@@ -27,7 +29,7 @@ class ProjectCompletionReportAccessTest extends TestCase
         ]);
     }
 
-    public function test_provincial_user_can_access_project_completion_report_with_returned_documents(): void
+    public function test_standalone_lgsf_project_completion_page_redirects_to_project_documents(): void
     {
         $projectCode = 'FALGU-2024-TEST-1';
         $this->createSampleProject($projectCode, 'Mountain Province', 'Tadian');
@@ -41,7 +43,6 @@ class ProjectCompletionReportAccessTest extends TestCase
             'access' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp',
         ]);
 
-        // Create a returned document
         LgsfProjectCompletionReportFile::create([
             'project_code' => $projectCode,
             'document_type' => 'project_completion_report_path',
@@ -55,11 +56,67 @@ class ProjectCompletionReportAccessTest extends TestCase
         $response = $this->actingAs($mpUser)
             ->get("/reports/one-time/project-completion-reports/falgu-gef-sbdp/{$projectCode}");
 
-        $response->assertStatus(200);
-        $response->assertSee('pre-impl-delete-form-project_completion_report_path');
+        $response->assertRedirect(route('initial-project-documents.show', ['projectCode' => $projectCode]));
     }
 
-    public function test_provincial_user_cannot_access_project_completion_report_from_other_province(): void
+    public function test_project_documents_screen_includes_lgsf_completion_uploads_for_eligible_projects(): void
+    {
+        $projectCode = 'FALGU-2024-TEST-1';
+        $this->createSampleProject($projectCode, 'Mountain Province', 'Tadian');
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_PROVINCIAL,
+            'agency' => 'DILG',
+            'province' => 'Mountain Province',
+            'office' => 'Bontoc',
+            'status' => 'active',
+            'access' => 'crud:*',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get(route('initial-project-documents.show', ['projectCode' => $projectCode]));
+
+        $response->assertOk()
+            ->assertSee('LGSF Project Completion Documents')
+            ->assertSee('Project Completion Report (using prescribed format)')
+            ->assertDontSee('Project Completion Reports')
+            ->assertSee('from_project_documents=1');
+    }
+
+    public function test_lgsf_upload_from_project_documents_returns_to_the_project_documents_screen(): void
+    {
+        $projectCode = 'FALGU-2024-TEST-1';
+        $this->createSampleProject($projectCode, 'Mountain Province', 'Tadian');
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_PROVINCIAL,
+            'agency' => 'DILG',
+            'province' => 'Mountain Province',
+            'office' => 'Bontoc',
+            'status' => 'active',
+            'access' => 'crud:*',
+        ]);
+        Storage::fake('public');
+
+        $response = $this->actingAs($user)->post(
+            route('reports.one-time.project-completion-reports.falgu-gef-sbdp.save', [
+                'projectCode' => $projectCode,
+                'from_project_documents' => '1',
+            ]),
+            [
+                'project_completion_report_path' => UploadedFile::fake()->create('completion-report.pdf', 100, 'application/pdf'),
+            ]
+        );
+
+        $response->assertRedirect(route('initial-project-documents.show', ['projectCode' => $projectCode]));
+        $this->assertDatabaseHas('lgsf_project_completion_report_files', [
+            'project_code' => $projectCode,
+            'document_type' => 'project_completion_report_path',
+            'uploaded_by' => $user->idno,
+        ]);
+    }
+
+    public function test_old_standalone_lgsf_url_redirects_for_users_outside_project_province(): void
     {
         $projectCode = 'FALGU-2024-TEST-1';
         $this->createSampleProject($projectCode, 'Mountain Province', 'Tadian');
@@ -76,10 +133,10 @@ class ProjectCompletionReportAccessTest extends TestCase
         $response = $this->actingAs($abraUser)
             ->get("/reports/one-time/project-completion-reports/falgu-gef-sbdp/{$projectCode}");
 
-        $response->assertStatus(404);
+        $response->assertRedirect(route('initial-project-documents.show', ['projectCode' => $projectCode]));
     }
 
-    public function test_regional_user_can_access_project_completion_report_without_errors(): void
+    public function test_standalone_lgsf_project_completion_list_redirects_to_project_documents(): void
     {
         $projectCode = 'FALGU-2024-TEST-1';
         $this->createSampleProject($projectCode, 'Mountain Province', 'Tadian');
@@ -93,21 +150,32 @@ class ProjectCompletionReportAccessTest extends TestCase
             'access' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp',
         ]);
 
-        // Create a returned document
-        LgsfProjectCompletionReportFile::create([
-            'project_code' => $projectCode,
-            'document_type' => 'project_completion_report_path',
-            'file_path' => 'reports/test_returned.pdf',
-            'status' => 'returned',
-            'approval_remarks' => 'Please revise section 2',
-            'uploaded_by' => 83,
-            'approved_at' => now(),
+        $response = $this->actingAs($roUser)
+            ->get('/reports/one-time/project-completion-reports/falgu-gef-sbdp');
+
+        $response->assertRedirect(route('initial-project-documents.index'));
+    }
+
+    public function test_standalone_sglgif_project_completion_pages_redirect_to_project_documents(): void
+    {
+        $projectCode = 'SGLGIF-2024-TEST-1';
+        $this->createSampleProject($projectCode, 'Mountain Province', 'Tadian');
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_PROVINCIAL,
+            'agency' => 'DILG',
+            'province' => 'Mountain Province',
+            'office' => 'Bontoc',
+            'status' => 'active',
+            'access' => 'crud:*',
         ]);
 
-        $response = $this->actingAs($roUser)
-            ->get("/reports/one-time/project-completion-reports/falgu-gef-sbdp/{$projectCode}");
+        $this->actingAs($user)
+            ->get('/reports/one-time/project-completion-reports/sglgif')
+            ->assertRedirect(route('initial-project-documents.index'));
 
-        $response->assertStatus(200);
+        $this->get("/reports/one-time/project-completion-reports/sglgif/{$projectCode}")
+            ->assertRedirect(route('initial-project-documents.show', ['projectCode' => $projectCode]));
     }
 
     public function test_provincial_user_can_delete_returned_completion_document(): void
@@ -143,4 +211,3 @@ class ProjectCompletionReportAccessTest extends TestCase
         ]);
     }
 }
-

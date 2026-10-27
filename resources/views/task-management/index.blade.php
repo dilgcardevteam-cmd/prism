@@ -1,7 +1,7 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Task Management')
-@section('page-title', 'Task Management')
+@section('title', 'Approval Management')
+@section('page-title', 'Approval Management')
 
 @section('styles')
 <style>
@@ -1785,7 +1785,7 @@
                         </div>
                     @endif
                 </div>
-                <h1 class="task-mgmt-title">Task Management Hub</h1>
+                <h1 class="task-mgmt-title">Approval Management</h1>
                 <p class="task-mgmt-description">
                     Track accomplishments, review pending uploads, and action documents awaiting validation or returned for revision. Click a program card to open its task list.
                 </p>

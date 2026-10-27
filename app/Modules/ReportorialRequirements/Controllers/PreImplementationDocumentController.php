@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 
 use App\Models\PreImplementationDocument;
 use App\Models\PreImplementationDocumentFile;
+use App\Modules\ReportorialRequirements\Models\LgsfProjectCompletionReport;
+use App\Modules\ReportorialRequirements\Models\LgsfProjectCompletionReportFile;
 use App\Services\InterventionNotificationService;
 use App\Services\LguReportorialWorkflowService;
 use App\Support\InputSanitizer;
@@ -230,6 +232,34 @@ class PreImplementationDocumentController extends Controller
 
         $document = PreImplementationDocument::where('project_code', $project->project_code)->first();
         $documentFiles = PreImplementationDocumentFile::where('project_code', $project->project_code)->get();
+        $lgsfDocumentFields = [];
+        $lgsfDocumentTypes = [];
+        $lgsfDocumentPaths = [];
+        $lgsfRouteConfig = null;
+        $lgsfCanBeIncluded = $request->routeIs('initial-project-documents.*')
+            && Auth::user()->hasCrudPermission('lgsf_project_completion_reports', 'view')
+            && in_array(strtoupper(trim((string) ($project->fund_source ?? ''))), ['SBDP', 'FALGU', 'GEF'], true)
+            && (int) $project->funding_year >= 2024;
+
+        if ($lgsfCanBeIncluded) {
+            $lgsfDocumentFields = $this->lgsfCompletionDocumentFieldMap();
+            $lgsfDocumentTypes = array_keys($lgsfDocumentFields);
+            $lgsfDocument = LgsfProjectCompletionReport::where('project_code', $project->project_code)->first();
+            $lgsfDocumentFiles = LgsfProjectCompletionReportFile::where('project_code', $project->project_code)->get();
+            $documentFiles = $documentFiles->concat($lgsfDocumentFiles);
+            $lgsfDocumentPaths = $lgsfDocument ? $lgsfDocument->only($lgsfDocumentTypes) : [];
+            $lgsfRouteConfig = [
+                'document' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.document',
+                'document_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.document-file',
+                'save' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.save',
+                'validate' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.validate',
+                'validate_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.validate-file',
+                'upload_multi' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.upload-multi',
+                'delete' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.delete',
+                'delete_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.delete-file',
+            ];
+        }
+
         $documentFilesByType = $documentFiles
             ->groupBy('document_type')
             ->map(function ($group) {
@@ -242,7 +272,7 @@ class PreImplementationDocumentController extends Controller
         $latestDocumentFilesByType = $documentFilesByType->map(function ($group) {
             return $group->first();
         });
-        $activityLogs = $this->buildActivityLogs($documentFiles, $project->project_code);
+        $activityLogs = $this->buildActivityLogs($documentFiles, $project->project_code, $lgsfCanBeIncluded);
 
         $documentUserIds = $documentFiles
             ->flatMap(function ($row) {
@@ -264,6 +294,18 @@ class PreImplementationDocumentController extends Controller
             ? collect()
             : User::whereIn('idno', $userIds)->get()->keyBy('idno');
 
+        $documentFields = $this->documentFieldMap();
+        $documentGroups = $this->documentFieldGroups();
+        $multiUploadDocumentTypes = $this->multiUploadDocumentTypes($request);
+
+        if ($lgsfCanBeIncluded) {
+            $documentFields = array_merge($documentFields, $lgsfDocumentFields);
+            $documentGroups = array_merge($documentGroups, [
+                'LGSF Project Completion Documents' => array_keys($lgsfDocumentFields),
+            ]);
+            $multiUploadDocumentTypes[] = 'photos_path';
+        }
+
         return view('reports.pre-implementation-documents.show', [
             'project' => $project,
             'document' => $document,
@@ -271,9 +313,12 @@ class PreImplementationDocumentController extends Controller
             'latestDocumentFilesByType' => $latestDocumentFilesByType,
             'usersById' => $usersById,
             'activityLogs' => $activityLogs,
-            'documentFields' => $this->documentFieldMap(),
-            'documentGroups' => $this->documentFieldGroups(),
-            'multiUploadDocumentTypes' => $this->multiUploadDocumentTypes($request),
+            'documentFields' => $documentFields,
+            'documentGroups' => $documentGroups,
+            'multiUploadDocumentTypes' => $multiUploadDocumentTypes,
+            'lgsfDocumentTypes' => $lgsfDocumentTypes,
+            'lgsfDocumentPaths' => $lgsfDocumentPaths,
+            'lgsfRouteConfig' => $lgsfRouteConfig,
             'allowedModeOfContract' => ['By Contract', 'By Administration'],
             'pageConfig' => $pageConfig,
             'routeConfig' => $routeConfig,
@@ -886,7 +931,7 @@ class PreImplementationDocumentController extends Controller
 
     private function formatDocumentLabel(string $documentType): string
     {
-        $label = $this->documentFieldMap()[$documentType] ?? null;
+        $label = array_merge($this->documentFieldMap(), $this->lgsfCompletionDocumentFieldMap())[$documentType] ?? null;
         if ($label) {
             return $label;
         }
@@ -1098,7 +1143,7 @@ class PreImplementationDocumentController extends Controller
         return $logs;
     }
 
-    private function parsePersistedActivityLog(string $line, string $projectCode): ?array
+    private function parsePersistedActivityLog(string $line, string $projectCode, bool $includeLgsf = false): ?array
     {
         $pattern = '/^\[([^\]]+)\]\s+[^\:]+\.\w+:\s+([^{]+)\s*(\{.*)/';
         if (!preg_match($pattern, $line, $matches)) {
@@ -1112,7 +1157,12 @@ class PreImplementationDocumentController extends Controller
             return null;
         }
 
-        if (($context['module'] ?? null) !== 'pre_implementation_documents') {
+        $allowedModules = ['pre_implementation_documents'];
+        if ($includeLgsf) {
+            $allowedModules[] = 'lgsf_project_completion_reports';
+        }
+
+        if (!in_array($context['module'] ?? null, $allowedModules, true)) {
             return null;
         }
 
@@ -1136,7 +1186,7 @@ class PreImplementationDocumentController extends Controller
         ];
     }
 
-    private function getPersistedActivityLogs(string $projectCode): array
+    private function getPersistedActivityLogs(string $projectCode, bool $includeLgsf = false): array
     {
         $logFiles = glob(storage_path('logs/upload_timestamps-*.log')) ?: [];
         $singleLogFile = storage_path('logs/upload_timestamps.log');
@@ -1155,11 +1205,17 @@ class PreImplementationDocumentController extends Controller
             $logEntries = preg_split('/(?=\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\])/', $content, -1, PREG_SPLIT_NO_EMPTY);
             foreach ($logEntries as $logEntry) {
                 $logEntry = trim($logEntry);
-                if ($logEntry === '' || strpos($logEntry, '"module":"pre_implementation_documents"') === false) {
+                if (
+                    $logEntry === ''
+                    || (
+                        strpos($logEntry, '"module":"pre_implementation_documents"') === false
+                        && (!$includeLgsf || strpos($logEntry, '"module":"lgsf_project_completion_reports"') === false)
+                    )
+                ) {
                     continue;
                 }
 
-                $parsed = $this->parsePersistedActivityLog($logEntry, $projectCode);
+                $parsed = $this->parsePersistedActivityLog($logEntry, $projectCode, $includeLgsf);
                 if ($parsed) {
                     $entries[] = $parsed;
                 }
@@ -1169,9 +1225,9 @@ class PreImplementationDocumentController extends Controller
         return $entries;
     }
 
-    private function buildActivityLogs($documentFiles, string $projectCode): array
+    private function buildActivityLogs($documentFiles, string $projectCode, bool $includeLgsf = false): array
     {
-        $persistedLogs = $this->getPersistedActivityLogs($projectCode);
+        $persistedLogs = $this->getPersistedActivityLogs($projectCode, $includeLgsf);
         $currentLogs = $this->buildCurrentActivityLogs($documentFiles);
 
         if (empty($persistedLogs)) {
@@ -1526,6 +1582,20 @@ class PreImplementationDocumentController extends Controller
                 'time_extensions_path',
                 'cancellation_termination_path',
             ],
+        ];
+    }
+
+    private function lgsfCompletionDocumentFieldMap(): array
+    {
+        return [
+            'project_completion_report_path' => 'Project Completion Report (using prescribed format)',
+            'statement_of_work_accomplished_path' => 'Statement of Work Accomplished',
+            'as_built_plans_path' => 'As-Built Plans',
+            'certificate_of_completion_path' => 'Certificate of Completion',
+            'statement_of_receipts_and_disbursements_path' => 'Statement of Receipts and Disbursements / Reports of Disbursements',
+            'photos_path' => 'Photos',
+            'proof_of_reversion_of_unexpended_funds_path' => 'Proof of Reversion of Unexpended Funds',
+            'copy_of_or_cr_for_vehicles_path' => 'Copy of OR/CR (for vehicles)',
         ];
     }
 }

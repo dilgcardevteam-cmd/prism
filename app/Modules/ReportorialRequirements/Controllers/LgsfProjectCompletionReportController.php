@@ -1343,7 +1343,7 @@ class LgsfProjectCompletionReportController extends Controller
 
     private function routeConfig(?Request $request = null): array
     {
-        return [
+        $routes = [
             'index' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp',
             'show' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.show',
             'document' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.document',
@@ -1355,6 +1355,12 @@ class LgsfProjectCompletionReportController extends Controller
             'delete' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.delete',
             'delete_file' => 'reports.one-time.project-completion-reports.falgu-gef-sbdp.delete-file',
         ];
+
+        if ($request && $request->query('from_project_documents') === '1') {
+            $routes['show'] = 'initial-project-documents.show';
+        }
+
+        return $routes;
     }
 
     private function multiUploadDocumentTypes(): array

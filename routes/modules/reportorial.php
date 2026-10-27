@@ -278,14 +278,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reports/one-time/project-initial-documents', function () {
         return redirect()->route('initial-project-documents.index', request()->query());
     })->name('reports.one-time.project-initial-documents');
-    Route::get(
-        '/reports/one-time/project-completion-reports/falgu-gef-sbdp',
-        [App\Modules\ReportorialRequirements\Controllers\LgsfProjectCompletionReportController::class, 'index']
-    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp');
-    Route::get(
-        '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}',
-        [App\Modules\ReportorialRequirements\Controllers\LgsfProjectCompletionReportController::class, 'show']
-    )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.show');
+    Route::get('/reports/one-time/project-completion-reports/falgu-gef-sbdp', function () {
+        return redirect()->route('initial-project-documents.index', request()->query());
+    })->name('reports.one-time.project-completion-reports.falgu-gef-sbdp');
+    Route::get('/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}', function (string $projectCode) {
+        return redirect()->route('initial-project-documents.show', array_merge(
+            ['projectCode' => $projectCode],
+            request()->query()
+        ));
+    })->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.show');
+    Route::get('/reports/one-time/project-completion-reports/safpb', function () {
+        return redirect()->route('initial-project-documents.index', request()->query());
+    })->name('reports.one-time.project-completion-reports.safpb');
     Route::get(
         '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/document/{documentType}',
         [App\Modules\ReportorialRequirements\Controllers\LgsfProjectCompletionReportController::class, 'viewDocument']
@@ -318,21 +322,20 @@ Route::middleware(['auth'])->group(function () {
         '/reports/one-time/project-completion-reports/falgu-gef-sbdp/{projectCode}/document-file/{fileId}',
         [App\Modules\ReportorialRequirements\Controllers\LgsfProjectCompletionReportController::class, 'deleteDocumentFile']
     )->name('reports.one-time.project-completion-reports.falgu-gef-sbdp.delete-file');
-    Route::view(
-        '/reports/one-time/project-completion-reports/safpb',
-        'reports.one-time.shared.show',
-        [
-            'pageTitle' => 'Project Completion Reports - SAFPB',
-            'pageSubtitle' => 'Dedicated one-time report page for Project Completion Reports covering SAFPB.',
-        ]
-    )->name('reports.one-time.project-completion-reports.safpb');
     Route::get(
         '/reports/one-time/project-completion-reports/sglgif',
-        [App\Modules\ReportorialRequirements\Controllers\SglgifProjectCompletionReportController::class, 'index']
+        function () {
+            return redirect()->route('initial-project-documents.index', request()->query());
+        }
     )->name('reports.one-time.project-completion-reports.sglgif');
     Route::get(
         '/reports/one-time/project-completion-reports/sglgif/{projectCode}',
-        [App\Modules\ReportorialRequirements\Controllers\SglgifProjectCompletionReportController::class, 'show']
+        function (string $projectCode) {
+            return redirect()->route('initial-project-documents.show', array_merge(
+                ['projectCode' => $projectCode],
+                request()->query()
+            ));
+        }
     )->name('reports.one-time.project-completion-reports.sglgif.show');
     Route::get(
         '/reports/one-time/project-completion-reports/sglgif/{projectCode}/document/{documentType}',

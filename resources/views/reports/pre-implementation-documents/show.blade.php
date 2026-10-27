@@ -133,6 +133,13 @@
                 'border' => '#a7f3d0',
                 'subtitle' => 'Implementation-phase records, adjustments, and project actions.',
             ],
+            'LGSF Project Completion Documents' => [
+                'icon' => 'fas fa-flag-checkered',
+                'accent' => '#0f766e',
+                'soft' => '#f0fdfa',
+                'border' => '#99f6e4',
+                'subtitle' => 'Completion report and supporting documents for eligible LGSF projects.',
+            ],
         ];
     @endphp
 
@@ -173,27 +180,34 @@
                     $label = $documentFields[$field] ?? $field;
                 @endphp
                 @php
+                    $isLgsfDocument = in_array($field, $lgsfDocumentTypes ?? [], true);
+                    $fieldRouteConfig = $isLgsfDocument ? $lgsfRouteConfig : $routeConfig;
+                    $fieldPermissionModule = $isLgsfDocument ? 'lgsf_project_completion_reports' : $permissionModule;
+                    $fieldScopeQuery = $scopeQuery;
+                    if ($isLgsfDocument) {
+                        $fieldScopeQuery['from_project_documents'] = '1';
+                    }
                     $fileRecordsForField = $documentFilesByType[$field] ?? collect();
                     $fileRecord = $latestDocumentFilesByType[$field] ?? null;
-                    $path = $fileRecord->file_path ?? ($document->{$field} ?? null);
+                    $path = $fileRecord->file_path ?? (($lgsfDocumentPaths[$field] ?? null) ?: ($document->{$field} ?? null));
                     $fileName = $path ? basename($path) : null;
 
                     $isMultiUpload = in_array($field, $multiUploadDocumentTypes, true);
                     $isPhotoMultiUpload = $isMultiUpload && $field === 'geotagged_photos_path';
                     $uploadCount = $fileRecordsForField instanceof \Illuminate\Support\Collection ? $fileRecordsForField->count() : 0;
                     $hasFile = !empty($path);
-                    $fileViewUrl = $hasFile ? route($routeConfig['document'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) : null;
+                    $fileViewUrl = $hasFile ? route($fieldRouteConfig['document'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $fieldScopeQuery)) : null;
                     $isReturned = $fileRecord && $fileRecord->status === 'returned';
                     $isApprovedRo = $fileRecord && $fileRecord->status === 'approved';
                     $isPendingRo = $fileRecord && $fileRecord->status === 'pending_ro';
                     $disableUpload = !$isMultiUpload && $hasFile;
-                    $canDeleteReturnedDocument = !empty($routeConfig['delete'])
+                    $canDeleteReturnedDocument = !empty($fieldRouteConfig['delete'])
                         && !$isMultiUpload
                         && $hasFile
                         && $isReturned
                         && !$isRegionalDilg
                         && $currentUser
-                        && $currentUser->hasCrudPermission($permissionModule, 'add');
+                        && $currentUser->hasCrudPermission($fieldPermissionModule, 'add');
                     $uploadDisabledMessage = $canDeleteReturnedDocument
                         ? 'Document was returned. Delete the current file, then upload and submit a replacement.'
                         : null;
@@ -433,13 +447,13 @@
                         @endif
                     </div>
                 @else
-                @if ($canDeleteReturnedDocument && !empty($routeConfig['delete']))
-                    <form id="{{ $deleteFormId }}" method="POST" action="{{ route($routeConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: none;">
+                @if ($canDeleteReturnedDocument && !empty($fieldRouteConfig['delete']))
+                    <form id="{{ $deleteFormId }}" method="POST" action="{{ route($fieldRouteConfig['delete'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $fieldScopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: none;">
                         @csrf
                         @method('DELETE')
                     </form>
                 @endif
-                <form method="POST" action="{{ route($routeConfig['save'], array_merge(['projectCode' => $project->project_code], $scopeQuery)) }}" enctype="multipart/form-data" class="document-card-wrapper" style="--card-border: {{ $cardBorder }}; --card-bg: {{ $cardBg }};">
+                <form method="POST" action="{{ route($fieldRouteConfig['save'], array_merge(['projectCode' => $project->project_code], $fieldScopeQuery)) }}" enctype="multipart/form-data" class="document-card-wrapper" style="--card-border: {{ $cardBorder }}; --card-bg: {{ $cardBg }};">
                     @csrf
 
                     <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 12px;">
@@ -502,7 +516,7 @@
                                         <i class="fas fa-clock-rotate-left"></i>
                                         <span style="margin-left: 6px;">History</span>
                                     </button>
-                                    @if ($canDeleteReturnedDocument && !empty($routeConfig['delete']))
+                                    @if ($canDeleteReturnedDocument && !empty($fieldRouteConfig['delete']))
                                         <button type="submit" form="{{ $deleteFormId }}" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.16);">
                                             <i class="fas fa-trash-alt"></i>
                                             <span>Delete</span>
@@ -586,11 +600,11 @@
                     @if ($showApprovalButtons)
                         <div style="display: flex; gap: 8px; margin-top: 8px;">
                             @if (($fileRecord?->status ?? '') !== 'returned')
-                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($fieldRouteConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $fieldScopeQuery)) }}', 'approve')" style="flex: 1; padding: 8px 12px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                     Approve
                                 </button>
                             @endif
-                            <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $scopeQuery)) }}', 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
+                            <button type="button" onclick="openPreImplementationApprovalModal('{{ route($fieldRouteConfig['validate'], array_merge(['projectCode' => $project->project_code, 'documentType' => $field], $fieldScopeQuery)) }}', 'return')" style="flex: 1; padding: 8px 12px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">
                                 Return
                             </button>
                         </div>
@@ -614,6 +628,13 @@
             $modalId = 'preImplMultiModal-' . $multiField;
             $multiUploadCount = $multiFiles instanceof \Illuminate\Support\Collection ? $multiFiles->count() : 0;
             $isPhotoMultiUpload = $multiField === 'geotagged_photos_path';
+            $isLgsfMultiUpload = in_array($multiField, $lgsfDocumentTypes ?? [], true);
+            $multiRouteConfig = $isLgsfMultiUpload ? $lgsfRouteConfig : $routeConfig;
+            $multiPermissionModule = $isLgsfMultiUpload ? 'lgsf_project_completion_reports' : $permissionModule;
+            $multiScopeQuery = $scopeQuery;
+            if ($isLgsfMultiUpload) {
+                $multiScopeQuery['from_project_documents'] = '1';
+            }
         @endphp
         <div id="{{ $modalId }}" data-pre-impl-multi-modal style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); z-index: 1100; padding: 24px; overflow-y: auto;">
             <div style="max-width: 1120px; margin: 0 auto; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 120px); border-radius: 20px; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24); overflow: hidden; border: 1px solid rgba(191, 219, 254, 0.9);">
@@ -656,7 +677,7 @@
                                 @endif
                             </div>
 
-                            <form method="POST" action="{{ route($routeConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $scopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <form method="POST" action="{{ route($multiRouteConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $multiScopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                                 @csrf
                                 <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;">
                                 <button type="submit" style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18);">
@@ -684,11 +705,11 @@
                                         $uploadedBy = $resolveUserName($multiFile->uploaded_by ?? null);
                                         $multiWorkflow = app(\App\Services\LguReportorialWorkflowService::class);
                                         $multiBadge = $multiWorkflow->resolveStatusBadge($multiFile, $project->city_municipality);
-                                        $canDeleteReturnedMultiFile = !empty($routeConfig['delete_file'])
+                                        $canDeleteReturnedMultiFile = !empty($multiRouteConfig['delete_file'])
                                             && $multiFile->status === 'returned'
                                             && !$isRegionalDilg
                                             && $currentUser
-                                            && $currentUser->hasCrudPermission($permissionModule, 'add');
+                                            && $currentUser->hasCrudPermission($multiPermissionModule, 'add');
                                         $multiValidationCheck = $currentUser
                                             ? $multiWorkflow->canUserValidate($currentUser, $multiFile, $project->city_municipality, $project->province)
                                             : ['allowed' => false];
@@ -704,7 +725,7 @@
                                         </td>
                                         <td style="padding: 12px 14px; font-size: 12px; color: #374151;">{{ $uploadedBy }}</td>
                                         <td style="padding: 12px 14px; text-align: right; white-space: nowrap;">
-                                            <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route($routeConfig['document_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', '{{ e(basename($multiFile->file_path)) }}')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 11px; font-weight: 700;">
+                                            <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route($multiRouteConfig['document_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $multiScopeQuery)) }}', '{{ e(basename($multiFile->file_path)) }}')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #0f172a; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 11px; font-weight: 700;">
                                                 <i class="fas fa-eye"></i>
                                                 View
                                             </a>
@@ -714,18 +735,18 @@
                                             </button>
                                             @if ($canValidateMulti)
                                                 @if ($multiFile->status !== 'returned')
-                                                    <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'approve')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
+                                                    <button type="button" onclick="openPreImplementationApprovalModal('{{ route($multiRouteConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $multiScopeQuery)) }}', 'approve')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #10b981; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
                                                         <i class="fas fa-check"></i>
                                                         Approve
                                                     </button>
                                                 @endif
-                                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($routeConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}', 'return')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
+                                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($multiRouteConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $multiScopeQuery)) }}', 'return')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
                                                     <i class="fas fa-times"></i>
                                                     Return
                                                 </button>
                                             @endif
-                                            @if ($canDeleteReturnedMultiFile && !empty($routeConfig['delete_file']))
-                                                <form method="POST" action="{{ route($routeConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $scopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; margin-left: 6px;">
+                                            @if ($canDeleteReturnedMultiFile && !empty($multiRouteConfig['delete_file']))
+                                                <form method="POST" action="{{ route($multiRouteConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $multiScopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; margin-left: 6px;">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #6b7280; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
