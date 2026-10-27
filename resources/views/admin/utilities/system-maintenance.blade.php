@@ -10,11 +10,11 @@
         $lastUpdatedBy = $maintenanceState['updated_by_name'] ?? 'Superadmin';
     @endphp
 
-    @if (session('success'))
-        <div style="margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; border: 1px solid #a7f3d0; background: #ecfdf5; color: #166534; font-size: 13px; font-weight: 600;">
+    <div id="maintenance-toggle-feedback" role="status" aria-live="polite" @if (!session('success')) hidden @endif style="margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; border: 1px solid #a7f3d0; background: #ecfdf5; color: #166534; font-size: 13px; font-weight: 600;">
+        @if (session('success'))
             {{ session('success') }}
-        </div>
-    @endif
+        @endif
+    </div>
 
     @if ($errors->any())
         <div style="margin-bottom: 18px; padding: 14px 16px; border-radius: 10px; border: 1px solid #fecaca; background: #fff7f7; color: #991b1b;">
@@ -41,17 +41,11 @@
                     <i class="fas fa-tools"></i>
                 </div>
                 <div>
-                    <div class="maintenance-hero__eyebrow {{ $isMaintenanceEnabled ? 'is-live' : '' }}">
+                    <div class="maintenance-hero__eyebrow {{ $isMaintenanceEnabled ? 'is-live' : '' }}" data-maintenance-state="eyebrow">
                         {{ $isMaintenanceEnabled ? 'Maintenance Active' : 'System Operational' }}
                     </div>
-                    <h2>{{ $isMaintenanceEnabled ? 'Restricted Access is now live' : 'Operational access is currently open' }}</h2>
-                    <p>
-                        @if ($isMaintenanceEnabled)
-                            Public `/login` requests are redirected to the maintenance notice page. Only the temporary `/admin/login` page accepts superadmin sign-ins during maintenance.
-                        @else
-                            All users can access PRISM normally. Enable maintenance mode when you need to temporarily restrict access to superadmin accounts only.
-                        @endif
-                    </p>
+                    <h2 data-maintenance-state="hero-title">{{ $isMaintenanceEnabled ? 'Restricted Access is now live' : 'Operational access is currently open' }}</h2>
+                    <p data-maintenance-state="hero-description">{{ $isMaintenanceEnabled ? 'Public `/login` requests are redirected to the maintenance notice page. Only the temporary `/admin/login` page accepts superadmin sign-ins during maintenance.' : 'All users can access PRISM normally. Enable maintenance mode when you need to temporarily restrict access to superadmin accounts only.' }}</p>
                 </div>
             </div>
 
@@ -64,58 +58,52 @@
                 <form
                     method="POST"
                     action="{{ route('utilities.system-maintenance.toggle') }}"
-                    onsubmit="return confirm('{{ $isMaintenanceEnabled ? 'Disable maintenance mode and restore regular access for all users?' : 'Enable maintenance mode? Only superadmin accounts will be able to sign in and access PRISM.' }}')"
+                    data-maintenance-toggle-form
                     style="margin: 0;"
                 >
                     @csrf
-                    <input type="hidden" name="enabled" value="{{ $isMaintenanceEnabled ? '0' : '1' }}">
+                    <input type="hidden" name="enabled" value="{{ $isMaintenanceEnabled ? '0' : '1' }}" data-maintenance-toggle-value>
                     <button type="submit" class="maintenance-button maintenance-button--primary {{ $isMaintenanceEnabled ? 'maintenance-button--danger' : '' }}">
-                        <i class="fas {{ $isMaintenanceEnabled ? 'fa-lock-open' : 'fa-power-off' }}"></i>
-                        <span>{{ $isMaintenanceEnabled ? 'Disable Maintenance Mode' : 'Enable Maintenance Mode' }}</span>
+                        <i class="fas {{ $isMaintenanceEnabled ? 'fa-lock-open' : 'fa-power-off' }}" data-maintenance-toggle-icon></i>
+                        <span data-maintenance-toggle-label>{{ $isMaintenanceEnabled ? 'Disable Maintenance Mode' : 'Enable Maintenance Mode' }}</span>
                     </button>
                 </form>
             </div>
         </div>
 
-        <div class="maintenance-banner {{ $isMaintenanceEnabled ? 'maintenance-banner--live' : '' }}">
+        <div class="maintenance-banner {{ $isMaintenanceEnabled ? 'maintenance-banner--live' : '' }}" data-maintenance-state-class="banner">
             <div class="maintenance-banner__icon">
-                <i class="fas {{ $isMaintenanceEnabled ? 'fa-triangle-exclamation' : 'fa-circle-check' }}"></i>
+                <i class="fas {{ $isMaintenanceEnabled ? 'fa-triangle-exclamation' : 'fa-circle-check' }}" data-maintenance-state-icon="banner"></i>
             </div>
             <div class="maintenance-banner__content">
-                <strong>{{ $isMaintenanceEnabled ? 'System lock is active.' : 'System is available.' }}</strong>
-                <span>
-                    @if ($isMaintenanceEnabled)
-                        During this period, only superadmin accounts can sign in and use internal pages. Everyone else is limited to the landing page and maintenance notice page, while superadmins use the temporary `/admin/login` page.
-                    @else
-                        PRISM is accepting normal sign-ins and regular page navigation for authorized users.
-                    @endif
-                </span>
+                <strong data-maintenance-state="banner-title">{{ $isMaintenanceEnabled ? 'System lock is active.' : 'System is available.' }}</strong>
+                <span data-maintenance-state="banner-description">{{ $isMaintenanceEnabled ? 'During this period, only superadmin accounts can sign in and use internal pages. Everyone else is limited to the landing page and maintenance notice page, while superadmins use the temporary `/admin/login` page.' : 'PRISM is accepting normal sign-ins and regular page navigation for authorized users.' }}</span>
             </div>
         </div>
 
         <div class="maintenance-status-grid">
             <article class="maintenance-stat maintenance-stat--accent">
                 <span class="maintenance-stat__label">System State</span>
-                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Under Maintenance' : 'Operational' }}</strong>
+                <strong class="maintenance-stat__value" data-maintenance-state="system-state">{{ $isMaintenanceEnabled ? 'Under Maintenance' : 'Operational' }}</strong>
                 <p class="maintenance-stat__meta">Primary status indicator used by the global access guard.</p>
             </article>
 
             <article class="maintenance-stat">
                 <span class="maintenance-stat__label">Login Access</span>
-                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Superadmin Only' : 'Allowed' }}</strong>
+                <strong class="maintenance-stat__value" data-maintenance-state="login-access">{{ $isMaintenanceEnabled ? 'Superadmin Only' : 'Allowed' }}</strong>
                 <p class="maintenance-stat__meta">Non-superadmin sign-in attempts are refused while maintenance mode is enabled.</p>
             </article>
 
             <article class="maintenance-stat">
                 <span class="maintenance-stat__label">Allowed Public Pages</span>
-                <strong class="maintenance-stat__value">{{ $isMaintenanceEnabled ? 'Landing + Notice' : 'Normal Routing' }}</strong>
+                <strong class="maintenance-stat__value" data-maintenance-state="allowed-pages">{{ $isMaintenanceEnabled ? 'Landing + Notice' : 'Normal Routing' }}</strong>
                 <p class="maintenance-stat__meta">The temporary `/admin/login` page remains available for superadmin access while maintenance is active.</p>
             </article>
 
             <article class="maintenance-stat">
                 <span class="maintenance-stat__label">Last Updated</span>
-                <strong class="maintenance-stat__value">{{ $lastUpdatedDisplay }}</strong>
-                <p class="maintenance-stat__meta">Last changed by {{ $lastUpdatedBy }}.</p>
+                <strong class="maintenance-stat__value" data-maintenance-updated-at>{{ $lastUpdatedDisplay }}</strong>
+                <p class="maintenance-stat__meta">Last changed by <span data-maintenance-updated-by>{{ $lastUpdatedBy }}</span>.</p>
             </article>
         </div>
 
@@ -125,14 +113,14 @@
                     <div class="maintenance-card__icon">
                         <i class="fas fa-shield-alt"></i>
                     </div>
-                    <span class="maintenance-chip {{ $isMaintenanceEnabled ? 'maintenance-chip--danger' : '' }}">
+                    <span class="maintenance-chip {{ $isMaintenanceEnabled ? 'maintenance-chip--danger' : '' }}" data-maintenance-state-class="guard-chip">
                         {{ $isMaintenanceEnabled ? 'Active Guard' : 'Ready' }}
                     </span>
                 </div>
                 <h3>Access Lock Policy</h3>
                 <p>When enabled, every route except the landing page, logout route, maintenance notice page, and temporary `/admin/login` route is blocked for non-superadmin users.</p>
                 <div class="maintenance-card__footer">
-                    <span>{{ $isMaintenanceEnabled ? 'Restriction enforced' : 'Restriction available' }}</span>
+                    <span data-maintenance-state="restriction">{{ $isMaintenanceEnabled ? 'Restriction enforced' : 'Restriction available' }}</span>
                     <i class="fas fa-user-lock" aria-hidden="true"></i>
                 </div>
             </article>
@@ -148,7 +136,7 @@
                 <p>Superadmin credentials continue to work through the temporary `/admin/login` page. Public `/login` requests are redirected to the maintenance notice, and valid non-superadmin credentials stay blocked.</p>
                 <div class="maintenance-preview">
                     <div class="maintenance-preview__title">Current Result</div>
-                    <div class="maintenance-preview__body">{{ $isMaintenanceEnabled ? 'Regular users are blocked from sign-in.' : 'All active users can sign in.' }}</div>
+                    <div class="maintenance-preview__body" data-maintenance-state="login-result">{{ $isMaintenanceEnabled ? 'Regular users are blocked from sign-in.' : 'All active users can sign in.' }}</div>
                 </div>
             </article>
 
@@ -184,6 +172,155 @@
             </article>
         </div>
     </section>
+
+    <script>
+        (() => {
+            const form = document.querySelector('[data-maintenance-toggle-form]');
+            if (!form) {
+                return;
+            }
+
+            const feedback = document.getElementById('maintenance-toggle-feedback');
+            const button = form.querySelector('button[type="submit"]');
+            const buttonLabel = form.querySelector('[data-maintenance-toggle-label]');
+            const buttonIcon = form.querySelector('[data-maintenance-toggle-icon]');
+            const enabledInput = form.querySelector('[data-maintenance-toggle-value]');
+            const setStateText = (key, value) => {
+                const element = document.querySelector(`[data-maintenance-state="${key}"]`);
+                if (element) {
+                    element.textContent = value;
+                }
+            };
+
+            const applyState = (state) => {
+                const enabled = Boolean(state.enabled);
+                const stateText = {
+                    eyebrow: enabled ? 'Maintenance Active' : 'System Operational',
+                    'hero-title': enabled ? 'Restricted Access is now live' : 'Operational access is currently open',
+                    'hero-description': enabled
+                        ? 'Public `/login` requests are redirected to the maintenance notice page. Only the temporary `/admin/login` page accepts superadmin sign-ins during maintenance.'
+                        : 'All users can access PRISM normally. Enable maintenance mode when you need to temporarily restrict access to superadmin accounts only.',
+                    'banner-title': enabled ? 'System lock is active.' : 'System is available.',
+                    'banner-description': enabled
+                        ? 'During this period, only superadmin accounts can sign in and use internal pages. Everyone else is limited to the landing page and maintenance notice page, while superadmins use the temporary `/admin/login` page.'
+                        : 'PRISM is accepting normal sign-ins and regular page navigation for authorized users.',
+                    'system-state': enabled ? 'Under Maintenance' : 'Operational',
+                    'login-access': enabled ? 'Superadmin Only' : 'Allowed',
+                    'allowed-pages': enabled ? 'Landing + Notice' : 'Normal Routing',
+                    restriction: enabled ? 'Restriction enforced' : 'Restriction available',
+                    'login-result': enabled ? 'Regular users are blocked from sign-in.' : 'All active users can sign in.'
+                };
+                Object.entries(stateText).forEach(([key, value]) => setStateText(key, value));
+
+                const eyebrow = document.querySelector('[data-maintenance-state="eyebrow"]');
+                eyebrow?.classList.toggle('is-live', enabled);
+                document.querySelector('[data-maintenance-state-class="banner"]')
+                    ?.classList.toggle('maintenance-banner--live', enabled);
+                document.querySelector('[data-maintenance-state-class="guard-chip"]')
+                    ?.classList.toggle('maintenance-chip--danger', enabled);
+
+                const bannerIcon = document.querySelector('[data-maintenance-state-icon="banner"]');
+                bannerIcon?.classList.toggle('fa-triangle-exclamation', enabled);
+                bannerIcon?.classList.toggle('fa-circle-check', !enabled);
+
+                button?.classList.toggle('maintenance-button--danger', enabled);
+                buttonIcon?.classList.remove('fa-spinner', 'fa-spin');
+                buttonIcon?.classList.toggle('fa-lock-open', enabled);
+                buttonIcon?.classList.toggle('fa-power-off', !enabled);
+                if (buttonLabel) {
+                    buttonLabel.textContent = enabled ? 'Disable Maintenance Mode' : 'Enable Maintenance Mode';
+                }
+                if (enabledInput) {
+                    enabledInput.value = enabled ? '0' : '1';
+                }
+
+                const updatedAt = document.querySelector('[data-maintenance-updated-at]');
+                const updatedBy = document.querySelector('[data-maintenance-updated-by]');
+                if (updatedAt && state.updated_at_display) {
+                    updatedAt.textContent = state.updated_at_display;
+                }
+                if (updatedBy) {
+                    updatedBy.textContent = state.updated_by_name || 'Superadmin';
+                }
+            };
+
+            form.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                if (!enabledInput || !button || button.disabled) {
+                    return;
+                }
+
+                const enabling = enabledInput.value === '1';
+                const confirmation = enabling
+                    ? 'Enable maintenance mode? Only superadmin accounts will be able to sign in and access PRISM.'
+                    : 'Disable maintenance mode and restore regular access for all users?';
+                if (!window.confirm(confirmation)) {
+                    return;
+                }
+
+                button.disabled = true;
+                button.setAttribute('aria-busy', 'true');
+                const originalLabel = buttonLabel?.textContent || '';
+                if (buttonLabel) {
+                    buttonLabel.textContent = 'Applying...';
+                }
+                buttonIcon?.classList.remove('fa-lock-open', 'fa-power-off');
+                buttonIcon?.classList.add('fa-spinner', 'fa-spin');
+                if (feedback) {
+                    feedback.hidden = true;
+                    feedback.style.borderColor = '#a7f3d0';
+                    feedback.style.background = '#ecfdf5';
+                    feedback.style.color = '#166534';
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'same-origin'
+                    });
+                    let result;
+                    try {
+                        result = await response.json();
+                    } catch {
+                        throw new Error('Unable to update maintenance mode. Please try again.');
+                    }
+                    if (!response.ok) {
+                        throw new Error(result.message || 'Unable to update maintenance mode. Please try again.');
+                    }
+
+                    applyState(result.maintenanceState);
+                    if (feedback) {
+                        feedback.textContent = result.message;
+                        feedback.hidden = false;
+                    }
+                } catch (error) {
+                    if (feedback) {
+                        feedback.textContent = error instanceof Error
+                            ? error.message
+                            : 'Unable to update maintenance mode. Please try again.';
+                        feedback.hidden = false;
+                        feedback.style.borderColor = '#fecaca';
+                        feedback.style.background = '#fff7f7';
+                        feedback.style.color = '#991b1b';
+                    }
+                    if (buttonLabel) {
+                        buttonLabel.textContent = originalLabel;
+                    }
+                    buttonIcon?.classList.remove('fa-spinner', 'fa-spin');
+                    buttonIcon?.classList.toggle('fa-lock-open', !enabling);
+                    buttonIcon?.classList.toggle('fa-power-off', enabling);
+                } finally {
+                    button.disabled = false;
+                    button.removeAttribute('aria-busy');
+                }
+            });
+        })();
+    </script>
 
     <style>
         .maintenance-shell {

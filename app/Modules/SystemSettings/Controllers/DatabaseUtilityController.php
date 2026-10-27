@@ -249,7 +249,7 @@ class DatabaseUtilityController extends Controller
         ]);
     }
 
-    public function toggleSystemMaintenance(Request $request): RedirectResponse
+    public function toggleSystemMaintenance(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'enabled' => ['required', 'boolean'],
@@ -257,7 +257,7 @@ class DatabaseUtilityController extends Controller
 
         $previousState = (bool) ($this->systemMaintenanceState->state()['enabled'] ?? false);
         $enabled = (bool) $validated['enabled'];
-        $this->systemMaintenanceState->setEnabled($enabled, $request->user());
+        $maintenanceState = $this->systemMaintenanceState->setEnabled($enabled, $request->user());
 
         app(ActivityLogService::class)->log(
             $request->user(),
@@ -274,14 +274,20 @@ class DatabaseUtilityController extends Controller
             ],
         );
 
+        $message = $enabled
+            ? 'Maintenance mode enabled. Non-superadmin users are now limited to the landing page, login page, and maintenance notice.'
+            : 'Maintenance mode disabled. Normal system access has been restored.';
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'maintenanceState' => $maintenanceState,
+            ]);
+        }
+
         return redirect()
             ->route('utilities.system-maintenance.index')
-            ->with(
-                'success',
-                $enabled
-                    ? 'Maintenance mode enabled. Non-superadmin users are now limited to the landing page, login page, and maintenance notice.'
-                    : 'Maintenance mode disabled. Normal system access has been restored.'
-            );
+            ->with('success', $message);
     }
 
     public function notifications(): View

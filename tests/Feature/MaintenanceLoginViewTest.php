@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use App\Modules\ActivityLogs\Services\ActivityLogService;
 use App\Support\SystemMaintenanceState;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Session\Middleware\StartSession;
@@ -10,6 +12,42 @@ use Tests\TestCase;
 
 class MaintenanceLoginViewTest extends TestCase
 {
+    public function test_maintenance_toggle_returns_json_state_without_redirecting_for_ajax_requests(): void
+    {
+        $user = new User;
+        $user->role = User::ROLE_SUPERADMIN;
+
+        $maintenanceState = [
+            'enabled' => true,
+            'updated_at' => now()->toIso8601String(),
+            'updated_at_display' => 'Oct 27, 2026 03:00 PM',
+            'updated_by_id' => null,
+            'updated_by_name' => 'Superadmin',
+        ];
+        $state = $this->createMock(SystemMaintenanceState::class);
+        $state->expects($this->once())->method('isEnabled')->willReturn(false);
+        $state->expects($this->once())->method('state')->willReturn(['enabled' => false]);
+        $state->expects($this->once())
+            ->method('setEnabled')
+            ->with(true, $user)
+            ->willReturn($maintenanceState);
+        $this->instance(SystemMaintenanceState::class, $state);
+
+        $activityLog = $this->createMock(ActivityLogService::class);
+        $activityLog->expects($this->once())->method('log');
+        $activityLog->expects($this->once())->method('logRequest');
+        $this->instance(ActivityLogService::class, $activityLog);
+
+        $response = $this->actingAs($user)->postJson(route('utilities.system-maintenance.toggle'), [
+            'enabled' => true,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('maintenanceState.enabled', true)
+            ->assertJsonPath('maintenanceState.updated_by_name', 'Superadmin')
+            ->assertJsonPath('message', 'Maintenance mode enabled. Non-superadmin users are now limited to the landing page, login page, and maintenance notice.');
+    }
+
     public function test_public_login_redirects_to_maintenance_notice_when_maintenance_is_enabled(): void
     {
         $state = $this->createMock(SystemMaintenanceState::class);
