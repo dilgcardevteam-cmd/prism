@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Modules\SystemSettings\Models\RolePermissionSetting;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -16,6 +19,8 @@ class UserManagementIndexTabPersistenceTest extends TestCase
         Schema::dropIfExists('tbnotifications');
         Schema::dropIfExists('role_permission_settings');
         Schema::dropIfExists('tbusers');
+        Cache::forget('users.management.location_options');
+        RolePermissionSetting::flushPermissionsCache();
 
         Schema::create('tbusers', function (Blueprint $table): void {
             $table->id('idno');
@@ -133,5 +138,45 @@ class UserManagementIndexTabPersistenceTest extends TestCase
             ->assertSessionHas('success', 'User activated successfully.');
 
         $this->assertSame('active', $user->fresh()->status);
+    }
+
+    public function test_location_filter_options_are_invalidated_when_user_locations_change(): void
+    {
+        $admin = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+            'province' => 'Existing Province',
+            'agency' => 'DILG',
+        ]);
+
+        $this->actingAs($admin)->get(route('users.index'))->assertOk();
+        $this->assertTrue(Cache::has('users.management.location_options'));
+
+        User::factory()->create([
+            'province' => 'New Province',
+            'agency' => 'LGU',
+            'office' => 'New Municipality',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('users.index'));
+
+        $response->assertOk();
+        $response->assertSee('New Province', false);
+        $response->assertSee('New Municipality', false);
+    }
+
+    public function test_role_permission_table_availability_is_checked_once_until_cache_is_flushed(): void
+    {
+        RolePermissionSetting::flushPermissionsCache();
+        $queryCount = 0;
+        DB::listen(function () use (&$queryCount): void {
+            $queryCount++;
+        });
+
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $this->assertTrue(RolePermissionSetting::tableAvailable());
+        }
+
+        $this->assertSame(1, $queryCount);
     }
 }

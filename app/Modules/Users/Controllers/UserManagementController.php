@@ -11,10 +11,13 @@ use App\Support\InputSanitizer;
 use App\Support\RolePermissionRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 
 class UserManagementController extends Controller
 {
+    private const LOCATION_OPTIONS_CACHE_KEY = 'users.management.location_options';
+
     public function __construct()
     {
         $this->middleware('auth');
@@ -28,13 +31,19 @@ class UserManagementController extends Controller
             'active' => 'Active',
             'inactive' => 'Inactive',
         ];
-        $provinceOptions = $this->provinceOptions();
         $selectedRole = strtolower(trim((string) $request->query('role', '')));
         $selectedStatus = strtolower(trim((string) $request->query('status', '')));
         $selectedProvince = trim((string) $request->query('province', ''));
         $selectedLgu = trim((string) $request->query('lgu', ''));
         $search = trim((string) $request->query('search', ''));
-        $lguOptions = $this->lguOptions($selectedProvince);
+        $showingAccessGrants = $request->query('tab') === 'access-grants';
+        $locationOptions = $showingAccessGrants
+            ? ['provinces' => [], 'lgus_by_province' => [], 'lgus' => []]
+            : $this->locationFilterOptions();
+        $provinceOptions = $locationOptions['provinces'];
+        $lguOptions = $selectedProvince !== ''
+            ? ($locationOptions['lgus_by_province'][strtolower($selectedProvince)] ?? [])
+            : $locationOptions['lgus'];
 
         $usersQuery = User::query()
             ->orderByRaw("CASE WHEN LOWER(TRIM(COALESCE(status, ''))) = 'inactive' THEN 0 ELSE 1 END")
@@ -83,8 +92,8 @@ class UserManagementController extends Controller
 
         return view('admin.users.index', [
             'users' => $users,
-            'accessGrantModules' => $this->accessGrantModules(),
-            'crudActionOptions' => RolePermissionRegistry::actionOptions(),
+            'accessGrantModules' => $showingAccessGrants ? $this->accessGrantModules() : [],
+            'crudActionOptions' => $showingAccessGrants ? RolePermissionRegistry::actionOptions() : [],
             'roleOptions' => $roleOptions,
             'statusOptions' => $statusOptions,
             'provinceOptions' => $provinceOptions,
@@ -99,33 +108,46 @@ class UserManagementController extends Controller
         ]);
     }
 
-    private function provinceOptions(): array
+    /**
+     * Cache dropdown options because their distinct-value queries scan tbusers.
+     *
+     * @return array{provinces: array<int, string>, lgus_by_province: array<string, array<int, string>>, lgus: array<int, string>}
+     */
+    private function locationFilterOptions(): array
     {
-        return User::query()
-            ->selectRaw("TRIM(COALESCE(province, '')) as value")
-            ->whereRaw("TRIM(COALESCE(province, '')) <> ''")
-            ->distinct()
-            ->orderBy('value')
-            ->pluck('value')
-            ->all();
-    }
+        return Cache::remember(self::LOCATION_OPTIONS_CACHE_KEY, now()->addMinutes(10), function (): array {
+            $provinces = User::query()
+                ->selectRaw("TRIM(COALESCE(province, '')) as value")
+                ->whereRaw("TRIM(COALESCE(province, '')) <> ''")
+                ->distinct()
+                ->orderBy('value')
+                ->pluck('value')
+                ->all();
 
-    private function lguOptions(string $selectedProvince = ''): array
-    {
-        $query = User::query()
-            ->selectRaw("TRIM(COALESCE(office, '')) as value")
-            ->whereRaw("LOWER(TRIM(COALESCE(agency, ''))) = ?", ['lgu'])
-            ->whereRaw("TRIM(COALESCE(office, '')) <> ''");
+            $lguRows = User::query()
+                ->selectRaw("LOWER(TRIM(COALESCE(province, ''))) as province_key, TRIM(COALESCE(office, '')) as value")
+                ->whereRaw("LOWER(TRIM(COALESCE(agency, ''))) = ?", ['lgu'])
+                ->whereRaw("TRIM(COALESCE(office, '')) <> ''")
+                ->distinct()
+                ->orderBy('value')
+                ->get();
 
-        if ($selectedProvince !== '') {
-            $query->whereRaw('LOWER(TRIM(COALESCE(province, ""))) = ?', [strtolower($selectedProvince)]);
-        }
+            $lgusByProvince = [];
+            $lgus = [];
+            foreach ($lguRows as $row) {
+                $lgusByProvince[$row->province_key][] = $row->value;
+                $lgus[] = $row->value;
+            }
 
-        return $query
-            ->distinct()
-            ->orderBy('value')
-            ->pluck('value')
-            ->all();
+            return [
+                'provinces' => $provinces,
+                'lgus_by_province' => array_map(
+                    static fn (array $values): array => array_values(array_unique($values)),
+                    $lgusByProvince,
+                ),
+                'lgus' => array_values(array_unique($lgus)),
+            ];
+        });
     }
 
     public function create()

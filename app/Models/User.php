@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class User extends Authenticatable implements MustVerifyEmail
@@ -25,6 +26,19 @@ class User extends Authenticatable implements MustVerifyEmail
     public const ACCESS_SCOPE_ALL = 'crud:*';
     public const ACCESS_SCOPE_NONE = 'crud:none';
     public const ACCESS_PERMISSION_PREFIX = 'crud:';
+
+    protected static function booted(): void
+    {
+        static::saved(function (self $user): void {
+            if ($user->wasRecentlyCreated || $user->wasChanged(['agency', 'office', 'province'])) {
+                Cache::forget('users.management.location_options');
+            }
+        });
+
+        static::deleted(function (): void {
+            Cache::forget('users.management.location_options');
+        });
+    }
 
     /**
      * The table associated with the model.
@@ -74,6 +88,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'remember_token',
     ];
+
+    private array $defaultCrudPermissionsCache = [];
+    private array $effectiveCrudPermissionsCache = [];
 
     /**
      * Get the name of the unique identifier for the user.
@@ -688,9 +705,15 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function defaultCrudPermissions(): array
     {
-        return RolePermissionRegistry::permissionsForRole(
-            $this->normalizedRole(),
-            RolePermissionSetting::permissionsForRole($this->normalizedRole()),
+        $role = $this->normalizedRole();
+
+        if (array_key_exists($role, $this->defaultCrudPermissionsCache)) {
+            return $this->defaultCrudPermissionsCache[$role];
+        }
+
+        return $this->defaultCrudPermissionsCache[$role] = RolePermissionRegistry::permissionsForRole(
+            $role,
+            RolePermissionSetting::permissionsForRole($role),
         );
     }
 
@@ -728,13 +751,19 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function effectiveCrudPermissions(): array
     {
+        $cacheKey = $this->normalizedRole() . "\0" . (string) $this->access;
+
+        if (array_key_exists($cacheKey, $this->effectiveCrudPermissionsCache)) {
+            return $this->effectiveCrudPermissionsCache[$cacheKey];
+        }
+
         if (!RolePermissionSetting::tableAvailable()) {
-            return $this->usesScopedCrudAccess()
+            return $this->effectiveCrudPermissionsCache[$cacheKey] = $this->usesScopedCrudAccess()
                 ? $this->grantedCrudPermissions()
                 : $this->defaultCrudPermissions();
         }
 
-        return $this->defaultCrudPermissions();
+        return $this->effectiveCrudPermissionsCache[$cacheKey] = $this->defaultCrudPermissions();
     }
 
     public function effectiveConcreteCrudPermissions(): array

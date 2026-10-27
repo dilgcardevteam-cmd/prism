@@ -20,11 +20,16 @@ class RolePermissionSetting extends Model
     ];
 
     protected static array $permissionsCache = [];
+    protected static ?bool $tableAvailabilityCache = null;
 
     public static function tableAvailable(): bool
     {
+        if (static::$tableAvailabilityCache !== null) {
+            return static::$tableAvailabilityCache;
+        }
+
         try {
-            return Schema::hasTable((new static())->getTable());
+            return static::$tableAvailabilityCache = Schema::hasTable((new static())->getTable());
         } catch (\Throwable) {
             return false;
         }
@@ -54,6 +59,6 @@ class RolePermissionSetting extends Model
     public static function flushPermissionsCache(): void
     {
         static::$permissionsCache = [];
+        static::$tableAvailabilityCache = null;
     }
 }
-
