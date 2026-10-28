@@ -44,6 +44,8 @@ use Illuminate\Support\Carbon;
 
 class FundUtilizationReportController extends Controller
 {
+    private const MINIMUM_FUNDING_YEAR = 2021;
+
     private array $fundUtilizationUploaderLevelCache = [];
 
     public function __construct()
@@ -388,6 +390,13 @@ class FundUtilizationReportController extends Controller
                 });
             });
         }
+    }
+
+    private function applyMinimumFundingYearFilter($query, string $fundingYearExpression): void
+    {
+        $query
+            ->whereRaw("LENGTH({$fundingYearExpression}) = 4")
+            ->whereRaw("CAST({$fundingYearExpression} AS UNSIGNED) >= ?", [self::MINIMUM_FUNDING_YEAR]);
     }
 
     private function buildFundUtilizationOptionQueries($furQuery, $lfpQuery, array $filters, array $expressions, array $exclude = []): array
@@ -1848,6 +1857,14 @@ class FundUtilizationReportController extends Controller
             ]);
         $lfpFundingYearQuery = clone $lfpBaseQuery;
 
+        $this->applyMinimumFundingYearFilter(
+            $furQuery,
+            "TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(tbfur.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), ''))"
+        );
+        $lfpFundingYearExpression = "TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), ''))";
+        $this->applyMinimumFundingYearFilter($lfpQuery, $lfpFundingYearExpression);
+        $this->applyMinimumFundingYearFilter($lfpFundingYearQuery, $lfpFundingYearExpression);
+
         $this->applyNonSglgifSourceScope(
             $furQuery,
             'COALESCE(locally_funded_projects.fund_source, tbfur.fund_source, spp.program)',
@@ -2082,20 +2099,20 @@ class FundUtilizationReportController extends Controller
         $this->applyFundUtilizationFiltersToQueries($fundingYearFurQuery, $fundingYearLfpQuery, $filters, $expressions, ['funding_year']);
 
         $fundingYears = $fundingYearFurQuery
-            ->selectRaw("TRIM(COALESCE(spp.funding_year, tbfur.funding_year, locally_funded_projects.funding_year, '')) as funding_year")
-            ->whereRaw("TRIM(COALESCE(spp.funding_year, tbfur.funding_year, locally_funded_projects.funding_year, '')) <> ''")
+            ->selectRaw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(tbfur.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), '')) as funding_year")
+            ->whereRaw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(tbfur.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), '')) <> ''")
             ->distinct()
             ->pluck('funding_year')
             ->concat(
                 $fundingYearLfpQuery
-                    ->selectRaw("TRIM(COALESCE(spp.funding_year, locally_funded_projects.funding_year, '')) as funding_year")
-                    ->whereRaw("TRIM(COALESCE(spp.funding_year, locally_funded_projects.funding_year, '')) <> ''")
+                    ->selectRaw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), '')) as funding_year")
+                    ->whereRaw("TRIM(COALESCE(NULLIF(spp.funding_year, ''), NULLIF(locally_funded_projects.funding_year, ''), '')) <> ''")
                     ->distinct()
                     ->pluck('funding_year')
             )
             ->concat(collect($activeFilters['funding_year'] ?? []))
             ->map(fn ($value) => trim((string) $value))
-            ->filter()
+            ->filter(fn ($value) => preg_match('/^\d{4}$/D', $value) === 1 && (int) $value >= self::MINIMUM_FUNDING_YEAR)
             ->unique()
             ->sortByDesc(fn ($value) => (int) $value)
             ->values();

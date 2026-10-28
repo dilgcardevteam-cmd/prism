@@ -156,6 +156,34 @@ class ProjectCompletionReportAccessTest extends TestCase
         $response->assertRedirect(route('initial-project-documents.index'));
     }
 
+    public function test_initial_project_documents_list_only_includes_projects_from_funding_year_2021(): void
+    {
+        $this->createSampleProject('FALGU-2020-TEST-1');
+        $this->createSampleProject('FALGU-2021-TEST-1');
+
+        DB::table('subay_project_profiles')
+            ->where('project_code', 'FALGU-2020-TEST-1')
+            ->update(['funding_year' => '2020', 'project_title' => 'FY2020 project']);
+        DB::table('subay_project_profiles')
+            ->where('project_code', 'FALGU-2021-TEST-1')
+            ->update(['funding_year' => '2021', 'project_title' => 'FY2021 project']);
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_PROVINCIAL,
+            'agency' => 'DILG',
+            'province' => 'Mountain Province',
+            'office' => 'Bontoc',
+            'status' => 'active',
+            'access' => 'crud:*',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('initial-project-documents.index'))
+            ->assertOk()
+            ->assertSee('FY2021 project')
+            ->assertDontSee('FY2020 project');
+    }
+
     public function test_standalone_sglgif_project_completion_pages_redirect_to_project_documents(): void
     {
         $projectCode = 'SGLGIF-2024-TEST-1';

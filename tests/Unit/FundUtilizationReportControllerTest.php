@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Http\Controllers\FundUtilizationReportController;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -68,6 +69,29 @@ class FundUtilizationReportControllerTest extends \Tests\TestCase
         ]);
 
         $this->assertSame('lgu', $level);
+    }
+
+    #[Test]
+    public function it_filters_out_projects_before_funding_year_2021(): void
+    {
+        Schema::create('funding_year_filter_test', function ($table) {
+            $table->string('funding_year');
+        });
+        DB::table('funding_year_filter_test')->insert([
+            ['funding_year' => '2020'],
+            ['funding_year' => '2021'],
+            ['funding_year' => '2026'],
+            ['funding_year' => 'unknown'],
+        ]);
+
+        $controller = new FundUtilizationReportController();
+        $method = new \ReflectionMethod(FundUtilizationReportController::class, 'applyMinimumFundingYearFilter');
+        $method->setAccessible(true);
+
+        $query = DB::table('funding_year_filter_test');
+        $method->invoke($controller, $query, 'TRIM(funding_year)');
+
+        $this->assertSame(['2021', '2026'], $query->orderBy('funding_year')->pluck('funding_year')->all());
     }
 
     #[Test]
@@ -501,4 +525,3 @@ class FundUtilizationReportControllerTest extends \Tests\TestCase
         $this->assertFalse($canDelete3);
     }
 }
-

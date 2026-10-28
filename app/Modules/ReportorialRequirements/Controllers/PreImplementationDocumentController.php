@@ -1305,7 +1305,8 @@ class PreImplementationDocumentController extends Controller
         $lfpSourcePlaceholders = implode(', ', array_fill(0, count($lfpSources), '?'));
         $cityComparableExpression = "TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(SUBSTRING_INDEX(COALESCE(spp.city_municipality, ''), ',', 1)), '(capital)', ''), 'municipality of ', ''), 'city of ', ''), ' municipality', ''), ' city', ''), '  ', ' '))";
 
-        $query = DB::table('subay_project_profiles as spp');
+        $query = DB::table('subay_project_profiles as spp')
+            ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2021');
 
         if (!$includeAllProjects) {
             $query
@@ -1428,9 +1429,9 @@ class PreImplementationDocumentController extends Controller
             return [
                 'title' => 'Initial Project Documents',
                 'index_heading' => 'Initial Project Documents',
-                'index_description' => 'View all accessible projects and open each project profile to manage initial project document records.',
+                'index_description' => 'View accessible projects funded in 2021 or later and open each project profile to manage initial project document records.',
                 'show_description' => 'Upload and validate initial project documents for this project.',
-                'empty_state' => 'No accessible projects found.',
+                'empty_state' => 'No accessible projects from 2021 onward found.',
                 'save_success_message' => 'Initial project documents saved successfully.',
             ];
         }
