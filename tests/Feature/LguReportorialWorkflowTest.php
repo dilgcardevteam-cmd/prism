@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ActivityLog;
 use App\Models\LpmcDocument;
+use App\Models\LpmcDocumentFile;
 use App\Models\RoadMaintenanceStatusDocument;
 use App\Models\User;
 use App\Services\LguReportorialWorkflowService;
@@ -377,6 +378,116 @@ class LguReportorialWorkflowTest extends TestCase
             'year' => 2025,
         ]);
         $allowedResponse->assertRedirect();
+    }
+
+    public function test_originating_submitter_can_delete_returned_document_files_before_replacement(): void
+    {
+        $lguUser = $this->createLguUser();
+        $oldFilePath = 'lpmc/la_trinidad/returned.pdf';
+        Storage::disk('public')->put($oldFilePath, 'returned document');
+
+        $document = LpmcDocument::create([
+            'province' => 'Benguet',
+            'office' => 'La Trinidad',
+            'doc_type' => 'mep',
+            'year' => 2025,
+            'status' => LguReportorialWorkflowService::STATUS_RETURNED,
+            'uploaded_by' => $lguUser->idno,
+            'uploaded_at' => now(),
+            'file_path' => $oldFilePath,
+            'original_filename' => 'returned.pdf',
+            'approval_remarks' => 'Please correct the report.',
+        ]);
+        LpmcDocumentFile::create([
+            'lpmc_document_id' => $document->id,
+            'file_path' => $oldFilePath,
+            'original_filename' => 'returned.pdf',
+            'uploaded_by' => $lguUser->idno,
+            'uploaded_at' => now(),
+        ]);
+
+        $deleteResponse = $this->actingAs($lguUser)
+            ->delete("/local-project-monitoring-committee/La Trinidad/document/{$document->id}");
+
+        $deleteResponse->assertRedirect();
+        $document->refresh();
+        $this->assertSame(LguReportorialWorkflowService::STATUS_RETURNED, $document->status);
+        $this->assertNull($document->file_path);
+        $this->assertNull($document->original_filename);
+        $this->assertDatabaseMissing('tblpmc_document_files', ['lpmc_document_id' => $document->id]);
+        Storage::disk('public')->assertMissing($oldFilePath);
+
+        $replacementResponse = $this->actingAs($lguUser)->post('/local-project-monitoring-committee/La Trinidad/upload', [
+            'document' => [UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf')],
+            'doc_type' => 'mep',
+            'year' => 2025,
+        ]);
+
+        $replacementResponse->assertRedirect();
+        $document->refresh();
+        $this->assertSame(LguReportorialWorkflowService::STATUS_PENDING_MLGOO, $document->status);
+        $this->assertNotNull($document->file_path);
+        $this->assertDatabaseHas('tblpmc_document_files', [
+            'lpmc_document_id' => $document->id,
+            'original_filename' => 'replacement.pdf',
+        ]);
+    }
+
+    public function test_only_owner_can_delete_returned_document_files(): void
+    {
+        $owner = $this->createLguUser();
+        $otherUser = User::factory()->create([
+            'role' => User::ROLE_LGU,
+            'agency' => 'LGU',
+            'province' => 'Benguet',
+            'office' => 'La Trinidad',
+            'status' => 'active',
+        ]);
+        $filePath = 'lpmc/la_trinidad/returned.pdf';
+        Storage::disk('public')->put($filePath, 'returned document');
+
+        $document = LpmcDocument::create([
+            'province' => 'Benguet',
+            'office' => 'La Trinidad',
+            'doc_type' => 'mep',
+            'year' => 2025,
+            'status' => LguReportorialWorkflowService::STATUS_RETURNED,
+            'uploaded_by' => $owner->idno,
+            'uploaded_at' => now(),
+            'file_path' => $filePath,
+        ]);
+
+        $response = $this->actingAs($otherUser)
+            ->delete("/local-project-monitoring-committee/La Trinidad/document/{$document->id}");
+
+        $response->assertForbidden();
+        $this->assertSame($filePath, $document->fresh()->file_path);
+        Storage::disk('public')->assertExists($filePath);
+    }
+
+    public function test_owner_cannot_delete_a_document_that_has_not_been_returned(): void
+    {
+        $lguUser = $this->createLguUser();
+        $filePath = 'lpmc/la_trinidad/pending.pdf';
+        Storage::disk('public')->put($filePath, 'pending document');
+
+        $document = LpmcDocument::create([
+            'province' => 'Benguet',
+            'office' => 'La Trinidad',
+            'doc_type' => 'mep',
+            'year' => 2025,
+            'status' => LguReportorialWorkflowService::STATUS_PENDING_MLGOO,
+            'uploaded_by' => $lguUser->idno,
+            'uploaded_at' => now(),
+            'file_path' => $filePath,
+        ]);
+
+        $response = $this->actingAs($lguUser)
+            ->delete("/local-project-monitoring-committee/La Trinidad/document/{$document->id}");
+
+        $response->assertForbidden();
+        $this->assertSame($filePath, $document->fresh()->file_path);
+        Storage::disk('public')->assertExists($filePath);
     }
 
     /**

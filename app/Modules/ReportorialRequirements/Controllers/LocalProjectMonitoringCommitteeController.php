@@ -29,7 +29,6 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:local_project_monitoring_committee,update')->only(['update', 'approveDocument']);
         $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy', 'deleteDocumentFile']);
-        $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
     private function getOffices(): array
@@ -1093,16 +1092,56 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ->where('office', $officeName)
             ->where('id', $docId)
             ->firstOrFail();
+        $user = auth()->user();
+        abort_unless($user && $user->isActive(), 403);
 
-        if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
-            Storage::disk('public')->delete($document->file_path);
+        $province = $this->findProvinceByOffice($officeName);
+        $uploaderId = (int) ($document->uploaded_by ?? 0);
+        $userId = (int) ($user->idno ?? $user->getKey());
+        $isOwner = $uploaderId > 0 && $uploaderId === $userId;
+
+        abort_unless(
+            $user->isSuperAdmin()
+                || ($isOwner && $user->canSubmitForLgu($province, $officeName)),
+            403
+        );
+        abort_unless(Str::lower(trim((string) $document->status)) === 'returned', 403, 'Only returned documents can be removed for replacement.');
+
+        $disk = Storage::disk('public');
+        $filePaths = $document->files()
+            ->pluck('file_path')
+            ->push($document->file_path)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        abort_unless($filePaths !== [], 422, 'This returned document has no files to delete.');
+
+        $existingFilePaths = array_values(array_filter($filePaths, fn ($path) => $disk->exists($path)));
+        if ($existingFilePaths !== [] && !$disk->delete($existingFilePaths)) {
+            abort(500, 'The returned document files could not be deleted.');
         }
 
-        $document->delete();
+        DB::transaction(function () use ($document) {
+            $document->files()->delete();
+            $document->update([
+                'file_path' => null,
+                'original_filename' => null,
+            ]);
+        });
+
+        $this->logActivity(
+            $officeName,
+            'delete_returned_document',
+            'Deleted returned document for replacement',
+            $document,
+            null,
+            now()
+        );
 
         return redirect()
             ->route('local-project-monitoring-committee.edit', $officeName)
-            ->with('success', 'Uploaded document deleted successfully.');
+            ->with('success', 'Returned document deleted. You can now upload a replacement.');
     }
 
     public function upload(Request $request, $id)

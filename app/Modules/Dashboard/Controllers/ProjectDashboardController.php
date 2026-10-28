@@ -106,13 +106,26 @@ class ProjectDashboardController extends Controller
             };
             $fundingYearFrom = $fundingYearMode === 'range' ? $parseFundingYearBoundary('funding_year_from') : null;
             $fundingYearTo = $fundingYearMode === 'range' ? $parseFundingYearBoundary('funding_year_to') : null;
-            if ($fundingYearMode === 'range' && $legacyFundingYearRange === '2024-and-below' && $fundingYearTo === null) {
-                $fundingYearTo = 2024;
-            } elseif ($fundingYearMode === 'range' && $legacyFundingYearRange === '2025-and-beyond' && $fundingYearFrom === null) {
-                $fundingYearFrom = 2025;
+            if ($fundingYearMode === 'range' && $legacyFundingYearRange === '2024-and-below') {
+                $fundingYearFrom ??= 2021;
+                $fundingYearTo ??= 2024;
+            } elseif ($fundingYearMode === 'range' && $legacyFundingYearRange === '2025-and-beyond') {
+                $fundingYearFrom ??= 2025;
             }
             if ($fundingYearFrom !== null && $fundingYearTo !== null && $fundingYearFrom > $fundingYearTo) {
                 [$fundingYearFrom, $fundingYearTo] = [$fundingYearTo, $fundingYearFrom];
+            }
+
+            $fundingYearFilters = $fundingYearMode === 'years'
+                ? $parseRequestedFilterValues('funding_year')
+                : [];
+            if (
+                $fundingYearMode === 'years'
+                && $legacyFundingYearRange === ''
+                && !request()->boolean('funding_year_filter_submitted')
+                && !request()->exists('funding_year')
+            ) {
+                $fundingYearFilters = ['2021', '2022', '2023', '2024', '2025', '2026'];
             }
 
             $filters = [
@@ -122,7 +135,7 @@ class ProjectDashboardController extends Controller
                 'barangay' => $parseRequestedFilterValues('barangay'),
                 'programs' => $parseRequestedFilterValues('program'),
                 'fund_source' => $parseRequestedFilterValues('fund_source'),
-                'funding_year' => $fundingYearMode === 'years' ? $parseRequestedFilterValues('funding_year') : [],
+                'funding_year' => $fundingYearFilters,
                 'funding_year_mode' => $fundingYearMode,
                 'funding_year_from' => $fundingYearFrom,
                 'funding_year_to' => $fundingYearTo,
@@ -991,8 +1004,7 @@ class ProjectDashboardController extends Controller
                 )
             ";
 
-            $computeProjectUpdateStatusCountsFromSubay = function ($subayQuery, array &$targetCounts) use ($projectUpdateStatusParsedDateExpression, $subayStatusGroupExpr, $subayProjectCodeGroupExpr) {
-
+            $fetchProjectUpdateDataFromSubay = function ($subayQuery) use ($projectUpdateStatusParsedDateExpression, $subayStatusGroupExpr, $subayProjectCodeGroupExpr) {
                 $projectUpdateRowsQuery = (clone $subayQuery)
                     ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
@@ -1001,29 +1013,7 @@ class ProjectDashboardController extends Controller
                     ->selectRaw("LOWER(TRIM(COALESCE({$subayStatusGroupExpr}, ''))) as status_raw")
                     ->selectRaw("{$projectUpdateStatusParsedDateExpression} as latest_update_date");
 
-                $counts = DB::query()
-                    ->fromSub($projectUpdateRowsQuery, 'project_updates')
-                    ->where('project_updates.status_raw', '!=', 'completed')
-                    ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) >= 60 THEN 1 ELSE 0 END) as high_risk_total')
-                    ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) > 30 AND DATEDIFF(CURDATE(), project_updates.latest_update_date) < 60 THEN 1 ELSE 0 END) as low_risk_total')
-                    ->selectRaw('SUM(CASE WHEN project_updates.latest_update_date IS NOT NULL AND DATEDIFF(CURDATE(), project_updates.latest_update_date) <= 30 THEN 1 ELSE 0 END) as no_risk_total')
-                    ->first();
-
-                $targetCounts['High Risk'] = (int) ($counts->high_risk_total ?? 0);
-                $targetCounts['Low Risk'] = (int) ($counts->low_risk_total ?? 0);
-                $targetCounts['No Risk'] = (int) ($counts->no_risk_total ?? 0);
-            };
-
-            $fetchProjectUpdateProjectsFromSubay = function ($subayQuery, string $riskLabel) use ($projectUpdateStatusParsedDateExpression, $subayStatusGroupExpr, $subayProjectCodeGroupExpr) {
-                $projectUpdateRowsQuery = (clone $subayQuery)
-                    ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
-                    ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
-                    ->selectRaw('TRIM(COALESCE(spp.province, "")) as province')
-                    ->selectRaw('TRIM(COALESCE(spp.city_municipality, "")) as city_municipality')
-                    ->selectRaw("LOWER(TRIM(COALESCE({$subayStatusGroupExpr}, ''))) as status_raw")
-                    ->selectRaw("{$projectUpdateStatusParsedDateExpression} as latest_update_date");
-
-                $statusRowsQuery = DB::query()
+                $statusRows = DB::query()
                     ->fromSub($projectUpdateRowsQuery, 'project_updates')
                     ->select(
                         'project_updates.project_code',
@@ -1034,23 +1024,41 @@ class ProjectDashboardController extends Controller
                     )
                     ->selectRaw('DATEDIFF(CURDATE(), project_updates.latest_update_date) as aging_days')
                     ->where('project_updates.status_raw', '!=', 'completed')
-                    ->whereNotNull('project_updates.latest_update_date');
-
-                if ($riskLabel === 'High Risk') {
-                    $statusRowsQuery->whereRaw('DATEDIFF(CURDATE(), project_updates.latest_update_date) >= 60');
-                } elseif ($riskLabel === 'Low Risk') {
-                    $statusRowsQuery->whereRaw('DATEDIFF(CURDATE(), project_updates.latest_update_date) > 30 AND DATEDIFF(CURDATE(), project_updates.latest_update_date) < 60');
-                } elseif ($riskLabel === 'No Risk') {
-                    $statusRowsQuery->whereRaw('DATEDIFF(CURDATE(), project_updates.latest_update_date) <= 30');
-                } else {
-                    return collect();
-                }
-
-                return $statusRowsQuery
+                    ->whereNotNull('project_updates.latest_update_date')
                     ->orderByDesc('aging_days')
                     ->orderBy('project_updates.project_code')
                     ->orderBy('project_updates.project_title')
                     ->get();
+
+                $counts = [
+                    'High Risk' => 0,
+                    'Low Risk' => 0,
+                    'No Risk' => 0,
+                ];
+                $projects = [
+                    'High Risk' => collect(),
+                    'Low Risk' => collect(),
+                    'No Risk' => collect(),
+                ];
+
+                foreach ($statusRows as $row) {
+                    $agingDays = (int) $row->aging_days;
+                    if ($agingDays >= 60) {
+                        $riskLabel = 'High Risk';
+                    } elseif ($agingDays > 30) {
+                        $riskLabel = 'Low Risk';
+                    } else {
+                        $riskLabel = 'No Risk';
+                    }
+
+                    $counts[$riskLabel]++;
+                    $projects[$riskLabel]->push($row);
+                }
+
+                return [
+                    'counts' => $counts,
+                    'projects' => $projects,
+                ];
             };
 
             if (Schema::hasTable('subay_project_profiles')) {
@@ -1664,10 +1672,9 @@ class ProjectDashboardController extends Controller
                 $computeProjectAtRiskAgingCounts(clone $filteredProjectCodesQuery, $projectAtRiskAgingCounts);
                 $projectAtRiskSlippageProjects = $fetchProjectAtRiskSlippageProjects(clone $filteredProjectCodesQuery);
                 $projectAtRiskAgingProjects = $fetchProjectAtRiskAgingProjects(clone $filteredProjectCodesQuery);
-                $computeProjectUpdateStatusCountsFromSubay(clone $subayDashboardQuery, $projectUpdateStatusCounts);
-                foreach ($projectUpdateStatusOrder as $riskLabel) {
-                    $projectUpdateRiskProjects[$riskLabel] = $fetchProjectUpdateProjectsFromSubay(clone $subayDashboardQuery, $riskLabel);
-                }
+                $projectUpdateData = $fetchProjectUpdateDataFromSubay(clone $subayDashboardQuery);
+                $projectUpdateStatusCounts = array_merge($projectUpdateStatusCounts, $projectUpdateData['counts']);
+                $projectUpdateRiskProjects = $projectUpdateData['projects'];
             } else {
                 $fallbackQuery = LocallyFundedProject::query();
                 $excludeSglgifFromFallback($fallbackQuery);

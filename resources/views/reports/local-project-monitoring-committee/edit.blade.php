@@ -156,6 +156,16 @@
                     $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
                     $isReturned = $doc && $doc->status === 'returned';
                     $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
+                    $documentUploaderId = (int) ($doc->uploaded_by ?? 0);
+                    $currentUserId = (int) (Auth::user()->idno ?? Auth::id());
+                    $canDeleteReturnedDocument = $isReturned
+                        && $doc
+                        && $hasFile
+                        && $canResubmitDoc
+                        && (
+                            Auth::user()->isSuperAdmin()
+                            || ($canUploadForLgu && $documentUploaderId > 0 && $documentUploaderId === $currentUserId)
+                        );
                     $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
@@ -341,6 +351,11 @@
                                 </button>
                             </div>
                         @endif
+                        @if ($canDeleteReturnedDocument)
+                            <button type="submit" form="lpmc-delete-returned-{{ $doc->id }}" onclick="return confirm('Delete this returned document and all of its files so you can upload a replacement?');" style="display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 10px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
+                                <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete returned document
+                            </button>
+                        @endif
                     @endif
                     <input
                         id="{{ $inputId }}"
@@ -389,13 +404,21 @@
                         </div>
                     @endif
                 </form>
-                @if (Auth::user()->isSuperAdmin() && $doc)
-                    @foreach ($doc->files ?? [] as $docFile)
-                        <form id="lpmc-delete-file-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display: none;">
+                @if ($doc)
+                    @if (Auth::user()->isSuperAdmin())
+                        @foreach ($doc->files ?? [] as $docFile)
+                            <form id="lpmc-delete-file-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display: none;">
+                                @csrf
+                                @method('DELETE')
+                            </form>
+                        @endforeach
+                    @endif
+                    @if ($canDeleteReturnedDocument)
+                        <form id="lpmc-delete-returned-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
                             @csrf
                             @method('DELETE')
                         </form>
-                    @endforeach
+                    @endif
                 @endif
             @endforeach
         </div>
@@ -450,9 +473,19 @@
                                     $filenameId = 'lpmc-q-file-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $disableQuarterUpload = is_array($configuredQuarterDeadline)
                                         && !empty($configuredQuarterDeadline['is_closed']);
-                                    $hasFile = $doc && $doc->file_path;
+                                    $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
                                     $isReturned = $doc && $doc->status === 'returned';
                                     $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
+                                    $documentUploaderId = (int) ($doc->uploaded_by ?? 0);
+                                    $currentUserId = (int) (Auth::user()->idno ?? Auth::id());
+                                    $canDeleteReturnedDocument = $isReturned
+                                        && $doc
+                                        && $hasFile
+                                        && $canResubmitDoc
+                                        && (
+                                            Auth::user()->isSuperAdmin()
+                                            || ($canUploadForLgu && $documentUploaderId > 0 && $documentUploaderId === $currentUserId)
+                                        );
                                     $disableUploadInput = !$canUploadForLgu
                                         || ($hasFile && !$isReturned)
                                         || ($isReturned && !$canResubmitDoc)
@@ -648,6 +681,11 @@
                                                 </button>
                                             </div>
                                         @endif
+                                        @if ($canDeleteReturnedDocument)
+                                            <button type="submit" form="lpmc-delete-returned-{{ $doc->id }}" onclick="return confirm('Delete this returned document and all of its files so you can upload a replacement?');" style="display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 10px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
+                                                <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete returned document
+                                            </button>
+                                        @endif
                                     @endif
                                     <input
                                         id="{{ $inputId }}"
@@ -697,13 +735,21 @@
                                         </div>
                                     @endif
                                 </form>
-                                @if (Auth::user()->isSuperAdmin() && $doc)
-                                    @foreach ($doc->files ?? [] as $docFile)
-                                        <form id="lpmc-delete-file-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display: none;">
+                                @if ($doc)
+                                    @if (Auth::user()->isSuperAdmin())
+                                        @foreach ($doc->files ?? [] as $docFile)
+                                            <form id="lpmc-delete-file-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display: none;">
+                                                @csrf
+                                                @method('DELETE')
+                                            </form>
+                                        @endforeach
+                                    @endif
+                                    @if ($canDeleteReturnedDocument)
+                                        <form id="lpmc-delete-returned-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
                                             @csrf
                                             @method('DELETE')
                                         </form>
-                                    @endforeach
+                                    @endif
                                 @endif
                             @endforeach
                         </div>

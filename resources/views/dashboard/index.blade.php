@@ -465,6 +465,24 @@
         $selectedProgramFilters = array_values($filters['programs'] ?? []);
         $selectedFundSourceFilters = array_values($filters['fund_source'] ?? []);
         $selectedFundingYearFilters = array_values($filters['funding_year'] ?? []);
+        if (($filters['funding_year_mode'] ?? 'years') === 'range') {
+            $fundingYearFrom = $filters['funding_year_from'] ?? null;
+            $fundingYearTo = $filters['funding_year_to'] ?? null;
+            $selectedFundingYearFilters = collect($filterOptions['funding_years'] ?? [])
+                ->map(fn ($year) => trim((string) $year))
+                ->filter(function ($year) use ($fundingYearFrom, $fundingYearTo) {
+                    if (preg_match('/^\d+$/D', $year) !== 1) {
+                        return false;
+                    }
+
+                    $numericYear = (int) $year;
+
+                    return ($fundingYearFrom === null || $numericYear >= $fundingYearFrom)
+                        && ($fundingYearTo === null || $numericYear <= $fundingYearTo);
+                })
+                ->values()
+                ->all();
+        }
         $selectedProjectTypeFilters = array_values($filters['project_type'] ?? []);
         $selectedProjectStatusFilters = array_values($filters['project_status'] ?? []);
         $dashboardProvinceCityMap = collect($filterOptions['province_city_map'] ?? []);
@@ -554,6 +572,7 @@
     <div class="dashboard-main-layout">
         <form id="dashboard-project-filter-form" method="GET" action="{{ route('dashboard') }}" class="dashboard-card project-filter-form dashboard-main-layout-filter" style="background: #ffffff; padding: 18px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;">
             <input type="hidden" name="tab" value="{{ $activeProjectTab }}">
+            <input type="hidden" name="funding_year_filter_submitted" value="1">
             <button type="button" class="project-filter-toggle" onclick="toggleProjectFilter(this)" aria-expanded="true" aria-controls="project-filter-body">
                 <span style="font-size: 20px;">🔍</span>
                 <span>PROJECT FILTER</span>
@@ -753,33 +772,46 @@
         <div id="dashboard-overview-export-modal" class="dashboard-modal" aria-hidden="true" hidden>
             <div class="dashboard-modal-backdrop" data-close-modal></div>
             <div class="dashboard-modal-dialog dashboard-export-format-modal" role="dialog" aria-modal="true" aria-labelledby="dashboard-overview-export-modal-title">
-                <div class="dashboard-modal-header">
-                    <h3 id="dashboard-overview-export-modal-title">Export Dashboard Report</h3>
+                <div class="dashboard-modal-header dashboard-export-format-header">
+                    <span class="dashboard-export-format-header-icon" aria-hidden="true">
+                        <i class="fas fa-file-export"></i>
+                    </span>
+                    <div class="dashboard-export-format-heading">
+                        <span class="dashboard-export-format-eyebrow">STATUS OF PROJECTS REPORT</span>
+                        <h3 id="dashboard-overview-export-modal-title">Export Dashboard Report</h3>
+                    </div>
                     <button type="button" class="dashboard-modal-close" data-close-modal aria-label="Close">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                <p class="dashboard-modal-subtitle">
-                    Choose the file format for the current Status of Projects by Province and City/Municipality report.
+                <p class="dashboard-modal-subtitle dashboard-export-format-subtitle">
+                    Choose a format to download the current Status of Projects by Province and City/Municipality report.
                 </p>
                 <div class="dashboard-modal-body">
                     <div class="dashboard-export-format-grid">
                         <button type="button" class="dashboard-export-format-option dashboard-export-format-option--excel" onclick="exportDashboardOverviewReport(this, 'excel')" data-export-filename="status-of-projects-by-location">
                             <span class="dashboard-export-format-option-icon"><i class="fas fa-file-excel" aria-hidden="true"></i></span>
-                            <span class="dashboard-export-format-option-title">Excel</span>
+                            <span class="dashboard-export-format-option-title">Excel <span class="dashboard-export-format-option-tag">WORKBOOK</span></span>
                             <span class="dashboard-export-format-option-copy">Restores the multi-sheet workbook template.</span>
+                            <span class="dashboard-export-format-option-action">Download Excel <i class="fas fa-arrow-right" aria-hidden="true"></i></span>
                         </button>
                         <button type="button" class="dashboard-export-format-option dashboard-export-format-option--csv" onclick="exportDashboardOverviewReport(this, 'csv')" data-export-filename="status-of-projects-by-location">
                             <span class="dashboard-export-format-option-icon"><i class="fas fa-file-csv" aria-hidden="true"></i></span>
-                            <span class="dashboard-export-format-option-title">CSV</span>
+                            <span class="dashboard-export-format-option-title">CSV <span class="dashboard-export-format-option-tag">SPREADSHEET</span></span>
                             <span class="dashboard-export-format-option-copy">Returns the earlier flat export template as CSV.</span>
+                            <span class="dashboard-export-format-option-action">Download CSV <i class="fas fa-arrow-right" aria-hidden="true"></i></span>
                         </button>
                         <button type="button" class="dashboard-export-format-option dashboard-export-format-option--pdf" onclick="exportDashboardOverviewReport(this, 'pdf')" data-export-filename="status-of-projects-by-location">
                             <span class="dashboard-export-format-option-icon"><i class="fas fa-file-pdf" aria-hidden="true"></i></span>
-                            <span class="dashboard-export-format-option-title">PDF</span>
+                            <span class="dashboard-export-format-option-title">PDF <span class="dashboard-export-format-option-tag">PRINT-READY</span></span>
                             <span class="dashboard-export-format-option-copy">Opens a print-ready report window for PDF output.</span>
+                            <span class="dashboard-export-format-option-action">Prepare PDF <i class="fas fa-arrow-right" aria-hidden="true"></i></span>
                         </button>
                     </div>
+                </div>
+                <div class="dashboard-export-format-footer">
+                    <i class="fas fa-sliders" aria-hidden="true"></i>
+                    Exports reflect the filters currently applied to the dashboard.
                 </div>
             </div>
         </div>
@@ -4107,63 +4139,182 @@
         }
 
         .dashboard-export-format-modal {
-            max-width: 760px;
+            width: min(820px, calc(100vw - 32px));
+            max-width: 820px;
+            border: 0;
+            border-radius: 20px;
+            box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+        }
+
+        .dashboard-export-format-header {
+            min-height: 100px;
+            padding: 22px 26px;
+            border-bottom: 0;
+            background:
+                radial-gradient(circle at 8% 0%, rgba(96, 165, 250, 0.22), transparent 34%),
+                linear-gradient(120deg, #f8fbff 0%, #ffffff 68%);
+        }
+
+        .dashboard-export-format-header-icon {
+            width: 48px;
+            height: 48px;
+            flex: 0 0 48px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #bfdbfe;
+            border-radius: 15px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 19px;
+        }
+
+        .dashboard-export-format-heading {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .dashboard-export-format-eyebrow {
+            color: #2563a8;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+        }
+
+        .dashboard-export-format-header h3 {
+            color: #10233f;
+            font-size: 21px;
+            letter-spacing: -0.025em;
+        }
+
+        .dashboard-export-format-modal .dashboard-modal-close {
+            width: 36px;
+            height: 36px;
+            border-color: #e2e8f0;
+            background: rgba(255, 255, 255, 0.8);
+            color: #64748b;
+        }
+
+        .dashboard-export-format-modal .dashboard-modal-close:hover {
+            border-color: #cbd5e1;
+            background: #ffffff;
+            color: #0f172a;
+        }
+
+        .dashboard-export-format-subtitle {
+            padding: 0 26px 20px;
+            border-bottom: 0;
+            background: #ffffff;
+            color: #64748b;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .dashboard-export-format-modal .dashboard-modal-body {
+            padding: 0 26px 24px;
+            overflow: visible;
         }
 
         .dashboard-export-format-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 14px;
+            gap: 16px;
         }
 
         .dashboard-export-format-option {
-            border: 1px solid #dbe4ff;
-            border-radius: 12px;
+            min-height: 224px;
+            position: relative;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
             background: #ffffff;
-            padding: 18px 16px;
+            padding: 20px 18px 17px;
             text-align: left;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            align-items: flex-start;
+            gap: 10px;
             cursor: pointer;
-            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.035);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
 
         .dashboard-export-format-option:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10);
+            transform: translateY(-4px);
+            box-shadow: 0 16px 30px rgba(15, 23, 42, 0.1);
         }
 
         .dashboard-export-format-option:focus-visible {
-            outline: 2px solid rgba(37, 99, 235, 0.85);
+            outline: 3px solid rgba(37, 99, 235, 0.32);
             outline-offset: 2px;
         }
 
         .dashboard-export-format-option-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 10px;
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 20px;
         }
 
         .dashboard-export-format-option-title {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
             color: #0f172a;
-            font-size: 15px;
-            font-weight: 700;
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .dashboard-export-format-option-tag {
+            padding: 4px 7px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.72);
+            color: #475569;
+            font-size: 8px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
         }
 
         .dashboard-export-format-option-copy {
             color: #475569;
             font-size: 12px;
-            line-height: 1.5;
+            line-height: 1.6;
+        }
+
+        .dashboard-export-format-option-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            width: 100%;
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid rgba(148, 163, 184, 0.22);
+            color: #334155;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .dashboard-export-format-option-action i {
+            transition: transform 0.2s ease;
+        }
+
+        .dashboard-export-format-option:hover .dashboard-export-format-option-action i {
+            transform: translateX(3px);
         }
 
         .dashboard-export-format-option--excel {
             border-color: #bbf7d0;
-            background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+            background: linear-gradient(155deg, #f0fdf4 0%, #ffffff 76%);
+        }
+
+        .dashboard-export-format-option--excel:hover {
+            border-color: #4ade80;
         }
 
         .dashboard-export-format-option--excel .dashboard-export-format-option-icon {
@@ -4173,7 +4324,11 @@
 
         .dashboard-export-format-option--csv {
             border-color: #bfdbfe;
-            background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+            background: linear-gradient(155deg, #eff6ff 0%, #ffffff 76%);
+        }
+
+        .dashboard-export-format-option--csv:hover {
+            border-color: #60a5fa;
         }
 
         .dashboard-export-format-option--csv .dashboard-export-format-option-icon {
@@ -4183,12 +4338,30 @@
 
         .dashboard-export-format-option--pdf {
             border-color: #fecaca;
-            background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%);
+            background: linear-gradient(155deg, #fef2f2 0%, #ffffff 76%);
+        }
+
+        .dashboard-export-format-option--pdf:hover {
+            border-color: #f87171;
         }
 
         .dashboard-export-format-option--pdf .dashboard-export-format-option-icon {
             background: #fee2e2;
             color: #b91c1c;
+        }
+
+        .dashboard-export-format-footer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 13px 26px 16px;
+            border-top: 1px solid #eef2f7;
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .dashboard-export-format-footer i {
+            color: #2563a8;
         }
 
         @media (max-width: 900px) {
@@ -4198,6 +4371,78 @@
 
             .dashboard-export-format-grid {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .dashboard-modal {
+                padding: 12px;
+            }
+
+            .dashboard-export-format-modal {
+                width: calc(100vw - 24px);
+                max-height: calc(100vh - 24px);
+                border-radius: 16px;
+            }
+
+            .dashboard-export-format-header {
+                min-height: 82px;
+                padding: 17px 18px;
+                gap: 10px;
+            }
+
+            .dashboard-export-format-header-icon {
+                width: 40px;
+                height: 40px;
+                flex-basis: 40px;
+                border-radius: 12px;
+            }
+
+            .dashboard-export-format-header h3 {
+                font-size: 18px;
+            }
+
+            .dashboard-export-format-subtitle {
+                padding: 0 18px 16px;
+                font-size: 12px;
+            }
+
+            .dashboard-export-format-modal .dashboard-modal-body {
+                padding: 0 18px 18px;
+            }
+
+            .dashboard-export-format-grid {
+                gap: 10px;
+            }
+
+            .dashboard-export-format-option {
+                min-height: 0;
+                display: grid;
+                grid-template-columns: 42px minmax(0, 1fr);
+                column-gap: 12px;
+                row-gap: 5px;
+                padding: 14px;
+            }
+
+            .dashboard-export-format-option-icon {
+                width: 42px;
+                height: 42px;
+                grid-row: span 2;
+            }
+
+            .dashboard-export-format-option-copy {
+                grid-column: 2;
+            }
+
+            .dashboard-export-format-option-action {
+                grid-column: 1 / -1;
+                margin-top: 5px;
+                padding-top: 9px;
+            }
+
+            .dashboard-export-format-footer {
+                padding: 12px 18px 14px;
+                line-height: 1.5;
             }
         }
 
