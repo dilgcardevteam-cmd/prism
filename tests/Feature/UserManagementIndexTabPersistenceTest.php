@@ -43,6 +43,11 @@ class UserManagementIndexTabPersistenceTest extends TestCase
             $table->string('remember_token')->nullable();
             $table->string('registration_ip_address')->nullable();
             $table->timestamps();
+            $table->string('role_key')->virtualAs("LOWER(TRIM(COALESCE(role, '')))");
+            $table->string('status_key')->virtualAs("LOWER(TRIM(COALESCE(status, '')))");
+            $table->string('province_key')->virtualAs("LOWER(TRIM(COALESCE(province, '')))");
+            $table->string('agency_key')->virtualAs("LOWER(TRIM(COALESCE(agency, '')))");
+            $table->string('office_key')->virtualAs("LOWER(TRIM(COALESCE(office, '')))");
         });
 
         Schema::create('tbnotifications', function (Blueprint $table): void {

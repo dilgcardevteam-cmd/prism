@@ -1514,6 +1514,8 @@ class LocallyFundedProjectController extends Controller
 
     public function mobileUploadGalleryImage(Request $request, LocallyFundedProject $project)
     {
+        $this->authorizeLocallyFundedProjectAccess($project);
+
         if (!Schema::hasTable('locally_funded_gallery_images')) {
             return response()->json([
                 'message' => 'Gallery table is missing. Please run migrations first.',
@@ -1530,7 +1532,6 @@ class LocallyFundedProjectController extends Controller
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
             'accuracy' => ['nullable', 'numeric', 'min:0'],
-            'uploaded_by' => ['nullable', 'integer', 'exists:tbusers,idno'],
         ]);
 
         $category = InputSanitizer::sanitizeNullablePlainText($validated['gallery_category']) ?? 'During';
@@ -1561,15 +1562,7 @@ class LocallyFundedProjectController extends Controller
 
         $storedPath = $imageFile->storeAs($directory, $fileName, 'public');
 
-        $authenticatedUploaderId = Auth::id();
-        $requestUploaderId = isset($validated['uploaded_by']) ? (int) $validated['uploaded_by'] : null;
-        $uploaderId = $authenticatedUploaderId ? (int) $authenticatedUploaderId : $requestUploaderId;
-
-        if (!$uploaderId) {
-            return response()->json([
-                'message' => 'Unable to determine uploader. Please sign in again and retry.',
-            ], 422);
-        }
+        $uploaderId = (int) Auth::id();
 
         $insertData = [
             'project_id' => $project->id,
@@ -1628,6 +1621,8 @@ class LocallyFundedProjectController extends Controller
 
     public function mobileDeleteGalleryImage(Request $request, LocallyFundedProject $project, $galleryImageId)
     {
+        $this->authorizeLocallyFundedProjectAccess($project);
+
         if (!Schema::hasTable('locally_funded_gallery_images')) {
             return response()->json([
                 'message' => 'Gallery table is missing. Please run migrations first.',
@@ -1677,6 +1672,8 @@ class LocallyFundedProjectController extends Controller
 
     public function mobileUpdateGalleryImage(Request $request, LocallyFundedProject $project, $galleryImageId)
     {
+        $this->authorizeLocallyFundedProjectAccess($project);
+
         if (!Schema::hasTable('locally_funded_gallery_images')) {
             return response()->json([
                 'message' => 'Gallery table is missing. Please run migrations first.',

@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { API_CANDIDATE_BASE_URLS, buildApiUrl } from "../constants/api";
 
 const AUTH_STORAGE_KEY = "pdmuoms.mobile.auth.session";
-const AUTH_STORAGE_VERSION = 2;
+const AUTH_STORAGE_VERSION = 3;
 
 const AuthContext = createContext(null);
 
@@ -44,7 +44,11 @@ export function AuthProvider({ children }) {
 
         const parsedSession = JSON.parse(rawSession);
 
-        if (parsedSession?.authVersion !== AUTH_STORAGE_VERSION) {
+        if (
+          parsedSession?.authVersion !== AUTH_STORAGE_VERSION ||
+          !parsedSession?.access_token ||
+          !parsedSession?.api_base_url
+        ) {
           await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
           setSession(null);
           return;
@@ -106,9 +110,16 @@ export function AuthProvider({ children }) {
         }
 
         const user = payloadJson?.user || {};
+        const accessToken = payloadJson?.access_token;
+        if (typeof accessToken !== "string" || accessToken.length === 0) {
+          throw new Error("The server did not issue a mobile access token.");
+        }
+
         const nextSession = {
           authVersion: AUTH_STORAGE_VERSION,
           authenticatedAt: Date.now(),
+          access_token: accessToken,
+          api_base_url: baseUrl,
           id: user.id ?? null,
           username: user.username || username,
           first_name: user.first_name ?? null,
@@ -148,8 +159,37 @@ export function AuthProvider({ children }) {
   };
 
   const signOut = async () => {
+    let logoutError = null;
+    const rawSession = await SecureStore.getItemAsync(AUTH_STORAGE_KEY);
+    if (rawSession) {
+      const storedSession = JSON.parse(rawSession);
+      if (storedSession?.access_token && storedSession?.api_base_url) {
+        try {
+          const response = await fetchWithTimeout(
+            buildApiUrl("/api/mobile/logout", storedSession.api_base_url),
+            {
+              method: "POST",
+              headers: {
+                Accept: "application/json",
+                Authorization: `Bearer ${storedSession.access_token}`,
+              },
+            },
+            3000
+          );
+          if (!response.ok && response.status !== 401) {
+            throw new Error(`Logout failed with status ${response.status}.`);
+          }
+        } catch (error) {
+          logoutError = error;
+        }
+      }
+    }
+
     await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
     setSession(null);
+    if (logoutError) {
+      throw new Error("The mobile session was cleared locally, but the server could not revoke its access token.");
+    }
   };
 
   const value = useMemo(

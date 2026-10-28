@@ -9,10 +9,12 @@ use Illuminate\Support\Facades\Auth;
 // Mobile Communications Endpoints
 Route::get('/api/mobile/messages', [MessageController::class, 'mobileIndex'])
     ->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('mobile.auth')
     ->name('api.mobile.messages.index');
 
 Route::post('/api/mobile/messages', [MessageController::class, 'store'])
     ->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('mobile.auth')
     ->name('api.mobile.messages.store');
 
 Route::post('/api/mobile/messages/typing', function (\Illuminate\Http\Request $request) {
@@ -34,23 +36,12 @@ Route::post('/api/mobile/messages/typing', function (\Illuminate\Http\Request $r
     event(new \App\Modules\Communications\Events\MessageTyping($recipientIds, $threadId, (int) $authUser->idno, $typing));
 
     return response()->json(['ok' => true]);
-})->withoutMiddleware(VerifyCsrfToken::class)->name('api.mobile.messages.typing');
+})->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('mobile.auth')
+    ->name('api.mobile.messages.typing');
 
-Route::get('/api/mobile/notifications', function (\Illuminate\Http\Request $request) {
-    $authUser = Auth::user();
-    $userId = $authUser?->idno ?? (int) $request->query('user_id');
-
-    if (!$userId) {
-        return response()->json([
-            'message' => 'Unauthenticated.',
-        ], 401);
-    }
-
-    if ($authUser && (int) $authUser->idno !== (int) $userId) {
-        return response()->json([
-            'message' => 'Unauthorized.',
-        ], 403);
-    }
+Route::get('/api/mobile/notifications', function () {
+    $userId = Auth::id();
 
     $notifications = \App\Modules\Communications\Support\NotificationCenter::presentMany(DB::table('tbnotifications')
         ->where('user_id', $userId)
@@ -65,7 +56,7 @@ Route::get('/api/mobile/notifications', function (\Illuminate\Http\Request $requ
         'unread_count' => $notifications->where('is_read', false)->count(),
         'total_count' => $notifications->count(),
     ]);
-})->withoutMiddleware(VerifyCsrfToken::class);
+})->middleware('mobile.auth');
 
 // Authenticated Web Communications & Notifications
 Route::middleware(['auth'])->group(function () {

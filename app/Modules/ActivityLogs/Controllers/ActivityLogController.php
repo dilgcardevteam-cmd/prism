@@ -178,11 +178,11 @@ class ActivityLogController extends Controller
         }
 
         if ($filters['date_from'] !== '') {
-            $query->whereDate('created_at', '>=', Carbon::parse($filters['date_from'])->toDateString());
+            $query->where('created_at', '>=', Carbon::parse($filters['date_from'])->startOfDay());
         }
 
         if ($filters['date_to'] !== '') {
-            $query->whereDate('created_at', '<=', Carbon::parse($filters['date_to'])->toDateString());
+            $query->where('created_at', '<', Carbon::parse($filters['date_to'])->addDay()->startOfDay());
         }
 
         if (($filters['sort'] ?? 'latest') === 'oldest') {
@@ -218,4 +218,3 @@ class ActivityLogController extends Controller
         ];
     }
 }
-

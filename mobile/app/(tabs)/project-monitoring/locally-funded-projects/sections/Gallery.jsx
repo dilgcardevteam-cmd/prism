@@ -9,7 +9,6 @@ import * as Location from "expo-location";
 import ConfirmationModal from "../../../../../components/common/ConfirmationModal";
 import FloatingToast from "../../../../../components/common/FloatingToast";
 import { APP_ROUTES } from "../../../../../constants/routes";
-import { useAuth } from "../../../../../contexts/AuthContext";
 import { useWebAppRequest } from "../../../../../hooks/useWebAppRequest";
 
 const GALLERY_FILTER_OPTIONS = [
@@ -223,7 +222,6 @@ const GalleryAllHeader = memo(function GalleryAllHeader({ count }) {
 export default function Gallery({ project }) {
   const { width } = useWindowDimensions();
   const router = useRouter();
-  const { session } = useAuth();
   const { fetchJsonWithFallback } = useWebAppRequest();
   const filterOptions = useMemo(() => GALLERY_FILTER_OPTIONS, []);
   const [selectedFilter, setSelectedFilter] = useState(filterOptions[0]);
@@ -496,11 +494,6 @@ export default function Gallery({ project }) {
       name: fileName,
       type: mimeType,
     });
-
-    const uploaderId = Number(session?.id || 0);
-    if (Number.isFinite(uploaderId) && uploaderId > 0) {
-      formData.append("uploaded_by", String(uploaderId));
-    }
 
     if (deviceLocation.latitude !== null && deviceLocation.longitude !== null) {
       formData.append("latitude", String(deviceLocation.latitude));

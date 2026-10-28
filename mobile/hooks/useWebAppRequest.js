@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getMobileAuthSession } from "./mobileAccessToken";
 import {
   API_CANDIDATE_BASE_URLS,
   API_URL,
@@ -31,6 +32,7 @@ async function requestJson(path, baseUrl, init = {}, timeout = REQUEST_TIMEOUT) 
 
   try {
     const url = buildApiUrl(path, baseUrl);
+    const authSession = await getMobileAuthSession();
 
     const response = await fetch(url, {
       ...init,
@@ -38,6 +40,7 @@ async function requestJson(path, baseUrl, init = {}, timeout = REQUEST_TIMEOUT) 
       signal: controller.signal,
       headers: {
         Accept: "application/json",
+        ...(authSession ? { Authorization: `Bearer ${authSession.accessToken}` } : {}),
         ...(init.headers || {}),
       },
     });
@@ -168,12 +171,16 @@ export function useWebAppRequest() {
       const dedupedCandidates = Array.from(
         new Set([activeBaseUrl, ...candidateBaseUrls].filter(Boolean))
       );
+      const authSession = await getMobileAuthSession();
+      const requestCandidates = authSession
+        ? [authSession.baseUrl]
+        : dedupedCandidates;
 
-      const nonLoopbackCandidates = dedupedCandidates.filter((baseUrl) => !isLoopbackBaseUrl(baseUrl));
-      const loopbackCandidates = dedupedCandidates.filter((baseUrl) => isLoopbackBaseUrl(baseUrl));
+      const nonLoopbackCandidates = requestCandidates.filter((baseUrl) => !isLoopbackBaseUrl(baseUrl));
+      const loopbackCandidates = requestCandidates.filter((baseUrl) => isLoopbackBaseUrl(baseUrl));
       const candidates = nonLoopbackCandidates.length
         ? [...nonLoopbackCandidates, ...loopbackCandidates]
-        : dedupedCandidates;
+        : requestCandidates;
 
       const { res, baseUrl } = await fetchWithRace(path, candidates, init, timeout);
 

@@ -1,22 +1,16 @@
 import { useCallback } from "react";
 
-import { buildApiUrl } from "../constants/api";
-import { useAuth } from "../contexts/AuthContext";
 import { useWebAppRequest } from "./useWebAppRequest";
+import { getMobileAuthSession } from "./mobileAccessToken";
 
 export function useMessagesApi() {
-  const { session } = useAuth();
-  const { activeBaseUrl, fetchJsonWithFallback } = useWebAppRequest();
+  const { fetchJsonWithFallback } = useWebAppRequest();
 
   const fetchMessages = useCallback(async ({ threadId = 0 } = {}) => {
     const queryParams = new URLSearchParams();
 
     if (Number(threadId || 0) > 0) {
       queryParams.set("thread", String(threadId));
-    }
-
-    if (session?.id) {
-      queryParams.set("user_id", String(session.id));
     }
 
     const queryString = queryParams.toString();
@@ -29,14 +23,10 @@ export function useMessagesApi() {
         "Content-Type": "application/json",
       },
     });
-  }, [fetchJsonWithFallback, session?.id]);
+  }, [fetchJsonWithFallback]);
 
   const sendMessage = useCallback(async ({ threadId = 0, recipientIds = [], message = "", image = null, images = [] }) => {
     const formData = new FormData();
-
-    if (session?.id) {
-      formData.append("user_id", String(session.id));
-    }
 
     if (Number(threadId || 0) > 0) {
       formData.append("thread_id", String(threadId));
@@ -70,11 +60,17 @@ export function useMessagesApi() {
       });
     }
 
-    const response = await fetch(buildApiUrl("/api/mobile/messages", activeBaseUrl), {
+    const authSession = await getMobileAuthSession();
+    if (!authSession) {
+      throw new Error("Please log in again before sending messages.");
+    }
+
+    const response = await fetch(`${authSession.baseUrl}/api/mobile/messages`, {
       method: "POST",
       credentials: "include",
       headers: {
         Accept: "application/json",
+        Authorization: `Bearer ${authSession.accessToken}`,
       },
       body: formData,
     });
@@ -86,7 +82,7 @@ export function useMessagesApi() {
     }
 
     return payload || {};
-  }, [activeBaseUrl, session?.id]);
+  }, []);
 
   return {
     fetchMessages,

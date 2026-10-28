@@ -20,9 +20,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { APP_COLORS } from "../../../../constants/theme";
 import { useMessagesApi } from "../../../../hooks/useMessagesApi";
+import { getMobileAuthSession } from "../../../../hooks/mobileAccessToken";
 import useEcho from "../../../../hooks/useEcho";
 import { useAuth } from "../../../../contexts/AuthContext";
-import { useWebAppRequest } from "../../../../hooks/useWebAppRequest";
 import { createScrollHandler, createScrollInterpolations } from "../../../../utils/animations";
 
 /* ---------------- UTIL ---------------- */
@@ -81,7 +81,6 @@ export default function ConversationPage() {
   const optimisticCounterRef = useRef(0);
 
   const { session } = useAuth();
-  const { activeBaseUrl } = useWebAppRequest();
   const echoRef = useEcho();
   const typingTimerRef = useRef(null);
 
@@ -285,12 +284,19 @@ export default function ConversationPage() {
     setCopyTargetMessageId(null);
     // notify stop typing
     try {
-      await fetch(`${activeBaseUrl}/api/mobile/messages/typing`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ thread_id: parsedThreadId, recipient_ids: parsedRecipientIds, typing: false }),
-      });
+      const authSession = await getMobileAuthSession();
+      if (authSession) {
+        await fetch(`${authSession.baseUrl}/api/mobile/messages/typing`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authSession.accessToken}`,
+          },
+          body: JSON.stringify({ thread_id: parsedThreadId, recipient_ids: parsedRecipientIds, typing: false }),
+        });
+      }
     } catch (_e) {}
 
     try {
@@ -341,14 +347,21 @@ export default function ConversationPage() {
   const sendTyping = useCallback((typing) => {
     if (!parsedThreadId) return;
     try {
-      fetch(`${activeBaseUrl}/api/mobile/messages/typing`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ thread_id: parsedThreadId, recipient_ids: parsedRecipientIds, typing }),
+      getMobileAuthSession().then((authSession) => {
+        if (!authSession) return;
+        return fetch(`${authSession.baseUrl}/api/mobile/messages/typing`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authSession.accessToken}`,
+          },
+          body: JSON.stringify({ thread_id: parsedThreadId, recipient_ids: parsedRecipientIds, typing }),
+        });
       }).catch(() => {});
     } catch (_e) {}
-  }, [parsedThreadId, parsedRecipientIds, activeBaseUrl]);
+  }, [parsedThreadId, parsedRecipientIds]);
 
   const onChangeReply = (value) => {
     setReply(value);

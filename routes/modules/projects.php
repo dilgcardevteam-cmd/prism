@@ -32,18 +32,21 @@ Route::get('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [Local
 Route::post('/api/mobile/locally-funded/{project}/gallery', [LocallyFundedProjectController::class, 'mobileUploadGalleryImage'])
     ->whereNumber('project')
     ->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware(['mobile.auth', 'crud_permission:locally_funded_projects,add'])
     ->name('api.mobile.locally-funded.gallery-upload');
 
 Route::delete('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [LocallyFundedProjectController::class, 'mobileDeleteGalleryImage'])
     ->whereNumber('project')
     ->whereNumber('galleryImage')
     ->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware(['mobile.auth', 'crud_permission:locally_funded_projects,delete'])
     ->name('api.mobile.locally-funded.gallery-delete');
 
 Route::patch('/api/mobile/locally-funded/{project}/gallery/{galleryImage}', [LocallyFundedProjectController::class, 'mobileUpdateGalleryImage'])
     ->whereNumber('project')
     ->whereNumber('galleryImage')
     ->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware(['mobile.auth', 'crud_permission:locally_funded_projects,update'])
     ->name('api.mobile.locally-funded.gallery-update');
 
 // ====================== AUTHENTICATED PROJECT ROUTES =====================

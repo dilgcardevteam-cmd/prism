@@ -67,25 +67,25 @@ class UserManagementController extends Controller
         }
 
         if ($selectedRole !== '' && array_key_exists($selectedRole, $roleOptions)) {
-            $usersQuery->whereRaw('LOWER(TRIM(COALESCE(role, ""))) = ?', [$selectedRole]);
+            $usersQuery->where('role_key', $selectedRole);
         } else {
             $selectedRole = '';
         }
 
         if ($selectedStatus !== '' && array_key_exists($selectedStatus, $statusOptions)) {
-            $usersQuery->whereRaw('LOWER(TRIM(COALESCE(status, ""))) = ?', [$selectedStatus]);
+            $usersQuery->where('status_key', $selectedStatus);
         } else {
             $selectedStatus = '';
         }
 
         if ($selectedProvince !== '') {
-            $usersQuery->whereRaw('LOWER(TRIM(COALESCE(province, ""))) = ?', [strtolower($selectedProvince)]);
+            $usersQuery->where('province_key', strtolower(trim($selectedProvince)));
         }
 
         if ($selectedLgu !== '') {
             $usersQuery
-                ->whereRaw('LOWER(TRIM(COALESCE(agency, ""))) = ?', ['lgu'])
-                ->whereRaw('LOWER(TRIM(COALESCE(office, ""))) = ?', [strtolower($selectedLgu)]);
+                ->where('agency_key', 'lgu')
+                ->where('office_key', strtolower(trim($selectedLgu)));
         }
 
         $users = $usersQuery->paginate(15)->withQueryString();
@@ -125,8 +125,8 @@ class UserManagementController extends Controller
                 ->all();
 
             $lguRows = User::query()
-                ->selectRaw("LOWER(TRIM(COALESCE(province, ''))) as province_key, TRIM(COALESCE(office, '')) as value")
-                ->whereRaw("LOWER(TRIM(COALESCE(agency, ''))) = ?", ['lgu'])
+                ->selectRaw("province_key, TRIM(COALESCE(office, '')) as value")
+                ->where('agency_key', 'lgu')
                 ->whereRaw("TRIM(COALESCE(office, '')) <> ''")
                 ->distinct()
                 ->orderBy('value')

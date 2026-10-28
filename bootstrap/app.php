@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'superadmin' => \App\Http\Middleware\SuperAdminMiddleware::class,
             'regional_dilg' => \App\Http\Middleware\RegionalOfficeDilgMiddleware::class,
             'crud_permission' => \App\Http\Middleware\EnsureCrudPermission::class,
+            'mobile.auth' => \App\Http\Middleware\AuthenticateMobileAccessToken::class,
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);
     })

@@ -129,7 +129,6 @@ export default function ProfileScreen() {
     setIsSavingEdit(true);
     try {
       const payload = {
-        user_id: session?.id,
         first_name: editFirstName,
         last_name: editLastName,
         phone: editPhone,
@@ -224,7 +223,6 @@ export default function ProfileScreen() {
     setIsSavingPassword(true);
     try {
       const payload = {
-        user_id: session?.id,
         current_password: currentPassword,
         new_password: newPassword,
         new_password_confirmation: confirmNewPassword,

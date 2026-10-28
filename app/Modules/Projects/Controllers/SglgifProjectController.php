@@ -157,23 +157,13 @@ class SglgifProjectController extends Controller
 
         $provinceFundingBreakdown = $this->buildFundingBreakdown($rows, 'province', 6);
         $categoryFundingBreakdown = $this->buildFundingBreakdown($rows, 'sub_type_of_project', 6);
-        $provinceProjectsModalMap = $provinceBreakdown
+        $provinceProjectLabels = $provinceBreakdown
             ->pluck('label')
             ->merge($provinceFundingBreakdown->pluck('label'))
             ->filter(fn ($label) => trim((string) $label) !== '')
             ->unique()
-            ->mapWithKeys(function (string $provinceLabel) use ($rows) {
-                $items = $rows
-                    ->filter(function (array $row) use ($provinceLabel) {
-                        $label = trim((string) ($row['province'] ?? ''));
-                        $normalizedLabel = $label !== '' ? $label : 'Unspecified';
-
-                        return $normalizedLabel === $provinceLabel;
-                    })
-                    ->values();
-
-                return [$provinceLabel => $items];
-            });
+            ->values();
+        $provinceProjectsModalMap = $this->buildProvinceProjectsModalMap($rows, $provinceProjectLabels);
 
         $fundingYearBreakdown = $rows
             ->groupBy(fn (array $row) => trim((string) ($row['funding_year'] ?? '')) !== '' ? $row['funding_year'] : 'Unspecified')
@@ -715,6 +705,21 @@ class SglgifProjectController extends Controller
             'overall_pct' => $overall,
             'updated_at' => $row->updated_at,
         ];
+    }
+
+    private function buildProvinceProjectsModalMap(Collection $rows, Collection $provinceLabels): Collection
+    {
+        $projectsByProvince = $rows->groupBy(function (array $row) {
+            $province = trim((string) ($row['province'] ?? ''));
+
+            return $province !== '' ? $province : 'Unspecified';
+        });
+
+        return $provinceLabels->mapWithKeys(
+            fn (string $province) => [
+                $province => $projectsByProvince->get($province, collect())->values(),
+            ]
+        );
     }
 
     private function buildCountBreakdown(Collection $rows, string $key, ?int $limit = null): Collection

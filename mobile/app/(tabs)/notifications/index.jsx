@@ -13,7 +13,6 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 
 import { APP_COLORS } from "../../../constants/theme";
-import { useAuth } from "../../../contexts/AuthContext";
 import { useWebAppRequest } from "../../../hooks/useWebAppRequest";
 
 export const meta = {
@@ -22,7 +21,6 @@ export const meta = {
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { session } = useAuth();
   const { fetchJsonWithFallback } = useWebAppRequest();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -38,9 +36,7 @@ export default function NotificationsScreen() {
 
       setErrorMessage(null);
 
-      const query = session?.id ? `?user_id=${encodeURIComponent(session.id)}` : "";
-
-      const response = await fetchJsonWithFallback(`/api/mobile/notifications${query}`, {
+      const response = await fetchJsonWithFallback("/api/mobile/notifications", {
         method: "GET",
         headers: {
           Accept: "application/json",
@@ -59,7 +55,7 @@ export default function NotificationsScreen() {
         setIsLoading(false);
       }
     }
-  }, [fetchJsonWithFallback, session?.id]);
+  }, [fetchJsonWithFallback]);
 
   useEffect(() => {
     loadNotifications();

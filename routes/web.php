@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use App\Models\LocallyFundedProject;
 use App\Models\User;
 use Illuminate\Support\Facades\Schema;
@@ -209,11 +210,21 @@ Route::post('/api/mobile/login', function (Request $request) {
         ], 422);
     }
 
-    Auth::login($user, $request->boolean('remember'));
-    $request->session()->regenerate();
+    $plainTextToken = Str::random(80);
+    $expiresAt = now()->addDays(30);
+    DB::table('mobile_access_tokens')->insert([
+        'user_id' => $user->idno,
+        'token_hash' => hash('sha256', $plainTextToken),
+        'expires_at' => $expiresAt,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 
     return response()->json([
         'message' => 'Login successful.',
+        'access_token' => $plainTextToken,
+        'token_type' => 'Bearer',
+        'expires_at' => $expiresAt->toISOString(),
         'user' => [
             'id' => $user->idno,
             'username' => $user->username,
@@ -230,15 +241,19 @@ Route::post('/api/mobile/login', function (Request $request) {
             'status' => $user->status,
         ],
     ]);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->middleware('throttle:10,1');
+
+Route::post('/api/mobile/logout', function (Request $request) {
+    DB::table('mobile_access_tokens')
+        ->where('token_hash', hash('sha256', (string) $request->bearerToken()))
+        ->delete();
+
+    return response()->json(['message' => 'Logged out successfully.']);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->middleware('mobile.auth');
 
 Route::get('/api/mobile/user/profile', function (Request $request) {
-    if (!Auth::check()) {
-        return response()->json([
-            'message' => 'Unauthenticated.',
-        ], 401);
-    }
-
     $user = Auth::user();
 
     return response()->json([
@@ -258,11 +273,10 @@ Route::get('/api/mobile/user/profile', function (Request $request) {
             'status' => $user->status,
         ],
     ]);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+})->middleware('mobile.auth');
 
 Route::post('/api/mobile/user/profile/update', function (Request $request) {
     $validated = $request->validate([
-        'user_id' => ['required', 'integer'],
         'first_name' => ['required', 'string', 'max:255'],
         'last_name' => ['required', 'string', 'max:255'],
         'position' => ['required', 'string', 'max:255'],
@@ -277,14 +291,7 @@ Route::post('/api/mobile/user/profile/update', function (Request $request) {
         ], 422);
     }
 
-    $user = User::where('idno', $validated['user_id'])->first();
-
-    if (!$user) {
-        return response()->json([
-            'message' => 'User not found.',
-        ], 404);
-    }
-
+    $user = Auth::user();
     $user->update([
         'fname' => trim((string) $validated['first_name']),
         'lname' => trim((string) $validated['last_name']),
@@ -310,17 +317,11 @@ Route::post('/api/mobile/user/profile/update', function (Request $request) {
             'status' => $user->status,
         ],
     ]);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->middleware('mobile.auth');
 
 Route::post('/api/mobile/user/password/update', function (Request $request) {
-    if (!Auth::check()) {
-        return response()->json([
-            'message' => 'Unauthenticated.',
-        ], 401);
-    }
-
     $validated = $request->validate([
-        'user_id' => ['required', 'integer'],
         'current_password' => ['required', 'string'],
         'new_password' => [
             'required',
@@ -340,21 +341,7 @@ Route::post('/api/mobile/user/password/update', function (Request $request) {
         'new_password.different' => 'The new password must be different from the current password.',
     ]);
 
-    $authUser = Auth::user();
-
-    if ((int) $authUser->idno !== (int) $validated['user_id']) {
-        return response()->json([
-            'message' => 'Unauthorized password update request.',
-        ], 403);
-    }
-
-    $user = User::where('idno', (int) $validated['user_id'])->first();
-
-    if (!$user) {
-        return response()->json([
-            'message' => 'User not found.',
-        ], 404);
-    }
+    $user = Auth::user();
 
     if (!Hash::check($validated['current_password'], $user->password)) {
         return response()->json([
@@ -364,11 +351,13 @@ Route::post('/api/mobile/user/password/update', function (Request $request) {
 
     $user->password = Hash::make($validated['new_password']);
     $user->save();
+    DB::table('mobile_access_tokens')->where('user_id', $user->idno)->delete();
 
     return response()->json([
         'message' => 'Password updated successfully.',
     ]);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
+})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+    ->middleware('mobile.auth');
 
 
 

@@ -138,4 +138,59 @@ class ActivityLogModuleTest extends TestCase
             'description' => 'Exported activity logs to CSV.',
         ]);
     }
+
+    public function test_date_filters_include_the_full_from_and_to_dates(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+
+        ActivityLog::query()->create([
+            'username' => 'before',
+            'action' => ActivityLog::ACTION_LOGIN,
+            'description' => 'Before selected dates.',
+            'created_at' => '2026-10-27 23:59:59',
+        ]);
+        ActivityLog::query()->create([
+            'username' => 'included-start',
+            'action' => ActivityLog::ACTION_LOGIN,
+            'description' => 'Included on the start date.',
+            'created_at' => '2026-10-28 00:00:00',
+        ]);
+        ActivityLog::query()->create([
+            'username' => 'included-end',
+            'action' => ActivityLog::ACTION_LOGIN,
+            'description' => 'Included on the end date.',
+            'created_at' => '2026-10-29 23:59:59',
+        ]);
+        ActivityLog::query()->create([
+            'username' => 'after',
+            'action' => ActivityLog::ACTION_LOGIN,
+            'description' => 'After selected dates.',
+            'created_at' => '2026-10-30 00:00:00',
+        ]);
+
+        $response = $this->actingAs($user)->get(route('utilities.activity-logs.index', [
+            'date_from' => '2026-10-28',
+            'date_to' => '2026-10-29',
+        ]));
+
+        $response->assertOk()
+            ->assertSee('Included on the start date.')
+            ->assertSee('Included on the end date.')
+            ->assertDontSee('Before selected dates.')
+            ->assertDontSee('After selected dates.');
+    }
+
+    public function test_filter_index_migration_adds_indexed_user_keys_and_log_timestamp(): void
+    {
+        $migration = require database_path('migrations/2026_10_28_155300_add_filter_indexes_to_activity_logs_and_users.php');
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumn('tbusers', 'role_key'));
+        $this->assertTrue(Schema::hasIndex('tbusers', 'tbusers_role_key_idx'));
+        $this->assertTrue(Schema::hasIndex('tbusers', 'tbusers_status_created_idx'));
+        $this->assertTrue(Schema::hasIndex('activity_logs', 'activity_logs_created_at_idx'));
+    }
 }
