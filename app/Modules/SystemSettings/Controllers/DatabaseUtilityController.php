@@ -1732,7 +1732,7 @@ class DatabaseUtilityController extends Controller
             ->selectRaw('COUNT(*) as total_users')
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ''))) = 'active' THEN 1 ELSE 0 END) as active_users")
             ->selectRaw("SUM(CASE WHEN LOWER(TRIM(COALESCE(status, ''))) = 'inactive' THEN 1 ELSE 0 END) as inactive_users")
-            ->groupBy('role_key')
+            ->groupByRaw("LOWER(TRIM(COALESCE(role, '')))")
             ->get()
             ->keyBy('role_key');
 
