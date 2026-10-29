@@ -2535,6 +2535,7 @@
                     </li>
                 </ul>
             </li>
+            @if(Auth::user()->hasCrudPermission('approval_management', 'view'))
             <li>
                 @php
                     $sidebarUser = Auth::user();
@@ -2608,6 +2609,7 @@
                     @endif
                 </a>
             </li>
+            @endif
             @php
                 $canViewLocallyFundedProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
                 $canViewRssaProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');

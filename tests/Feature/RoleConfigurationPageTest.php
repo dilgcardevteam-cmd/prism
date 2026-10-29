@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\SystemSettings\Models\RolePermissionSetting;
 use App\Modules\SystemSettings\Models\UserRole;
+use App\Support\RolePermissionRegistry;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -95,12 +96,42 @@ class RoleConfigurationPageTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Role Configuration')
-            ->assertSee('Manage User Roles');
+            ->assertSee('Manage User Roles')
+            ->assertSee('Approval Management')
+            ->assertSee('DILG MC No. 2018-19')
+            ->assertSee('DILG MC No. 2018-30');
 
         $this->assertNotNull($roleCountQuery);
         $this->assertStringContainsString(
             "group by lower(trim(coalesce(role, '')))",
             strtolower($roleCountQuery),
         );
+    }
+
+    public function test_approval_management_is_configurable_and_included_in_default_role_access(): void
+    {
+        $modules = collect(RolePermissionRegistry::modules())
+            ->flatMap(fn (array $module): array => $module['items'] ?? [])
+            ->keyBy('aspect');
+
+        $this->assertSame(['view'], $modules['approval_management']['actions']);
+        $this->assertContains('approval_management.view', RolePermissionRegistry::validPermissionKeys());
+
+        foreach ([
+            User::ROLE_REGIONAL,
+            User::ROLE_PROVINCIAL,
+            User::ROLE_MLGOO,
+            User::ROLE_LGU,
+        ] as $role) {
+            $this->assertContains(
+                'approval_management.view',
+                RolePermissionRegistry::permissionsForRole($role),
+            );
+        }
+
+        $this->assertArrayHasKey('quarterly_dilg_mc_2018_19', $modules);
+        $this->assertArrayHasKey('quarterly_dilg_mc_2018_30', $modules);
+        $this->assertContains('quarterly_dilg_mc_2018_19.update', RolePermissionRegistry::validPermissionKeys());
+        $this->assertContains('quarterly_dilg_mc_2018_30.update', RolePermissionRegistry::validPermissionKeys());
     }
 }

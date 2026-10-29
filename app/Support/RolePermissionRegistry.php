@@ -162,6 +162,18 @@ class RolePermissionRegistry
                 ],
             ],
             [
+                'module' => 'Approval Management',
+                'description' => 'Approval inbox for reviewing pending submissions and returned documents.',
+                'items' => [
+                    [
+                        'aspect' => 'approval_management',
+                        'label' => 'Approval Management',
+                        'description' => 'Open the approval inbox to review pending submissions and returned documents.',
+                        'actions' => ['view'],
+                    ],
+                ],
+            ],
+            [
                 'module' => 'DILG Deliverables',
                 'description' => 'DILG-only deliverable pages for monitoring, evaluation, and related reporting outputs.',
                 'items' => [
@@ -536,9 +548,11 @@ class RolePermissionRegistry
             ],
         ];
 
+        $approvalManagementPermissions = ['approval_management.view'];
+
         return [
             User::ROLE_SUPERADMIN => ['*'],
-            User::ROLE_REGIONAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $dataManagementPermissions, $ticketingPermissions[User::ROLE_REGIONAL], [
+            User::ROLE_REGIONAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $dataManagementPermissions, $ticketingPermissions[User::ROLE_REGIONAL], $approvalManagementPermissions, [
                 'locally_funded_projects.update',
                 'confirmation_of_fund_receipt.view',
                 'dilg_deliverables_monitoring_evaluation.view',
@@ -546,7 +560,7 @@ class RolePermissionRegistry
                 'dilg_deliverables_rlip_lime_monthly.view',
                 'dilg_deliverables_qaar_tool_monitoring.view',
             ]),
-            User::ROLE_PROVINCIAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_PROVINCIAL], [
+            User::ROLE_PROVINCIAL => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_PROVINCIAL], $approvalManagementPermissions, [
                 'locally_funded_projects.update',
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
@@ -560,7 +574,7 @@ class RolePermissionRegistry
                 'dilg_deliverables_rlip_lime_monthly.view',
                 'dilg_deliverables_qaar_tool_monitoring.view',
             ]),
-            User::ROLE_MLGOO => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_MLGOO], [
+            User::ROLE_MLGOO => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_MLGOO], $approvalManagementPermissions, [
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
                 'nadai_management.view',
@@ -568,7 +582,7 @@ class RolePermissionRegistry
                 'confirmation_of_fund_receipt.add',
                 'confirmation_of_fund_receipt.update',
             ]),
-            User::ROLE_LGU => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_LGU], [
+            User::ROLE_LGU => array_merge($reportorialPermissions, $projectMonitoringPermissions, $ticketingPermissions[User::ROLE_LGU], $approvalManagementPermissions, [
                 'pre_implementation_documents.view',
                 'pre_implementation_documents.add',
                 'nadai_management.view',
