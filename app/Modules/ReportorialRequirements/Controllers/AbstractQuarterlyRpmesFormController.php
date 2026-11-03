@@ -50,29 +50,17 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 'filters' => $filters,
                 'filterOptions' => $this->emptyProjectFilterOptions(),
                 'formMeta' => $this->viewMeta(),
+                'submissionAnalysis' => $this->emptySubmissionAnalysis(),
             ]);
         }
 
         $baseQuery = $this->buildAccessibleSubayQuery($user);
         $filterOptions = $this->buildProjectFilterOptions(clone $baseQuery, $filters);
+        $submissionAnalysis = !empty($this->formConfig()['show_submission_analysis'])
+            ? $this->buildSubmissionAnalysis(clone $baseQuery, $filters)
+            : [];
 
-        $projectsQuery = (clone $baseQuery)
-            ->whereNotNull('spp.project_code')
-            ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''")
-            ->select([
-                'spp.project_code',
-                'spp.project_title',
-                'spp.city_municipality',
-                'spp.province',
-                'spp.funding_year',
-                'spp.status',
-                DB::raw($this->fundSourceExpression('spp') . ' as fund_source'),
-            ]);
-
-        $this->applyProjectFilters($projectsQuery, $filters);
-        $this->applyValidationListMetadata($projectsQuery);
-
-        $projects = $projectsQuery
+        $projects = $this->buildProjectListQuery($baseQuery, $filters)
             ->orderBy('validation_priority')
             ->orderByRaw('CASE WHEN latest_uploaded_at IS NULL THEN 1 ELSE 0 END')
             ->orderByDesc('latest_uploaded_at')
@@ -88,7 +76,311 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             'filters' => $filters,
             'filterOptions' => $filterOptions,
             'formMeta' => $this->viewMeta(),
+            'submissionAnalysis' => $submissionAnalysis,
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($this->userCanAccessReport($user), 403);
+
+        $filters = $this->resolveProjectFilters($request);
+        $filename = 'rpmes-form-2-report-' . now()->format('Ymd-His') . '.csv';
+        $headers = [
+            'Project Code',
+            'Project Title',
+            'Fund Source',
+            'Funding Year',
+            'City / Municipality',
+            'Province',
+            'Project Status',
+            'Approval Status',
+            'Date Submitted',
+            'Validation Level',
+        ];
+
+        return response()->streamDownload(function () use ($user, $filters, $headers): void {
+            $output = fopen('php://output', 'w');
+            if ($output === false) {
+                throw new \RuntimeException('Unable to open the report export stream.');
+            }
+
+            fputcsv($output, $headers);
+
+            if (Schema::hasTable('subay_project_profiles')) {
+                $query = $this->buildProjectListQuery(
+                    $this->buildAccessibleSubayQuery($user),
+                    $filters
+                )
+                    ->orderBy('spp.project_code');
+
+                foreach ($query->cursor() as $project) {
+                    $isReturned = strtolower(trim((string) $project->latest_submission_status)) === 'returned';
+                    $isApproved = !empty($project->latest_approved_at_dilg_ro);
+                    $isPendingRo = !empty($project->latest_approved_at_dilg_po) && !$isReturned;
+
+                    $approvalStatus = 'Awaiting Upload';
+                    $validationLevel = '—';
+                    if (!empty($project->latest_report_file_path)) {
+                        $approvalStatus = 'For DILG Provincial Office Validation';
+                        $validationLevel = 'DILG Provincial Office';
+                    }
+
+                    if ($isPendingRo) {
+                        $approvalStatus = 'For DILG Regional Office Validation';
+                        $validationLevel = 'DILG Regional Office';
+                    }
+                    if ($isApproved) {
+                        $approvalStatus = 'Approved';
+                        $validationLevel = 'Completed';
+                    }
+                    if ($isReturned) {
+                        $approvalStatus = 'Returned';
+                        $validationLevel = !empty($project->latest_approved_at_dilg_po)
+                            ? 'Returned at DILG Regional Office'
+                            : 'Returned at DILG Provincial Office';
+                    }
+
+                    $dateSubmitted = $project->latest_uploaded_at
+                        ? \Illuminate\Support\Carbon::parse($project->latest_uploaded_at)
+                            ->setTimezone(config('app.timezone'))
+                            ->format('M d, Y h:i A')
+                        : '—';
+
+                    fputcsv($output, array_map($this->safeCsvCell(...), [
+                        $project->project_code,
+                        $project->project_title ?: '-',
+                        $project->fund_source ?: 'Unspecified',
+                        $project->funding_year ?: '-',
+                        $project->city_municipality ?: '-',
+                        $project->province ?: '-',
+                        $project->status ?: 'Unknown',
+                        $approvalStatus,
+                        $dateSubmitted,
+                        $validationLevel,
+                    ]));
+                }
+            }
+
+            $analysis = $this->buildSubmissionAnalysis(
+                $this->buildAccessibleSubayQuery($user),
+                $filters
+            );
+            $overall = $analysis['overall'];
+
+            fputcsv($output, array_fill(0, count($headers), ''));
+            fputcsv($output, ['Analysis Summary']);
+            fputcsv($output, ['Metric', 'Count / Rate']);
+            fputcsv($output, ['Unique projects', $overall['total_projects']]);
+            fputcsv($output, ['Quarterly reports submitted (all quarters)', $overall['submitted']]);
+            fputcsv($output, ['Approved reports', $overall['approved']]);
+            fputcsv($output, ['Reports awaiting validation', $overall['pending_validation']]);
+            fputcsv($output, ['Returned reports', $overall['returned']]);
+            fputcsv($output, ['Submission rate', number_format((float) $overall['submission_rate'], 1) . '%']);
+            fputcsv($output, array_fill(0, count($headers), ''));
+            fputcsv($output, ['Quarterly Breakdown']);
+            fputcsv($output, ['Quarter', 'Submitted', 'Approved', 'Awaiting Validation', 'Returned', 'Approval Rate']);
+
+            foreach (['Q1' => 'Quarter 1', 'Q2' => 'Quarter 2', 'Q3' => 'Quarter 3', 'Q4' => 'Quarter 4'] as $quarterCode => $quarterLabel) {
+                $quarter = $analysis['quarters'][$quarterCode];
+                fputcsv($output, [
+                    $quarterLabel,
+                    $quarter['submitted'],
+                    $quarter['approved'],
+                    $quarter['pending_validation'],
+                    $quarter['returned'],
+                    number_format((float) $quarter['approval_rate'], 1) . '%',
+                ]);
+            }
+
+            fclose($output);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    private function buildProjectListQuery($baseQuery, array $filters)
+    {
+        $projectsQuery = (clone $baseQuery)
+            ->whereNotNull('spp.project_code')
+            ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''")
+            ->select([
+                'spp.id',
+                'spp.project_code',
+                'spp.project_title',
+                'spp.city_municipality',
+                'spp.province',
+                'spp.funding_year',
+                'spp.status',
+                DB::raw($this->fundSourceExpression('spp') . ' as fund_source'),
+            ]);
+
+        $this->applyProjectFilters($projectsQuery, $filters);
+        if (!empty($this->formConfig()['show_submission_analysis'])) {
+            $canonicalProjectIds = (clone $baseQuery)
+                ->whereNotNull('spp.project_code')
+                ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''");
+            $this->applyProjectFilters($canonicalProjectIds, $filters);
+            $canonicalProjectIds
+                ->selectRaw('MAX(spp.id)')
+                ->groupByRaw('LOWER(TRIM(spp.project_code))');
+            $projectsQuery->whereIn('spp.id', $canonicalProjectIds);
+        }
+
+        $this->applyValidationListMetadata($projectsQuery);
+
+        return $projectsQuery;
+    }
+
+    private function safeCsvCell($value): string
+    {
+        $value = trim((string) ($value ?? ''));
+
+        return preg_match('/^[\s]*[=+\-@]/u', $value) === 1
+            ? "'" . $value
+            : $value;
+    }
+
+    private function buildSubmissionAnalysis($baseQuery, array $filters): array
+    {
+        $projectScope = (clone $baseQuery)
+            ->whereNotNull('spp.project_code')
+            ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''");
+        $this->applyProjectFilters($projectScope, $filters);
+
+        $projectScope
+            ->select([
+                DB::raw('LOWER(TRIM(spp.project_code)) as project_code'),
+                DB::raw('MIN(spp.city_municipality) as city_municipality'),
+            ])
+            ->groupByRaw('LOWER(TRIM(spp.project_code))');
+
+        $totalProjects = (int) DB::query()
+            ->fromSub(clone $projectScope, 'analysis_projects')
+            ->count();
+
+        $quarterStats = [];
+        foreach (array_keys($this->quarters()) as $quarter) {
+            $quarterStats[$quarter] = [
+                'total' => $totalProjects,
+                'submitted' => 0,
+                'approved' => 0,
+                'pending_validation' => 0,
+                'returned' => 0,
+                'no_submission' => $totalProjects,
+                'approval_rate' => 0,
+            ];
+        }
+
+        $overall = [
+            'total_projects' => $totalProjects,
+            'total_periods' => $totalProjects * count($quarterStats),
+            'submitted' => 0,
+            'approved' => 0,
+            'pending_validation' => 0,
+            'returned' => 0,
+            'no_submission' => $totalProjects * count($quarterStats),
+            'submission_rate' => 0,
+            'approval_rate' => 0,
+        ];
+
+        if ($totalProjects === 0 || !Schema::hasTable($this->uploadTable())) {
+            return ['overall' => $overall, 'quarters' => $quarterStats];
+        }
+
+        $uploads = DB::table($this->uploadTable() . ' as upload')
+            ->joinSub(clone $projectScope, 'analysis_projects', function ($join) {
+                $join->on(DB::raw('LOWER(TRIM(upload.project_code))'), '=', 'analysis_projects.project_code');
+            })
+            ->whereIn('upload.quarter', array_keys($quarterStats))
+            ->select([
+                'upload.quarter',
+                'upload.file_path',
+                'upload.status',
+                'upload.approved_at_dilg_po',
+                'upload.approved_at_dilg_ro',
+                'upload.approved_at_c_mlgoo',
+                'analysis_projects.city_municipality',
+            ])
+            ->get();
+
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        $modelClass = $this->uploadModelClass();
+        foreach ($uploads as $upload) {
+            if (!isset($quarterStats[$upload->quarter])) {
+                continue;
+            }
+
+            $uploadModel = new $modelClass((array) $upload);
+            $stage = $workflowService->currentStage($uploadModel, $upload->city_municipality);
+            if ($stage === 'pending_upload') {
+                continue;
+            }
+
+            $quarterStats[$upload->quarter]['submitted']++;
+            $quarterStats[$upload->quarter]['no_submission']--;
+            $overall['submitted']++;
+            $overall['no_submission']--;
+
+            if ($stage === \App\Services\LguReportorialWorkflowService::STATUS_APPROVED) {
+                $quarterStats[$upload->quarter]['approved']++;
+                $overall['approved']++;
+            } elseif ($stage === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED) {
+                $quarterStats[$upload->quarter]['returned']++;
+                $overall['returned']++;
+            } else {
+                $quarterStats[$upload->quarter]['pending_validation']++;
+                $overall['pending_validation']++;
+            }
+        }
+
+        foreach ($quarterStats as &$quarterStat) {
+            $quarterStat['approval_rate'] = $quarterStat['total'] > 0
+                ? round(($quarterStat['approved'] / $quarterStat['total']) * 100, 1)
+                : 0;
+        }
+        unset($quarterStat);
+
+        $overall['submission_rate'] = $overall['total_periods'] > 0
+            ? round(($overall['submitted'] / $overall['total_periods']) * 100, 1)
+            : 0;
+        $overall['approval_rate'] = $overall['total_periods'] > 0
+            ? round(($overall['approved'] / $overall['total_periods']) * 100, 1)
+            : 0;
+
+        return ['overall' => $overall, 'quarters' => $quarterStats];
+    }
+
+    private function emptySubmissionAnalysis(): array
+    {
+        $quarterStats = [];
+        foreach (array_keys($this->quarters()) as $quarter) {
+            $quarterStats[$quarter] = [
+                'total' => 0,
+                'submitted' => 0,
+                'approved' => 0,
+                'pending_validation' => 0,
+                'returned' => 0,
+                'no_submission' => 0,
+                'approval_rate' => 0,
+            ];
+        }
+
+        return [
+            'overall' => [
+                'total_projects' => 0,
+                'total_periods' => 0,
+                'submitted' => 0,
+                'approved' => 0,
+                'pending_validation' => 0,
+                'returned' => 0,
+                'no_submission' => 0,
+                'submission_rate' => 0,
+                'approval_rate' => 0,
+            ],
+            'quarters' => $quarterStats,
+        ];
     }
 
     public function show(Request $request, string $projectCode)
@@ -468,6 +760,14 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             }
         }
 
+        $minimumFundingYear = (int) ($this->formConfig()['minimum_funding_year'] ?? 0);
+        if ($minimumFundingYear > 0) {
+            $query->whereRaw(
+                "CAST(NULLIF(TRIM(COALESCE(spp.funding_year, '')), '') AS UNSIGNED) >= ?",
+                [$minimumFundingYear]
+            );
+        }
+
         $allowedFundSources = $this->allowedFundSources();
         if (!empty($allowedFundSources)) {
             $normalizedFundSources = collect($allowedFundSources)
@@ -483,6 +783,19 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                     $normalizedFundSources
                 );
             }
+        }
+
+        $excludedFundSources = collect($this->formConfig()['excluded_fund_sources'] ?? [])
+            ->map(static fn ($value) => strtoupper(trim((string) $value)))
+            ->filter(static fn (string $value) => $value !== '')
+            ->values()
+            ->all();
+        if ($excludedFundSources !== []) {
+            $placeholders = implode(', ', array_fill(0, count($excludedFundSources), '?'));
+            $query->whereRaw(
+                'UPPER(TRIM(' . $this->fundSourceExpression('spp') . ")) NOT IN ({$placeholders})",
+                $excludedFundSources
+            );
         }
 
         return $query;
@@ -528,6 +841,9 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 WHEN UPPER(TRIM({$alias}.project_code)) LIKE 'GEF%' THEN 'GEF'
                 WHEN UPPER(TRIM({$alias}.project_code)) LIKE 'SAFPB%' THEN 'SAFPB'
                 WHEN UPPER(TRIM({$alias}.project_code)) LIKE 'SGLGIF%' THEN 'SGLGIF'
+                WHEN UPPER(TRIM(COALESCE({$alias}.program, ''))) LIKE '%FALGU%' THEN 'FALGU'
+                WHEN UPPER(TRIM(COALESCE({$alias}.program, ''))) IN ('GROWTH EQUITY FUND', 'GEF') THEN 'GEF'
+                WHEN UPPER(TRIM(COALESCE({$alias}.program, ''))) IN ('SUPPORT TO THE BARANGAY DEVELOPMENT PROGRAM', 'SBDP') THEN 'SBDP'
                 WHEN TRIM(COALESCE({$alias}.program, '')) <> '' THEN UPPER(TRIM(COALESCE({$alias}.program, '')))
                 ELSE 'UNSPECIFIED'
             END

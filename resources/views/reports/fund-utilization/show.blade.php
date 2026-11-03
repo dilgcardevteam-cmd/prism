@@ -3489,8 +3489,8 @@
 
                 return true;
             } catch (error) {
-                console.warn('In-place refresh encountered an error, falling back to full reload:', error);
-                window.location.reload();
+                console.error('In-place refresh failed:', error);
+                showToast('Upload completed, but the document list could not be updated. Please try again.', 'error');
                 return false;
             }
         }
@@ -3793,6 +3793,7 @@
                     form.addEventListener('submit', function(event) {
                         if (form.dataset.batchUploadConfirmed === '1') {
                             delete form.dataset.batchUploadConfirmed;
+                            form.dataset.batchUploadConfirmationPassed = '1';
                             return;
                         }
 
@@ -3826,6 +3827,93 @@
                         batchInput.click();
                     });
                 });
+            });
+        }
+
+        function initializeDocumentUploadAjax() {
+            if (document.documentElement.dataset.documentUploadAjaxBound === '1') {
+                return;
+            }
+
+            document.documentElement.dataset.documentUploadAjaxBound = '1';
+            document.addEventListener('submit', async function(event) {
+                const form = event.target;
+                if (!(form instanceof HTMLFormElement) || !/\/upload-(mov|batch-document|written-notice|fdp)(?:$|[?#])/.test(form.action)) {
+                    return;
+                }
+
+                if (
+                    form.matches('[data-batch-upload-form="1"]')
+                    && form.dataset.batchUploadSubmitBound === '1'
+                    && form.dataset.batchUploadConfirmationPassed !== '1'
+                ) {
+                    return;
+                }
+                delete form.dataset.batchUploadConfirmationPassed;
+
+                event.preventDefault();
+                if (form.dataset.submitting === '1') {
+                    return;
+                }
+
+                const fileInputs = Array.from(form.querySelectorAll('input[type="file"]'));
+                const selectedFiles = fileInputs.filter((input) => input.files && input.files.length > 0);
+                if (selectedFiles.length === 0) {
+                    showToast('Choose a document before submitting.', 'error');
+                    return;
+                }
+
+                form.dataset.submitting = '1';
+                const submitButton = event.submitter instanceof HTMLButtonElement
+                    ? event.submitter
+                    : form.querySelector('button[type="submit"], input[type="submit"]');
+                const originalButtonContent = submitButton instanceof HTMLButtonElement ? submitButton.innerHTML : '';
+                if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = true;
+                    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: new FormData(form),
+                    });
+                    let payload = null;
+                    try {
+                        payload = await response.json();
+                    } catch (error) {
+                        payload = null;
+                    }
+
+                    if (!response.ok) {
+                        const validationMessage = payload?.errors
+                            ? Object.values(payload.errors).flat().find((message) => typeof message === 'string')
+                            : null;
+                        throw new Error(
+                            (typeof payload?.message === 'string' && payload.message.trim())
+                                || validationMessage
+                                || 'Document upload failed. Please try again.'
+                        );
+                    }
+
+                    showToast(payload?.message || 'Document uploaded successfully.', 'success');
+                    const targetCardId = selectedFiles[0].closest('[id^="doc-card-"]')?.id || null;
+                    void refreshPagePreservingState(targetCardId);
+                } catch (error) {
+                    console.error('Document upload failed:', error);
+                    showToast(error.message || 'Document upload failed. Please try again.', 'error');
+                } finally {
+                    form.dataset.submitting = '0';
+                    if (submitButton instanceof HTMLButtonElement) {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalButtonContent;
+                    }
+                }
             });
         }
 
@@ -3893,11 +3981,13 @@
 
         document.addEventListener('DOMContentLoaded', initializeUploadStyling);
         document.addEventListener('DOMContentLoaded', initializeBatchUploadConfirmation);
+        document.addEventListener('DOMContentLoaded', initializeDocumentUploadAjax);
         document.addEventListener('DOMContentLoaded', initializeCustomConfirmationBypass);
         document.addEventListener('DOMContentLoaded', restoreFurAccordionState);
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             initializeUploadStyling();
             initializeBatchUploadConfirmation();
+            initializeDocumentUploadAjax();
             initializeCustomConfirmationBypass();
             restoreFurAccordionState();
         }

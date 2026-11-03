@@ -54,8 +54,22 @@
         .dashboard-filter-reset { grid-column: 3; display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
         .dashboard-filter-reset-link { height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #003a99 0%, #002c76 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px; box-shadow: 0 4px 10px rgba(0, 44, 118, 0.18); transition: box-shadow 0.18s ease, transform 0.18s ease; }
         .dashboard-filter-reset-link:hover { box-shadow: 0 6px 14px rgba(0, 44, 118, 0.24); transform: translateY(-1px); }
+        .dashboard-filter-export-link { height: 34px; min-width: 150px; border-radius: 7px; background: linear-gradient(180deg, #059669 0%, #047857 100%); color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px; box-shadow: 0 4px 10px rgba(5, 150, 105, 0.18); transition: box-shadow 0.18s ease, transform 0.18s ease; }
+        .dashboard-filter-export-link:hover { box-shadow: 0 6px 14px rgba(5, 150, 105, 0.24); transform: translateY(-1px); }
         .dashboard-filter-apply-btn { height: 34px; min-width: 150px; border-radius: 7px; border: 0; background: linear-gradient(180deg, #1d4ed8 0%, #1e3a8a 100%); color: #ffffff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(29, 78, 216, 0.22); transition: box-shadow 0.18s ease, transform 0.18s ease; }
         .dashboard-filter-apply-btn:hover { background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%); box-shadow: 0 6px 14px rgba(29, 78, 216, 0.28); transform: translateY(-1px); }
+        .rpmes-analysis { margin: 0 0 20px; }
+        .rpmes-analysis-summary, .rpmes-analysis-quarters { display: grid; gap: 12px; }
+        .rpmes-analysis-summary { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); margin-bottom: 14px; }
+        .rpmes-analysis-quarters { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+        .rpmes-analysis-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(15, 23, 42, .05); }
+        .rpmes-analysis-label { color: #6b7280; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+        .rpmes-analysis-value { color: #1f2937; font-size: 24px; font-weight: 800; line-height: 1.2; margin-top: 5px; }
+        .rpmes-quarter-card { display: flex; align-items: center; gap: 14px; }
+        .rpmes-quarter-ring { width: 76px; height: 76px; flex: 0 0 76px; border-radius: 50%; display: grid; place-items: center; }
+        .rpmes-quarter-ring-inner { width: 58px; height: 58px; border-radius: 50%; background: #fff; display: grid; place-items: center; color: #166534; font-size: 13px; font-weight: 800; }
+        .rpmes-quarter-breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 7px; color: #6b7280; font-size: 10px; }
+        .rpmes-quarter-breakdown strong { color: #374151; }
         @media (max-width: 1100px) { .dashboard-filter-grid { grid-template-columns: repeat(2, minmax(200px, 1fr)); } .dashboard-filter-reset { grid-column: auto; justify-content: flex-start; } }
         @media (max-width: 700px) { .dashboard-filter-grid { grid-template-columns: 1fr; } .dashboard-filter-reset-link, .dashboard-filter-apply-btn { width: 100%; } }
     </style>
@@ -63,6 +77,56 @@
     <div class="content-header">
         <h1>{{ $formMeta['list_heading'] }}</h1>
     </div>
+
+    @if(!empty($formMeta['show_submission_analysis']))
+        @php
+            $analysisOverall = $submissionAnalysis['overall'] ?? [];
+            $analysisQuarters = $submissionAnalysis['quarters'] ?? [];
+            $analysisCards = [
+                ['Unique Projects', $analysisOverall['total_projects'] ?? 0, '#1e3a8a'],
+                ['Quarterly Reports Submitted', $analysisOverall['submitted'] ?? 0, '#0369a1'],
+                ['Approved Reports', $analysisOverall['approved'] ?? 0, '#15803d'],
+                ['Reports Awaiting Validation', $analysisOverall['pending_validation'] ?? 0, '#b45309'],
+                ['Returned Reports', $analysisOverall['returned'] ?? 0, '#b91c1c'],
+            ];
+        @endphp
+        <section class="rpmes-analysis" aria-label="RPMES Form 2 submission analysis">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+                <h2 style="margin: 0; color: #1f2937; font-size: 16px; font-weight: 800;">Quarterly Submission Analysis</h2>
+                <span style="color: #6b7280; font-size: 11px;">Unique project count; report totals are across {{ number_format((int) ($analysisOverall['total_periods'] ?? 0)) }} quarterly project-report slots · {{ number_format($analysisOverall['submission_rate'] ?? 0, 1) }}% submitted</span>
+            </div>
+            <div class="rpmes-analysis-summary">
+                @foreach($analysisCards as [$label, $value, $color])
+                    <div class="rpmes-analysis-card">
+                        <div class="rpmes-analysis-label">{{ $label }}</div>
+                        <div class="rpmes-analysis-value" style="color: {{ $color }};">{{ number_format((int) $value) }}</div>
+                    </div>
+                @endforeach
+            </div>
+            <div class="rpmes-analysis-quarters">
+                @foreach(['Q1' => 'Quarter 1', 'Q2' => 'Quarter 2', 'Q3' => 'Quarter 3', 'Q4' => 'Quarter 4'] as $quarterCode => $quarterLabel)
+                    @php
+                        $quarterData = $analysisQuarters[$quarterCode] ?? [];
+                        $approvalRate = (float) ($quarterData['approval_rate'] ?? 0);
+                    @endphp
+                    <div class="rpmes-analysis-card rpmes-quarter-card">
+                        <div class="rpmes-quarter-ring" style="background: conic-gradient(#16a34a {{ $approvalRate }}%, #e5e7eb 0);">
+                            <div class="rpmes-quarter-ring-inner">{{ number_format($approvalRate, 1) }}%</div>
+                        </div>
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="color: #1e3a8a; font-size: 12px; font-weight: 800; text-transform: uppercase;">{{ $quarterLabel }}</div>
+                            <div style="color: #6b7280; font-size: 10px; margin-top: 2px;">approved of {{ number_format((int) ($quarterData['total'] ?? 0)) }} projects</div>
+                            <div class="rpmes-quarter-breakdown">
+                                <span>Submitted <strong>{{ number_format((int) ($quarterData['submitted'] ?? 0)) }}</strong></span>
+                                <span>Pending <strong>{{ number_format((int) ($quarterData['pending_validation'] ?? 0)) }}</strong></span>
+                                <span>Returned <strong>{{ number_format((int) ($quarterData['returned'] ?? 0)) }}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     <form method="GET" action="{{ route($formMeta['index_route']) }}" class="dashboard-card project-filter-form collapsed">
         <input type="hidden" name="per_page" value="{{ $perPage ?? 15 }}">
@@ -138,6 +202,9 @@
                 </div>
 
                 <div class="dashboard-filter-reset">
+                    @if(!empty($formMeta['export_route']))
+                        <a href="{{ route($formMeta['export_route'], $filters) }}" class="dashboard-filter-export-link"><i class="fas fa-file-export" aria-hidden="true"></i> Export Report</a>
+                    @endif
                     <a href="{{ route($formMeta['index_route']) }}" class="dashboard-filter-reset-link"><i class="fas fa-rotate-left" aria-hidden="true"></i> Reset Filter</a>
                     <button type="submit" class="dashboard-filter-apply-btn"><i class="fas fa-check" aria-hidden="true"></i> Apply Filter</button>
                 </div>

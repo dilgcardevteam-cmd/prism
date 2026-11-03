@@ -4,12 +4,13 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class PagasaTimeService
 {
     private const PAGASA_URL = 'https://oras.pagasa.dost.gov.ph/';
-    private const CACHE_KEY = 'pagasa_time_offset';
+    private const CACHE_KEY = 'pagasa_time_offset_signed_v2';
     private const CACHE_DURATION = 3600; // 1 hour
 
     /**
@@ -20,24 +21,7 @@ class PagasaTimeService
      */
     public static function getCurrentTime(): Carbon
     {
-        try {
-            // Try to fetch from PAGASA
-            $response = Http::timeout(5)
-                ->retry(2, 100)
-                ->get(self::PAGASA_URL);
-
-            if ($response->successful()) {
-                $time = self::parsePageTime($response->body());
-                if ($time) {
-                    return $time;
-                }
-            }
-        } catch (\Exception $e) {
-            Log::warning('PAGASA time fetch failed: ' . $e->getMessage());
-        }
-
-        // Fallback to system time
-        return Carbon::now('Asia/Manila');
+        return Carbon::now('Asia/Manila')->addSeconds(self::getTimeOffset());
     }
 
     /**
@@ -84,15 +68,42 @@ class PagasaTimeService
      */
     public static function getTimeOffset(): int
     {
-        return \Illuminate\Support\Facades\Cache::remember(
-            self::CACHE_KEY,
-            self::CACHE_DURATION,
-            function () {
-                $pagasaTime = self::getCurrentTime();
-                $systemTime = Carbon::now('Asia/Manila');
-                return $pagasaTime->diffInSeconds($systemTime);
+        try {
+            $cachedOffset = Cache::get(self::CACHE_KEY);
+            if (is_numeric($cachedOffset)) {
+                return (int) $cachedOffset;
             }
-        );
+        } catch (\Throwable $exception) {
+            Log::warning('PAGASA time offset cache read failed: ' . $exception->getMessage());
+        }
+
+        try {
+            $response = Http::connectTimeout(2)
+                ->timeout(3)
+                ->get(self::PAGASA_URL);
+
+            if (!$response->successful()) {
+                return 0;
+            }
+
+            $pagasaTime = self::parsePageTime($response->body());
+            if (!$pagasaTime) {
+                return 0;
+            }
+
+            $offset = $pagasaTime->getTimestamp() - Carbon::now('Asia/Manila')->getTimestamp();
+
+            try {
+                Cache::put(self::CACHE_KEY, $offset, self::CACHE_DURATION);
+            } catch (\Throwable $exception) {
+                Log::warning('PAGASA time offset cache write failed: ' . $exception->getMessage());
+            }
+
+            return $offset;
+        } catch (\Throwable $exception) {
+            Log::warning('PAGASA time fetch failed: ' . $exception->getMessage());
+            return 0;
+        }
     }
 
     /**
@@ -113,6 +124,6 @@ class PagasaTimeService
      */
     public static function clearCache(): void
     {
-        \Illuminate\Support\Facades\Cache::forget(self::CACHE_KEY);
+        Cache::forget(self::CACHE_KEY);
     }
 }

@@ -509,7 +509,11 @@ class SystemManagementController extends Controller
             $displayName = basename($storedPath);
         }
 
-        return back()->with('success', "Loaded {$inserted} rows from {$displayName}.");
+        $successMessage = $dataTable === 'subay_project_profiles'
+            ? "Synchronized {$inserted} projects from {$displayName}."
+            : "Loaded {$inserted} rows from {$displayName}.";
+
+        return back()->with('success', $successMessage);
     }
 
     public function deleteSubaybayanImport(Request $request, $importId)
@@ -1021,16 +1025,20 @@ class SystemManagementController extends Controller
             }
 
             foreach ($projectRows as $projectCode => $row) {
-                $this->upsertProjectProfileRow($dataTable, $projectCode, $row, $now);
+                $this->upsertProjectProfileRow($dataTable, $projectCode, $row, $now, $uploadPage);
             }
 
             if ($dataTable === 'subay_project_profiles') {
+                if ($projectRows === []) {
+                    throw new \RuntimeException('No rows with valid project codes were found; existing SubayBAYAN data was left unchanged.');
+                }
+                $this->removeProjectsMissingFromSnapshot($uploadPage, $projectRows);
                 $this->refreshSubayDerivedColumnsForScope($uploadPage);
             }
 
             $this->synchronizeProjectMetadata($projectRows);
 
-            return $processed;
+            return $dataTable === 'subay_project_profiles' ? count($projectRows) : $processed;
         });
     }
 
@@ -1060,11 +1068,14 @@ class SystemManagementController extends Controller
         }
     }
 
-    private function upsertProjectProfileRow(string $dataTable, string $projectCode, array $row, $now): void
+    private function upsertProjectProfileRow(string $dataTable, string $projectCode, array $row, $now, array $uploadPage): void
     {
-        $matchingRows = DB::table($dataTable)
-            ->whereRaw('LOWER(TRIM(project_code)) = ?', [$projectCode])
-            ->get(['id']);
+        $matchingRowsQuery = DB::table($dataTable)
+            ->whereRaw('LOWER(TRIM(project_code)) = ?', [$projectCode]);
+        if ($dataTable === 'subay_project_profiles') {
+            $this->applySubayDatasetScope($matchingRowsQuery, $uploadPage);
+        }
+        $matchingRows = $matchingRowsQuery->get(['id']);
 
         if ($matchingRows->isEmpty()) {
             $row['created_at'] = $now;
@@ -1073,15 +1084,71 @@ class SystemManagementController extends Controller
             return;
         }
 
-        $updates = $this->nonBlankImportValues($row);
-        unset($updates['project_code'], $updates['created_at']);
+        $updates = $dataTable === 'subay_project_profiles'
+            ? $row
+            : $this->nonBlankImportValues($row);
+        unset($updates['id'], $updates['created_at'], $updates['updated_at']);
+        if ($dataTable === 'subay_project_profiles') {
+            $updates['project_code'] = trim((string) ($row['project_code'] ?? ''));
+        } else {
+            unset($updates['project_code']);
+        }
         $updates['updated_at'] = $now;
 
-        if (count($updates) > 1) {
-            DB::table($dataTable)
-                ->whereRaw('LOWER(TRIM(project_code)) = ?', [$projectCode])
-                ->update($updates);
+        $updateQuery = DB::table($dataTable)
+            ->whereRaw('LOWER(TRIM(project_code)) = ?', [$projectCode]);
+        if ($dataTable === 'subay_project_profiles') {
+            $this->applySubayDatasetScope($updateQuery, $uploadPage);
         }
+        $updateQuery->update($updates);
+    }
+
+    private function removeProjectsMissingFromSnapshot(array $uploadPage, array $projectRows): void
+    {
+        $existingRowsQuery = DB::table('subay_project_profiles');
+        $this->applySubayDatasetScope($existingRowsQuery, $uploadPage);
+
+        $existingRows = $existingRowsQuery
+            ->whereNotNull('project_code')
+            ->whereRaw("TRIM(COALESCE(project_code, '')) <> ''")
+            ->orderBy('id')
+            ->get(['id', 'project_code']);
+
+        $incomingCodes = array_fill_keys(array_keys($projectRows), true);
+        $retainedCodes = [];
+        $idsToDelete = [];
+
+        foreach ($existingRows as $existingRow) {
+            $projectCode = $this->normalizeProjectCode($existingRow->project_code);
+            if (!isset($incomingCodes[$projectCode]) || isset($retainedCodes[$projectCode])) {
+                $idsToDelete[] = (int) $existingRow->id;
+                continue;
+            }
+
+            $retainedCodes[$projectCode] = true;
+        }
+
+        foreach (array_chunk($idsToDelete, 500) as $idChunk) {
+            DB::table('subay_project_profiles')->whereIn('id', $idChunk)->delete();
+        }
+    }
+
+    private function applySubayDatasetScope($query, array $uploadPage): void
+    {
+        $query->whereRaw($this->subayDatasetScopeSql((string) ($uploadPage['snapshotScope'] ?? 'subaybayan')));
+    }
+
+    private function subayDatasetScopeSql(string $scope): string
+    {
+        return match ($scope) {
+            'sglgif' => "UPPER(TRIM(COALESCE(program, ''))) = 'SGLGIF'",
+            'subaybayan_2025_above' => "subaybayan_dataset_group = '2025_above'",
+            default => "(
+                (program IS NULL OR UPPER(TRIM(COALESCE(program, ''))) <> 'SGLGIF')
+                AND
+                (subaybayan_dataset_group IS NULL OR subaybayan_dataset_group <> '2025_above')
+            )",
+        };
     }
 
     private function nonBlankImportValues(array $row): array
@@ -1615,15 +1682,7 @@ class SystemManagementController extends Controller
         $scope = (string) ($uploadPage['snapshotScope'] ?? 'subaybayan');
         $dateExpression = $this->subayParsedDateExpression('date');
 
-        $whereClause = match ($scope) {
-            'sglgif' => "UPPER(TRIM(COALESCE(program, ''))) = 'SGLGIF'",
-            'subaybayan_2025_above' => "subaybayan_dataset_group = '2025_above'",
-            default => "(
-                (program IS NULL OR UPPER(TRIM(COALESCE(program, ''))) <> 'SGLGIF')
-                AND
-                (subaybayan_dataset_group IS NULL OR subaybayan_dataset_group <> '2025_above')
-            )",
-        };
+        $whereClause = $this->subayDatasetScopeSql($scope);
 
         DB::statement("
             UPDATE subay_project_profiles

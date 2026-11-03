@@ -133,6 +133,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/reports/quarterly/rpmes/form-2', [App\Modules\ReportorialRequirements\Controllers\QuarterlyRpmesForm2Controller::class, 'index'])
         ->name('reports.quarterly.rpmes.form-2');
+    Route::get('/reports/quarterly/rpmes/form-2/export', [App\Modules\ReportorialRequirements\Controllers\QuarterlyRpmesForm2Controller::class, 'export'])
+        ->name('reports.quarterly.rpmes.form-2.export');
     Route::post('/reports/quarterly/rpmes/form-2/{projectCode}/upload', [App\Modules\ReportorialRequirements\Controllers\QuarterlyRpmesForm2Controller::class, 'upload'])
         ->name('reports.quarterly.rpmes.form-2.upload');
     Route::post('/reports/quarterly/rpmes/form-2/{projectCode}/approve/{quarter}', [App\Modules\ReportorialRequirements\Controllers\QuarterlyRpmesForm2Controller::class, 'approveDocument'])

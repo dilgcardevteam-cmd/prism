@@ -3265,7 +3265,12 @@ class FundUtilizationReportController extends Controller
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
+        $expectsJson = $request->expectsJson() || $request->ajax();
         if (!$this->canUploadFundUtilizationDocuments($user)) {
+            if ($expectsJson) {
+                return response()->json(['message' => 'Only LGU User and DILG Provincial Office users can upload documents.'], 403);
+            }
+
             return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'mov'])->withErrors([
                 'mov_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
@@ -3312,6 +3317,10 @@ class FundUtilizationReportController extends Controller
                     Storage::disk('public')->delete($path);
                 }
 
+                if ($expectsJson) {
+                    return response()->json(['message' => $exception->getMessage()], 500);
+                }
+
                 return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'mov'])->withErrors([
                     'mov_file' => $exception->getMessage(),
                 ]);
@@ -3322,6 +3331,10 @@ class FundUtilizationReportController extends Controller
             }
         }
 
+        if ($expectsJson) {
+            return response()->json(['message' => 'MOV file uploaded successfully.']);
+        }
+
         return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'mov'])->with('success', 'MOV file uploaded successfully.');
     }
 
@@ -3330,7 +3343,12 @@ class FundUtilizationReportController extends Controller
      */
     public function uploadBatchDocument(FundUtilizationBatchDocumentUploadRequest $request, $projectCode, FundUtilizationWorkflowService $workflowService)
     {
+        $expectsJson = $request->expectsJson() || $request->ajax();
         if (!$this->canUploadFundUtilizationDocuments(Auth::user())) {
+            if ($expectsJson) {
+                return response()->json(['message' => 'Only LGU User and DILG Provincial Office users can upload documents.'], 403);
+            }
+
             return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'batch-document'])->withErrors([
                 'batch_document_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
@@ -3360,8 +3378,23 @@ class FundUtilizationReportController extends Controller
                     }
                 }
 
+                if ($expectsJson) {
+                    Log::error('Fund utilization batch document upload failed.', [
+                        'project_code' => $projectCode,
+                        'quarter' => $request->quarter,
+                        'user_id' => Auth::id(),
+                        'message' => $exception->getMessage(),
+                    ]);
+
+                    return response()->json(['message' => $exception->getMessage() ?: 'Batch document upload failed. Please try again.'], 500);
+                }
+
                 throw $exception;
             }
+        }
+
+        if ($expectsJson) {
+            return response()->json(['message' => 'Batch Documents files uploaded successfully.']);
         }
 
         return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'batch-document'])->with('success', 'Batch Documents files uploaded successfully.');
@@ -4082,7 +4115,12 @@ class FundUtilizationReportController extends Controller
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
+        $expectsJson = $request->expectsJson() || $request->ajax();
         if (!$this->canUploadFundUtilizationDocuments($user)) {
+            if ($expectsJson) {
+                return response()->json(['message' => 'Only LGU User and DILG Provincial Office users can upload documents.'], 403);
+            }
+
             return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'written-notice-dbm'])->withErrors([
                 'written_notice' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
@@ -4150,6 +4188,10 @@ class FundUtilizationReportController extends Controller
                     }
                 }
 
+                if ($expectsJson) {
+                    return response()->json(['message' => $exception->getMessage()], 500);
+                }
+
                 return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'written-notice-dbm'])->withErrors([
                     'written_notice' => $exception->getMessage(),
                 ]);
@@ -4165,6 +4207,10 @@ class FundUtilizationReportController extends Controller
             }
         }
 
+        if ($expectsJson) {
+            return response()->json(['message' => 'Written Notice files uploaded successfully.']);
+        }
+
         return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'written-notice-dbm'])->with('success', 'Written Notice files uploaded successfully.');
     }
 
@@ -4175,7 +4221,12 @@ class FundUtilizationReportController extends Controller
     {
         $report = $this->getReportOrLfpProject($projectCode);
         $user = Auth::user();
+        $expectsJson = $request->expectsJson() || $request->ajax();
         if (!$this->canUploadFundUtilizationDocuments($user)) {
+            if ($expectsJson) {
+                return response()->json(['message' => 'Only LGU User and DILG Provincial Office users can upload documents.'], 403);
+            }
+
             return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'fdp'])->withErrors([
                 'fdp_file' => 'Only LGU User and DILG Provincial Office users can upload documents.',
             ]);
@@ -4223,6 +4274,10 @@ class FundUtilizationReportController extends Controller
                     Storage::disk('public')->delete($path);
                 }
 
+                if ($expectsJson) {
+                    return response()->json(['message' => $exception->getMessage()], 500);
+                }
+
                 return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'fdp'])->withErrors([
                     'fdp_file' => $exception->getMessage(),
                 ]);
@@ -4231,6 +4286,10 @@ class FundUtilizationReportController extends Controller
             if ($oldFilePath && $oldFilePath !== $record->fdp_file_path && Storage::disk('public')->exists($oldFilePath)) {
                 Storage::disk('public')->delete($oldFilePath);
             }
+        }
+
+        if ($expectsJson) {
+            return response()->json(['message' => 'FDP document uploaded successfully.']);
         }
 
         return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $request->quarter, 'document' => 'fdp'])->with('success', 'FDP document uploaded successfully.');
