@@ -79,6 +79,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/messages/{thread}/mark-read', [MessageController::class, 'markThreadRead'])->name('messages.mark-read');
     Route::post('/messages/{thread}/delete', [MessageController::class, 'deleteConversation'])->name('messages.delete');
     Route::post('/messages/{thread}/rename-group', [MessageController::class, 'renameGroup'])->name('messages.rename-group');
+    Route::post('/messages/{thread}/add-group-members', [MessageController::class, 'addGroupMembers'])->name('messages.add-group-members');
     Route::get('/messages/poll', [MessageController::class, 'poll'])->name('messages.poll');
     Route::get('/messages/conversation', [MessageController::class, 'conversation'])->name('messages.conversation');
 });

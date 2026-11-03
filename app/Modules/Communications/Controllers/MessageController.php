@@ -592,6 +592,148 @@ class MessageController extends Controller
             ->with('success', 'Group name updated.');
     }
 
+    public function addGroupMembers(Request $request, int $thread): RedirectResponse
+    {
+        if (!$this->hasMessagingSchema()) {
+            return redirect()->route('messages.index')
+                ->with('error', 'Messaging is not configured yet. Run migrations first.');
+        }
+
+        $authId = (int) Auth::id();
+        $threadId = max(0, $thread);
+        if ($threadId <= 0) {
+            return redirect()->route('messages.index')->with('error', 'Conversation not found.');
+        }
+
+        $isMember = DB::table('message_thread_members')
+            ->where('thread_id', $threadId)
+            ->where('user_id', $authId)
+            ->exists();
+
+        if (!$isMember) {
+            return redirect()->route('messages.index')->with('error', 'You are not allowed to update this conversation.');
+        }
+
+        $threadRecord = DB::table('message_threads')
+            ->where('id', $threadId)
+            ->first(['id', 'is_group']);
+        $memberCount = (int) DB::table('message_thread_members')
+            ->where('thread_id', $threadId)
+            ->count();
+
+        if (!$threadRecord || (!(bool) $threadRecord->is_group && $memberCount <= 2)) {
+            return redirect()->route('messages.index', ['thread' => $threadId])
+                ->with('error', 'Members can only be added to group conversations.');
+        }
+
+        $validated = $request->validateWithBag('groupMembers', [
+            'recipient_ids' => ['required', 'array', 'min:1'],
+            'recipient_ids.*' => [
+                'required',
+                'integer',
+                'different:' . $authId,
+                Rule::exists('tbusers', 'idno'),
+            ],
+            'group_members_open' => ['nullable', 'in:1'],
+        ]);
+
+        $requestedIds = collect($validated['recipient_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $eligibleUsers = User::query()
+            ->whereIn('idno', $requestedIds)
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhereRaw('LOWER(TRIM(status)) in (?, ?)', ['active', 'approved']);
+            })
+            ->get(['idno', 'fname', 'lname']);
+
+        if ($eligibleUsers->count() !== $requestedIds->count()) {
+            return redirect()->route('messages.index', ['thread' => $threadId])
+                ->withInput()
+                ->withErrors(['recipient_ids' => 'One or more selected users are no longer available.'], 'groupMembers');
+        }
+
+        $eligibleNamesById = $eligibleUsers->mapWithKeys(function ($user) {
+            $name = trim((string) (($user->fname ?? '') . ' ' . ($user->lname ?? '')));
+
+            return [(int) $user->idno => $name !== '' ? $name : 'Unknown User'];
+        });
+        $actor = User::query()->where('idno', $authId)->first(['fname', 'lname']);
+        $actorName = trim((string) (($actor->fname ?? '') . ' ' . ($actor->lname ?? '')));
+        $actorName = $actorName !== '' ? $actorName : 'A group member';
+
+        $result = DB::transaction(function () use ($threadId, $authId, $requestedIds, $actorName, $eligibleNamesById) {
+            DB::table('message_threads')
+                ->where('id', $threadId)
+                ->lockForUpdate()
+                ->first();
+
+            $memberIds = DB::table('message_thread_members')
+                ->where('thread_id', $threadId)
+                ->pluck('user_id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            if (!$memberIds->contains($authId)) {
+                return ['forbidden' => true, 'added' => collect(), 'members' => $memberIds];
+            }
+
+            $newMemberIds = $requestedIds->diff($memberIds)->values();
+            if ($newMemberIds->isEmpty()) {
+                return ['forbidden' => false, 'added' => $newMemberIds, 'members' => $memberIds];
+            }
+
+            $now = now();
+            DB::table('message_thread_members')->insert($newMemberIds->map(function ($memberId) use ($threadId, $now) {
+                return [
+                    'thread_id' => $threadId,
+                    'user_id' => (int) $memberId,
+                    'joined_at' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            })->all());
+
+            $allMemberIds = $memberIds->merge($newMemberIds)->unique()->values();
+            $addedMemberNames = $newMemberIds
+                ->map(fn ($memberId) => $eligibleNamesById->get((int) $memberId, 'Unknown User'))
+                ->values();
+            $message = $this->sanitizeSingleLineInput(
+                $actorName . ' added ' . $addedMemberNames->join(', ') . ' to the group.',
+                2000
+            );
+            DB::table('user_messages')->insert($allMemberIds->map(function ($recipientId) use ($threadId, $authId, $message, $now) {
+                return [
+                    'thread_id' => $threadId,
+                    'sender_id' => $authId,
+                    'recipient_id' => (int) $recipientId,
+                    'message' => $message,
+                    'read_at' => (int) $recipientId === $authId ? $now : null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            })->all());
+
+            return ['forbidden' => false, 'added' => $newMemberIds, 'members' => $allMemberIds];
+        });
+
+        if ($result['forbidden']) {
+            return redirect()->route('messages.index')->with('error', 'You are not allowed to update this conversation.');
+        }
+
+        if ($result['added']->isEmpty()) {
+            return redirect()->route('messages.index', ['thread' => $threadId])
+                ->with('error', 'The selected users are already members of this group.');
+        }
+
+        $this->broadcastThreadUpdates($result['members'], $threadId);
+
+        return redirect()->route('messages.index', ['thread' => $threadId])
+            ->with('success', 'Group members added.');
+    }
+
     public function markThreadUnread(Request $request, int $thread): RedirectResponse
     {
         if (!$this->hasMessagingSchema()) {

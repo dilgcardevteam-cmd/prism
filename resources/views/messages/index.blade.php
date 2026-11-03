@@ -11,6 +11,7 @@
     $selectedThreadId = (int) ($selectedThreadId ?? 0);
     $latestConversationId = (int) ($conversation->max('id') ?? 0);
     $renameGroupErrors = $errors->renameGroup ?? new \Illuminate\Support\MessageBag();
+    $groupMemberErrors = $errors->groupMembers ?? new \Illuminate\Support\MessageBag();
 
     $nameInitials = static function (?string $name): string {
         $parts = preg_split('/\s+/', trim((string) $name)) ?: [];
@@ -101,7 +102,17 @@
         }
     }
 
-    $groupInfoShouldOpen = $selectedIsGroup && ($renameGroupErrors->isNotEmpty() || (string) old('group_rename_open') === '1');
+    $groupInfoShouldOpen = $selectedIsGroup && (
+        $renameGroupErrors->isNotEmpty()
+        || $groupMemberErrors->isNotEmpty()
+        || (string) old('group_rename_open') === '1'
+        || (string) old('group_members_open') === '1'
+    );
+    $selectedGroupMemberIds = $selectedGroupMembers->pluck('idno')->map(fn ($id) => (int) $id);
+    $oldGroupMemberIds = collect(old('recipient_ids', []))->map(fn ($id) => (int) $id)->values();
+    $addableGroupUsers = collect($availableUsers ?? [])
+        ->reject(fn ($user) => $selectedGroupMemberIds->contains((int) $user->idno))
+        ->values();
 
     $latestConversationMessage = $conversation->last();
     $bannerAuthor = 'PRISM';
@@ -462,6 +473,68 @@
                                         <p class="msg-group-rename-error">{{ $renameGroupErrors->first('group_name') }}</p>
                                     @endif
                                 </form>
+                                <button
+                                    type="button"
+                                    class="msg-group-members-toggle"
+                                    id="msgGroupMembersToggle"
+                                    aria-controls="msgGroupAddForm"
+                                    aria-expanded="{{ $groupMemberErrors->isNotEmpty() ? 'true' : 'false' }}"
+                                >
+                                    <i class="fas fa-user-plus"></i>
+                                    <span>Add members</span>
+                                </button>
+                                <form
+                                    method="POST"
+                                    action="{{ route('messages.add-group-members', ['thread' => $selectedThreadId]) }}"
+                                    class="msg-group-add-form"
+                                    id="msgGroupAddForm"
+                                    {{ $groupMemberErrors->isEmpty() ? 'hidden' : '' }}
+                                >
+                                    @csrf
+                                    <input type="hidden" name="group_members_open" value="1">
+                                    <label class="msg-group-rename-label" for="msgGroupMemberSearch">Find people to add</label>
+                                    <input
+                                        type="search"
+                                        class="msg-group-member-search"
+                                        id="msgGroupMemberSearch"
+                                        placeholder="Search by name or position"
+                                        autocomplete="off"
+                                    >
+                                    <div class="msg-group-add-options" id="msgGroupAddOptions">
+                                        @foreach($addableGroupUsers as $user)
+                                            @php
+                                                $addMemberName = trim((string) (($user->fname ?? '') . ' ' . ($user->lname ?? '')));
+                                                $addMemberName = $addMemberName !== '' ? $addMemberName : 'Unknown User';
+                                                $addMemberPosition = trim((string) ($user->position ?: $user->office ?: 'PDMU User'));
+                                                $isOldGroupMember = $oldGroupMemberIds->contains((int) $user->idno);
+                                            @endphp
+                                            <label class="msg-group-add-option" data-search="{{ strtolower($addMemberName . ' ' . $addMemberPosition) }}">
+                                                <input
+                                                    type="checkbox"
+                                                    name="recipient_ids[]"
+                                                    value="{{ $user->idno }}"
+                                                    {{ $isOldGroupMember ? 'checked' : '' }}
+                                                >
+                                                <span>
+                                                    <strong>{{ $addMemberName }}</strong>
+                                                    <small>{{ $addMemberPosition }}</small>
+                                                </span>
+                                            </label>
+                                        @endforeach
+                                        <p class="msg-group-add-empty" id="msgGroupAddEmpty" {{ $addableGroupUsers->isNotEmpty() ? 'hidden' : '' }}>No matching people found.</p>
+                                    </div>
+                                    @if($groupMemberErrors->any())
+                                        <div class="msg-group-rename-error" role="alert">
+                                            @foreach($groupMemberErrors->all() as $error)
+                                                <p>{{ $error }}</p>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                    <div class="msg-group-add-actions">
+                                        <button type="button" class="msg-group-add-cancel" id="msgGroupAddCancel">Cancel</button>
+                                        <button type="submit" class="msg-group-add-submit">Add selected</button>
+                                    </div>
+                                </form>
                                 <div class="msg-group-info-list">
                                     @forelse($selectedGroupMembers as $member)
                                         @php
@@ -728,7 +801,7 @@
 body.msg-group-info-open{overflow:hidden}
 .msg-group-info-modal{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px}
 .msg-group-info-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.36);backdrop-filter:blur(3px)}
-.msg-group-info-dialog{position:relative;z-index:1;width:min(100%,460px);max-height:min(80vh,720px);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border-radius:24px;border:1px solid #dbe3ee;background:#fff;box-shadow:0 28px 60px rgba(15,23,42,.18)}
+.msg-group-info-dialog{position:relative;z-index:1;width:min(100%,460px);max-height:min(80vh,720px);display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);overflow:hidden;border-radius:24px;border:1px solid #dbe3ee;background:#fff;box-shadow:0 28px 60px rgba(15,23,42,.18)}
 .msg-group-info-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 18px 14px;border-bottom:1px solid #e6edf6}
 .msg-group-info-copy{display:grid;gap:4px;min-width:0}
 .msg-group-info-copy strong{font-size:18px;line-height:1.2;color:#0f172a}
@@ -745,6 +818,24 @@ body.msg-group-info-open{overflow:hidden}
 .msg-group-rename-toggle:hover{transform:translateY(-1px)}
 .msg-group-rename-toggle.is-editing{background:#002C76;color:#fff}
 .msg-group-rename-error{margin:0;color:#be123c;font-size:12px;line-height:1.4}
+.msg-group-members-toggle{display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 16px 0;padding:10px 12px;border:1px solid #cbd9eb;border-radius:12px;background:#fff;color:#002C76;font-size:12px;font-weight:800;cursor:pointer}
+.msg-group-members-toggle:hover{background:#f1f6ff}
+.msg-group-add-form{display:grid;gap:8px;padding:12px 16px;border-bottom:1px solid #e6edf6;background:#fff}
+.msg-group-add-form[hidden]{display:none}
+.msg-group-member-search{width:100%;min-width:0;border:1px solid #d6e2f0;border-radius:10px;background:#f8fbff;color:#0f172a;padding:9px 11px;font-size:12px;outline:none}
+.msg-group-member-search:focus{border-color:#8fb9ff;box-shadow:0 0 0 3px rgba(10,102,255,.10);background:#fff}
+.msg-group-add-options{display:grid;gap:5px;max-height:150px;overflow-y:auto;padding:2px;scrollbar-width:thin}
+.msg-group-add-option{display:grid;grid-template-columns:16px minmax(0,1fr);align-items:center;gap:9px;padding:8px 9px;border:1px solid #e2eaf4;border-radius:10px;background:#fff;cursor:pointer}
+.msg-group-add-option[hidden]{display:none}
+.msg-group-add-option input{width:15px;height:15px;margin:0;accent-color:#002C76}
+.msg-group-add-option span{display:grid;gap:2px;min-width:0}
+.msg-group-add-option strong{overflow:hidden;color:#0f172a;font-size:11px;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+.msg-group-add-option small{overflow:hidden;color:#64748b;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.msg-group-add-empty{margin:0;padding:10px;color:#64748b;font-size:11px;text-align:center}
+.msg-group-add-actions{display:flex;justify-content:flex-end;gap:8px}
+.msg-group-add-actions button{border:0;border-radius:9px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer}
+.msg-group-add-cancel{background:#eef2f7;color:#475569}
+.msg-group-add-submit{background:#002C76;color:#fff}
 .msg-group-info-list{display:grid;gap:8px;padding:16px;overflow-y:auto;background:#f8fbff}
 .msg-group-member-card{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:start;gap:10px;padding:10px 12px;border:1px solid #dbe5f1;border-radius:16px;background:#fff}
 .msg-group-member-avatar{width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;letter-spacing:.02em}
@@ -990,6 +1081,12 @@ body.msg-image-modal-open{overflow:hidden}
     const groupNameInput = document.getElementById('msgGroupNameInput');
     const groupRenameToggle = document.getElementById('msgGroupRenameToggle');
     const groupRenameStartsEditing = groupRenameForm?.dataset.initialEditing === '1';
+    const groupMembersToggle = document.getElementById('msgGroupMembersToggle');
+    const groupAddForm = document.getElementById('msgGroupAddForm');
+    const groupMemberSearch = document.getElementById('msgGroupMemberSearch');
+    const groupAddOptions = Array.from(document.querySelectorAll('.msg-group-add-option'));
+    const groupAddEmpty = document.getElementById('msgGroupAddEmpty');
+    const groupAddCancel = document.getElementById('msgGroupAddCancel');
 
     const setGroupRenameEditing = (editing, options = {}) => {
         const shouldFocusInput = options.focusInput === true;
@@ -1043,6 +1140,43 @@ body.msg-image-modal-open{overflow:hidden}
 
     if (groupInfoButton && groupInfoModal) {
         setGroupRenameEditing(groupRenameStartsEditing, { focusInput: false });
+
+        groupMembersToggle?.addEventListener('click', () => {
+            if (!(groupAddForm instanceof HTMLFormElement)) {
+                return;
+            }
+
+            const open = groupAddForm.hidden;
+            groupAddForm.hidden = !open;
+            groupMembersToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                groupMemberSearch?.focus();
+            }
+        });
+
+        groupMemberSearch?.addEventListener('input', () => {
+            const query = String(groupMemberSearch.value || '').trim().toLowerCase();
+            let visibleCount = 0;
+
+            groupAddOptions.forEach((option) => {
+                const matches = String(option.dataset.search || '').includes(query);
+                option.hidden = !matches;
+                if (matches) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (groupAddEmpty instanceof HTMLElement) {
+                groupAddEmpty.hidden = visibleCount > 0;
+            }
+        });
+
+        groupAddCancel?.addEventListener('click', () => {
+            if (groupAddForm instanceof HTMLFormElement) {
+                groupAddForm.hidden = true;
+            }
+            groupMembersToggle?.setAttribute('aria-expanded', 'false');
+        });
 
         groupInfoButton.addEventListener('click', () => {
             setGroupInfoOpen(true);
