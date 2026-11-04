@@ -2535,7 +2535,6 @@
                     </li>
                 </ul>
             </li>
-            @if(Auth::user()->hasCrudPermission('approval_management', 'view'))
             <li>
                 @php
                     $sidebarUser = Auth::user();
@@ -2543,7 +2542,10 @@
                     $taskMgmtReturnedCount = 0;
                     
                     if ($sidebarUser) {
-                        if ($sidebarUser instanceof \App\Models\User && ($sidebarUser->isRegionalUser() || $sidebarUser->isSuperAdmin())) {
+                        if ($sidebarUser instanceof \App\Models\User && (
+                            $sidebarUser->isRegionalUser()
+                            || ($sidebarUser->isSuperAdmin() && $sidebarUser->approvalLevel() === 'regional')
+                        )) {
                             $taskMgmtPendingCount = app(\App\Services\RegionalApprovalPoolService::class)
                                 ->pendingTasks($sidebarUser->isSuperAdmin())
                                 ->count();
@@ -2581,15 +2583,7 @@
                                 ->values();
                         }
 
-                        if ($sidebarUser->isSuperAdmin()) {
-                            $pendingTasks = $notifications->filter(fn ($n) => in_array($n['queue_key'], ['pending_provincial', 'pending_regional'], true));
-                        } elseif ($sidebarUser->isRegionalUser()) {
-                            $pendingTasks = $notifications->filter(fn ($n) => $n['queue_key'] === 'pending_regional');
-                        } elseif ($sidebarUser->isProvincialUser()) {
-                            $pendingTasks = $notifications->filter(fn ($n) => $n['queue_key'] === 'pending_provincial');
-                        } else {
-                            $pendingTasks = collect();
-                        }
+                        $pendingTasks = collect();
                         
                         $taskMgmtPendingCount = $pendingTasks->count();
                         $taskMgmtReturnedCount = $notifications->filter(fn ($n) => $n['queue_key'] === 'returned')->count();
@@ -2609,7 +2603,6 @@
                     @endif
                 </a>
             </li>
-            @endif
             @php
                 $canViewLocallyFundedProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
                 $canViewRssaProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');

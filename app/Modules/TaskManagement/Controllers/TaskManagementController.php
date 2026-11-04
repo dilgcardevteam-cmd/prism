@@ -74,7 +74,9 @@ class TaskManagementController extends Controller
         }
 
         $poolService = app(RegionalApprovalPoolService::class);
-        $pendingApprovals = $user ? $poolService->pendingTasksForUser($user) : collect();
+        $pendingApprovals = $user && $approvalLevel === 'regional'
+            ? $poolService->pendingTasksForUser($user)
+            : collect();
         $returnedDocuments = $user ? $poolService->returnedTasksForUser($user) : collect();
 
         $pendingByModule = $pendingApprovals->groupBy('module_label');

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\LpmcDocument;
+use App\Models\RolePermissionSetting;
 use App\Models\User;
 use App\Services\LguReportorialWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -12,7 +13,32 @@ class TaskManagementLocalizationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_c_mlgoo_sees_localized_approvals_pool_for_their_municipality_only(): void
+    public function test_task_management_remains_available_to_users_without_the_new_approval_permission(): void
+    {
+        RolePermissionSetting::query()->create([
+            'role' => User::ROLE_LGU,
+            'permissions' => [],
+        ]);
+        RolePermissionSetting::flushPermissionsCache();
+
+        $lguUser = User::factory()->create([
+            'role' => User::ROLE_LGU,
+            'agency' => 'LGU',
+            'province' => 'Benguet',
+            'office' => 'La Trinidad',
+            'status' => 'active',
+        ]);
+
+        $this->assertFalse($lguUser->hasCrudPermission('approval_management', 'view'));
+
+        $response = $this->actingAs($lguUser)->get(route('task-management.index'));
+
+        $response->assertOk();
+        $response->assertSee('Approval Management');
+        $response->assertSee(route('task-management.index'));
+    }
+
+    public function test_c_mlgoo_does_not_see_approval_pool_or_pending_documents(): void
     {
         $mlgooLaTrinidad = User::factory()->create([
             'role' => User::ROLE_MLGOO,
@@ -65,23 +91,52 @@ class TaskManagementLocalizationTest extends TestCase
         $response->assertSee('Level: C/MLGOO Validator');
         $response->assertSee('La Trinidad, Benguet');
 
-        // Pool title localized to C/MLGOO jurisdiction
-        $response->assertSee('C/MLGOO Approvals Pool — La Trinidad, Benguet');
-
-        // Can see assigned municipality document
+        // C/MLGOO users only see returned documents awaiting action, not pending approvals.
+        $response->assertDontSee('Approvals Pool');
         $response->assertSee('La Trinidad');
-        $response->assertSee('/local-project-monitoring-committee/La%20Trinidad/edit');
+        $response->assertDontSee('/local-project-monitoring-committee/La%20Trinidad/edit');
         $response->assertSee('target="_blank"', false);
         $response->assertDontSee('taskPageNeedsRefresh', false);
 
-        // Cannot see other municipalities
+        // Pending documents from any municipality are absent from the approval page.
         $response->assertDontSee('itogon_mep.pdf');
         $response->assertDontSee('/local-project-monitoring-committee/Itogon/edit');
         $response->assertDontSee('bangued_mep.pdf');
         $response->assertDontSee('/local-project-monitoring-committee/Bangued/edit');
     }
 
-    public function test_provincial_user_sees_localized_approvals_pool_for_their_province_only(): void
+    public function test_c_mlgoo_sees_returned_documents_for_their_assigned_office(): void
+    {
+        $mlgoo = User::factory()->create([
+            'role' => User::ROLE_MLGOO,
+            'agency' => 'DILG',
+            'province' => 'Benguet',
+            'office' => 'La Trinidad',
+            'status' => 'active',
+        ]);
+
+        LpmcDocument::create([
+            'province' => 'Benguet',
+            'office' => 'La Trinidad',
+            'year' => 2026,
+            'doc_type' => 'mep',
+            'status' => LguReportorialWorkflowService::STATUS_RETURNED,
+            'file_name' => 'returned_la_trinidad.pdf',
+            'file_path' => 'reports/returned_la_trinidad.pdf',
+            'approval_remarks' => 'CMLGOO returned this for correction',
+            'uploaded_by' => $mlgoo->idno,
+            'uploaded_at' => now(),
+        ]);
+
+        $response = $this->actingAs($mlgoo)->get(route('task-management.index'));
+
+        $response->assertOk();
+        $response->assertDontSee('Approvals Pool');
+        $response->assertSee('Returned Documents Awaiting Action — La Trinidad');
+        $response->assertSee('CMLGOO returned this for correction');
+    }
+
+    public function test_provincial_user_does_not_see_approval_pool_or_pending_documents(): void
     {
         $provincialBenguet = User::factory()->create([
             'role' => User::ROLE_PROVINCIAL,
@@ -150,20 +205,47 @@ class TaskManagementLocalizationTest extends TestCase
         $response->assertSee('Level: Provincial Validator');
         $response->assertSee('Province of Benguet');
 
-        // Pool title localized to Province
-        $response->assertSee('Provincial Approvals Pool — Benguet');
+        // Provincial users only see returned documents awaiting action, not pending approvals.
+        $response->assertDontSee('Approvals Pool');
         $response->assertSee('Unassigned Tickets Pool — Benguet');
         $response->assertSee('Returned Documents Awaiting Action — Benguet');
 
-        // Can see Benguet document awaiting Provincial validation
-        $response->assertSee('/local-project-monitoring-committee/La%20Trinidad/edit');
-
-        // Cannot see Abra document
+        // Pending documents at any approval stage are absent from the approval page.
+        $response->assertDontSee('/local-project-monitoring-committee/La%20Trinidad/edit');
         $response->assertDontSee('/local-project-monitoring-committee/Bangued/edit');
-
-        // Cannot see documents whose validation is not for provincial level (pending_ro or pending_mlgoo)
         $response->assertDontSee('/local-project-monitoring-committee/Itogon/edit');
         $response->assertDontSee('/local-project-monitoring-committee/Tuba/edit');
+    }
+
+    public function test_provincial_user_sees_returned_documents_for_their_province(): void
+    {
+        $provincialUser = User::factory()->create([
+            'role' => User::ROLE_PROVINCIAL,
+            'agency' => 'DILG',
+            'province' => 'Benguet',
+            'office' => 'Provincial Office',
+            'status' => 'active',
+        ]);
+
+        LpmcDocument::create([
+            'province' => 'Benguet',
+            'office' => 'Provincial Office',
+            'year' => 2026,
+            'doc_type' => 'mep',
+            'status' => LguReportorialWorkflowService::STATUS_RETURNED,
+            'file_name' => 'returned_benguet_plgu.pdf',
+            'file_path' => 'reports/returned_benguet_plgu.pdf',
+            'approval_remarks' => 'Provincial submission returned for correction',
+            'uploaded_by' => $provincialUser->idno,
+            'uploaded_at' => now(),
+        ]);
+
+        $response = $this->actingAs($provincialUser)->get(route('task-management.index'));
+
+        $response->assertOk();
+        $response->assertDontSee('Approvals Pool');
+        $response->assertSee('Returned Documents Awaiting Action — Benguet');
+        $response->assertSee('Provincial submission returned for correction');
     }
 
     public function test_regional_user_sees_regional_pool_and_only_pending_ro_documents(): void
@@ -499,7 +581,7 @@ class TaskManagementLocalizationTest extends TestCase
         $response->assertDontSee('/local-project-monitoring-committee/Bangued/edit');
     }
 
-    public function test_superadmin_with_provincial_office_sees_provincial_approval_pool_only(): void
+    public function test_superadmin_with_provincial_office_does_not_see_approval_pool(): void
     {
         $provincialAdmin = User::factory()->create([
             'role' => User::ROLE_SUPERADMIN,
@@ -553,19 +635,18 @@ class TaskManagementLocalizationTest extends TestCase
         $response = $this->actingAs($provincialAdmin)->get(route('task-management.index'));
         $response->assertStatus(200);
 
-        // Shows Provincial Approvals Pool — Benguet
-        $response->assertSee('Provincial Approvals Pool — Benguet');
+        // Approval pool is reserved for regional office users.
+        $response->assertDontSee('Approvals Pool');
         $response->assertDontSee('Centralized Regional Approvals Pool');
-        $response->assertDontSee('C/MLGOO Approvals Pool');
         $response->assertDontSee('All Pending System Approvals');
 
-        // Can see Benguet provincial document, not Abra or RO
-        $response->assertSee('/local-project-monitoring-committee/La%20Trinidad/edit');
+        // Pending submissions do not appear in the provincial approval page.
+        $response->assertDontSee('/local-project-monitoring-committee/La%20Trinidad/edit');
         $response->assertDontSee('/local-project-monitoring-committee/Bangued/edit');
         $response->assertDontSee('/local-project-monitoring-committee/Itogon/edit');
     }
 
-    public function test_superadmin_with_municipal_office_sees_cmlgoo_approval_pool_only(): void
+    public function test_superadmin_with_municipal_office_does_not_see_approval_pool(): void
     {
         $cmlgooAdmin = User::factory()->create([
             'role' => User::ROLE_SUPERADMIN,
@@ -603,14 +684,14 @@ class TaskManagementLocalizationTest extends TestCase
         $response = $this->actingAs($cmlgooAdmin)->get(route('task-management.index'));
         $response->assertStatus(200);
 
-        // Shows C/MLGOO Approvals Pool — La Trinidad, Benguet
-        $response->assertSee('C/MLGOO Approvals Pool — La Trinidad, Benguet');
+        // Approval pool is reserved for regional office users.
+        $response->assertDontSee('Approvals Pool');
         $response->assertDontSee('Provincial Approvals Pool');
         $response->assertDontSee('Centralized Regional Approvals Pool');
         $response->assertDontSee('All Pending System Approvals');
 
-        // Can see assigned municipality, not others
-        $response->assertSee('/local-project-monitoring-committee/La%20Trinidad/edit');
+        // Pending submissions do not appear in the C/MLGOO approval page.
+        $response->assertDontSee('/local-project-monitoring-committee/La%20Trinidad/edit');
         $response->assertDontSee('/local-project-monitoring-committee/Itogon/edit');
     }
 }

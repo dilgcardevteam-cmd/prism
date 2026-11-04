@@ -1526,7 +1526,7 @@
 @php
     $user = Auth::user();
     $approvalLevel = $approvalLevel ?? ($user ? $user->approvalLevel() : null);
-    $hasValidatorRole = $approvalLevel !== null;
+    $hasApprovalPool = $approvalLevel === 'regional';
 
     // Module icon mapper based on label/key
     $moduleIcons = [
@@ -1792,18 +1792,12 @@
             </div>
         </section>
 
-        <!-- Pool Section 1: APPROVALS POOL (Only visible to validators based on approval level office / level) -->
-        @if($hasValidatorRole)
+        <!-- Approval pool is reserved for regional validators. -->
+        @if($hasApprovalPool)
             <div class="task-pool-section">
                 <h2 class="task-pool-section-title">
                     <i class="fas fa-inbox"></i>
-                    @if($approvalLevel === 'regional')
-                        <span>Centralized Regional Approvals Pool — {{ $user->region ?: 'CAR' }}</span>
-                    @elseif($approvalLevel === 'provincial')
-                        <span>Provincial Approvals Pool — {{ $user->province ?: 'Provincial' }}</span>
-                    @elseif($approvalLevel === 'cmlgoo')
-                        <span>C/MLGOO Approvals Pool — {{ $user->office ?: 'Municipal' }}@if($user->province), {{ $user->province }}@endif</span>
-                    @endif
+                    <span>Centralized Regional Approvals Pool — {{ $user->region ?: 'CAR' }}</span>
                 </h2>
                 
                 @if($pendingByModule->isNotEmpty())
@@ -1843,15 +1837,7 @@
                         <div class="empty-icon"><i class="fas fa-circle-check" style="color: #10b981;"></i></div>
                         <div class="empty-title">All Caught Up!</div>
                         <p class="empty-desc">
-                            @if($approvalLevel === 'cmlgoo')
-                                There are no document submissions awaiting C/MLGOO validation for {{ $user->office ?: 'your assigned municipality' }}.
-                            @elseif($approvalLevel === 'provincial')
-                                There are no document submissions awaiting provincial validation for {{ $user->province ?: 'your province' }}.
-                            @elseif($approvalLevel === 'regional')
-                                There are no document submissions awaiting regional validation in the regional pool.
-                            @else
-                                There are no document submissions waiting for your approval in this pool.
-                            @endif
+                            There are no document submissions awaiting regional validation in the regional pool.
                         </p>
                     </div>
                 @endif
@@ -1994,7 +1980,7 @@
 
 <!-- MODAL DIALOGS CONTAINER -->
 <!-- A. Approvals Modals -->
-@if($hasValidatorRole && $pendingByModule->isNotEmpty())
+@if($hasApprovalPool && $pendingByModule->isNotEmpty())
     @foreach($pendingByModule as $moduleLabel => $tasks)
         @php
             $firstTask = $tasks->first();
@@ -2780,12 +2766,8 @@
                         </span>
                         <span class="batch-scope-badge-header">
                             <i class="fas fa-shield-halved"></i>
-                            @if($approvalLevel === 'regional')
+                            @if($hasApprovalPool)
                                 Regional Approvals Pool (CAR)
-                            @elseif($approvalLevel === 'provincial')
-                                Provincial Approvals Pool ({{ $user->province ?? 'CAR' }})
-                            @elseif($approvalLevel === 'cmlgoo')
-                                C/MLGOO Approvals Pool ({{ $user->office ?? 'LGU' }})
                             @else
                                 Submission Details
                             @endif
