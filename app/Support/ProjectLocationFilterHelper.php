@@ -149,7 +149,7 @@ class ProjectLocationFilterHelper
             }
 
             foreach ($cityMap as $cityLabel => $barangays) {
-                $cityBarangayMap[$cityLabel] = collect(is_array($barangays) ? $barangays : [])
+                $cleanedBarangays = collect(is_array($barangays) ? $barangays : [])
                     ->map([self::class, 'normalizeLabel'])
                     ->filter()
                     ->unique(function ($label) {
@@ -157,6 +157,10 @@ class ProjectLocationFilterHelper
                     })
                     ->values()
                     ->all();
+
+                $cityBarangayMap[$cityLabel] = $cleanedBarangays;
+                $mapKey = mb_strtolower($provinceLabel) . '|' . mb_strtolower($cityLabel);
+                $cityBarangayMap[$mapKey] = $cleanedBarangays;
             }
         }
 

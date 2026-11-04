@@ -95,10 +95,11 @@
 @endsection
 
 @section('content')
-    <div class="content-header">
-        <h1>Welcome back, {{ Auth::user()->fname ?? 'User' }}! 👋</h1>
-        <p>Project Status Summary as of {{ $subayUploadDateLabel ?? 'No SubayBAYAN upload yet' }}.</p>
-    </div>
+    <div id="dashboard-content">
+        <div class="content-header">
+            <h1>Welcome back, {{ Auth::user()->fname ?? 'User' }}! 👋</h1>
+            <p>Project Status Summary as of {{ $subayUploadDateLabel ?? 'No SubayBAYAN upload yet' }}.</p>
+        </div>
 
     @php
         $statusIconMap = [
@@ -487,16 +488,49 @@
         $selectedProjectStatusFilters = array_values($filters['project_status'] ?? []);
         $dashboardProvinceCityMap = collect($filterOptions['province_city_map'] ?? []);
         $dashboardCityBarangayMap = collect($filterOptions['city_barangay_map'] ?? []);
-        $dashboardCityOptions = collect($selectedProvinceFilters)
-            ->flatMap(fn ($province) => $dashboardProvinceCityMap->get($province, []))
-            ->concat($selectedCityFilters)
-            ->map(fn ($city) => trim((string) $city))
-            ->filter()
-            ->unique()
-            ->sort()
-            ->values();
+        $getProvinceCities = function ($provinceName) use ($dashboardProvinceCityMap) {
+            $norm = mb_strtolower(trim((string) $provinceName));
+            foreach ($dashboardProvinceCityMap as $provKey => $cities) {
+                if (mb_strtolower(trim((string) $provKey)) === $norm) {
+                    return is_array($cities) ? $cities : [];
+                }
+            }
+            return [];
+        };
+        if (!empty($selectedProvinceFilters)) {
+            $dashboardCityOptions = collect($selectedProvinceFilters)
+                ->flatMap(fn ($province) => $getProvinceCities($province))
+                ->concat($selectedCityFilters)
+                ->map(fn ($city) => trim((string) $city))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+        } else {
+            $dashboardCityOptions = collect($filterOptions['cities'] ?? [])
+                ->concat(collect($dashboardProvinceCityMap)->flatten())
+                ->concat($selectedCityFilters)
+                ->map(fn ($city) => trim((string) $city))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+        }
         $dashboardBarangayOptions = collect($selectedCityFilters)
-            ->flatMap(fn ($city) => $dashboardCityBarangayMap->get($city, []))
+            ->flatMap(function ($city) use ($dashboardCityBarangayMap, $selectedProvinceFilters) {
+                $province = count($selectedProvinceFilters) === 1 ? strtolower(trim((string) $selectedProvinceFilters[0])) : '';
+                $cityKey = $province !== '' ? ($province . '|' . strtolower(trim((string) $city))) : strtolower(trim((string) $city));
+
+                $barangays = $dashboardCityBarangayMap->get($cityKey);
+                if (empty($barangays)) {
+                    $barangays = $dashboardCityBarangayMap->get(strtolower(trim((string) $city)), []);
+                }
+                if (empty($barangays)) {
+                    $barangays = $dashboardCityBarangayMap->get(trim((string) $city), []);
+                }
+
+                return is_array($barangays) ? $barangays : [];
+            })
             ->concat($selectedBarangayFilters)
             ->map(fn ($barangay) => trim((string) $barangay))
             ->filter()
@@ -669,9 +703,10 @@
                     </div>
 
                     <div class="dashboard-filter-reset" style="grid-column: span 2; display: flex; align-items: end; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                        <span style="color: #6b7280; font-size: 12px; margin-right: auto;">Dashboard updates automatically when a filter changes.</span>
                         <button type="submit" class="dashboard-filter-apply-btn" style="height: 38px; min-width: 170px; border-radius: 8px; padding: 0 18px;">
                             <i class="fas fa-filter" aria-hidden="true"></i>
-                            Apply Filter
+                            Update Now
                         </button>
                         <a href="{{ route('dashboard', ['tab' => $activeProjectTab]) }}" class="dashboard-filter-reset-link" style="height: 38px; min-width: 170px; border-radius: 8px; padding: 0 18px;">
                             Reset Filter
@@ -4925,8 +4960,9 @@
         const STATUS_LOCATION_EXPORT_ROWS = @json($statusSubaybayanLocationReport ?? []);
         const PROVINCE_FUNDING_YEAR_PROGRAM_STATUS_EXPORT_ROWS = @json($provinceFundingYearProgramStatusReport ?? []);
         const STATUS_LOCATION_EXPORT_STATUSES = @json($statusDisplayOrder ?? array_keys($statusSubaybayanCounts ?? []));
-        const DASHBOARD_PROVINCE_CITY_OPTIONS = @json($filterOptions['province_city_map'] ?? []);
-        const DASHBOARD_CITY_BARANGAY_OPTIONS = @json($filterOptions['city_barangay_map'] ?? []);
+        let DASHBOARD_PROVINCE_CITY_OPTIONS = @json($filterOptions['province_city_map'] ?? []);
+        let DASHBOARD_CITY_BARANGAY_OPTIONS = @json($filterOptions['city_barangay_map'] ?? []);
+        const DASHBOARD_CONFIGURED_LOCATION_HIERARCHY = @json(\App\Support\ProjectLocationFilterHelper::buildConfiguredLocationHierarchy());
         const EXCEL_MAX_CELL_TEXT_LENGTH = 32767;
         const truncateExcelCellText = (rawValue) => {
             const stringValue = String(rawValue ?? '');
@@ -6095,10 +6131,12 @@
             const provinceSelect = document.getElementById('province');
             const citySelect = document.getElementById('city_municipality');
             const barangaySelect = document.getElementById('barangay');
-            const cityStackedFilter = document.querySelector('[data-stacked-filter][data-source-select-id="city_municipality"]');
-            const barangayStackedFilter = document.querySelector('[data-stacked-filter][data-source-select-id="barangay"]');
+            const programSelect = document.getElementById('program');
+            const typeSelect = document.getElementById('project_type');
+            const statusSelect = document.getElementById('project_status');
+            const fundingYearMenu = document.getElementById('funding-year-dropdown-menu');
 
-            if (!provinceSelect || !citySelect || !barangaySelect || !cityStackedFilter || !barangayStackedFilter) {
+            if (!provinceSelect || !citySelect || !barangaySelect) {
                 return;
             }
 
@@ -6106,127 +6144,305 @@
                 return;
             }
 
-            const rebuildBarangayOptions = () => {
-                const selectedCityOptions = Array.from(citySelect.selectedOptions || [])
-                    .map((optionEl) => String(optionEl.value || '').trim())
-                    .filter((value) => value !== '');
-                const selectedCityValueSet = new Set(selectedCityOptions);
-                const selectedCityValues = Array.isArray(citySelect.__selectionOrder)
-                    ? citySelect.__selectionOrder.filter((value) => selectedCityValueSet.has(value))
-                    : selectedCityOptions;
-                const selectedBarangayValues = new Set(
-                    Array.from(barangaySelect.selectedOptions || [])
-                        .map((optionEl) => String(optionEl.value || '').trim())
-                        .filter((value) => value !== '')
-                );
-                const orderedBarangays = [];
-                const seenBarangays = new Set();
+            const rebuildBarangayOptions = (preserveValue, newBarangayList = null) => {
+                const provinceValue = String(provinceSelect.value || '').trim().toLowerCase();
+                const cityValue = String(citySelect.value || '').trim().toLowerCase();
+                const selectedBarangayValue = String(preserveValue !== undefined ? preserveValue : (barangaySelect.value || '')).trim();
+                const mapKey = `${provinceValue}|${cityValue}`;
+                let barangays = [];
 
-                selectedCityValues.forEach((cityValue) => {
-                    const barangays = Array.isArray(DASHBOARD_CITY_BARANGAY_OPTIONS?.[cityValue])
-                        ? DASHBOARD_CITY_BARANGAY_OPTIONS[cityValue]
-                        : [];
-
-                    barangays.forEach((barangayValue) => {
-                        const normalizedBarangay = String(barangayValue || '').trim();
-                        if (normalizedBarangay === '') {
-                            return;
+                if (Array.isArray(newBarangayList)) {
+                    barangays = newBarangayList;
+                } else if (cityValue) {
+                    if (Array.isArray(DASHBOARD_CITY_BARANGAY_OPTIONS?.[mapKey])) {
+                        barangays = DASHBOARD_CITY_BARANGAY_OPTIONS[mapKey];
+                    } else if (Array.isArray(DASHBOARD_CITY_BARANGAY_OPTIONS?.[cityValue])) {
+                        barangays = DASHBOARD_CITY_BARANGAY_OPTIONS[cityValue];
+                    } else {
+                        for (const [k, v] of Object.entries(DASHBOARD_CITY_BARANGAY_OPTIONS || {})) {
+                            if (k.toLowerCase() === mapKey || k.toLowerCase() === cityValue) {
+                                barangays = Array.isArray(v) ? v : [];
+                                break;
+                            }
                         }
+                    }
+                }
 
-                        const dedupeKey = normalizedBarangay.toLowerCase();
-                        if (seenBarangays.has(dedupeKey)) {
-                            return;
-                        }
+                const validBarangays = Array.from(new Set(barangays.filter((value) => String(value || '').trim() !== ''))).sort();
 
-                        seenBarangays.add(dedupeKey);
-                        orderedBarangays.push(normalizedBarangay);
-                    });
-                });
-
-                barangaySelect.innerHTML = '';
-                orderedBarangays.forEach((barangayValue) => {
+                barangaySelect.replaceChildren(new Option('All', ''));
+                validBarangays.forEach((barangayValue) => {
                     const optionEl = document.createElement('option');
                     optionEl.value = barangayValue;
                     optionEl.textContent = barangayValue;
-                    optionEl.selected = selectedBarangayValues.has(barangayValue);
+                    optionEl.selected = barangayValue.toLowerCase() === selectedBarangayValue.toLowerCase();
                     barangaySelect.appendChild(optionEl);
                 });
 
-                barangayStackedFilter.dataset.emptyBadgeText = selectedCityValues.length > 0
-                    ? 'All'
-                    : 'Select city/municipality first';
-                barangayStackedFilter.dataset.emptyMenuText = selectedCityValues.length > 0
-                    ? 'No barangay options available.'
-                    : 'Select city/municipality first.';
-
-                if (typeof barangayStackedFilter.__refreshFilterUi === 'function') {
-                    barangayStackedFilter.__refreshFilterUi();
+                if (selectedBarangayValue && validBarangays.some((b) => b.toLowerCase() === selectedBarangayValue.toLowerCase())) {
+                    const matched = validBarangays.find((b) => b.toLowerCase() === selectedBarangayValue.toLowerCase());
+                    barangaySelect.value = matched;
+                } else {
+                    barangaySelect.value = '';
                 }
             };
 
-            const rebuildCityOptions = () => {
-                const selectedProvinceOptions = Array.from(provinceSelect.selectedOptions || [])
-                    .map((optionEl) => String(optionEl.value || '').trim())
-                    .filter((value) => value !== '');
-                const selectedProvinceValueSet = new Set(selectedProvinceOptions);
-                const selectedProvinceValues = Array.isArray(provinceSelect.__selectionOrder)
-                    ? provinceSelect.__selectionOrder.filter((value) => selectedProvinceValueSet.has(value))
-                    : selectedProvinceOptions;
-                const selectedCityValues = new Set(
-                    Array.from(citySelect.selectedOptions || [])
-                        .map((optionEl) => String(optionEl.value || '').trim())
-                        .filter((value) => value !== '')
-                );
-                const orderedCities = [];
-                const seenCities = new Set();
+            const rebuildCityOptions = (preserveValue, newCityList = null) => {
+                const provinceValue = String(provinceSelect.value || '').trim();
+                const selectedCityValue = String(preserveValue !== undefined ? preserveValue : (citySelect.value || '')).trim();
+                let cities = [];
 
-                selectedProvinceValues.forEach((provinceValue) => {
-                    const cities = Array.isArray(DASHBOARD_PROVINCE_CITY_OPTIONS?.[provinceValue])
-                        ? DASHBOARD_PROVINCE_CITY_OPTIONS[provinceValue]
-                        : [];
+                if (Array.isArray(newCityList)) {
+                    cities = newCityList;
+                } else if (provinceValue) {
+                    cities = Object.entries(DASHBOARD_PROVINCE_CITY_OPTIONS || {})
+                        .filter(([province]) => province.toLowerCase() === provinceValue.toLowerCase())
+                        .flatMap(([, options]) => Array.isArray(options) ? options : []);
+                } else {
+                    cities = Object.values(DASHBOARD_PROVINCE_CITY_OPTIONS || {})
+                        .flatMap((options) => Array.isArray(options) ? options : []);
+                }
 
-                    cities.forEach((cityValue) => {
-                        const normalizedCity = String(cityValue || '').trim();
-                        if (normalizedCity === '') {
-                            return;
-                        }
+                const validCities = Array.from(new Set(cities.filter((value) => String(value || '').trim() !== ''))).sort();
 
-                        const dedupeKey = normalizedCity.toLowerCase();
-                        if (seenCities.has(dedupeKey)) {
-                            return;
-                        }
-
-                        seenCities.add(dedupeKey);
-                        orderedCities.push(normalizedCity);
-                    });
-                });
-
-                citySelect.innerHTML = '';
-                orderedCities.forEach((cityValue) => {
+                citySelect.replaceChildren(new Option('All', ''));
+                validCities.forEach((cityValue) => {
                     const optionEl = document.createElement('option');
                     optionEl.value = cityValue;
                     optionEl.textContent = cityValue;
-                    optionEl.selected = selectedCityValues.has(cityValue);
+                    optionEl.selected = cityValue.toLowerCase() === selectedCityValue.toLowerCase();
                     citySelect.appendChild(optionEl);
                 });
 
-                cityStackedFilter.dataset.emptyBadgeText = selectedProvinceValues.length > 0
-                    ? 'All'
-                    : 'Select province first';
-                cityStackedFilter.dataset.emptyMenuText = selectedProvinceValues.length > 0
-                    ? 'No city/municipality options available.'
-                    : 'Select province first.';
-
-                if (typeof cityStackedFilter.__refreshFilterUi === 'function') {
-                    cityStackedFilter.__refreshFilterUi();
+                if (selectedCityValue && validCities.some((city) => city.toLowerCase() === selectedCityValue.toLowerCase())) {
+                    const matched = validCities.find((city) => city.toLowerCase() === selectedCityValue.toLowerCase());
+                    citySelect.value = matched;
+                } else {
+                    citySelect.value = '';
                 }
 
-                citySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                rebuildBarangayOptions(preserveValue !== undefined ? barangaySelect.value : '');
             };
 
-            provinceSelect.addEventListener('change', rebuildCityOptions);
-            citySelect.addEventListener('change', rebuildBarangayOptions);
-            rebuildCityOptions();
+            let cascadeTimer = null;
+            let provinceRequestSequence = 0;
+            const updateCitiesForProvince = async () => {
+                const requestSequence = ++provinceRequestSequence;
+                const provinceValue = String(provinceSelect.value || '').trim();
+
+                citySelect.replaceChildren(new Option('All', ''));
+                barangaySelect.replaceChildren(new Option('All', ''));
+                citySelect.disabled = true;
+
+                try {
+                    const params = new URLSearchParams();
+                    if (provinceValue) {
+                        params.set('province', provinceValue);
+                    }
+
+                    const response = await fetch(`{{ route('dashboard.filters') }}?${params.toString()}`, {
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`City options request failed with HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (requestSequence !== provinceRequestSequence) {
+                        return;
+                    }
+
+                    let cities = Array.isArray(data.cities) ? data.cities : [];
+                    if (cities.length === 0 && provinceValue) {
+                        const provinceEntry = Object.entries(DASHBOARD_CONFIGURED_LOCATION_HIERARCHY)
+                            .find(([label]) => label.trim().toLowerCase() === provinceValue.toLowerCase());
+                        cities = provinceEntry ? Object.keys(provinceEntry[1] || {}) : [];
+                    }
+                    cities
+                        .filter((city) => String(city || '').trim() !== '')
+                        .sort((left, right) => String(left).localeCompare(String(right)))
+                        .forEach((city) => {
+                            citySelect.appendChild(new Option(city, city));
+                        });
+
+                    if (data.province_city_map && typeof data.province_city_map === 'object') {
+                        DASHBOARD_PROVINCE_CITY_OPTIONS = data.province_city_map;
+                    }
+                    if (data.city_barangay_map && typeof data.city_barangay_map === 'object') {
+                        DASHBOARD_CITY_BARANGAY_OPTIONS = data.city_barangay_map;
+                    }
+                } catch (error) {
+                    if (requestSequence === provinceRequestSequence) {
+                        console.error('Unable to update City/Municipality options:', error);
+                    }
+                } finally {
+                    if (requestSequence === provinceRequestSequence) {
+                        citySelect.disabled = false;
+                    }
+                }
+            };
+
+            const triggerCascadeUpdate = (changedSource) => {
+                clearTimeout(cascadeTimer);
+                cascadeTimer = setTimeout(async () => {
+                    try {
+                        const params = new URLSearchParams();
+                        if (provinceSelect?.value) params.set('province', provinceSelect.value);
+                        if (citySelect?.value) params.set('city_municipality', citySelect.value);
+                        if (barangaySelect?.value) params.set('barangay', barangaySelect.value);
+                        if (programSelect?.value) params.set('program', programSelect.value);
+                        if (typeSelect?.value) params.set('project_type', typeSelect.value);
+                        if (statusSelect?.value) params.set('project_status', statusSelect.value);
+
+                        const checkedYears = Array.from(document.querySelectorAll('input[name="funding_year[]"]:checked')).map(cb => cb.value);
+                        checkedYears.forEach(y => params.append('funding_year[]', y));
+
+                        const response = await fetch(`{{ route('dashboard.filters') }}?${params.toString()}`, {
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        });
+
+                        if (!response.ok) return;
+
+                        const data = await response.json();
+
+                        // 1. Update Programs
+                        if (programSelect && changedSource !== 'program' && Array.isArray(data.programs)) {
+                            const curProgram = programSelect.value;
+                            programSelect.replaceChildren(new Option('All', ''));
+                            data.programs.forEach(prog => {
+                                const opt = new Option(prog, prog);
+                                opt.selected = prog.toLowerCase() === curProgram.toLowerCase();
+                                programSelect.appendChild(opt);
+                            });
+                            if (!data.programs.some(p => p.toLowerCase() === curProgram.toLowerCase())) {
+                                programSelect.value = '';
+                            }
+                        }
+
+                        // 2. Update Project Types
+                        if (typeSelect && changedSource !== 'project_type' && Array.isArray(data.project_types)) {
+                            const curType = typeSelect.value;
+                            typeSelect.replaceChildren(new Option('All', ''));
+                            data.project_types.forEach(pt => {
+                                const opt = new Option(pt, pt);
+                                opt.selected = pt.toLowerCase() === curType.toLowerCase();
+                                typeSelect.appendChild(opt);
+                            });
+                            if (!data.project_types.some(t => t.toLowerCase() === curType.toLowerCase())) {
+                                typeSelect.value = '';
+                            }
+                        }
+
+                        // 3. Update Project Statuses
+                        if (statusSelect && changedSource !== 'project_status' && Array.isArray(data.project_statuses)) {
+                            const curStatus = statusSelect.value;
+                            statusSelect.replaceChildren(new Option('All', ''));
+                            data.project_statuses.forEach(st => {
+                                const opt = new Option(st, st);
+                                opt.selected = st.toLowerCase() === curStatus.toLowerCase();
+                                statusSelect.appendChild(opt);
+                            });
+                            if (!data.project_statuses.some(s => s.toLowerCase() === curStatus.toLowerCase())) {
+                                statusSelect.value = '';
+                            }
+                        }
+
+                        // 4. Update Provinces (if changedSource is not province, and user has not selected a province)
+                        if (provinceSelect && !provinceSelect.value && changedSource !== 'province' && Array.isArray(data.provinces) && data.provinces.length > 0) {
+                            const curProvince = provinceSelect.value;
+                            if (params.get('program') || params.get('project_type') || params.get('project_status')) {
+                                provinceSelect.replaceChildren(new Option('All', ''));
+                                data.provinces.forEach(pr => {
+                                    const opt = new Option(pr, pr);
+                                    opt.selected = pr.toLowerCase() === curProvince.toLowerCase();
+                                    provinceSelect.appendChild(opt);
+                                });
+                                if (!data.provinces.some(p => p.toLowerCase() === curProvince.toLowerCase())) {
+                                    provinceSelect.value = '';
+                                }
+                            }
+                        }
+
+                        // 5. Update client maps from server
+                        if (data.province_city_map && typeof data.province_city_map === 'object') {
+                            DASHBOARD_PROVINCE_CITY_OPTIONS = data.province_city_map;
+                        }
+                        if (data.city_barangay_map && typeof data.city_barangay_map === 'object') {
+                            DASHBOARD_CITY_BARANGAY_OPTIONS = data.city_barangay_map;
+                        }
+
+                        // 6. Update City/Municipality options based on available projects
+                        if (citySelect && changedSource !== 'city_municipality') {
+                            const curCity = citySelect.value;
+                            const availableCities = Array.isArray(data.cities) ? data.cities : null;
+                            rebuildCityOptions(curCity, availableCities);
+                        }
+
+                        // 7. Update Barangay options based on available projects
+                        if (barangaySelect && changedSource !== 'barangay') {
+                            const curBarangay = barangaySelect.value;
+                            const availableBarangays = Array.isArray(data.barangays) ? data.barangays : null;
+                            rebuildBarangayOptions(curBarangay, availableBarangays);
+                        }
+
+                    } catch (err) {
+                        console.warn('Dashboard filter cascade update error:', err);
+                    }
+                }, 250);
+            };
+
+            citySelect.addEventListener('change', () => {
+                rebuildBarangayOptions('');
+                triggerCascadeUpdate('city_municipality');
+            });
+
+            barangaySelect.addEventListener('change', () => {
+                triggerCascadeUpdate('barangay');
+            });
+
+            if (programSelect) {
+                programSelect.addEventListener('change', () => {
+                    triggerCascadeUpdate('program');
+                });
+            }
+
+            if (typeSelect) {
+                typeSelect.addEventListener('change', () => {
+                    triggerCascadeUpdate('project_type');
+                });
+            }
+
+            if (statusSelect) {
+                statusSelect.addEventListener('change', () => {
+                    triggerCascadeUpdate('project_status');
+                });
+            }
+
+            if (fundingYearMenu) {
+                fundingYearMenu.addEventListener('change', () => {
+                    triggerCascadeUpdate('funding_year');
+                });
+            }
+
+            const initialCity = citySelect.value;
+            const initialBarangay = barangaySelect.value;
+            if (provinceSelect.value) {
+                const hasProvinceCityMap = Object.keys(DASHBOARD_PROVINCE_CITY_OPTIONS || {}).length > 0;
+                if (hasProvinceCityMap) {
+                    rebuildCityOptions(initialCity);
+                }
+                if (citySelect.value) {
+                    rebuildBarangayOptions(initialBarangay);
+                }
+            }
+
             provinceSelect.dataset.dashboardLocationDependenciesInitialized = '1';
         }
 
@@ -7277,10 +7493,207 @@
             });
         }
 
+        function refreshDashboardFromFilter(form) {
+            if (!form || form.dataset.refreshing === '1') {
+                return;
+            }
+
+            const formData = new FormData(form);
+            const query = new URLSearchParams(formData);
+            const targetUrl = `${form.action}?${query.toString()}`;
+            const content = document.getElementById('dashboard-content');
+
+            if (!content) {
+                form.submit();
+                return;
+            }
+
+            form.dataset.refreshing = '1';
+            form.setAttribute('aria-busy', 'true');
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+
+            if (window.AppUI && typeof window.AppUI.showPageLoader === 'function') {
+                window.AppUI.showPageLoader({
+                    title: 'Updating dashboard',
+                    detail: 'Loading the selected province data.',
+                });
+            }
+
+            fetch(targetUrl, {
+                headers: {
+                    Accept: 'text/html',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error(`Dashboard refresh failed with HTTP ${response.status}`);
+                    }
+
+                    return response.text();
+                })
+                .then((html) => {
+                    const parsedDocument = new DOMParser().parseFromString(html, 'text/html');
+                    const updatedContent = parsedDocument.getElementById('dashboard-content');
+                    if (!updatedContent) {
+                        throw new Error('Dashboard refresh response did not contain dashboard content');
+                    }
+
+                    content.replaceWith(updatedContent);
+                    window.history.replaceState({}, '', targetUrl);
+                    window.__dashboardPageBooted = false;
+                    bootDashboardPage();
+                })
+                .catch((error) => {
+                    console.error(error);
+                    window.alert('The dashboard could not be updated. Please try again.');
+                })
+                .finally(() => {
+                    form.dataset.refreshing = '0';
+                    form.removeAttribute('aria-busy');
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                    if (window.AppUI && typeof window.AppUI.hidePageLoader === 'function') {
+                        window.AppUI.hidePageLoader();
+                    }
+                });
+        }
+
+        if (!window.__dashboardFilterRefreshBound) {
+            window.__dashboardFilterRefreshBound = true;
+            let dashboardFilterRefreshTimer = null;
+
+            const scheduleDashboardFilterRefresh = (form) => {
+                clearTimeout(dashboardFilterRefreshTimer);
+                dashboardFilterRefreshTimer = setTimeout(() => {
+                    refreshDashboardFromFilter(form);
+                }, 350);
+            };
+
+            document.addEventListener('submit', (event) => {
+                const form = event.target.closest('#dashboard-project-filter-form');
+                if (!form) {
+                    return;
+                }
+
+                event.preventDefault();
+                refreshDashboardFromFilter(form);
+            });
+
+            document.addEventListener('change', (event) => {
+                const form = event.target.closest('#dashboard-project-filter-form');
+                if (!form || event.target.id === 'province') {
+                    return;
+                }
+
+                if (
+                    event.target.matches('#city_municipality, #barangay, #program, #project_type, #project_status')
+                    || event.target.matches('input[name="funding_year[]"]')
+                ) {
+                    scheduleDashboardFilterRefresh(form);
+                }
+            });
+
+            document.addEventListener('dashboard:province-cities-updated', (event) => {
+                const form = document.getElementById('dashboard-project-filter-form');
+                if (form && event.detail?.requestSequence === window.__dashboardProvinceRequestSequence) {
+                    scheduleDashboardFilterRefresh(form);
+                }
+            });
+        }
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', bootDashboardPage);
         } else {
             bootDashboardPage();
         }
     </script>
+    <script>
+        (() => {
+            if (window.__dashboardProvinceCityListenerBound) {
+                return;
+            }
+
+            window.__dashboardProvinceCityListenerBound = true;
+            let requestSequence = 0;
+            window.__dashboardProvinceRequestSequence = 0;
+
+            document.addEventListener('change', async (event) => {
+                const provinceSelect = event.target.closest('#province');
+                if (!provinceSelect) {
+                    return;
+                }
+
+                const citySelect = document.getElementById('city_municipality');
+                const barangaySelect = document.getElementById('barangay');
+                if (!citySelect) {
+                    return;
+                }
+
+                const currentRequest = ++requestSequence;
+                window.__dashboardProvinceRequestSequence = currentRequest;
+                citySelect.replaceChildren(new Option('All', ''));
+                citySelect.disabled = true;
+                barangaySelect?.replaceChildren(new Option('All', ''));
+
+                try {
+                    const params = new URLSearchParams();
+                    if (provinceSelect.value) {
+                        params.set('province', provinceSelect.value);
+                    }
+
+                    const response = await fetch(`{{ route('dashboard.filters') }}?${params.toString()}`, {
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`City/Municipality request failed with HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (currentRequest !== requestSequence) {
+                        return;
+                    }
+
+                    if (data.province_city_map && typeof data.province_city_map === 'object') {
+                        DASHBOARD_PROVINCE_CITY_OPTIONS = data.province_city_map;
+                    }
+                    if (data.city_barangay_map && typeof data.city_barangay_map === 'object') {
+                        DASHBOARD_CITY_BARANGAY_OPTIONS = data.city_barangay_map;
+                    }
+
+                    let cities = Array.isArray(data.cities) ? data.cities : [];
+                    if (cities.length === 0 && provinceSelect.value) {
+                        const provinceEntry = Object.entries(DASHBOARD_CONFIGURED_LOCATION_HIERARCHY)
+                            .find(([label]) => label.trim().toLowerCase() === provinceSelect.value.trim().toLowerCase());
+                        cities = provinceEntry ? Object.keys(provinceEntry[1] || {}) : [];
+                    }
+
+                    cities
+                        .filter((city) => String(city || '').trim() !== '')
+                        .forEach((city) => citySelect.appendChild(new Option(city, city)));
+
+                    document.dispatchEvent(new CustomEvent('dashboard:province-cities-updated', {
+                        detail: { requestSequence: currentRequest },
+                    }));
+                } catch (error) {
+                    if (currentRequest === requestSequence) {
+                        console.error(error);
+                    }
+                } finally {
+                    if (currentRequest === requestSequence) {
+                        citySelect.disabled = false;
+                    }
+                }
+            }, true);
+        })();
+    </script>
+    </div>
 @endsection

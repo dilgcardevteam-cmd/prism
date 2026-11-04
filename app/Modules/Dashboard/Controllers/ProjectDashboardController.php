@@ -151,7 +151,7 @@ class ProjectDashboardController extends Controller
                 $filters['barangay'] = [];
             }
 
-            $dashboardCacheKey = 'dashboard_locally_funded_v2:' . md5(serialize([
+            $dashboardCacheKey = 'dashboard_locally_funded_v4:' . md5(serialize([
                 'user_id' => Auth::id(),
                 'tab' => $activeProjectTab,
                 'filters' => $filters,
@@ -189,28 +189,28 @@ class ProjectDashboardController extends Controller
             $hasSubayDateParsedColumn = Schema::hasTable('subay_project_profiles') && Schema::hasColumn('subay_project_profiles', 'date_parsed');
 
             $subayProjectCodeFilterExpr = $hasSubayProjectCodeKeyColumn
-                ? 'spp.project_code_key'
+                ? 'COALESCE(spp.project_code_key, spp.project_code)'
                 : 'spp.project_code';
             $subayProvinceFilterExpr = $hasSubayProvinceKeyColumn
-                ? 'spp.province_key'
+                ? 'COALESCE(spp.province_key, spp.province)'
                 : 'spp.province';
             $subayStatusFilterExpr = $hasSubayStatusKeyColumn
-                ? 'spp.status_key'
+                ? 'COALESCE(spp.status_key, spp.status)'
                 : 'spp.status';
             $subayFundingYearFilterExpr = $hasSubayFundingYearKeyColumn
-                ? 'spp.funding_year_key'
+                ? 'COALESCE(spp.funding_year_key, spp.funding_year)'
                 : 'spp.funding_year';
             $subayProjectCodeGroupExpr = $hasSubayProjectCodeKeyColumn
-                ? 'spp.project_code_key'
+                ? 'COALESCE(spp.project_code_key, UPPER(TRIM(spp.project_code)))'
                 : 'UPPER(TRIM(spp.project_code))';
             $subayProvinceGroupExpr = $hasSubayProvinceKeyColumn
-                ? 'spp.province_key'
+                ? 'COALESCE(spp.province_key, TRIM(COALESCE(spp.province, "")))'
                 : 'TRIM(COALESCE(spp.province, ""))';
             $subayStatusGroupExpr = $hasSubayStatusKeyColumn
-                ? 'spp.status_key'
+                ? 'COALESCE(spp.status_key, UPPER(TRIM(COALESCE(spp.status, ""))))'
                 : 'UPPER(TRIM(COALESCE(spp.status, "")))';
             $subayFundingYearGroupExpr = $hasSubayFundingYearKeyColumn
-                ? 'spp.funding_year_key'
+                ? 'COALESCE(spp.funding_year_key, TRIM(COALESCE(spp.funding_year, "")))'
                 : 'TRIM(COALESCE(spp.funding_year, ""))';
             $subayFundingYearOrderExpr = $hasSubayFundingYearNumColumn
                 ? 'spp.funding_year_num'
@@ -226,6 +226,17 @@ class ProjectDashboardController extends Controller
                 if ($to !== null) {
                     $query->whereRaw("{$fundingYearExpression} <= ?", [$to]);
                 }
+            };
+            $getLocationMapValues = static function (array $map, string $label): array {
+                $normalizedLabel = strtolower(trim($label));
+
+                foreach ($map as $mapLabel => $values) {
+                    if (strtolower(trim((string) $mapLabel)) === $normalizedLabel) {
+                        return is_array($values) ? $values : [];
+                    }
+                }
+
+                return [];
             };
 
             $normalizeComparableLocationValue = function ($value): string {
@@ -356,21 +367,22 @@ class ProjectDashboardController extends Controller
                 $query->whereRaw($normalizedComparableLocationSql($column) . " IN ({$placeholders})", $normalizedValues);
             };
 
+            $computedFundSourceExpr = "
+                CASE
+                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'SBDP%' THEN 'SBDP'
+                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'FA-%' THEN 'FALGU'
+                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'FALGU%' THEN 'FALGU'
+                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'CMGP%' THEN 'CMGP'
+                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'GEF%' THEN 'GEF'
+                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'SAFPB%' THEN 'SAFPB'
+                    WHEN UPPER(TRIM(spp.project_code)) LIKE 'SGLGIF%' THEN 'SGLGIF'
+                    WHEN TRIM(COALESCE(spp.program, '')) <> '' THEN UPPER(TRIM(COALESCE(spp.program, '')))
+                    ELSE 'UNSPECIFIED'
+                END
+            ";
             $fundSourceFromProjectCodeExpr = $hasSubayFundSourceKeyColumn
-                ? 'spp.fund_source_key'
-                : "
-                    CASE
-                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'SBDP%' THEN 'SBDP'
-                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'FA-%' THEN 'FALGU'
-                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'FALGU%' THEN 'FALGU'
-                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'CMGP%' THEN 'CMGP'
-                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'GEF%' THEN 'GEF'
-                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'SAFPB%' THEN 'SAFPB'
-                        WHEN UPPER(TRIM(spp.project_code)) LIKE 'SGLGIF%' THEN 'SGLGIF'
-                        WHEN TRIM(COALESCE(spp.program, '')) <> '' THEN UPPER(TRIM(COALESCE(spp.program, '')))
-                        ELSE 'UNSPECIFIED'
-                    END
-                ";
+                ? "COALESCE(NULLIF(spp.fund_source_key, ''), {$computedFundSourceExpr})"
+                : $computedFundSourceExpr;
 
             $excludeSglgifFromSubay = function ($query) use ($fundSourceFromProjectCodeExpr, $subayProjectCodeFilterExpr) {
                 $query->whereRaw($subayProjectCodeFilterExpr . " IS NOT NULL")
@@ -383,16 +395,32 @@ class ProjectDashboardController extends Controller
                     ->whereRaw('UPPER(TRIM(COALESCE(fund_source, ""))) <> ?', ['SGLGIF']);
             };
 
-            $applyDashboardFiltersToSubay = function ($query) use ($filters, $applyExactMultiFilterToSubay, $applyDelimitedMultiFilterToSubay, $applyComparableLocationMultiFilterToSubay, $applyFundingYearRangeFilter, $fundSourceFromProjectCodeExpr, $subayProvinceFilterExpr, $subayFundingYearFilterExpr, $subayFundingYearRangeExpr, $subayStatusFilterExpr, $subayProjectCodeFilterExpr) {
-                $applyExactMultiFilterToSubay($query, $subayProvinceFilterExpr, $filters['province']);
-                $applyComparableLocationMultiFilterToSubay($query, 'spp.city_municipality', $filters['city_municipality']);
-                $applyDelimitedMultiFilterToSubay($query, 'spp.barangay', $filters['barangay']);
-                $applyExactMultiFilterToSubay($query, 'spp.program', $filters['programs']);
-                $applyExactMultiFilterToSubay($query, $fundSourceFromProjectCodeExpr, $filters['fund_source']);
-                $applyExactMultiFilterToSubay($query, $subayFundingYearFilterExpr, $filters['funding_year']);
-                $applyFundingYearRangeFilter($query, $subayFundingYearRangeExpr, $filters['funding_year_from'], $filters['funding_year_to']);
-                $applyExactMultiFilterToSubay($query, 'spp.type_of_project', $filters['project_type']);
-                $applyExactMultiFilterToSubay($query, $subayStatusFilterExpr, $filters['project_status']);
+            $applyDashboardFiltersToSubay = function ($query, ?string $excludeFilter = null) use ($filters, $applyExactMultiFilterToSubay, $applyDelimitedMultiFilterToSubay, $applyComparableLocationMultiFilterToSubay, $applyFundingYearRangeFilter, $fundSourceFromProjectCodeExpr, $subayProvinceFilterExpr, $subayFundingYearFilterExpr, $subayFundingYearRangeExpr, $subayStatusFilterExpr, $subayProjectCodeFilterExpr) {
+                if ($excludeFilter !== 'province') {
+                    $applyExactMultiFilterToSubay($query, $subayProvinceFilterExpr, $filters['province']);
+                }
+                if ($excludeFilter !== 'city_municipality') {
+                    $applyComparableLocationMultiFilterToSubay($query, 'spp.city_municipality', $filters['city_municipality']);
+                }
+                if ($excludeFilter !== 'barangay') {
+                    $applyDelimitedMultiFilterToSubay($query, 'spp.barangay', $filters['barangay']);
+                }
+                if ($excludeFilter !== 'program') {
+                    $applyExactMultiFilterToSubay($query, 'spp.program', $filters['programs']);
+                }
+                if ($excludeFilter !== 'fund_source') {
+                    $applyExactMultiFilterToSubay($query, $fundSourceFromProjectCodeExpr, $filters['fund_source']);
+                }
+                if ($excludeFilter !== 'funding_year') {
+                    $applyExactMultiFilterToSubay($query, $subayFundingYearFilterExpr, $filters['funding_year']);
+                    $applyFundingYearRangeFilter($query, $subayFundingYearRangeExpr, $filters['funding_year_from'], $filters['funding_year_to']);
+                }
+                if ($excludeFilter !== 'project_type') {
+                    $applyExactMultiFilterToSubay($query, 'spp.type_of_project', $filters['project_type']);
+                }
+                if ($excludeFilter !== 'project_status') {
+                    $applyExactMultiFilterToSubay($query, $subayStatusFilterExpr, $filters['project_status']);
+                }
 
                 if ($filters['search'] !== '') {
                     $searchNeedle = '%' . strtolower($filters['search']) . '%';
@@ -958,12 +986,16 @@ class ProjectDashboardController extends Controller
                 return $projectsByRisk;
             };
 
+            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+
             $projectUpdateStatusParsedDateExpression = $hasSubayDateParsedColumn
                 ? 'spp.date_parsed'
-                : "
+                : ($isSqlite
+                    ? "COALESCE(spp.date, '')"
+                    : "
                     COALESCE(
                         IF(
-                            TRIM(COALESCE(spp.date, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$',
+                            TRIM(COALESCE(spp.date, '')) REGEXP '^[0-9]+(\\.[0-9]+){0,1}$',
                             DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE(spp.date, '')) AS DECIMAL(12,4))) DAY),
                             NULL
                         ),
@@ -980,12 +1012,14 @@ class ProjectDashboardController extends Controller
                         STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%b %e, %Y'),
                         STR_TO_DATE(NULLIF(TRIM(COALESCE(spp.date, '')), ''), '%M %e, %Y')
                     )
-                ";
+                ");
 
-            $expectedCompletionParsedDateExpression = "
+            $expectedCompletionParsedDateExpression = $isSqlite
+                ? "COALESCE(spp.intended_completion_date_2, '')"
+                : "
                 COALESCE(
                     IF(
-                        TRIM(COALESCE(spp.intended_completion_date_2, '')) REGEXP '^[0-9]+(\\.[0-9]+)?$',
+                        TRIM(COALESCE(spp.intended_completion_date_2, '')) REGEXP '^[0-9]+(\\.[0-9]+){0,1}$',
                         DATE_ADD('1899-12-30', INTERVAL FLOOR(CAST(TRIM(COALESCE(spp.intended_completion_date_2, '')) AS DECIMAL(12,4))) DAY),
                         NULL
                     ),
@@ -1004,7 +1038,7 @@ class ProjectDashboardController extends Controller
                 )
             ";
 
-            $fetchProjectUpdateDataFromSubay = function ($subayQuery) use ($projectUpdateStatusParsedDateExpression, $subayStatusGroupExpr, $subayProjectCodeGroupExpr) {
+            $fetchProjectUpdateDataFromSubay = function ($subayQuery) use ($isSqlite, $projectUpdateStatusParsedDateExpression, $subayStatusGroupExpr, $subayProjectCodeGroupExpr) {
                 $projectUpdateRowsQuery = (clone $subayQuery)
                     ->selectRaw("{$subayProjectCodeGroupExpr} as project_code")
                     ->selectRaw('TRIM(COALESCE(spp.project_title, "")) as project_title')
@@ -1022,7 +1056,7 @@ class ProjectDashboardController extends Controller
                         'project_updates.city_municipality',
                         'project_updates.latest_update_date'
                     )
-                    ->selectRaw('DATEDIFF(CURDATE(), project_updates.latest_update_date) as aging_days')
+                    ->selectRaw($isSqlite ? 'CAST(julianday("now") - julianday(project_updates.latest_update_date) AS INTEGER) as aging_days' : 'DATEDIFF(CURDATE(), project_updates.latest_update_date) as aging_days')
                     ->where('project_updates.status_raw', '!=', 'completed')
                     ->whereNotNull('project_updates.latest_update_date')
                     ->orderByDesc('aging_days')
@@ -1085,7 +1119,13 @@ class ProjectDashboardController extends Controller
                     $filterOptions['province_city_map'] = $provinceCityMap;
                     $filterOptions['cities'] = collect($filters['province'])
                         ->flatMap(function ($provinceLabel) use ($provinceCityMap) {
-                            return $provinceCityMap[$provinceLabel] ?? [];
+                            foreach ($provinceCityMap as $mapLabel => $cities) {
+                                if (strtolower(trim((string) $mapLabel)) === strtolower(trim((string) $provinceLabel))) {
+                                    return $cities;
+                                }
+                            }
+
+                            return [];
                         })
                         ->unique(function ($cityLabel) {
                             return strtolower(trim((string) $cityLabel));
@@ -1099,7 +1139,13 @@ class ProjectDashboardController extends Controller
                     if (!empty($filters['province'])) {
                         $allowedCityKeys = collect($filters['province'])
                             ->flatMap(function ($provinceLabel) use ($provinceCityMap) {
-                                return $provinceCityMap[$provinceLabel] ?? [];
+                                foreach ($provinceCityMap as $mapLabel => $cities) {
+                                    if (strtolower(trim((string) $mapLabel)) === strtolower(trim((string) $provinceLabel))) {
+                                        return $cities;
+                                    }
+                                }
+
+                                return [];
                             })
                             ->map(function ($cityLabel) {
                                 return strtolower(trim((string) $cityLabel));
@@ -1121,8 +1167,8 @@ class ProjectDashboardController extends Controller
 
                     $filterOptions['city_barangay_map'] = $cityBarangayMap;
                     $filterOptions['barangays'] = collect($filters['city_municipality'])
-                        ->flatMap(function ($cityLabel) use ($cityBarangayMap) {
-                            return $cityBarangayMap[$cityLabel] ?? [];
+                        ->flatMap(function ($cityLabel) use ($cityBarangayMap, $getLocationMapValues) {
+                            return $getLocationMapValues($cityBarangayMap, (string) $cityLabel);
                         })
                         ->unique(function ($barangayLabel) {
                             return strtolower(trim((string) $barangayLabel));
@@ -1212,8 +1258,8 @@ class ProjectDashboardController extends Controller
 
                     $filterOptions['province_city_map'] = $provinceCityMap;
                     $filterOptions['cities'] = collect($filters['province'])
-                        ->flatMap(function ($provinceLabel) use ($provinceCityMap) {
-                            return $provinceCityMap[$provinceLabel] ?? [];
+                        ->flatMap(function ($provinceLabel) use ($provinceCityMap, $getLocationMapValues) {
+                            return $getLocationMapValues($provinceCityMap, (string) $provinceLabel);
                         })
                         ->unique(function ($cityLabel) {
                             return strtolower(trim((string) $cityLabel));
@@ -1257,8 +1303,8 @@ class ProjectDashboardController extends Controller
 
                     $filterOptions['city_barangay_map'] = $cityBarangayMap;
                     $filterOptions['barangays'] = collect($filters['city_municipality'])
-                        ->flatMap(function ($cityLabel) use ($cityBarangayMap) {
-                            return $cityBarangayMap[$cityLabel] ?? [];
+                        ->flatMap(function ($cityLabel) use ($cityBarangayMap, $getLocationMapValues) {
+                            return $getLocationMapValues($cityBarangayMap, (string) $cityLabel);
                         })
                         ->unique(function ($barangayLabel) {
                             return strtolower(trim((string) $barangayLabel));
@@ -1308,6 +1354,155 @@ class ProjectDashboardController extends Controller
                     ->distinct()
                     ->orderBy('spp.status')
                     ->pluck('spp.status');
+
+                $provinceOptionsQuery = clone $subayBaseQuery;
+                $applyDashboardFiltersToSubay($provinceOptionsQuery, 'province');
+                $filterOptions['provinces'] = $provinceOptionsQuery
+                    ->select('spp.province')
+                    ->whereNotNull('spp.province')
+                    ->whereRaw('TRIM(spp.province) <> ""')
+                    ->distinct()
+                    ->orderBy('spp.province')
+                    ->pluck('spp.province');
+
+                $cityOptionsQuery = clone $subayBaseQuery;
+                $applyDashboardFiltersToSubay($cityOptionsQuery, 'city_municipality');
+                $cityRows = $cityOptionsQuery
+                    ->selectRaw("TRIM(COALESCE({$subayProvinceFilterExpr}, '')) as province, TRIM(COALESCE(spp.city_municipality, '')) as city_municipality")
+                    ->whereNotNull('spp.city_municipality')
+                    ->whereRaw('TRIM(spp.city_municipality) <> ""')
+                    ->distinct()
+                    ->orderBy('province')
+                    ->orderBy('city_municipality')
+                    ->get();
+                $projectProvinceCityMap = [];
+                $allAvailableCities = [];
+                foreach ($cityRows as $row) {
+                    $provinceLabel = $normalizeFilterValue($row->province ?? '');
+                    $cityLabel = $normalizeFilterValue($row->city_municipality ?? '');
+                    if ($provinceLabel === '' || $cityLabel === '') {
+                        continue;
+                    }
+
+                    $targetKey = $provinceLabel;
+                    foreach ($configuredProvinceLabels as $k) {
+                        if (mb_strtolower(trim($k)) === mb_strtolower(trim($provinceLabel))) {
+                            $targetKey = $k;
+                            break;
+                        }
+                    }
+
+                    $projectProvinceCityMap[$targetKey] ??= [];
+                    if (!in_array($cityLabel, $projectProvinceCityMap[$targetKey], true)) {
+                        $projectProvinceCityMap[$targetKey][] = $cityLabel;
+                    }
+
+                    if (!in_array($cityLabel, $allAvailableCities, true)) {
+                        $allAvailableCities[] = $cityLabel;
+                    }
+                }
+
+                foreach ($projectProvinceCityMap as $k => &$cList) {
+                    natcasesort($cList);
+                    $cList = array_values($cList);
+                }
+                unset($cList);
+                natcasesort($allAvailableCities);
+                $allAvailableCities = array_values($allAvailableCities);
+
+                $filterOptions['province_city_map'] = $projectProvinceCityMap;
+
+                if (!empty($filters['province'])) {
+                    $selCities = collect();
+                    foreach ($filters['province'] as $prov) {
+                        $provNorm = mb_strtolower(trim($prov));
+                        foreach ($projectProvinceCityMap as $k => $cList) {
+                            if (mb_strtolower(trim($k)) === $provNorm) {
+                                $selCities = $selCities->concat($cList);
+                            }
+                        }
+                    }
+                    $filterOptions['cities'] = $selCities->unique()->values();
+                } else {
+                    $filterOptions['cities'] = collect($allAvailableCities);
+                }
+
+                $barangayOptionsQuery = clone $subayBaseQuery;
+                $applyDashboardFiltersToSubay($barangayOptionsQuery, 'barangay');
+                $barangayRows = $barangayOptionsQuery
+                    ->selectRaw("TRIM(COALESCE({$subayProvinceFilterExpr}, '')) as province, TRIM(COALESCE(spp.city_municipality, '')) as city_municipality, spp.barangay as barangay")
+                    ->whereNotNull('spp.city_municipality')
+                    ->whereRaw('TRIM(spp.city_municipality) <> ""')
+                    ->whereNotNull('spp.barangay')
+                    ->whereRaw('TRIM(spp.barangay) <> ""')
+                    ->distinct()
+                    ->orderBy('province')
+                    ->orderBy('city_municipality')
+                    ->get();
+                $cityBarangayMap = [];
+                foreach ($barangayRows as $row) {
+                    $provinceLabel = strtolower($normalizeFilterValue($row->province ?? ''));
+                    $cityLabel = strtolower($normalizeFilterValue($row->city_municipality ?? ''));
+                    $mapKey = $provinceLabel . '|' . $cityLabel;
+                    foreach (preg_split('/\r\n|\r|\n/u', (string) ($row->barangay ?? '')) ?: [] as $barangay) {
+                        $barangayLabel = $normalizeFilterValue($barangay);
+                        if ($barangayLabel === '') {
+                            continue;
+                        }
+
+                        $cityBarangayMap[$mapKey] ??= [];
+                        if (!in_array($barangayLabel, $cityBarangayMap[$mapKey], true)) {
+                            $cityBarangayMap[$mapKey][] = $barangayLabel;
+                        }
+
+                        $cityBarangayMap[$cityLabel] ??= [];
+                        if (!in_array($barangayLabel, $cityBarangayMap[$cityLabel], true)) {
+                            $cityBarangayMap[$cityLabel][] = $barangayLabel;
+                        }
+                    }
+                }
+
+                $filterOptions['city_barangay_map'] = $cityBarangayMap;
+                $filterOptions['barangays'] = collect($filters['city_municipality'])
+                    ->flatMap(function ($cityLabel) use ($cityBarangayMap, $filters) {
+                        $cityNorm = strtolower(trim((string) $cityLabel));
+                        $res = [];
+                        if (!empty($filters['province'])) {
+                            foreach ($filters['province'] as $prov) {
+                                $pNorm = strtolower(trim((string) $prov));
+                                $mk = $pNorm . '|' . $cityNorm;
+                                if (!empty($cityBarangayMap[$mk])) {
+                                    $res = array_merge($res, $cityBarangayMap[$mk]);
+                                }
+                            }
+                        }
+                        if (empty($res) && !empty($cityBarangayMap[$cityNorm])) {
+                            $res = $cityBarangayMap[$cityNorm];
+                        }
+                        return $res;
+                    })
+                    ->unique(function ($barangayLabel) {
+                        return strtolower(trim((string) $barangayLabel));
+                    })
+                    ->values();
+
+                foreach ([
+                    'fund_sources' => ['fund_source', $fundSourceFromProjectCodeExpr],
+                    'funding_years' => ['funding_year', $subayFundingYearFilterExpr],
+                    'programs' => ['program', 'spp.program'],
+                    'project_types' => ['project_type', 'spp.type_of_project'],
+                    'project_statuses' => ['project_status', 'spp.status'],
+                ] as $optionKey => [$excludeFilter, $column]) {
+                    $optionsQuery = clone $subayBaseQuery;
+                    $applyDashboardFiltersToSubay($optionsQuery, $excludeFilter);
+                    $filterOptions[$optionKey] = $optionsQuery
+                        ->selectRaw("{$column} as option_value")
+                        ->whereRaw("{$column} IS NOT NULL")
+                        ->whereRaw("TRIM(COALESCE({$column}, '')) <> ''")
+                        ->distinct()
+                        ->orderBy('option_value')
+                        ->pluck('option_value');
+                }
 
                 $subayDashboardQuery = clone $subayBaseQuery;
                 $applyDashboardFiltersToSubay($subayDashboardQuery);
@@ -1405,7 +1600,7 @@ class ProjectDashboardController extends Controller
                 $fundSourceCountsMap = (clone $subayDashboardQuery)
                     ->selectRaw("{$fundSourceFromProjectCodeExpr} as fund_source")
                     ->selectRaw('COUNT(*) as total')
-                    ->groupBy(DB::raw($fundSourceFromProjectCodeExpr))
+                    ->groupBy('fund_source')
                     ->get()
                     ->reduce(function ($carry, $row) {
                         $label = strtoupper(trim((string) $row->fund_source));
