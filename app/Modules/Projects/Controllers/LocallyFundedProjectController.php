@@ -2594,7 +2594,8 @@ $url = route('locally-funded-project.show', $project, false);
         }
         $rawFilterState['project_group'] = request('project_group', 'modern');
         $filterHash = md5(serialize($rawFilterState));
-        $cacheKey = "lfp_index_v18:{$userId}:{$filterHash}";
+        $dataVersion = (int) Cache::get('lfp_data_version', 0);
+        $cacheKey = "lfp_index_v19:{$dataVersion}:{$userId}:{$filterHash}";
 
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
@@ -2899,7 +2900,7 @@ $url = route('locally-funded-project.show', $project, false);
         }
 
         $scopedLocationOptionsQuery = clone $query;
-        $scopedOptionsCacheKey = "lfp_index_scoped_options_v5:{$userId}:{$currentYear}:{$currentMonth}:{$filters['project_group']}";
+        $scopedOptionsCacheKey = "lfp_index_scoped_options_v6:{$dataVersion}:{$userId}:{$currentYear}:{$currentMonth}:{$filters['project_group']}";
 
         $normalizedFundSourceExpression = "COALESCE(NULLIF(UPPER(TRIM(COALESCE(lfp.fund_source, ''))), ''), {$subayFundSourceKeyExpr})";
         $normalizedProcurementExpression = "COALESCE(NULLIF(LOWER(TRIM(COALESCE(lfp.mode_of_procurement, ''))), ''), {$subayProcurementKeyExpr})";

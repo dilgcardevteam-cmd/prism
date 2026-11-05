@@ -104,6 +104,7 @@ class FundUtilizationReportController extends Controller
         LocallyFundedProject::query()
             ->leftJoin('subay_project_profiles as spp', 'spp.project_code', '=', 'locally_funded_projects.subaybayan_project_code')
             ->whereRaw('UPPER(TRIM(COALESCE(locally_funded_projects.fund_source, ""))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.program, ""))) <> ?', ['SGLGIF'])
             ->whereRaw('UPPER(TRIM(COALESCE(locally_funded_projects.subaybayan_project_code, ""))) NOT LIKE ?', ['SGLGIF%'])
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -158,6 +159,7 @@ class FundUtilizationReportController extends Controller
 
         try {
             $this->syncMissingLfpReports();
+            Cache::increment('fur_data_version');
         } catch (\Illuminate\Database\QueryException $exception) {
             Cache::forget($cacheKey);
             Log::warning('Unable to synchronize locally funded projects to fund utilization reports.', [
@@ -1109,6 +1111,7 @@ class FundUtilizationReportController extends Controller
      */
     public function index(Request $request)
     {
+        $this->syncMissingLfpReportsIfDue();
         [$reportsQuery, $filters, $filterOptions] = $this->buildFilteredReportsQuery($request);
         $perPage = (int) $request->query('per_page', 10);
         $allowedPerPage = [10, 15, 25, 50];
@@ -1161,6 +1164,7 @@ class FundUtilizationReportController extends Controller
         $cacheKey = 'fur_index_data_v2:' . md5(serialize([
             'user' => Auth::id(),
             'query' => $request->query(),
+            'data_version' => Cache::get('fur_data_version', 0),
         ]));
 
         return Cache::remember($cacheKey, now()->addSeconds(30), function () use ($reportsQuery) {
@@ -1809,6 +1813,11 @@ class FundUtilizationReportController extends Controller
         $furQuery = FundUtilizationReport::query()
             ->leftJoin('locally_funded_projects', 'locally_funded_projects.subaybayan_project_code', '=', 'tbfur.project_code')
             ->leftJoin('subay_project_profiles as spp', 'spp.project_code', '=', 'tbfur.project_code')
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('subay_project_profiles as loaded_project')
+                    ->whereColumn('loaded_project.project_code', 'tbfur.project_code');
+            })
             ->select([
                 'tbfur.project_code',
                 'tbfur.project_title',
@@ -1867,17 +1876,17 @@ class FundUtilizationReportController extends Controller
 
         $this->applyNonSglgifSourceScope(
             $furQuery,
-            'COALESCE(locally_funded_projects.fund_source, tbfur.fund_source, spp.program)',
+            "CASE WHEN UPPER(TRIM(COALESCE(spp.program, ''))) = 'SGLGIF' OR UPPER(TRIM(COALESCE(locally_funded_projects.fund_source, ''))) = 'SGLGIF' OR UPPER(TRIM(COALESCE(tbfur.fund_source, ''))) = 'SGLGIF' THEN 'SGLGIF' ELSE COALESCE(locally_funded_projects.fund_source, tbfur.fund_source, spp.program) END",
             'tbfur.project_code'
         );
         $this->applyNonSglgifSourceScope(
             $lfpQuery,
-            'COALESCE(locally_funded_projects.fund_source, spp.program)',
+            "CASE WHEN UPPER(TRIM(COALESCE(spp.program, ''))) = 'SGLGIF' OR UPPER(TRIM(COALESCE(locally_funded_projects.fund_source, ''))) = 'SGLGIF' THEN 'SGLGIF' ELSE COALESCE(locally_funded_projects.fund_source, spp.program) END",
             'locally_funded_projects.subaybayan_project_code'
         );
         $this->applyNonSglgifSourceScope(
             $lfpFundingYearQuery,
-            'COALESCE(locally_funded_projects.fund_source, spp.program)',
+            "CASE WHEN UPPER(TRIM(COALESCE(spp.program, ''))) = 'SGLGIF' OR UPPER(TRIM(COALESCE(locally_funded_projects.fund_source, ''))) = 'SGLGIF' THEN 'SGLGIF' ELSE COALESCE(locally_funded_projects.fund_source, spp.program) END",
             'locally_funded_projects.subaybayan_project_code'
         );
 

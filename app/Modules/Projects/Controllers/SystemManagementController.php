@@ -7,10 +7,12 @@ use App\Services\RlipLimeDataService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Shuchkin\SimpleXLS;
+use Shuchkin\SimpleXLSX;
 
 class SystemManagementController extends Controller
 {
@@ -315,6 +317,7 @@ class SystemManagementController extends Controller
         'overall' => 'sglgif_overall',
     ];
     private const SUBAYBAYAN_2025_TEMPLATE_HEADER_MAP = [
+        'year' => 'funding_year',
         'component_details' => 'sub_type_of_project',
         'project_type' => 'type_of_project',
         'mode_of_implementation' => 'moi',
@@ -423,10 +426,10 @@ class SystemManagementController extends Controller
 
         $request->validate(
             [
-                'file' => ['required', 'file', 'mimes:csv,txt,xls', 'max:51200'],
+                'file' => ['required', 'file', 'mimes:csv,txt,xls,xlsx,xlsm,xltx,xltm', 'max:51200'],
             ],
             [
-                'file.mimes' => 'Please upload a CSV or legacy Excel (.xls) file.',
+                'file.mimes' => 'Please upload a CSV or Excel file (.csv, .xls, .xlsx, .xlsm, .xltx, or .xltm).',
             ]
         );
 
@@ -503,6 +506,11 @@ class SystemManagementController extends Controller
                 'last_loaded_at' => now(),
                 'updated_at' => now(),
             ]);
+
+        if ($dataTable === 'subay_project_profiles') {
+            Cache::increment('lfp_data_version');
+            Cache::increment('fur_data_version');
+        }
 
         $displayName = trim((string) ($record->original_file_name ?? ''));
         if ($displayName === '') {
@@ -1009,7 +1017,7 @@ class SystemManagementController extends Controller
                     continue;
                 }
 
-                $this->validateImportedFundingYear($row, $uploadPage, $rowIndex + 1);
+                $row['funding_year'] = $this->validateImportedFundingYear($row, $uploadPage, $rowIndex + 1);
 
                 $projectCode = $this->normalizeProjectCode($row['project_code'] ?? null);
                 if ($projectCode !== '') {
@@ -1034,6 +1042,7 @@ class SystemManagementController extends Controller
                 }
                 $this->removeProjectsMissingFromSnapshot($uploadPage, $projectRows);
                 $this->refreshSubayDerivedColumnsForScope($uploadPage);
+                $this->synchronizeFundUtilizationProjects($projectRows);
             }
 
             $this->synchronizeProjectMetadata($projectRows);
@@ -1047,15 +1056,17 @@ class SystemManagementController extends Controller
         return strtolower(trim((string) $value));
     }
 
-    private function validateImportedFundingYear(array $row, array $uploadPage, int $rowNumber): void
+    private function validateImportedFundingYear(array $row, array $uploadPage, int $rowNumber): string
     {
         $range = $uploadPage['yearRange'] ?? null;
         if (!is_array($range)) {
-            return;
+            return trim((string) ($row['funding_year'] ?? ''));
         }
 
         $rawYear = trim((string) ($row['funding_year'] ?? ''));
-        if (!preg_match('/^\d{4}$/', $rawYear)) {
+        if (preg_match('/^(\d{4})(?:\.0+)?$/', $rawYear, $matches)) {
+            $rawYear = $matches[1];
+        } else {
             throw new \RuntimeException("Row {$rowNumber} must contain a valid four-digit funding year.");
         }
 
@@ -1066,6 +1077,8 @@ class SystemManagementController extends Controller
         if (isset($range['max']) && $year > (int) $range['max']) {
             throw new \RuntimeException("Row {$rowNumber} contains funding year {$year}; this upload accepts 2024 and below projects only.");
         }
+
+        return $rawYear;
     }
 
     private function upsertProjectProfileRow(string $dataTable, string $projectCode, array $row, $now, array $uploadPage): void
@@ -1192,8 +1205,10 @@ class SystemManagementController extends Controller
             'city_municipality' => ['city_municipality'],
             'region' => ['region'],
             'barangay' => ['barangay'],
+            'barangays' => ['barangays', 'barangay'],
             'project_description' => ['project_description'],
             'program' => ['program', 'name_of_program'],
+            'name_of_program' => ['name_of_program', 'program'],
             'type' => ['project_type', 'type_of_project'],
             'status' => ['status'],
             'implementing_unit' => ['implementing_unit'],
@@ -1205,7 +1220,9 @@ class SystemManagementController extends Controller
             'date_of_nadai' => ['date_nadai'],
             'actual_start_of_construction' => ['actual_start_date'],
             'intended_completion_date' => ['target_date_completion'],
+            'national_subsidy_original_allocation' => ['national_subsidy', 'national_subsidy_original_allocation'],
         ];
+        $projectRegistryTables = ['project_at_risks', 'rssa_project_profiles'];
         $protectedFragments = [
             '_path', 'file', 'image', 'attachment', 'approval', 'remark',
             'updated_by', 'created_by', 'user_id',
@@ -1221,11 +1238,14 @@ class SystemManagementController extends Controller
             $codeColumn = in_array('project_code', $columns, true) ? 'project_code' : 'subaybayan_project_code';
 
             foreach ($projectRows as $projectCode => $sourceRow) {
-                $matchingRows = DB::table($table)
+                $matchingRowExists = DB::table($table)
                     ->whereRaw('LOWER(TRIM(' . $codeColumn . ')) = ?', [$projectCode])
-                    ->get(['id']);
+                    ->exists();
 
-                if ($matchingRows->isEmpty()) {
+                if (!$matchingRowExists) {
+                    if (in_array($table, $projectRegistryTables, true)) {
+                        $this->insertProjectRegistryRow($table, $columns, $codeColumn, $projectCode, $sourceRow, $aliases);
+                    }
                     continue;
                 }
 
@@ -1255,6 +1275,112 @@ class SystemManagementController extends Controller
                 }
             }
         }
+    }
+
+    private function insertProjectRegistryRow(
+        string $table,
+        array $columns,
+        string $codeColumn,
+        string $projectCode,
+        array $sourceRow,
+        array $aliases
+    ): void {
+        $row = [$codeColumn => trim($projectCode)];
+
+        foreach ($sourceRow as $sourceColumn => $value) {
+            if (trim((string) $value) === '') {
+                continue;
+            }
+
+            foreach ($aliases[$sourceColumn] ?? [$sourceColumn] as $destinationColumn) {
+                if (in_array($destinationColumn, ['id', 'created_at', 'updated_at'], true)
+                    || !in_array($destinationColumn, $columns, true)) {
+                    continue;
+                }
+
+                $row[$destinationColumn] = $value;
+                break;
+            }
+        }
+
+        $now = now();
+        if (in_array('created_at', $columns, true)) {
+            $row['created_at'] = $now;
+        }
+        if (in_array('updated_at', $columns, true)) {
+            $row['updated_at'] = $now;
+        }
+
+        DB::table($table)->insert($row);
+    }
+
+    private function synchronizeFundUtilizationProjects(array $projectRows): void
+    {
+        if (!Schema::hasTable('tbfur')) {
+            return;
+        }
+
+        $columns = Schema::getColumnListing('tbfur');
+        $now = now();
+
+        foreach ($projectRows as $projectCode => $sourceRow) {
+            $projectCode = trim((string) $projectCode);
+            if ($projectCode === '' || $this->isExcludedImportedProject($sourceRow, $projectCode)) {
+                continue;
+            }
+
+            $payload = [
+                'project_code' => $projectCode,
+                'province' => $sourceRow['province'] ?? null,
+                'implementing_unit' => $sourceRow['implementing_unit'] ?? null,
+                'fund_source' => $this->resolveImportedFundSource($sourceRow, $projectCode),
+                'funding_year' => $sourceRow['funding_year'] ?? null,
+                'project_title' => $sourceRow['project_title'] ?? null,
+                'allocation' => $sourceRow['national_subsidy_original_allocation'] ?? null,
+                'contract_amount' => $sourceRow['contract_price'] ?? null,
+                'project_status' => $sourceRow['status'] ?? 'Ongoing',
+                'updated_at' => $now,
+            ];
+            $payload = array_intersect_key($payload, array_fill_keys($columns, true));
+
+            $existingQuery = DB::table('tbfur')
+                ->whereRaw('LOWER(TRIM(project_code)) = ?', [strtolower($projectCode)]);
+            if ($existingQuery->exists()) {
+                $existingQuery->update(array_diff_key($payload, ['project_code' => true]));
+                continue;
+            }
+
+            $payload['created_at'] = $now;
+            DB::table('tbfur')->insert($payload);
+        }
+    }
+
+    private function isExcludedImportedProject(array $sourceRow, string $projectCode): bool
+    {
+        $program = strtoupper(trim((string) ($sourceRow['program'] ?? '')));
+
+        return $program === 'SGLGIF' || str_starts_with(strtoupper($projectCode), 'SGLGIF');
+    }
+
+    private function resolveImportedFundSource(array $sourceRow, string $projectCode): string
+    {
+        $program = strtoupper(trim((string) ($sourceRow['program'] ?? '')));
+        $code = strtoupper(trim($projectCode));
+
+        if (str_starts_with($code, 'SBDP')) {
+            return 'SBDP';
+        }
+        if (str_starts_with($code, 'FA-') || str_starts_with($code, 'FALGU')) {
+            return 'FALGU';
+        }
+        if (str_starts_with($code, 'CMGP')) {
+            return 'CMGP';
+        }
+        if (str_starts_with($code, 'GEF')) {
+            return 'GEF';
+        }
+
+        return $program;
     }
 
     private function isProtectedImportColumn(string $column, array $protectedFragments): bool
@@ -1295,16 +1421,25 @@ class SystemManagementController extends Controller
             }
         }
 
-        if ($extension !== 'xls') {
-            throw new \RuntimeException('Unsupported file type. Please upload a CSV or legacy Excel (.xls) file.');
+        if (!in_array($extension, ['xls', 'xlsx', 'xlsm', 'xltx', 'xltm'], true)) {
+            throw new \RuntimeException('Unsupported file type. Please upload a CSV or Excel file (.csv, .xls, .xlsx, .xlsm, .xltx, or .xltm).');
         }
 
-        $xls = SimpleXLS::parse($path);
-        if (!$xls) {
-            throw new \RuntimeException('Unable to parse the uploaded Excel file: ' . (SimpleXLS::parseError() ?: 'Unknown parser error'));
+        if ($extension === 'xls') {
+            $xls = SimpleXLS::parse($path);
+            if (!$xls) {
+                throw new \RuntimeException('Unable to parse the uploaded Excel file: ' . (SimpleXLS::parseError() ?: 'Unknown parser error'));
+            }
+
+            return $xls->rows();
         }
 
-        return $xls->rows();
+        $xlsx = SimpleXLSX::parse($path);
+        if (!$xlsx) {
+            throw new \RuntimeException('Unable to parse the uploaded Excel file: ' . (SimpleXLSX::parseError() ?: 'Unknown parser error'));
+        }
+
+        return $xlsx->rows();
     }
 
     private function resolveImportStructure(
@@ -1425,6 +1560,7 @@ class SystemManagementController extends Controller
         $row8col74 = strtoupper(trim((string) ($rows[8][74] ?? '')));
         $row8col96 = strtoupper(trim((string) ($rows[8][96] ?? '')));
         $row8col105 = strtoupper(trim((string) ($rows[8][105] ?? '')));
+        $row8col113 = strtoupper(trim((string) ($rows[8][113] ?? '')));
         $row9col50 = strtoupper(trim((string) ($rows[9][50] ?? '')));
         $row9col106 = strtoupper(trim((string) ($rows[9][106] ?? '')));
 
@@ -1433,9 +1569,9 @@ class SystemManagementController extends Controller
             && $row8col23 === 'UPLOADED IMAGES'
             && $row8col74 === 'MONTH (YEAR)'
             && $row8col96 === 'MONTH (YEAR)'
-            && $row8col105 === 'YEAR OF ASSESSMENT'
+            && ($row8col105 === 'YEAR OF ASSESSMENT' || $row8col113 === 'YEAR OF ASSESSMENT')
             && $row9col50 === 'OBJECTIVE'
-            && $row9col106 === 'OBSERVED RESULT';
+            && ($row9col106 === 'OBSERVED RESULT' || $row9col106 === 'DESCRIPTION (REASON)');
     }
 
     private function matchesRssaTemplate(array $rows): bool

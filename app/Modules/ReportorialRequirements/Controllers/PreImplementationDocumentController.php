@@ -1300,19 +1300,14 @@ class PreImplementationDocumentController extends Controller
         $officeLower = $user->normalizedOffice();
         $officeComparableLower = $user->normalizedOfficeComparable();
         $regionLower = $user->normalizedRegion();
-        $fundSourceExpression = $this->fundSourceExpression('spp');
-        $lfpSources = $this->subaybayanLfpFundSources();
-        $lfpSourcePlaceholders = implode(', ', array_fill(0, count($lfpSources), '?'));
         $cityComparableExpression = "TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(SUBSTRING_INDEX(COALESCE(spp.city_municipality, ''), ',', 1)), '(capital)', ''), 'municipality of ', ''), 'city of ', ''), ' municipality', ''), ' city', ''), '  ', ' '))";
 
         $query = DB::table('subay_project_profiles as spp')
-            ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2021');
-
-        if (!$includeAllProjects) {
-            $query
-                ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2024')
-                ->whereRaw("{$fundSourceExpression} IN ({$lfpSourcePlaceholders})", $lfpSources);
-        }
+            ->whereRaw('CAST(NULLIF(TRIM(COALESCE(spp.funding_year, \'\')), \'\') AS UNSIGNED) >= 2021')
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.program, \'\'))) <> ?', ['SGLGIF'])
+            ->whereRaw('UPPER(TRIM(COALESCE(spp.project_code, \'\'))) NOT LIKE ?', ['SGLGIF%'])
+            ->whereNotNull('spp.project_code')
+            ->whereRaw("TRIM(COALESCE(spp.project_code, '')) <> ''");
 
         if ($user->isLguScopedUser()) {
             if ($office !== '') {
@@ -1394,11 +1389,6 @@ class PreImplementationDocumentController extends Controller
     private function projectTypeExpression(string $alias = 'spp'): string
     {
         return "TRIM(COALESCE(NULLIF(TRIM({$alias}.type_of_project), ''), NULLIF(TRIM({$alias}.type), ''), ''))";
-    }
-
-    private function subaybayanLfpFundSources(): array
-    {
-        return ['SBDP', 'FALGU', 'CMGP', 'GEF', 'SAFPB'];
     }
 
     private function hasAllProjectsScope(?Request $request = null): bool
