@@ -5,11 +5,13 @@ namespace App\Modules\ReportorialRequirements\Controllers;
 use App\Http\Controllers\Controller;
 
 use App\Models\PisatAssessment;
+use App\Modules\ReportorialRequirements\Models\PisatDocument;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class PisatReportController extends Controller
 {
@@ -95,8 +97,22 @@ class PisatReportController extends Controller
 
         $query = $this->buildAccessibleLfpQuery($user)
             ->join('subay_project_profiles as spp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
-            ->leftJoin('pisat_assessments as pa', 'lfp.subaybayan_project_code', '=', 'pa.project_code')
             ->whereRaw("UPPER(spp.status) = 'COMPLETED'");
+
+        if (Schema::hasTable('pisat_assessments')) {
+            $query->leftJoin('pisat_assessments as pa', 'lfp.subaybayan_project_code', '=', 'pa.project_code');
+        }
+        if (Schema::hasTable('pisat_documents')) {
+            $query->leftJoinSub(
+                DB::table('pisat_documents')
+                    ->select('project_code', DB::raw('COUNT(*) as document_count'))
+                    ->groupBy('project_code'),
+                'pd',
+                'lfp.subaybayan_project_code',
+                '=',
+                'pd.project_code'
+            );
+        }
 
         // Apply filters
         if ($request->filled('search')) {
@@ -131,15 +147,38 @@ class PisatReportController extends Controller
             'lfp.city_municipality',
             'lfp.barangay',
             'lfp.funding_year',
-            'pa.id as assessment_id',
-            'pa.status as assessment_status',
-            'pa.impact_classification as assessment_impact'
-        ])
+        ]);
+        if (Schema::hasTable('pisat_assessments')) {
+            $query->addSelect([
+                'pa.id as assessment_id',
+                'pa.status as assessment_status',
+                'pa.impact_classification as assessment_impact',
+            ]);
+        }
+        $query->selectRaw(Schema::hasTable('pisat_documents')
+            ? 'COALESCE(pd.document_count, 0) as document_count'
+            : '0 as document_count')
         ->orderByRaw("CASE WHEN lfp.funding_year IS NULL OR TRIM(lfp.funding_year) = '' THEN 1 ELSE 0 END")
         ->orderByRaw('CAST(lfp.funding_year AS UNSIGNED) DESC')
         ->orderBy('lfp.subaybayan_project_code');
 
         $projects = $query->paginate(15)->withQueryString();
+        $documentsByProject = PisatDocument::whereIn(
+            'project_code',
+            $projects->getCollection()->pluck('project_code')
+        )->latest()->get()->groupBy('project_code');
+        $projects->getCollection()->transform(function ($project) use ($documentsByProject) {
+            $project->documents = $documentsByProject->get($project->project_code, collect())
+                ->map(fn (PisatDocument $document) => [
+                    'id' => $document->id,
+                    'file_name' => $document->file_name,
+                    'uploaded_at' => $document->created_at?->format('M d, Y h:i A'),
+                    'view_url' => route('reports.one-time.pisat.documents.view', $document),
+                    'download_url' => route('reports.one-time.pisat.documents.download', $document),
+                    'delete_url' => route('reports.one-time.pisat.documents.destroy', $document),
+                ])->values();
+            return $project;
+        });
 
         $officesByProvince = $this->getOffices();
         $provinces = array_keys($officesByProvince);
@@ -194,6 +233,110 @@ class PisatReportController extends Controller
         }
 
         return view('reports.one-time.pisat.create', compact('completedProjects', 'preselectedProject'));
+    }
+
+    public function uploadDocuments(Request $request)
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'project_code' => ['required', 'string', 'max:255'],
+            'project_title' => ['required', 'string', 'max:255'],
+            'province' => ['nullable', 'string', 'max:255'],
+            'city_municipality' => ['nullable', 'string', 'max:255'],
+            'documents' => ['required', 'array', 'min:1', 'max:5'],
+            'documents.*' => ['required', 'file', 'mimes:pdf', 'mimetypes:application/pdf', 'max:15360'],
+        ]);
+
+        $project = $this->buildAccessibleLfpQuery($user)
+            ->join('subay_project_profiles as spp', 'lfp.subaybayan_project_code', '=', 'spp.project_code')
+            ->where('lfp.subaybayan_project_code', $validated['project_code'])
+            ->whereRaw("UPPER(spp.status) = 'COMPLETED'")
+            ->select([
+                'lfp.subaybayan_project_code as project_code',
+                'lfp.project_name as project_title',
+                'lfp.province',
+                'lfp.city_municipality',
+            ])
+            ->first();
+
+        if (!$project) {
+            abort(403, 'You are not allowed to upload documents for this project.');
+        }
+
+        $existingCount = PisatDocument::where('project_code', $project->project_code)->count();
+        $incomingCount = count($validated['documents']);
+        if ($existingCount + $incomingCount > 5) {
+            return back()->withErrors([
+                'documents' => "This project already has {$existingCount} PISAT document(s). You can upload at most " . (5 - $existingCount) . ' more.',
+            ])->withInput();
+        }
+
+        foreach ($validated['documents'] as $document) {
+            $path = $document->store('pisat/' . $project->project_code, 'public');
+
+            PisatDocument::create([
+                'project_code' => $project->project_code,
+                'project_title' => $project->project_title,
+                'province' => $project->province,
+                'city_municipality' => $project->city_municipality,
+                'file_name' => $document->getClientOriginalName(),
+                'file_path' => $path,
+                'uploaded_by' => $user->idno,
+                'office' => $user->office,
+            ]);
+        }
+
+        return back()->with('success', "{$incomingCount} PISAT document(s) uploaded successfully.");
+    }
+
+    public function downloadDocument(PisatDocument $document)
+    {
+        $this->authorizeDocumentAccess($document);
+        return Storage::disk('public')->download($document->file_path, $document->file_name);
+    }
+
+    public function viewDocument(PisatDocument $document)
+    {
+        $this->authorizeDocumentAccess($document);
+        return response()->stream(
+            static function () use ($document): void {
+                $stream = Storage::disk('public')->readStream($document->file_path);
+                if ($stream === false) {
+                    abort(404, 'The requested document is no longer available.');
+                }
+                fpassthru($stream);
+                fclose($stream);
+            },
+            200,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . addslashes($document->file_name) . '"',
+            ]
+        );
+    }
+
+    public function deleteDocument(PisatDocument $document)
+    {
+        $this->authorizeDocumentAccess($document);
+        Storage::disk('public')->delete($document->file_path);
+        $document->delete();
+
+        return back()->with('success', 'PISAT document deleted successfully.');
+    }
+
+    private function authorizeDocumentAccess(PisatDocument $document): void
+    {
+        $project = $this->buildAccessibleLfpQuery(Auth::user())
+            ->where('lfp.subaybayan_project_code', $document->project_code)
+            ->exists();
+
+        if (!$project) {
+            abort(403, 'You are not allowed to access this document.');
+        }
+
+        if (!Storage::disk('public')->exists($document->file_path)) {
+            abort(404, 'The requested document is no longer available.');
+        }
     }
 
     public function store(Request $request)
@@ -448,4 +591,3 @@ class PisatReportController extends Controller
             ->with('success', $msg);
     }
 }
-

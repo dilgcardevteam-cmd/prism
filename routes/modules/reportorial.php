@@ -374,25 +374,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reports/one-time/pisat', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'index'])
         ->middleware('crud_permission:pisat_reports,view')
         ->name('reports.one-time.pisat');
-    Route::get('/reports/one-time/pisat/create', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'create'])
+    Route::post('/reports/one-time/pisat/documents', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'uploadDocuments'])
         ->middleware('crud_permission:pisat_reports,add')
-        ->name('reports.one-time.pisat.create');
-    Route::post('/reports/one-time/pisat', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'store'])
-        ->middleware('crud_permission:pisat_reports,add')
-        ->name('reports.one-time.pisat.store');
-    Route::get('/reports/one-time/pisat/{assessment}', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'show'])
+        ->name('reports.one-time.pisat.documents.store');
+    Route::get('/reports/one-time/pisat/documents/{document}/download', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'downloadDocument'])
         ->middleware('crud_permission:pisat_reports,view')
-        ->name('reports.one-time.pisat.show');
-    Route::get('/reports/one-time/pisat/{assessment}/edit', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'edit'])
-        ->middleware('crud_permission:pisat_reports,update')
-        ->name('reports.one-time.pisat.edit');
-    Route::put('/reports/one-time/pisat/{assessment}', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'update'])
-        ->middleware('crud_permission:pisat_reports,update')
-        ->name('reports.one-time.pisat.update');
-    Route::post('/reports/one-time/pisat/{assessment}/validate', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'validateAssessment'])
-        ->middleware('crud_permission:pisat_reports,update')
-        ->name('reports.one-time.pisat.validate');
-
+        ->name('reports.one-time.pisat.documents.download');
+    Route::get('/reports/one-time/pisat/documents/{document}/view', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'viewDocument'])
+        ->middleware('crud_permission:pisat_reports,view')
+        ->name('reports.one-time.pisat.documents.view');
+    Route::delete('/reports/one-time/pisat/documents/{document}', [App\Modules\ReportorialRequirements\Controllers\PisatReportController::class, 'deleteDocument'])
+        ->middleware('crud_permission:pisat_reports,add')
+        ->name('reports.one-time.pisat.documents.destroy');
     Route::get('/reports/rbis-annual-certification', [App\Modules\ReportorialRequirements\Controllers\RbisAnnualCertificationController::class, 'index'])
         ->name('rbis-annual-certification.index');
     Route::get('/reports/rbis-annual-certification/{office}/edit', [App\Modules\ReportorialRequirements\Controllers\RbisAnnualCertificationController::class, 'edit'])
