@@ -555,4 +555,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Task Management Module
     require base_path('routes/modules/task_management.php');
+
+    // Announcement Management Module
+    require base_path('routes/modules/announcements.php');
 });

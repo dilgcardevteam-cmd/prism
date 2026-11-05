@@ -114,9 +114,10 @@
                 $hasFile = $doc && $doc->file_path;
                 $isReturned = $doc && $doc->status === 'returned';
                 $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
-                $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                 $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                 $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
+                $canReplaceForRegionalValidation = $hasFile && $isPendingRo && empty($doc->regional_replacement_used_at) && $canUploadForLgu;
+                $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned && !$canReplaceForRegionalValidation) || ($isReturned && !$canResubmitDoc);
                 $badge = $workflowService->resolveStatusBadge($hasFile ? $doc : null, $officeName);
                 $statusLabel = $badge['label'] ?? 'Pending Upload';
                 $statusColor = $badge['color'] ?? $badge['badgeBg'] ?? '#6b7280';
@@ -365,7 +366,7 @@
                                             {{ $submissionTimeliness['label'] }}
                                         </span>
                                     @endif
-                                    @if (Auth::user()->isSuperAdmin())
+                                    @if (Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro')
                                         <form method="POST" action="{{ route($reportConfig['deleteRoute'], ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                             @csrf
                                         @method('DELETE')

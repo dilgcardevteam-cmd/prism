@@ -330,6 +330,7 @@ class QuarterlyDilgMc201830Controller extends Controller
         ]);
 
         $province = $this->findProvinceByOffice($office) ?? 'Unknown';
+        abort_unless($user && $user->canSubmitForLgu($province, $office), 403);
         $path = $request->file('document')->store(
             'quarterly/dilg-mc-2018-30/' . Str::slug($office, '_'),
             'public'
@@ -356,6 +357,11 @@ class QuarterlyDilgMc201830Controller extends Controller
         }
 
         $existingDocument = $existingDocumentQuery->first();
+        $canReplaceForRegionalValidation = $existingDocument
+            && !empty($existingDocument->file_path)
+            && $existingDocument->status === 'pending_ro'
+            && empty($existingDocument->regional_replacement_used_at)
+            && $user->canSubmitForLgu($province, $office);
 
         if ($existingDocument && $existingDocument->status === 'returned') {
             $oldPath = $existingDocument->file_path;
@@ -375,6 +381,28 @@ class QuarterlyDilgMc201830Controller extends Controller
                 'user_remarks' => null,
             ]);
 
+            if ($oldPath && $oldPath !== $path && Storage::disk('public')->exists($oldPath)) {
+                Storage::disk('public')->delete($oldPath);
+            }
+        } elseif ($existingDocument && !empty($existingDocument->file_path) && !$canReplaceForRegionalValidation) {
+            return redirect()
+                ->back()
+                ->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
+        } elseif ($canReplaceForRegionalValidation) {
+            $oldPath = $existingDocument->file_path;
+            $existingDocument->update([
+                'province' => $province,
+                'file_path' => $path,
+                'original_name' => $originalName,
+                'uploaded_by' => auth()->id(),
+                'uploaded_at' => $uploadedAt,
+                'status' => 'pending_ro',
+                'approved_at_dilg_ro' => null,
+                'approved_by_dilg_ro' => null,
+                'approval_remarks' => null,
+                'user_remarks' => null,
+                'regional_replacement_used_at' => $uploadedAt,
+            ]);
             if ($oldPath && $oldPath !== $path && Storage::disk('public')->exists($oldPath)) {
                 Storage::disk('public')->delete($oldPath);
             }
@@ -419,6 +447,7 @@ class QuarterlyDilgMc201830Controller extends Controller
             ->where('office', $office)
             ->where('id', $docId)
             ->firstOrFail();
+        abort_if($document->status === 'pending_ro', 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
 
         if (!$document->file_path || !Storage::disk('public')->exists($document->file_path)) {
             abort(404);

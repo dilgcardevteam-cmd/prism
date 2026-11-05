@@ -263,6 +263,20 @@
                 'requested_at' => $latestAction?->created_at ?? null,
             ];
         };
+        $regionalReplacementFieldForView = function (string $documentType): ?string {
+            return match ($documentType) {
+                'mov', 'batch-document' => 'regional_replacement_used_at',
+                'fdp' => 'fdp_regional_replacement_used_at',
+                'posting-link' => 'posting_regional_replacement_used_at',
+                'written-notice-dbm' => 'dbm_regional_replacement_used_at',
+                'written-notice-dilg' => 'dilg_regional_replacement_used_at',
+                'written-notice-speaker' => 'speaker_regional_replacement_used_at',
+                'written-notice-president' => 'president_regional_replacement_used_at',
+                'written-notice-house' => 'house_regional_replacement_used_at',
+                'written-notice-senate' => 'senate_regional_replacement_used_at',
+                default => null,
+            };
+        };
         $resolveValidationState = function (
             $record,
             bool $hasDocument,
@@ -272,7 +286,7 @@
             ?string $poTimestampField = 'approved_at_dilg_po',
             ?string $roTimestampField = 'approved_at_dilg_ro',
             ?string $encoderField = null
-        ) use ($resolveUploaderLevel, $resolveResubmissionRequestState, $submissionWorkflows, $currentUser, $isProvincialValidator, $isRegionalValidator) {
+        ) use ($resolveUploaderLevel, $resolveResubmissionRequestState, $regionalReplacementFieldForView, $submissionWorkflows, $currentUser, $isProvincialValidator, $isRegionalValidator) {
             $status = $record && $statusField ? strtolower(trim((string) ($record->{$statusField} ?? ''))) : '';
             $uploaderLevel = $resolveUploaderLevel($record, $encoderField);
             $poApprovedAt = $record && $poTimestampField ? ($record->{$poTimestampField} ?? null) : null;
@@ -364,6 +378,9 @@
                 'is_resubmission_requested' => $isResubmissionRequested,
                 'resubmission_requested_by' => $resubmissionRequestState['requested_by'],
                 'resubmission_requested_remarks' => $resubmissionRequestState['requested_remarks'],
+                'regional_replacement_used' => $record && ($replacementField = $regionalReplacementFieldForView($workflowDocumentType))
+                    ? !empty($record->{$replacementField})
+                    : false,
                 'status_color' => $statusColor,
                 'status_label' => $statusLabel,
                 'field_bg' => $fieldBg,
@@ -722,7 +739,7 @@
                     <form action="{{ route('fund-utilization.upload-mov', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($movValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($movValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                        <input type="file" name="mov_file" class="dashboard-file-input" accept="application/pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'mov-save-btn-{{ $quarter }}', 'mov-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($movValidationState['is_approved'] ?? false) || ($movValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($movValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                         <button type="submit" id="mov-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -926,7 +943,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeDbmValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeDbmValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                                    <input type="file" name="secretary_dbm" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dbm-save-btn-{{ $quarter }}', 'dbm-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeDbmValidationState['is_approved'] ?? false) || ($writtenNoticeDbmValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeDbmValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="dbm-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1082,7 +1099,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeDilgValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeDilgValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                                    <input type="file" name="secretary_dilg" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'dilg-save-btn-{{ $quarter }}', 'dilg-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeDilgValidationState['is_approved'] ?? false) || ($writtenNoticeDilgValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeDilgValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="dilg-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1228,7 +1245,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeSpeakerValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeSpeakerValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                                    <input type="file" name="speaker_house" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'speaker-save-btn-{{ $quarter }}', 'speaker-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeSpeakerValidationState['is_approved'] ?? false) || ($writtenNoticeSpeakerValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeSpeakerValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="speaker-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1381,7 +1398,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticePresidentValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticePresidentValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                                    <input type="file" name="president_senate" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'president-save-btn-{{ $quarter }}', 'president-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticePresidentValidationState['is_approved'] ?? false) || ($writtenNoticePresidentValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticePresidentValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="president-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1524,7 +1541,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeHouseValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeHouseValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                                    <input type="file" name="house_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'house-save-btn-{{ $quarter }}', 'house-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeHouseValidationState['is_approved'] ?? false) || ($writtenNoticeHouseValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeHouseValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="house-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1668,7 +1685,7 @@
                                     </label>
                                 @endif
                                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
-                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeSenateValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeSenateValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                                    <input type="file" name="senate_committee" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'senate-save-btn-{{ $quarter }}', 'senate-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($writtenNoticeSenateValidationState['is_approved'] ?? false) || ($writtenNoticeSenateValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($writtenNoticeSenateValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                                     <button type="submit" id="senate-save-btn-{{ $quarter }}" form="written-notice-form-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                                         <i class="fas fa-upload"></i> Submit
                                     </button>
@@ -1860,7 +1877,7 @@
                     <form action="{{ route('fund-utilization.upload-fdp', $report->project_code) }}" method="POST" enctype="multipart/form-data" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($fdpValidationState['is_approved'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($fdpValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
+                        <input type="file" name="fdp_file" class="dashboard-file-input" accept="image/*,.pdf" style="flex: 1; min-width: 200px;" onchange="showSaveButton(this, 'fdp-save-btn-{{ $quarter }}', 'fdp-filename-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($fdpValidationState['is_approved'] ?? false) || ($fdpValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : (($fdpValidationState['is_approved'] ?? false) ? 'This document has already been approved.' : '') }}">
                         <button type="submit" id="fdp-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-upload"></i> Submit
                         </button>
@@ -2025,7 +2042,7 @@
                     <form action="{{ route('fund-utilization.save-posting-link', $report->project_code) }}" method="POST" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; align-items: center;">
                         @csrf
                         <input type="hidden" name="quarter" value="{{ $quarter }}">
-                        <input type="text" name="posting_link" value="{{ $postingLinkValue }}" placeholder="https://example.com/post" style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" oninput="showSaveButtonForText(this, 'posting-save-btn-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
+                        <input type="text" name="posting_link" value="{{ $postingLinkValue }}" placeholder="https://example.com/post" style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px;" oninput="showSaveButtonForText(this, 'posting-save-btn-{{ $quarter }}')" {{ !$canUploadFundUtilizationDocuments || ($postingValidationState['is_approved'] ?? false) || ($postingValidationState['regional_replacement_used'] ?? false) ? 'disabled' : '' }} title="{{ !$canUploadFundUtilizationDocuments ? 'Only LGU User and DILG Provincial Office users can upload documents.' : '' }}">
                         <button type="submit" id="posting-save-btn-{{ $quarter }}" style="padding: 10px 20px; background-color: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; width: auto;">
                             <i class="fas fa-save"></i> Submit
                         </button>

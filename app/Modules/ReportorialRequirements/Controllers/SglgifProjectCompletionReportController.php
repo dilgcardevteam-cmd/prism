@@ -220,7 +220,9 @@ class SglgifProjectCompletionReportController extends Controller
         }
 
         $document = SglgifProjectCompletionReport::where('project_code', $project->project_code)->first();
-        $documentFiles = SglgifProjectCompletionReportFile::where('project_code', $project->project_code)->get();
+        $documentFiles = SglgifProjectCompletionReportFile::where('project_code', $project->project_code)
+            ->whereNotNull('file_path')
+            ->get();
         $documentFilesByType = $documentFiles
             ->groupBy('document_type')
             ->map(function ($group) {
@@ -527,6 +529,63 @@ class SglgifProjectCompletionReportController extends Controller
         $fileRecord = SglgifProjectCompletionReportFile::where('project_code', $project->project_code)
             ->where('id', $fileId)
             ->firstOrFail();
+
+        if (($fileRecord->status ?? null) === LguReportorialWorkflowService::STATUS_PENDING_RO) {
+            abort_unless(
+                $user
+                    && $user->isActive()
+                    && !$user->isRegionalUser()
+                    && !$user->isRegionalOfficeAssignment()
+                    && $user->canSubmitForLgu($project->province, $project->city_municipality),
+                403,
+                'You are not authorized to replace this pending Regional validation file.'
+            );
+            abort_if(
+                $fileRecord->regional_replacement_used_at !== null,
+                403,
+                'This file has already used its one-time replacement.'
+            );
+
+            $documentType = (string) $fileRecord->document_type;
+            $path = $fileRecord->file_path;
+            $deletedAt = now();
+            DB::transaction(function () use ($fileRecord, $path, $documentType, $project, $deletedAt): void {
+                if ($path && Storage::disk('public')->exists($path)) {
+                    Storage::disk('public')->delete($path);
+                }
+
+                $fileRecord->update([
+                    'file_path' => null,
+                    'status' => 'replaced',
+                    'regional_replacement_used_at' => $deletedAt,
+                ]);
+
+                $document = SglgifProjectCompletionReport::where('project_code', $project->project_code)->first();
+                if ($document && (string) ($document->{$documentType} ?? '') === (string) $path) {
+                    $document->{$documentType} = SglgifProjectCompletionReportFile::where('project_code', $project->project_code)
+                        ->where('document_type', $documentType)
+                        ->whereNotNull('file_path')
+                        ->orderByDesc('uploaded_at')
+                        ->orderByDesc('created_at')
+                        ->value('file_path');
+                    $document->updated_by = Auth::user()->idno ?? null;
+                    $document->save();
+                }
+
+                $this->logActivity(
+                    $project->project_code,
+                    'delete',
+                    'Deleted pending Regional validation file for replacement',
+                    $fileRecord,
+                    'One-time replacement used.',
+                    $deletedAt
+                );
+            });
+
+            return redirect()
+                ->route($routeConfig['show'], array_merge(['projectCode' => $project->project_code], $scopeQuery))
+                ->with('success', $this->formatDocumentLabel($documentType) . ' deleted. You can upload one replacement.');
+        }
 
         if (($fileRecord->status ?? null) !== 'returned') {
             return redirect()

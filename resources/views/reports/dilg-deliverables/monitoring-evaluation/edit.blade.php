@@ -131,7 +131,8 @@
                     $isReturned = $doc && $doc->status === 'returned';
                     $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
                     $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
-                    $disableUploadInput = ($hasFile && !$isReturned) || $isRegionalOfficeUserForUpload;
+                    $canReplaceForRegionalValidation = $hasFile && $doc->status === 'pending_ro' && empty($doc->regional_replacement_used_at) && !$isRegionalOfficeUserForUpload;
+                    $disableUploadInput = ($hasFile && !$isReturned && !$canReplaceForRegionalValidation) || $isRegionalOfficeUserForUpload;
                     $isApprovedRo = $doc && $doc->status === 'approved';
                     $isPendingRo = $doc && $doc->status === 'pending_ro';
                     $isPendingDeletion = $doc && $doc->status === 'pending_deletion';
@@ -332,7 +333,7 @@
                                             <i class="fas fa-history"></i> History
                                         </button>
 
-                                        @if (Auth::user()->isSuperAdmin())
+                                        @if (Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro')
                                             <form method="POST" action="{{ route($deleteRoute, ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Are you sure you want to delete this document?');" style="display: inline-block;">
                                                 @csrf
                                                 @method('DELETE')
@@ -1403,4 +1404,3 @@
     </div>
     </div>
 @endsection
-

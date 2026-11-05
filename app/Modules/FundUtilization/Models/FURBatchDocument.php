@@ -29,6 +29,7 @@ class FURBatchDocument extends Model
         'encoder_id',
         'batch_document_uploaded_at',
         'batch_document_encoder_id',
+        'regional_replacement_used_at',
     ];
 
     protected $casts = [
@@ -39,6 +40,7 @@ class FURBatchDocument extends Model
         'approved_at_dilg_po' => 'datetime',
         'approved_at_dilg_ro' => 'datetime',
         'batch_document_uploaded_at' => 'datetime',
+        'regional_replacement_used_at' => 'datetime',
     ];
 
     public function encoder()

@@ -634,6 +634,7 @@ class SwaAnnexFReportController extends Controller
             ->where('office', $officeName)
             ->where('id', $docId)
             ->firstOrFail();
+        abort_if($document->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO, 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
 
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
             Storage::disk('public')->delete($document->file_path);
@@ -680,12 +681,17 @@ class SwaAnnexFReportController extends Controller
             ->first();
 
         $isReturned = ($existingDocument && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED);
+        $canReplaceForRegionalValidation = $existingDocument
+            && !empty($existingDocument->file_path)
+            && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO
+            && empty($existingDocument->regional_replacement_used_at)
+            && $user->canSubmitForLgu($province, $officeName);
         if ($isReturned) {
             $checkResubmit = $workflowService->canUserResubmit($user, $existingDocument);
             if (!$checkResubmit['allowed']) {
                 abort(403, $checkResubmit['reason']);
             }
-        } elseif ($existingDocument && !empty($existingDocument->file_path)) {
+        } elseif ($existingDocument && !empty($existingDocument->file_path) && !$canReplaceForRegionalValidation) {
             return redirect()
                 ->back()
                 ->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
@@ -697,9 +703,18 @@ class SwaAnnexFReportController extends Controller
         $path = $file->store('swa-annex-f/' . $officeSlug, 'public');
         $uploadedAt = now();
 
-        $uploadFields = $isReturned
-            ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
-            : $workflowService->initialFieldsForUpload($user, $officeName, $province);
+        $uploadFields = $canReplaceForRegionalValidation
+            ? [
+                'status' => \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO,
+                'approved_at_dilg_ro' => null,
+                'approved_by_dilg_ro' => null,
+                'approval_remarks' => null,
+                'user_remarks' => null,
+                'regional_replacement_used_at' => $uploadedAt,
+            ]
+            : ($isReturned
+                ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
+                : $workflowService->initialFieldsForUpload($user, $officeName, $province));
 
         $document = SwaAnnexFDocument::updateOrCreate(
             [

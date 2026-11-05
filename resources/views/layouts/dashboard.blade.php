@@ -2497,6 +2497,56 @@
             }
 
             $messageUnreadBadgeText = $unreadMessageThreads > 99 ? '99+' : (string) $unreadMessageThreads;
+
+            $unreadAnnouncementCount = 0;
+            $totalActiveAnnouncementCount = 0;
+            $recentTopAnnouncements = collect();
+            $loginPopupAnnouncementsPayload = [];
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('announcements') && Auth::check()) {
+                    $announcementService = app(\App\Modules\Announcements\Services\AnnouncementService::class);
+                    $topbarAnnouncementData = $announcementService->getTopBarData(Auth::user(), 5);
+                    $unreadAnnouncementCount = $topbarAnnouncementData['unread_count'] ?? 0;
+                    $totalActiveAnnouncementCount = $topbarAnnouncementData['total_count'] ?? 0;
+                    $recentTopAnnouncements = $topbarAnnouncementData['recent'] ?? collect();
+
+                    $shouldShowLoginPopup = session('announcements_login_popup_pending', false)
+                        || !session()->has('announcements_popup_shown_in_session');
+
+                    if ($shouldShowLoginPopup) {
+                        $popupItems = $announcementService->getLoginPopupAnnouncements(Auth::user());
+                        if ($popupItems->isNotEmpty()) {
+                            session()->put('announcements_popup_shown_in_session', true);
+                            session()->forget('announcements_login_popup_pending');
+
+                            $loginPopupAnnouncementsPayload = $popupItems->map(function ($item) {
+                                return [
+                                    'id' => $item->id,
+                                    'title' => $item->title,
+                                    'content' => $item->content,
+                                    'type_badge' => $item->typeBadge(),
+                                    'priority_badge' => $item->priorityBadge(),
+                                    'priority' => $item->priority,
+                                    'is_pinned' => (bool) $item->is_pinned,
+                                    'has_deadline' => $item->hasDeadline(),
+                                    'deadline_badge' => $item->deadlineBadge(),
+                                    'deadline_at_formatted' => $item->deadline_at ? $item->deadline_at->format('M d, Y h:i A') : null,
+                                    'author_name' => $item->creator ? trim(($item->creator->fname ?? '') . ' ' . ($item->creator->lname ?? '')) : 'Administrator',
+                                    'published_at' => $item->published_at ? $item->published_at->format('M d, Y h:i A') : 'Recently',
+                                    'audience_desc' => $item->audienceDescription(),
+                                    'action_url' => $item->action_url,
+                                    'action_text' => $item->action_text ?: 'Open Link',
+                                    'has_attachment' => !empty($item->attachment_path),
+                                    'attachment_name' => $item->attachment_name,
+                                    'download_url' => route('announcements.download', $item->id),
+                                ];
+                            })->values()->all();
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Safe fallback
+            }
         @endphp
 
         <ul class="sidebar-menu">
@@ -2803,7 +2853,6 @@
                         || $reportsQuarterlyRpmesActive;
                     $reportsSwaAnnexFActive = request()->routeIs('reports.monthly.swa-annex-f*');
                     $reportsMonthlyReportActive = request()->routeIs('reports.monthly.pd-no-pbbm-2025-1572-1573*');
-                    $reportsMonthlyRpmesActive = false;
                     $reportsDilgDeliverablesActive = request()->routeIs('reports.dilg-deliverables');
                     $monitoringEvaluationLfpActive = request()->routeIs('reports.dilg-deliverables.monitoring-evaluation.lfp*');
                     $monitoringEvaluationRlipLimeActive = request()->routeIs('reports.dilg-deliverables.monitoring-evaluation.rlip-lime*');
@@ -3037,15 +3086,6 @@
                                         </ul>
                                     </li>
                                 @endif
-                                <li>
-                                    <a href="#" class="@if($reportsMonthlyRpmesActive) active @endif submenu-toggle" onclick="toggleSubmenu(event, 'reportsMonthlyRpmesMenu')">
-                                        <i class="fas fa-file-alt"></i>
-                                        <span>RPMES FORM</span>
-                                        <i class="fas fa-chevron-down submenu-chevron" style="margin-left: auto; font-size: 11px;"></i>
-                                    </a>
-                                    <ul id="reportsMonthlyRpmesMenu" class="submenu" style="display: {{ $reportsMonthlyRpmesActive ? 'block' : 'none' }};">
-                                    </ul>
-                                </li>
                             </ul>
                         </li>
                     @endif
@@ -3164,6 +3204,13 @@
                     <i class="fas fa-envelope-open-text"></i>
                     <span>Messages</span>
                     <span class="sidebar-menu-badge" data-message-unread-badge @if($unreadMessageThreads < 1) hidden @endif>{{ $messageUnreadBadgeText }}</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('announcements.index') }}" class="sidebar-float-hover @if(request()->routeIs('announcements.*')) active @endif">
+                    <i class="fas fa-bullhorn"></i>
+                    <span>Announcements</span>
+                    <span class="sidebar-menu-badge" id="sidebarAnnouncementBadge" @if($unreadAnnouncementCount < 1) style="display:none;" @endif>{{ $unreadAnnouncementCount > 99 ? '99+' : $unreadAnnouncementCount }}</span>
                 </a>
             </li>
             @php
@@ -3584,7 +3631,93 @@
                     </div>
                 </div>
 
-
+                <!-- Announcements -->
+                <div class="notification-wrap">
+                    <button
+                        class="notification-bell"
+                        id="announcementBell"
+                        title="Announcements"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                        aria-controls="announcementMenu"
+                    >
+                        <i class="fas fa-bullhorn"></i>
+                        @if($unreadAnnouncementCount > 0)
+                            <span class="notification-badge" id="announcementUnreadBadge">{{ $unreadAnnouncementCount > 99 ? '99+' : $unreadAnnouncementCount }}</span>
+                        @endif
+                    </button>
+                    <div class="notification-menu" id="announcementMenu">
+                        <div class="notification-menu-header">
+                            <div class="notification-menu-header-copy">
+                                <span class="notification-menu-title">Announcements</span>
+                                <div class="notification-menu-stats">
+                                    <span class="notification-menu-stat unread" id="announcementMenuUnreadStat">Unread: {{ number_format($unreadAnnouncementCount) }}</span>
+                                    <span class="notification-menu-stat read">Total: {{ number_format($totalActiveAnnouncementCount) }}</span>
+                                </div>
+                            </div>
+                            @if($unreadAnnouncementCount > 0)
+                                <button type="button" class="notification-menu-stat" id="topbarMarkAllAnnouncementsReadBtn" onclick="markAllAnnouncementsReadFromTopbar(event)" style="border:none;background:transparent;color:#002C76;cursor:pointer;font-weight:600;padding:2px 4px;font-size:11px;">
+                                    Mark all read
+                                </button>
+                            @endif
+                        </div>
+                        @if($recentTopAnnouncements->isEmpty())
+                            <div class="notification-menu-empty">No active announcements.</div>
+                        @else
+                            @foreach($recentTopAnnouncements as $announcementItem)
+                                @php
+                                    $isItemRead = $announcementItem->isReadByUser(Auth::user());
+                                    $typeBadge = $announcementItem->typeBadge();
+                                @endphp
+                                <a
+                                    href="javascript:void(0)"
+                                    onclick="openGlobalAnnouncementReader({{ $announcementItem->id }})"
+                                    class="notification-menu-item {{ !$isItemRead ? 'unread' : '' }}"
+                                    id="topbar-announcement-item-{{ $announcementItem->id }}"
+                                >
+                                    <div class="notification-menu-message-row">
+                                        @if(!$isItemRead)
+                                            <span class="notification-unread-dot" aria-label="Unread announcement" id="topbar-announcement-dot-{{ $announcementItem->id }}"></span>
+                                        @endif
+                                        <div style="min-width: 0; flex: 1;">
+                                            <div class="notification-menu-message" style="display: flex; align-items: center; gap: 6px;">
+                                                @if($announcementItem->is_pinned)
+                                                    <i class="fas fa-thumbtack" style="color: #ca8a04; font-size: 11px;" title="Pinned"></i>
+                                                @endif
+                                                <span>{{ $announcementItem->title }}</span>
+                                            </div>
+                                            <div class="notification-menu-meta">
+                                                <span class="notification-status-badge {{ $typeBadge['tone'] }}">
+                                                    {{ $typeBadge['label'] }}
+                                                </span>
+                                                @if($announcementItem->hasDeadline())
+                                                    @php $topDl = $announcementItem->deadlineBadge(); @endphp
+                                                    @if($topDl)
+                                                        <span class="notification-status-badge" style="background: {{ $topDl['bg'] }}; color: {{ $topDl['color'] }}; border: 1px solid {{ $topDl['border'] }};" title="Deadline: {{ $topDl['formatted'] }}">
+                                                            <i class="fas {{ $topDl['icon'] }}"></i> {{ $topDl['label'] }}
+                                                        </span>
+                                                    @endif
+                                                @endif
+                                                <span class="notification-menu-module">{{ $announcementItem->audienceDescription() }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="notification-menu-time">
+                                        {{ $announcementItem->published_at ? $announcementItem->published_at->format('M d, Y h:i A') : 'Recently' }}
+                                    </div>
+                                </a>
+                            @endforeach
+                        @endif
+                        <div class="notification-menu-footer">
+                            <div class="notification-menu-footer-actions">
+                                <a href="{{ route('announcements.index') }}" class="notification-menu-view-all">
+                                    <i class="fas fa-bullhorn"></i>
+                                    <span>Open Announcement Center</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="notification-wrap">
                     <button
@@ -3888,6 +4021,107 @@
             </div>
         </div>
     </div>
+
+    <!-- Global Announcement Reader Modal -->
+    <div id="globalAnnouncementReaderModal" class="announcement-modal" aria-hidden="true" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1300; display: none; align-items: center; justify-content: center; padding: 20px;">
+        <div class="announcement-modal-backdrop" onclick="closeGlobalAnnouncementReader()" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(2px);"></div>
+        <div class="announcement-modal-dialog" style="position: relative; background: #ffffff; border-radius: 14px; width: 100%; max-width: 680px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); display: flex; flex-direction: column; max-height: 90vh; z-index: 10; overflow: hidden;">
+            <div style="padding: 18px 24px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; background: #f8fafc;">
+                <div style="flex: 1; min-width: 0;">
+                    <div id="globalReaderBadgesGroup" style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;"></div>
+                    <h2 id="globalReaderTitle" style="font-size: 18px; font-weight: 700; color: #002C76; margin: 0; line-height: 1.4;"></h2>
+                    <div id="globalReaderMeta" style="display: flex; align-items: center; gap: 12px; font-size: 11px; color: #64748b; margin-top: 8px; flex-wrap: wrap;"></div>
+                </div>
+                <button type="button" onclick="closeGlobalAnnouncementReader()" style="background: transparent; border: none; font-size: 24px; color: #94a3b8; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
+            </div>
+            <div style="padding: 22px 24px; overflow-y: auto; max-height: 520px;">
+                <div id="globalReaderDeadlineBox" style="display: none; align-items: center; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; border: 1px solid;"></div>
+                <div id="globalReaderContent" style="font-size: 14px; line-height: 1.7; color: #334155; white-space: pre-wrap;"></div>
+                <div id="globalReaderAttachmentBox" style="display: none; margin-top: 20px; padding: 14px 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; align-items: center; gap: 14px;">
+                    <div style="font-size: 22px; color: #002C76;"><i class="fas fa-file-alt"></i></div>
+                    <div style="flex: 1; min-width: 0;">
+                        <strong id="globalReaderAttachmentName" style="display: block; font-size: 13px; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Notice_Document.pdf</strong>
+                        <span style="font-size: 11px; color: #64748b;">Attached Document</span>
+                    </div>
+                    <a href="#" id="globalReaderAttachmentBtn" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; text-decoration: none;">
+                        <i class="fas fa-download"></i> Download
+                    </a>
+                </div>
+            </div>
+            <div style="padding: 14px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <a href="#" id="globalReaderActionLink" target="_blank" rel="noopener noreferrer" style="display: none; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; background: #002C76; color: #ffffff; text-decoration: none;">
+                        <i class="fas fa-external-link-alt"></i> <span id="globalReaderActionText">Open Action</span>
+                    </a>
+                </div>
+                <button type="button" onclick="closeGlobalAnnouncementReader()" style="padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; cursor: pointer;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    @if(!empty($loginPopupAnnouncementsPayload))
+    <!-- Automatic Login Announcement Modal -->
+    <div id="announcementLoginPopupModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1500; display: flex; align-items: center; justify-content: center; padding: 20px;">
+        <div onclick="closeLoginAnnouncementModal()" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);"></div>
+        <div style="position: relative; background: #ffffff; border-radius: 16px; width: 100%; max-width: 680px; box-shadow: 0 25px 35px -5px rgba(0, 0, 0, 0.35); display: flex; flex-direction: column; max-height: 90vh; z-index: 10; overflow: hidden;">
+            <div style="padding: 20px 26px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; background: linear-gradient(135deg, #002C76 0%, #0040a8 100%); color: #ffffff;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
+                        <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #93c5fd; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-bullhorn"></i> Official Notice
+                        </span>
+                        @if(count($loginPopupAnnouncementsPayload) > 1)
+                            <span id="loginNoticeCounter" style="font-size: 11px; font-weight: 600; background: rgba(255, 255, 255, 0.2); padding: 2px 8px; border-radius: 12px; color: #ffffff;">
+                                Notice 1 of {{ count($loginPopupAnnouncementsPayload) }}
+                            </span>
+                        @endif
+                    </div>
+                    <div id="loginPopupBadges" style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;"></div>
+                    <h2 id="loginPopupTitle" style="font-size: 20px; font-weight: 700; color: #ffffff; margin: 0; line-height: 1.35;"></h2>
+                    <div id="loginPopupMeta" style="display: flex; align-items: center; gap: 14px; font-size: 12px; color: #cbd5e1; margin-top: 8px; flex-wrap: wrap;"></div>
+                </div>
+                <button type="button" onclick="closeLoginAnnouncementModal()" style="background: rgba(255, 255, 255, 0.1); border: none; font-size: 22px; color: #ffffff; cursor: pointer; padding: 4px 10px; border-radius: 8px; line-height: 1;" title="Dismiss notice">&times;</button>
+            </div>
+
+            <div style="padding: 24px 26px; overflow-y: auto; max-height: 500px;">
+                <div id="loginPopupDeadlineBox" style="display: none; align-items: center; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; border: 1px solid;"></div>
+                <div id="loginPopupContent" style="font-size: 14px; line-height: 1.75; color: #334155; white-space: pre-wrap;"></div>
+
+                <div id="loginPopupAttachmentBox" style="display: none; margin-top: 20px; padding: 14px 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; align-items: center; gap: 14px;">
+                    <div style="font-size: 24px; color: #002C76;"><i class="fas fa-file-alt"></i></div>
+                    <div style="flex: 1; min-width: 0;">
+                        <strong id="loginPopupAttachmentName" style="display: block; font-size: 13px; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></strong>
+                        <span style="font-size: 11px; color: #64748b;">Official Attachment File</span>
+                    </div>
+                    <a href="#" id="loginPopupAttachmentBtn" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #002C76; color: #ffffff; text-decoration: none;">
+                        <i class="fas fa-download"></i> Download
+                    </a>
+                </div>
+            </div>
+
+            <div style="padding: 14px 26px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                <div>
+                    <a href="#" id="loginPopupActionLink" target="_blank" rel="noopener noreferrer" style="display: none; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; background: #002C76; color: #ffffff; text-decoration: none;">
+                        <i class="fas fa-external-link-alt"></i> <span id="loginPopupActionText">Open Action</span>
+                    </a>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    @if(count($loginPopupAnnouncementsPayload) > 1)
+                        <button type="button" id="loginPopupPrevBtn" onclick="prevLoginAnnouncement()" style="padding: 8px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #ffffff; color: #334155; border: 1px solid #cbd5e1; cursor: pointer;">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </button>
+                        <button type="button" id="loginPopupNextBtn" onclick="nextLoginAnnouncement()" style="padding: 8px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; background: #ffffff; color: #334155; border: 1px solid #cbd5e1; cursor: pointer;">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                    @endif
+                    <button type="button" onclick="closeLoginAnnouncementModal(true)" style="padding: 8px 18px; font-size: 13px; font-weight: 600; border-radius: 8px; background: #002C76; color: #ffffff; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-check"></i> <span>Acknowledge & Close</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
     
     <script>
         // Sidebar Toggle
@@ -4038,6 +4272,10 @@
         const returnedMenu = document.getElementById('returnedMenu');
         const openReturnedModalBtn = document.getElementById('openReturnedModalBtn');
         const returnedUnreadBadge = document.getElementById('returnedUnreadBadge');
+
+        const announcementBell = document.getElementById('announcementBell');
+        const announcementMenu = document.getElementById('announcementMenu');
+        const announcementUnreadBadge = document.getElementById('announcementUnreadBadge');
 
         const NOTIFICATION_LOCATION_CONFIG = {
             provinces: @json($notificationFilterConfiguredProvinces ?? []),
@@ -4273,6 +4511,12 @@
             }
             if (returnedBell) {
                 returnedBell.setAttribute('aria-expanded', 'false');
+            }
+            if (announcementMenu) {
+                announcementMenu.classList.remove('show');
+            }
+            if (announcementBell) {
+                announcementBell.setAttribute('aria-expanded', 'false');
             }
 
 
@@ -4919,7 +5163,12 @@
                 if (returnedBell) {
                     returnedBell.setAttribute('aria-expanded', 'false');
                 }
-
+                if (announcementMenu) {
+                    announcementMenu.classList.remove('show');
+                }
+                if (announcementBell) {
+                    announcementBell.setAttribute('aria-expanded', 'false');
+                }
             });
         }
 
@@ -4949,7 +5198,12 @@
                 if (returnedBell) {
                     returnedBell.setAttribute('aria-expanded', 'false');
                 }
-
+                if (announcementMenu) {
+                    announcementMenu.classList.remove('show');
+                }
+                if (announcementBell) {
+                    announcementBell.setAttribute('aria-expanded', 'false');
+                }
             });
         }
 
@@ -4975,7 +5229,12 @@
                 if (returnedBell) {
                     returnedBell.setAttribute('aria-expanded', 'false');
                 }
-
+                if (announcementMenu) {
+                    announcementMenu.classList.remove('show');
+                }
+                if (announcementBell) {
+                    announcementBell.setAttribute('aria-expanded', 'false');
+                }
             });
         }
 
@@ -5001,7 +5260,43 @@
                 if (messageBell) {
                     messageBell.setAttribute('aria-expanded', 'false');
                 }
+                if (announcementMenu) {
+                    announcementMenu.classList.remove('show');
+                }
+                if (announcementBell) {
+                    announcementBell.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
 
+        if (announcementBell && announcementMenu) {
+            announcementBell.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeNotificationsListModal();
+                announcementMenu.classList.toggle('show');
+                this.setAttribute('aria-expanded', announcementMenu.classList.contains('show') ? 'true' : 'false');
+                if (profileMenu) {
+                    profileMenu.classList.remove('show');
+                }
+                if (notificationMenu) {
+                    notificationMenu.classList.remove('show');
+                }
+                if (notificationBell) {
+                    notificationBell.setAttribute('aria-expanded', 'false');
+                }
+                if (returnedMenu) {
+                    returnedMenu.classList.remove('show');
+                }
+                if (returnedBell) {
+                    returnedBell.setAttribute('aria-expanded', 'false');
+                }
+                if (messageMenu) {
+                    messageMenu.classList.remove('show');
+                }
+                if (messageBell) {
+                    messageBell.setAttribute('aria-expanded', 'false');
+                }
             });
         }
 
@@ -5060,14 +5355,328 @@
                 returnedMenu.classList.remove('show');
                 returnedBell.setAttribute('aria-expanded', 'false');
             }
-
+            if (announcementMenu && announcementBell && !announcementMenu.contains(e.target) && !announcementBell.contains(e.target)) {
+                announcementMenu.classList.remove('show');
+                announcementBell.setAttribute('aria-expanded', 'false');
+            }
         });
 
         document.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') {
                 closeNotificationsListModal();
+                closeGlobalAnnouncementReader();
+                closeLoginAnnouncementModal();
             }
         });
+
+        function openGlobalAnnouncementReader(id) {
+            if (announcementMenu) {
+                announcementMenu.classList.remove('show');
+            }
+            if (announcementBell) {
+                announcementBell.setAttribute('aria-expanded', 'false');
+            }
+
+            const modal = document.getElementById('globalAnnouncementReaderModal');
+            if (!modal) {
+                window.location.href = `/announcements/${id}`;
+                return;
+            }
+
+            fetch(`/announcements/${id}/detail`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('globalReaderTitle').textContent = data.title;
+                    document.getElementById('globalReaderContent').textContent = data.content;
+
+                    const deadlineBox = document.getElementById('globalReaderDeadlineBox');
+                    if (deadlineBox) {
+                        if (data.has_deadline && data.deadline_badge) {
+                            deadlineBox.style.display = 'flex';
+                            deadlineBox.style.background = data.deadline_badge.bg;
+                            deadlineBox.style.color = data.deadline_badge.color;
+                            deadlineBox.style.borderColor = data.deadline_badge.border;
+                            deadlineBox.innerHTML = `
+                                <div style="font-size: 20px; margin-right: 12px;"><i class="fas ${data.deadline_badge.icon}"></i></div>
+                                <div style="flex: 1;">
+                                    <strong style="display: block; font-size: 13px;">${data.deadline_badge.label} &bull; ${data.deadline_badge.relative}</strong>
+                                    <span style="font-size: 11px; opacity: 0.95;">Compliance Cutoff: ${data.deadline_badge.formatted}</span>
+                                </div>
+                            `;
+                        } else {
+                            deadlineBox.style.display = 'none';
+                        }
+                    }
+
+                    const badgesGroup = document.getElementById('globalReaderBadgesGroup');
+                    let badgesHtml = `<span class="type-pill" style="background:${data.type_badge.bg}; color:${data.type_badge.color}; border:1px solid ${data.type_badge.border}; font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px;"><i class="fas ${data.type_badge.icon}"></i> ${data.type_badge.label}</span>`;
+                    if (data.priority === 'urgent' || data.priority === 'high') {
+                        badgesHtml += ` <span style="font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; text-transform:uppercase; background:${data.priority_badge.bg}; color:${data.priority_badge.color};">${data.priority_badge.label}</span>`;
+                    }
+                    if (data.is_pinned) {
+                        badgesHtml += ` <span style="font-size:11px; font-weight:700; color:#ca8a04; background:#fef9c3; padding:2px 8px; border-radius:10px; border:1px solid #fef08a;"><i class="fas fa-thumbtack"></i> Pinned</span>`;
+                    }
+                    badgesGroup.innerHTML = badgesHtml;
+
+                    const meta = document.getElementById('globalReaderMeta');
+                    meta.innerHTML = `
+                        <span><i class="fas fa-user-edit"></i> ${data.author_name}</span>
+                        <span><i class="far fa-clock"></i> ${data.published_at_formatted}</span>
+                        <span><i class="fas fa-users"></i> ${data.audience_desc}</span>
+                    `;
+
+                    const attachBox = document.getElementById('globalReaderAttachmentBox');
+                    const attachName = document.getElementById('globalReaderAttachmentName');
+                    const attachBtn = document.getElementById('globalReaderAttachmentBtn');
+                    if (data.has_attachment) {
+                        attachBox.style.display = 'flex';
+                        attachName.textContent = data.attachment_name || 'Attached File';
+                        attachBtn.href = data.attachment_download_url;
+                    } else {
+                        attachBox.style.display = 'none';
+                    }
+
+                    const actionLink = document.getElementById('globalReaderActionLink');
+                    const actionText = document.getElementById('globalReaderActionText');
+                    if (data.action_url) {
+                        actionLink.style.display = 'inline-flex';
+                        actionLink.href = data.action_url;
+                        actionText.textContent = data.action_text || 'Open Action';
+                    } else {
+                        actionLink.style.display = 'none';
+                    }
+
+                    // Remove unread dots in topbar
+                    const itemDot = document.getElementById(`topbar-announcement-dot-${id}`);
+                    if (itemDot) itemDot.remove();
+                    const itemEl = document.getElementById(`topbar-announcement-item-${id}`);
+                    if (itemEl) itemEl.classList.remove('unread');
+
+                    // Update badge counts
+                    const newCount = parseInt(data.unread_count, 10);
+                    updateGlobalAnnouncementBadges(newCount);
+
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                })
+                .catch(err => {
+                    console.error(err);
+                    window.location.href = `/announcements/${id}`;
+                });
+        }
+
+        function closeGlobalAnnouncementReader() {
+            const modal = document.getElementById('globalAnnouncementReaderModal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
+
+        function updateGlobalAnnouncementBadges(unreadCount) {
+            const topbarBadge = document.getElementById('announcementUnreadBadge');
+            const sidebarBadge = document.getElementById('sidebarAnnouncementBadge');
+            const unreadStat = document.getElementById('announcementMenuUnreadStat');
+
+            if (topbarBadge) {
+                if (unreadCount > 0) {
+                    topbarBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                    topbarBadge.style.display = 'flex';
+                } else {
+                    topbarBadge.style.display = 'none';
+                }
+            }
+
+            if (sidebarBadge) {
+                if (unreadCount > 0) {
+                    sidebarBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                    sidebarBadge.style.display = 'inline-flex';
+                } else {
+                    sidebarBadge.style.display = 'none';
+                }
+            }
+
+            if (unreadStat) {
+                unreadStat.textContent = `Unread: ${unreadCount}`;
+            }
+        }
+
+        function markAllAnnouncementsReadFromTopbar(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                || '{{ csrf_token() }}';
+
+            fetch('{{ route("announcements.mark-all-read") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': token,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.querySelectorAll('[id^="topbar-announcement-dot-"]').forEach(el => el.remove());
+                    document.querySelectorAll('[id^="topbar-announcement-item-"]').forEach(el => el.classList.remove('unread'));
+                    updateGlobalAnnouncementBadges(0);
+                    const markAllBtn = document.getElementById('topbarMarkAllAnnouncementsReadBtn');
+                    if (markAllBtn) markAllBtn.remove();
+                }
+            })
+            .catch(err => console.error(err));
+        }
+
+        const loginAnnouncementsData = @json($loginPopupAnnouncementsPayload ?? []);
+        let currentLoginNoticeIndex = 0;
+
+        function renderLoginAnnouncement(index) {
+            if (!loginAnnouncementsData || !loginAnnouncementsData.length) return;
+            if (index < 0) index = 0;
+            if (index >= loginAnnouncementsData.length) index = loginAnnouncementsData.length - 1;
+            currentLoginNoticeIndex = index;
+
+            const item = loginAnnouncementsData[index];
+            if (!item) return;
+
+            const counter = document.getElementById('loginNoticeCounter');
+            if (counter) {
+                counter.textContent = `Notice ${index + 1} of ${loginAnnouncementsData.length}`;
+            }
+
+            const titleEl = document.getElementById('loginPopupTitle');
+            const contentEl = document.getElementById('loginPopupContent');
+            if (titleEl) titleEl.textContent = item.title;
+            if (contentEl) contentEl.textContent = item.content;
+
+            const dlBox = document.getElementById('loginPopupDeadlineBox');
+            if (dlBox) {
+                if (item.has_deadline && item.deadline_badge) {
+                    dlBox.style.display = 'flex';
+                    dlBox.style.background = item.deadline_badge.bg;
+                    dlBox.style.color = item.deadline_badge.color;
+                    dlBox.style.borderColor = item.deadline_badge.border;
+                    dlBox.innerHTML = `
+                        <div style="font-size: 20px; margin-right: 12px;"><i class="fas ${item.deadline_badge.icon}"></i></div>
+                        <div style="flex: 1;">
+                            <strong style="display: block; font-size: 13px;">${item.deadline_badge.label} &bull; ${item.deadline_badge.relative}</strong>
+                            <span style="font-size: 11px; opacity: 0.95;">Compliance Cutoff: ${item.deadline_badge.formatted}</span>
+                        </div>
+                    `;
+                } else {
+                    dlBox.style.display = 'none';
+                }
+            }
+
+            const badgesGroup = document.getElementById('loginPopupBadges');
+            if (badgesGroup && item.type_badge) {
+                let badgesHtml = `<span style="background:${item.type_badge.bg}; color:${item.type_badge.color}; border:1px solid ${item.type_badge.border}; font-size:11px; font-weight:600; padding:3px 9px; border-radius:6px;"><i class="fas ${item.type_badge.icon}"></i> ${item.type_badge.label}</span>`;
+                if (item.priority === 'urgent' || item.priority === 'high') {
+                    badgesHtml += ` <span style="background:${item.priority_badge.bg}; color:${item.priority_badge.color}; font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; text-transform:uppercase;">${item.priority_badge.label}</span>`;
+                }
+                if (item.is_pinned) {
+                    badgesHtml += ` <span style="background:#fef08a; color:#854d0e; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px;"><i class="fas fa-thumbtack"></i> Pinned</span>`;
+                }
+                badgesGroup.innerHTML = badgesHtml;
+            }
+
+            const meta = document.getElementById('loginPopupMeta');
+            if (meta) {
+                meta.innerHTML = `
+                    <span><i class="fas fa-user-edit"></i> ${item.author_name}</span>
+                    <span><i class="far fa-clock"></i> ${item.published_at}</span>
+                    <span><i class="fas fa-users"></i> ${item.audience_desc}</span>
+                `;
+            }
+
+            const attachBox = document.getElementById('loginPopupAttachmentBox');
+            const attachName = document.getElementById('loginPopupAttachmentName');
+            const attachBtn = document.getElementById('loginPopupAttachmentBtn');
+            if (attachBox && attachName && attachBtn) {
+                if (item.has_attachment) {
+                    attachBox.style.display = 'flex';
+                    attachName.textContent = item.attachment_name || 'Attached File';
+                    attachBtn.href = item.download_url;
+                } else {
+                    attachBox.style.display = 'none';
+                }
+            }
+
+            const actionLink = document.getElementById('loginPopupActionLink');
+            const actionText = document.getElementById('loginPopupActionText');
+            if (actionLink && actionText) {
+                if (item.action_url) {
+                    actionLink.style.display = 'inline-flex';
+                    actionLink.href = item.action_url;
+                    actionText.textContent = item.action_text || 'Open Action';
+                } else {
+                    actionLink.style.display = 'none';
+                }
+            }
+
+            const prevBtn = document.getElementById('loginPopupPrevBtn');
+            const nextBtn = document.getElementById('loginPopupNextBtn');
+            if (prevBtn) prevBtn.disabled = (index === 0);
+            if (nextBtn) nextBtn.disabled = (index === loginAnnouncementsData.length - 1);
+        }
+
+        function prevLoginAnnouncement() {
+            if (currentLoginNoticeIndex > 0) {
+                renderLoginAnnouncement(currentLoginNoticeIndex - 1);
+            }
+        }
+
+        function nextLoginAnnouncement() {
+            if (currentLoginNoticeIndex < loginAnnouncementsData.length - 1) {
+                renderLoginAnnouncement(currentLoginNoticeIndex + 1);
+            }
+        }
+
+        function closeLoginAnnouncementModal(markAsRead = false) {
+            const modal = document.getElementById('announcementLoginPopupModal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+
+            if (markAsRead && loginAnnouncementsData && loginAnnouncementsData[currentLoginNoticeIndex]) {
+                const item = loginAnnouncementsData[currentLoginNoticeIndex];
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                    || '{{ csrf_token() }}';
+
+                fetch(`/announcements/${item.id}/read`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': token,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.unread_count !== undefined) {
+                        updateGlobalAnnouncementBadges(data.unread_count);
+                    }
+                })
+                .catch(err => console.error(err));
+            }
+        }
+
+        if (loginAnnouncementsData && loginAnnouncementsData.length > 0) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    renderLoginAnnouncement(0);
+                    document.body.style.overflow = 'hidden';
+                });
+            } else {
+                renderLoginAnnouncement(0);
+                document.body.style.overflow = 'hidden';
+            }
+        }
 
         (function initializeGlobalMessageUnreadBadges() {
             const messagePollUrl = @json(route('messages.poll'));
@@ -5413,6 +6022,10 @@
                     return false;
                 }
 
+                if (form.matches('form[enctype="multipart/form-data"]')) {
+                    return false;
+                }
+
                 if (submitter && submitter.dataset && submitter.dataset.pageLoading === 'false') {
                     return false;
                 }
@@ -5655,6 +6268,10 @@
                     return;
                 }
 
+                if (document.querySelector('form[enctype="multipart/form-data"][data-upload-in-progress="true"]')) {
+                    return;
+                }
+
                 showPageLoader({ immediate: true });
             });
 
@@ -5815,6 +6432,106 @@
                         }
                     });
                 });
+            }, true);
+        })();
+
+        (function enhanceDocumentUploads() {
+            const multipartSelector = 'form[enctype="multipart/form-data"]';
+
+            function formatBytes(bytes) {
+                if (bytes < 1024 * 1024) {
+                    return `${Math.ceil(bytes / 1024)} KB`;
+                }
+
+                return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+            }
+
+            function showUploadError(input, message) {
+                input.setCustomValidity(message);
+                input.reportValidity();
+                input.addEventListener('change', function clearUploadError() {
+                    input.setCustomValidity('');
+                    input.removeEventListener('change', clearUploadError);
+                }, { once: true });
+            }
+
+            function validateFileSize(input) {
+                const maxSizeKb = Number(input.dataset.maxSizeKb || 0);
+                if (!maxSizeKb || !input.files || input.files.length === 0) {
+                    return true;
+                }
+
+                const oversizedFile = Array.from(input.files).find((file) => file.size > maxSizeKb * 1024);
+                if (!oversizedFile) {
+                    input.setCustomValidity('');
+                    return true;
+                }
+
+                showUploadError(
+                    input,
+                    `${oversizedFile.name} is ${formatBytes(oversizedFile.size)}. The maximum allowed size is ${formatBytes(maxSizeKb * 1024)}.`
+                );
+                return false;
+            }
+
+            document.addEventListener('change', function(event) {
+                const input = event.target;
+                if (input instanceof HTMLInputElement && input.type === 'file') {
+                    validateFileSize(input);
+                }
+            }, true);
+
+            document.addEventListener('submit', function(event) {
+                const form = event.target;
+                if (!(form instanceof HTMLFormElement) || !form.matches(multipartSelector)) {
+                    return;
+                }
+
+                const submitter = event.submitter;
+                const submitterText = (submitter?.textContent || submitter?.value || '').trim().toLowerCase();
+                const requiresConfirmation = form.dataset.confirm
+                    || submitter?.dataset?.confirm
+                    || submitterText.includes('save')
+                    || submitterText.includes('delete');
+                if (requiresConfirmation && form.dataset.confirmed !== 'true') {
+                    return;
+                }
+                if (form.dataset.confirmed === 'true') {
+                    delete form.dataset.confirmed;
+                }
+
+                const fileInputs = Array.from(form.querySelectorAll('input[type="file"]'));
+                if (fileInputs.some((input) => !validateFileSize(input))) {
+                    event.preventDefault();
+                    return;
+                }
+
+                if (form.dataset.uploadInProgress === 'true') {
+                    event.preventDefault();
+                    return;
+                }
+
+                form.dataset.uploadInProgress = 'true';
+                form.setAttribute('aria-busy', 'true');
+
+                if (submitter && !submitter.disabled) {
+                    submitter.dataset.originalUploadText = submitter.innerHTML;
+                    submitter.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Uploading...';
+                }
+
+                form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach((button) => {
+                    if (button !== submitter) {
+                        button.disabled = true;
+                    }
+                    button.setAttribute('aria-disabled', 'true');
+                });
+
+                const progress = document.createElement('div');
+                progress.setAttribute('role', 'status');
+                progress.setAttribute('aria-live', 'polite');
+                progress.textContent = 'Uploading document. Please keep this page open.';
+                progress.style.cssText = 'width:100%;margin-top:8px;color:#2563eb;font-size:11px;font-weight:600;';
+                form.appendChild(progress);
             }, true);
         })();
 

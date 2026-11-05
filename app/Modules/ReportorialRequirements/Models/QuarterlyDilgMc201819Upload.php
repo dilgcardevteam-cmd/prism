@@ -28,6 +28,7 @@ class QuarterlyDilgMc201819Upload extends Model
         'approved_by_dilg_ro',
         'approval_remarks',
         'user_remarks',
+        'regional_replacement_used_at',
     ];
 
     protected $casts = [
@@ -36,5 +37,6 @@ class QuarterlyDilgMc201819Upload extends Model
         'approved_at' => 'datetime',
         'approved_at_dilg_po' => 'datetime',
         'approved_at_dilg_ro' => 'datetime',
+        'regional_replacement_used_at' => 'datetime',
     ];
 }

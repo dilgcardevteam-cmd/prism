@@ -133,9 +133,10 @@
                     $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
                     $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
                     $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
-                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
+                    $canReplaceForRegionalValidation = $hasFile && $isPendingRo && empty($doc->regional_replacement_used_at) && $canUploadForLgu;
+                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned && !$canReplaceForRegionalValidation) || ($isReturned && !$canResubmitDoc);
                     $requestedMonth = strtoupper(trim((string) request()->query('month', '')));
                     $isExpandedByDefault = $requestedMonth !== ''
                         ? $requestedMonth === $monthCode
@@ -318,7 +319,7 @@
                                             {{ $submissionTimeliness['label'] }}
                                         </span>
                                     @endif
-                                    @if (Auth::user()->isSuperAdmin())
+                                    @if (Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro')
                                         <form method="POST" action="{{ route('reports.monthly.pd-no-pbbm-2025-1572-1573.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                             @csrf
                                             @method('DELETE')

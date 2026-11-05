@@ -80,7 +80,9 @@
                         $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
                         $configuredMonthDeadline = $configuredMonthlyDeadlines[$monthCode] ?? null;
                         $monthDeadlineDisplay = is_array($configuredMonthDeadline) ? (string) ($configuredMonthDeadline['display'] ?? '') : '';
-                        $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
+                        $isPendingRo = $doc && $doc->status === 'pending_ro';
+                        $canReplaceForRegionalValidation = $hasFile && $isPendingRo && empty($doc->regional_replacement_used_at) && $canUploadForLgu;
+                        $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned && !$canReplaceForRegionalValidation) || ($isReturned && !$canResubmitDoc);
                         $isExpandedByDefault = $loop->first;
                         $badge = $workflowService->resolveStatusBadge($hasFile ? $doc : null, $officeName);
                         $statusLabel = $badge['label'] ?? 'Pending Upload';
@@ -236,7 +238,7 @@
                                                 {{ $submissionTimeliness['label'] }}
                                             </span>
                                         @endif
-                                        @if (Auth::user()->isSuperAdmin())
+                                        @if (Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro')
                                             <form method="POST" action="{{ route('reports.monthly.swa-annex-f.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                                 @csrf
                                                 @method('DELETE')
@@ -504,7 +506,5 @@
         </style>
     </div>
 @endsection
-
-
 
 

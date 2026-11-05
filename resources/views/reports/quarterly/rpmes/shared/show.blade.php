@@ -144,7 +144,11 @@
                 ];
             }
             $canUploadForLgu = Auth::user()->canSubmitForLgu($project->province, $project->city_municipality);
-            $canUpload = $canUploadForLgu && (!$hasUpload || $isReturned);
+            $canUpload = $canUploadForLgu && (
+                !$hasUpload
+                || $isReturned
+                || ($isPendingRo && empty($upload->regional_replacement_used_at))
+            );
             $canDelete = Auth::user()->isSuperAdmin() && $hasUpload;
             $canUserValidateCheck = ($hasUpload && $upload)
                 ? $workflowService->canUserValidate(Auth::user(), $upload, $project->city_municipality, $project->province)
@@ -208,6 +212,8 @@
                         <div style="margin-bottom:12px;font-size:12px;color:#64748b;">
                             @if(!$canUploadForLgu)
                                 You are not authorized to upload reports for this LGU.
+                            @elseif($hasUpload && $isPendingRo && !empty($upload->regional_replacement_used_at))
+                                The one-time replacement has already been used. Upload is disabled while this report is awaiting Regional Office validation.
                             @elseif($hasUpload && !$isReturned)
                                 Upload is locked while the submitted report is under review or already approved.
                             @endif
@@ -282,6 +288,49 @@
 <script>
     const rpmesApprovalBaseUrl = @json(route($formMeta['index_route']));
     const rpmesReportShortName = @json($formMeta['report_short_name']);
+    const rpmesAccordionStorageKey = 'rpmes_stage_' + encodeURIComponent(@json($project->project_code));
+
+    function saveRpmesAccordionState(elementId = null) {
+        try {
+            const openQuarter = elementId
+                || Array.from(document.querySelectorAll('[id^="quarter-"]'))
+                    .find((element) => element.style.display === 'block')
+                    ?.id
+                || null;
+            sessionStorage.setItem(rpmesAccordionStorageKey, JSON.stringify({
+                openQuarter: openQuarter,
+                scrollY: window.scrollY || window.pageYOffset || 0,
+            }));
+        } catch (error) {
+            // Ignore browser storage errors.
+        }
+    }
+
+    function restoreRpmesAccordionState() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('quarter')) {
+                return;
+            }
+
+            const state = JSON.parse(sessionStorage.getItem(rpmesAccordionStorageKey) || 'null');
+            if (!state?.openQuarter) {
+                return;
+            }
+
+            const quarter = document.getElementById(state.openQuarter);
+            if (!quarter || quarter.style.display === 'block') {
+                return;
+            }
+
+            toggleAccordion(state.openQuarter);
+            if (typeof state.scrollY === 'number') {
+                requestAnimationFrame(() => window.scrollTo({ top: state.scrollY, behavior: 'instant' }));
+            }
+        } catch (error) {
+            // Ignore malformed or unavailable browser storage.
+        }
+    }
 
     function toggleAccordion(elementId) {
         const element = document.getElementById(elementId);
@@ -310,7 +359,13 @@
         } else {
             element.style.display = 'none';
             if (icon) icon.style.transform = 'rotate(0deg)';
+            if (elementId.startsWith('quarter-')) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('quarter');
+                window.history.replaceState({}, '', url.toString());
+            }
         }
+        saveRpmesAccordionState();
     }
 
     function renderSelectedFileName(filenameDiv, fileName) {
@@ -373,6 +428,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        restoreRpmesAccordionState();
         document.querySelectorAll('.ops-upload-filename').forEach(function (filenameDiv) {
             if (filenameDiv.textContent && filenameDiv.textContent.trim().length > 0) {
                 filenameDiv.classList.add('has-file');

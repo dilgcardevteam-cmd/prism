@@ -116,7 +116,7 @@
                     ];
                 };
                 $resolveStatusTheme = function ($doc) use ($officeName) {
-                    $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
+                    $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->contains(fn ($file) => !empty($file->file_path))));
                     if (!$hasFile) {
                         return [
                             'label' => 'Pending Upload',
@@ -153,8 +153,11 @@
                     $inputId = 'lpmc-doc-input-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
                     $buttonId = 'lpmc-doc-btn-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
                     $filenameId = 'lpmc-doc-file-' . $docBlock['doc_type'] . '-' . $docBlock['year'];
-                    $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
+                    $docFiles = $doc ? ($doc->files ? $doc->files->filter(fn ($f) => !empty($f->file_path)) : collect()) : collect();
+                    $hasFile = $doc && (!empty($doc->file_path) || $docFiles->isNotEmpty());
                     $isReturned = $doc && $doc->status === 'returned';
+                    $isPendingRo = $doc && $doc->status === 'pending_ro';
+                    $hasUsedRegionalReplacement = $doc && !empty($doc->regional_replacement_used_at);
                     $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
                     $documentUploaderId = (int) ($doc->uploaded_by ?? 0);
                     $currentUserId = (int) (Auth::user()->idno ?? Auth::id());
@@ -166,7 +169,17 @@
                             Auth::user()->isSuperAdmin()
                             || ($canUploadForLgu && $documentUploaderId > 0 && $documentUploaderId === $currentUserId)
                         );
-                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
+                    $canDeletePendingRegionalDocument = $doc
+                        && $isPendingRo
+                        && $hasFile
+                        && empty($doc->regional_replacement_used_at)
+                        && $canUploadForLgu;
+                    $canReplaceDoc = $canDeleteReturnedDocument || $canDeletePendingRegionalDocument;
+                    $reachedReplacementLimit = $hasFile && $isPendingRo && $hasUsedRegionalReplacement;
+                    $disableUploadInput = !$canUploadForLgu
+                        || ($hasFile && !$isReturned)
+                        || ($isReturned && !$canResubmitDoc)
+                        || $reachedReplacementLimit;
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
                     $statusTheme = $resolveStatusTheme($doc);
@@ -315,8 +328,7 @@
                             </div>
                         @endforeach
                     </div>
-                    @if ($doc)
-                        @php $docFiles = $doc->files ?? collect(); @endphp
+                    @if ($doc && $hasFile)
                         @if ($docFiles->isNotEmpty())
                             <div style="margin-bottom: 10px;">
                                 @foreach ($docFiles as $docFile)
@@ -337,7 +349,7 @@
                                     </div>
                                 @endforeach
                             </div>
-                        @elseif ($doc->file_path)
+                        @elseif (!empty($doc->file_path))
                             {{-- Legacy single-file display (before multi-file table existed) --}}
                             @php $displayName = $doc->original_filename ?: basename($doc->file_path); @endphp
                             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
@@ -351,45 +363,55 @@
                                 </button>
                             </div>
                         @endif
-                        @if ($canDeleteReturnedDocument)
-                            <button type="submit" form="lpmc-delete-returned-{{ $doc->id }}" onclick="return confirm('Delete this returned document and all of its files so you can upload a replacement?');" style="display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 10px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
-                                <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete returned document
+                        @if ($canReplaceDoc)
+                            <button
+                                type="button"
+                                onclick="openLpmcReplaceModal('lpmc-delete-returned-{{ $doc->id }}', '{{ addslashes($docBlock['label']) }}', {{ $canDeletePendingRegionalDocument ? 'true' : 'false' }})"
+                                style="display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 11px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; transition: background-color 0.15s ease;"
+                                onmouseover="this.style.background='#ffe4e6'"
+                                onmouseout="this.style.background='#fff1f2'"
+                            >
+                                <i class="fas fa-sync-alt" aria-hidden="true"></i> Replace document
                             </button>
                         @endif
                     @endif
-                    <input
-                        id="{{ $inputId }}"
-                        type="file"
-                        name="document[]"
-                        multiple
-                        required
-                        @disabled($disableUploadInput)
-                        class="ops-upload-input dashboard-file-input"
-                        data-max-size-kb="25600"
-                        style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; margin-bottom: 8px; background-color: {{ $disableUploadInput ? '#f3f4f6' : '#ffffff' }}; cursor: {{ $disableUploadInput ? 'not-allowed' : 'auto' }};"
-                        onchange="showLpmcSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
-                    >
-                    @if ($disableUploadInput)
-                        <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                            @if (!$canUploadForLgu)
-                                You are not authorized to upload documents for this LGU.
-                            @elseif ($isReturned && !$canResubmitDoc)
-                                Returned reports can only be edited and resubmitted by the originating submitter.
-                            @else
-                                File already submitted. Choose file is disabled until the current file is returned.
-                            @endif
-                        </div>
-                    @endif
-                    <div id="{{ $filenameId }}" class="ops-upload-filename" style="display: none; margin-bottom: 8px; font-size: 12px; color: #6b7280;"></div>
-                    <button
-                        type="submit"
-                        id="{{ $buttonId }}"
-                        @disabled($disableUploadInput)
-                        class="ops-upload-submit"
-                        style="width: 100%; padding: 8px 12px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: {{ $disableUploadInput ? 'not-allowed' : 'pointer' }}; font-weight: 600; font-size: 12px; opacity: {{ $disableUploadInput ? '0.55' : '0' }}; pointer-events: none; transition: all 0.3s ease;"
-                    >
-                        Upload
-                    </button>
+                    <div style="{{ $hasFile && $canReplaceDoc ? 'display: none;' : '' }}">
+                        <input
+                            id="{{ $inputId }}"
+                            type="file"
+                            name="document[]"
+                            multiple
+                            required
+                            @disabled($disableUploadInput)
+                            class="ops-upload-input dashboard-file-input"
+                            data-max-size-kb="25600"
+                            style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; margin-bottom: 8px; background-color: {{ $disableUploadInput ? '#f3f4f6' : '#ffffff' }}; cursor: {{ $disableUploadInput ? 'not-allowed' : 'auto' }};"
+                            onchange="showLpmcSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
+                        >
+                        @if ($disableUploadInput)
+                            <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
+                                @if (!$canUploadForLgu)
+                                    You are not authorized to upload documents for this LGU.
+                                @elseif ($isReturned && !$canResubmitDoc)
+                                    Returned reports can only be edited and resubmitted by the originating submitter.
+                                @elseif ($reachedReplacementLimit)
+                                    The one-time replacement has already been used. Upload is disabled while this report is awaiting Regional Office validation.
+                                @else
+                                    File already submitted. Choose file is disabled until the current file is returned.
+                                @endif
+                            </div>
+                        @endif
+                        <div id="{{ $filenameId }}" class="ops-upload-filename" style="display: none; margin-bottom: 8px; font-size: 12px; color: #6b7280;"></div>
+                        <button
+                            type="submit"
+                            id="{{ $buttonId }}"
+                            @disabled($disableUploadInput)
+                            class="ops-upload-submit"
+                            style="width: 100%; padding: 8px 12px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: {{ $disableUploadInput ? 'not-allowed' : 'pointer' }}; font-weight: 600; font-size: 12px; opacity: {{ $disableUploadInput ? '0.55' : '0' }}; pointer-events: none; transition: all 0.3s ease;"
+                        >
+                            Upload
+                        </button>
+                    </div>
                     @php
                         $canValidateDoc = $hasFile && $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                     @endphp
@@ -413,7 +435,7 @@
                             </form>
                         @endforeach
                     @endif
-                    @if ($canDeleteReturnedDocument)
+                    @if ($canReplaceDoc)
                         <form id="lpmc-delete-returned-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
                             @csrf
                             @method('DELETE')
@@ -473,8 +495,11 @@
                                     $filenameId = 'lpmc-q-file-' . $qDoc['doc_type'] . '-' . $quarter;
                                     $disableQuarterUpload = is_array($configuredQuarterDeadline)
                                         && !empty($configuredQuarterDeadline['is_closed']);
-                                    $hasFile = $doc && ($doc->file_path || ($doc->files && $doc->files->isNotEmpty()));
+                                    $docFiles = $doc ? ($doc->files ? $doc->files->filter(fn ($f) => !empty($f->file_path)) : collect()) : collect();
+                                    $hasFile = $doc && (!empty($doc->file_path) || $docFiles->isNotEmpty());
                                     $isReturned = $doc && $doc->status === 'returned';
+                                    $isPendingRo = $doc && $doc->status === 'pending_ro';
+                                    $hasUsedRegionalReplacement = $doc && !empty($doc->regional_replacement_used_at);
                                     $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
                                     $documentUploaderId = (int) ($doc->uploaded_by ?? 0);
                                     $currentUserId = (int) (Auth::user()->idno ?? Auth::id());
@@ -486,9 +511,17 @@
                                             Auth::user()->isSuperAdmin()
                                             || ($canUploadForLgu && $documentUploaderId > 0 && $documentUploaderId === $currentUserId)
                                         );
+                                    $canDeletePendingRegionalDocument = $doc
+                                        && $isPendingRo
+                                        && $hasFile
+                                        && empty($doc->regional_replacement_used_at)
+                                        && $canUploadForLgu;
+                                    $canReplaceDoc = $canDeleteReturnedDocument || $canDeletePendingRegionalDocument;
+                                    $reachedReplacementLimit = $hasFile && $isPendingRo && $hasUsedRegionalReplacement;
                                     $disableUploadInput = !$canUploadForLgu
                                         || ($hasFile && !$isReturned)
                                         || ($isReturned && !$canResubmitDoc)
+                                        || $reachedReplacementLimit
                                         || $disableQuarterUpload;
                                     
                                     $statusTheme = $resolveStatusTheme($doc);
@@ -645,8 +678,7 @@
                                             </div>
                                         @endforeach
                                     </div>
-                                    @if ($doc)
-                                        @php $docFiles = $doc->files ?? collect(); @endphp
+                                    @if ($doc && $hasFile)
                                         @if ($docFiles->isNotEmpty())
                                             <div style="margin-bottom: 10px;">
                                                 @foreach ($docFiles as $docFile)
@@ -667,7 +699,7 @@
                                                     </div>
                                                 @endforeach
                                             </div>
-                                        @elseif ($doc->file_path)
+                                        @elseif (!empty($doc->file_path))
                                             {{-- Legacy single-file display --}}
                                             @php $displayName = $doc->original_filename ?: basename($doc->file_path); @endphp
                                             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
@@ -681,46 +713,57 @@
                                                 </button>
                                             </div>
                                         @endif
-                                        @if ($canDeleteReturnedDocument)
-                                            <button type="submit" form="lpmc-delete-returned-{{ $doc->id }}" onclick="return confirm('Delete this returned document and all of its files so you can upload a replacement?');" style="display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 10px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
-                                                <i class="fas fa-trash-alt" aria-hidden="true"></i> Delete returned document
+                                        @if ($canReplaceDoc)
+                                            <button
+                                                type="button"
+                                                onclick="openLpmcReplaceModal('lpmc-delete-returned-{{ $doc->id }}', '{{ addslashes($qDoc['label']) }}', {{ $canDeletePendingRegionalDocument ? 'true' : 'false' }})"
+                                                style="display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 7px 11px; background: #fff1f2; color: #b91c1c; border: 1px solid #fecdd3; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; transition: background-color 0.15s ease;"
+                                                onmouseover="this.style.background='#ffe4e6'"
+                                                onmouseout="this.style.background='#fff1f2'"
+                                            >
+                                                <i class="fas fa-sync-alt" aria-hidden="true"></i> Replace document
                                             </button>
                                         @endif
                                     @endif
-                                    <input
-                                        id="{{ $inputId }}"
-                                        type="file"
-                                        name="document[]"
-                                        multiple
-                                        required
-                                        @disabled($disableUploadInput)
-                                        class="dashboard-file-input"
-                                        data-max-size-kb="25600"
-                                        style="width: 100%; margin-bottom: 8px; background-color: {{ $disableUploadInput ? '#f3f4f6' : '#ffffff' }}; cursor: {{ $disableUploadInput ? 'not-allowed' : 'auto' }};"
-                                        onchange="showLpmcSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
-                                    >
-                                    @if ($disableUploadInput)
-                                        <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
-                                            @if ($disableQuarterUpload)
-                                                Uploads are closed for {{ $label }} based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
-                                            @elseif (!$canUploadForLgu)
-                                                You are not authorized to upload documents for this LGU.
-                                            @elseif ($isReturned && !$canResubmitDoc)
-                                                Returned reports can only be edited and resubmitted by the originating submitter.
-                                            @else
-                                                File already submitted. Choose file is disabled until the current file is returned.
-                                            @endif
-                                        </div>
-                                    @endif
-                                    <div id="{{ $filenameId }}" style="display: none; margin-bottom: 8px; font-size: 12px; color: #6b7280;"></div>
-                                    <button
-                                        type="submit"
-                                        id="{{ $buttonId }}"
-                                        @disabled($disableUploadInput)
-                                        style="width: 100%; padding: 8px 12px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: {{ $disableUploadInput ? 'not-allowed' : 'pointer' }}; font-weight: 600; font-size: 12px; opacity: {{ $disableUploadInput ? '0.55' : '0' }}; pointer-events: none; transition: all 0.3s ease;"
-                                    >
-                                        Upload
-                                    </button>
+                                    <div style="{{ $hasFile && $canReplaceDoc ? 'display: none;' : '' }}">
+                                        <input
+                                            id="{{ $inputId }}"
+                                            type="file"
+                                            name="document[]"
+                                            multiple
+                                            required
+                                            @disabled($disableUploadInput)
+                                            class="ops-upload-input dashboard-file-input"
+                                            data-max-size-kb="25600"
+                                            style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 12px; margin-bottom: 8px; background-color: {{ $disableUploadInput ? '#f3f4f6' : '#ffffff' }}; cursor: {{ $disableUploadInput ? 'not-allowed' : 'auto' }};"
+                                            onchange="showLpmcSaveButton(this, '{{ $buttonId }}', '{{ $filenameId }}')"
+                                        >
+                                        @if ($disableUploadInput)
+                                            <div style="margin-bottom: 8px; font-size: 11px; color: #6b7280;">
+                                                @if ($disableQuarterUpload)
+                                                    Uploads are closed for {{ $label }} based on the superadmin deadline{{ $quarterDeadlineDisplay !== '' ? ' (' . $quarterDeadlineDisplay . ')' : '' }}.
+                                                @elseif (!$canUploadForLgu)
+                                                    You are not authorized to upload documents for this LGU.
+                                                @elseif ($isReturned && !$canResubmitDoc)
+                                                    Returned reports can only be edited and resubmitted by the originating submitter.
+                                                @elseif ($reachedReplacementLimit)
+                                                    The one-time replacement has already been used. Upload is disabled while this report is awaiting Regional Office validation.
+                                                @else
+                                                    File already submitted. Choose file is disabled until the current file is returned.
+                                                @endif
+                                            </div>
+                                        @endif
+                                        <div id="{{ $filenameId }}" class="ops-upload-filename" style="display: none; margin-bottom: 8px; font-size: 12px; color: #6b7280;"></div>
+                                        <button
+                                            type="submit"
+                                            id="{{ $buttonId }}"
+                                            @disabled($disableUploadInput)
+                                            class="ops-upload-submit"
+                                            style="width: 100%; padding: 8px 12px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: {{ $disableUploadInput ? 'not-allowed' : 'pointer' }}; font-weight: 600; font-size: 12px; opacity: {{ $disableUploadInput ? '0.55' : '0' }}; pointer-events: none; transition: all 0.3s ease;"
+                                        >
+                                            Upload
+                                        </button>
+                                    </div>
                                     @php
                                         $canValidateDoc = $hasFile && $doc ? $workflowService->canUserValidate(Auth::user(), $doc, $officeName, $province)['allowed'] : false;
                                     @endphp
@@ -744,7 +787,7 @@
                                             </form>
                                         @endforeach
                                     @endif
-                                    @if ($canDeleteReturnedDocument)
+                                    @if ($canReplaceDoc)
                                         <form id="lpmc-delete-returned-{{ $doc->id }}" method="POST" action="{{ route('local-project-monitoring-committee.delete-document', ['lpmc' => $officeName, 'docId' => $doc->id]) }}" style="display: none;">
                                             @csrf
                                             @method('DELETE')
@@ -859,6 +902,60 @@
     </button>
 
     <script>
+        const lpmcAccordionStorageKey = @json('lpmc_stage_' . $officeName);
+        let lpmcStateRestored = false;
+
+        function saveLpmcAccordionState(targetId = null) {
+            try {
+                const openPanel = targetId
+                    || Array.from(document.querySelectorAll('.lpmc-accordion-toggle'))
+                        .map((button) => button.getAttribute('data-target'))
+                        .find((id) => document.getElementById(id)?.style.display === 'block')
+                    || null;
+
+                sessionStorage.setItem(lpmcAccordionStorageKey, JSON.stringify({
+                    openPanel: openPanel,
+                    scrollY: window.scrollY || window.pageYOffset || 0,
+                }));
+            } catch (error) {
+                // Ignore browser storage errors.
+            }
+        }
+
+        function restoreLpmcAccordionState() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (params.has('quarter') || params.has('document')) {
+                    return;
+                }
+
+                const state = JSON.parse(sessionStorage.getItem(lpmcAccordionStorageKey) || 'null');
+                const panel = state?.openPanel ? document.getElementById(state.openPanel) : null;
+                const button = state?.openPanel
+                    ? Array.from(document.querySelectorAll('.lpmc-accordion-toggle'))
+                        .find((candidate) => candidate.getAttribute('data-target') === state.openPanel)
+                    : null;
+                if (!panel || !button || panel.style.display === 'block') {
+                    return;
+                }
+
+                panel.style.display = 'block';
+                button.setAttribute('aria-expanded', 'true');
+                const icon = button.querySelector('i');
+                if (icon) {
+                    icon.style.transform = 'rotate(180deg)';
+                }
+
+                if (typeof state.scrollY === 'number') {
+                    requestAnimationFrame(() => window.scrollTo({ top: state.scrollY, behavior: 'instant' }));
+                }
+            } catch (error) {
+                // Ignore malformed or unavailable browser storage.
+            } finally {
+                lpmcStateRestored = true;
+            }
+        }
+
         document.querySelectorAll('.lpmc-accordion-toggle').forEach(function (button) {
             button.addEventListener('click', function () {
                 const targetId = button.getAttribute('data-target');
@@ -887,6 +984,7 @@
                 if (icon) {
                     icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
                 }
+                saveLpmcAccordionState(isOpen ? null : targetId);
             });
         });
 
@@ -917,8 +1015,21 @@
                         documentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     });
                 }
+                return;
             }
+
+            restoreLpmcAccordionState();
+            lpmcStateRestored = true;
         });
+
+        let lpmcScrollDebounce = null;
+        window.addEventListener('scroll', function () {
+            if (!lpmcStateRestored) {
+                return;
+            }
+            window.clearTimeout(lpmcScrollDebounce);
+            lpmcScrollDebounce = window.setTimeout(saveLpmcAccordionState, 250);
+        }, { passive: true });
     </script>
 
     <script>
@@ -1514,6 +1625,96 @@
             const modal = document.getElementById('lpmcApprovalModal');
             if (event.target === modal) {
                 closeLpmcApprovalModal();
+            }
+        });
+    </script>
+
+    <div id="lpmcReplaceModal" style="display: none; position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1200; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: white; border-radius: 12px; max-width: 460px; width: 92%; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22); overflow: hidden;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: white;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-sync-alt" style="font-size: 15px;"></i>
+                    <h3 style="margin: 0; color: white; font-size: 16px; font-weight: 700;">Replace Document</h3>
+                </div>
+                <button type="button" onclick="closeLpmcReplaceModal()" aria-label="Close" style="border: none; background: rgba(255,255,255,0.15); color: white; width: 28px; height: 28px; border-radius: 999px; cursor: pointer; font-size: 20px; display: inline-flex; align-items: center; justify-content: center; line-height: 1;">&times;</button>
+            </div>
+            <div style="padding: 20px 22px;">
+                <div style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px;">
+                    <div style="width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div>
+                        <div id="lpmcReplaceDocumentLabel" style="font-weight: 700; color: #111827; font-size: 14px; margin-bottom: 4px;"></div>
+                        <p style="margin: 0; color: #4b5563; font-size: 12.5px; line-height: 1.5;">
+                            Are you sure you want to replace this document? The current document and all of its files will be deleted so you can select and upload a replacement.
+                        </p>
+                    </div>
+                </div>
+                <div id="lpmcReplaceNotice" style="display: none; padding: 9px 12px; background: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; font-size: 11.5px; color: #92400e; margin-bottom: 16px; line-height: 1.45;">
+                    <i class="fas fa-info-circle" style="margin-right: 4px;"></i>
+                    <strong>Important:</strong> You have <strong>one replacement opportunity</strong> while this document is awaiting Regional Office validation. Once replaced, further replacements will be disabled.
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
+                    <button type="button" onclick="closeLpmcReplaceModal()" style="padding: 9px 16px; background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12.5px;">Cancel</button>
+                    <button type="button" id="lpmcConfirmReplaceBtn" onclick="confirmLpmcReplace()" style="padding: 9px 18px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-trash-alt"></i> Yes, Replace Document
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let activeLpmcReplaceFormId = null;
+
+        function openLpmcReplaceModal(formId, documentLabel, isRegionalPending) {
+            activeLpmcReplaceFormId = formId;
+            const modal = document.getElementById('lpmcReplaceModal');
+            const labelEl = document.getElementById('lpmcReplaceDocumentLabel');
+            const noticeEl = document.getElementById('lpmcReplaceNotice');
+
+            if (labelEl) {
+                labelEl.textContent = documentLabel || 'Document';
+            }
+            if (noticeEl) {
+                noticeEl.style.display = isRegionalPending ? 'block' : 'none';
+            }
+            if (modal) {
+                modal.style.display = 'flex';
+            }
+        }
+
+        function closeLpmcReplaceModal() {
+            const modal = document.getElementById('lpmcReplaceModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            activeLpmcReplaceFormId = null;
+        }
+
+        function confirmLpmcReplace() {
+            if (!activeLpmcReplaceFormId) return;
+            const form = document.getElementById(activeLpmcReplaceFormId);
+            if (form) {
+                const btn = document.getElementById('lpmcConfirmReplaceBtn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+                }
+                form.submit();
+            }
+        }
+
+        window.addEventListener('click', function (event) {
+            const modal = document.getElementById('lpmcReplaceModal');
+            if (event.target === modal) {
+                closeLpmcReplaceModal();
+            }
+        });
+
+        window.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeLpmcReplaceModal();
             }
         });
     </script>

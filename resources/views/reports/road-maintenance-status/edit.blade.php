@@ -129,9 +129,10 @@
                     $hasFile = $doc && $doc->file_path;
                     $isReturned = $doc && $doc->status === 'returned';
                     $canResubmitDoc = $isReturned ? $workflowService->canUserResubmit(Auth::user(), $doc)['allowed'] : true;
-                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned) || ($isReturned && !$canResubmitDoc);
                     $isApprovedRo = $doc && $doc->approved_at_dilg_ro;
                     $isPendingRo = $doc && $doc->approved_at_dilg_po && !$doc->approved_at_dilg_ro;
+                    $canReplaceForRegionalValidation = $hasFile && $isPendingRo && empty($doc->regional_replacement_used_at) && $canUploadForLgu;
+                    $disableUploadInput = !$canUploadForLgu || ($hasFile && !$isReturned && !$canReplaceForRegionalValidation) || ($isReturned && !$canResubmitDoc);
                     $requestedQuarter = strtoupper(trim((string) request()->query('quarter', '')));
                     $isExpandedByDefault = $requestedQuarter !== ''
                         ? $requestedQuarter === $quarter
@@ -318,7 +319,7 @@
                                 $isApprovedDoc = (bool) ($doc && ($doc->approved_at_dilg_ro || strtolower((string) $doc->status) === 'approved'));
                                 $canDeleteDoc = $hasFile && $doc && (
                                     Auth::user()->isSuperAdmin()
-                                    || (!$isApprovedDoc && Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'delete') && Auth::user()->canAccessLguScope($province, $officeName))
+                                    || (!$isApprovedDoc && $doc->status !== 'pending_ro' && Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'delete') && Auth::user()->canAccessLguScope($province, $officeName))
                                 );
                             @endphp
                             @if ($doc && $doc->file_path)

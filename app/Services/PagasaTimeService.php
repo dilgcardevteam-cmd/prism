@@ -12,6 +12,10 @@ class PagasaTimeService
     private const PAGASA_URL = 'https://oras.pagasa.dost.gov.ph/';
     private const CACHE_KEY = 'pagasa_time_offset_signed_v2';
     private const CACHE_DURATION = 3600; // 1 hour
+    private const CONNECT_TIMEOUT_SECONDS = 1;
+    private const REQUEST_TIMEOUT_SECONDS = 2;
+
+    private static ?int $requestOffset = null;
 
     /**
      * Get current time from PAGASA server
@@ -68,26 +72,36 @@ class PagasaTimeService
      */
     public static function getTimeOffset(): int
     {
+        if (self::$requestOffset !== null) {
+            return self::$requestOffset;
+        }
+
         try {
             $cachedOffset = Cache::get(self::CACHE_KEY);
             if (is_numeric($cachedOffset)) {
-                return (int) $cachedOffset;
+                self::$requestOffset = (int) $cachedOffset;
+
+                return self::$requestOffset;
             }
         } catch (\Throwable $exception) {
             Log::warning('PAGASA time offset cache read failed: ' . $exception->getMessage());
         }
 
         try {
-            $response = Http::connectTimeout(2)
-                ->timeout(3)
+            $response = Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+                ->timeout(self::REQUEST_TIMEOUT_SECONDS)
                 ->get(self::PAGASA_URL);
 
             if (!$response->successful()) {
+                self::$requestOffset = 0;
+
                 return 0;
             }
 
             $pagasaTime = self::parsePageTime($response->body());
             if (!$pagasaTime) {
+                self::$requestOffset = 0;
+
                 return 0;
             }
 
@@ -99,9 +113,13 @@ class PagasaTimeService
                 Log::warning('PAGASA time offset cache write failed: ' . $exception->getMessage());
             }
 
-            return $offset;
+            self::$requestOffset = $offset;
+
+            return self::$requestOffset;
         } catch (\Throwable $exception) {
             Log::warning('PAGASA time fetch failed: ' . $exception->getMessage());
+            self::$requestOffset = 0;
+
             return 0;
         }
     }
@@ -124,6 +142,7 @@ class PagasaTimeService
      */
     public static function clearCache(): void
     {
+        self::$requestOffset = null;
         Cache::forget(self::CACHE_KEY);
     }
 }

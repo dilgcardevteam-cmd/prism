@@ -34,8 +34,9 @@ class FundUtilizationWorkflowService
         string $documentType,
         Model $record,
         User $uploader,
+        bool $allowRegionalReplacement = false,
     ): FundUtilizationApprovalWorkflow {
-        return DB::transaction(function () use ($report, $quarter, $documentType, $record, $uploader): FundUtilizationApprovalWorkflow {
+        return DB::transaction(function () use ($report, $quarter, $documentType, $record, $uploader, $allowRegionalReplacement): FundUtilizationApprovalWorkflow {
             $projectCode = $report->project_code;
 
             $workflow = FundUtilizationApprovalWorkflow::query()
@@ -47,7 +48,12 @@ class FundUtilizationWorkflowService
             $isResubmission = $workflow !== null;
             $previousStatus = $workflow?->status;
 
-            if ($workflow && !$this->isReturnedStatus($workflow->status) && $workflow->status !== 'Approved') {
+            $isPendingRegionalValidation = $workflow
+                && (int) ($workflow->current_approval_level ?? 0) === 2
+                && str_starts_with((string) $workflow->status, 'Pending Level 2');
+
+            if ($workflow && !$this->isReturnedStatus($workflow->status) && $workflow->status !== 'Approved'
+                && !($allowRegionalReplacement && $isPendingRegionalValidation)) {
                 throw new RuntimeException('This submission is already under validation and cannot be resubmitted yet.');
             }
 
@@ -65,7 +71,9 @@ class FundUtilizationWorkflowService
                 $workflow->revision_number = ($workflow->revision_number ?? 1) + 1;
             }
 
-            $targetLevel = $this->entryLevelForUploader($workflow, $uploader);
+            $targetLevel = $isPendingRegionalValidation
+                ? 2
+                : $this->entryLevelForUploader($workflow, $uploader);
             $validator = $this->resolveValidatorForLevel($report, $uploader, $targetLevel);
 
             $workflow->current_approval_level = $targetLevel;
@@ -77,7 +85,7 @@ class FundUtilizationWorkflowService
             $workflow->completed_at = null;
             $workflow->last_approved_level = 0;
             $workflow->save();
-            $this->syncRecordAfterSubmission($record, $documentType, $uploader, $targetLevel);
+            $this->syncRecordAfterSubmission($record, $documentType, $uploader, $targetLevel, $allowRegionalReplacement);
 
             $remarks = null;
             if ($documentType === 'mov' && isset($record->mov_file_path)) {
@@ -867,7 +875,7 @@ class FundUtilizationWorkflowService
         ]);
     }
 
-    protected function syncRecordAfterSubmission(Model $record, string $documentType, User $uploader, int $targetLevel): void
+    protected function syncRecordAfterSubmission(Model $record, string $documentType, User $uploader, int $targetLevel, bool $isRegionalReplacement = false): void
     {
         $fieldMap = $this->documentFieldMap($documentType);
         if ($fieldMap === []) {
@@ -877,6 +885,13 @@ class FundUtilizationWorkflowService
         $statusField = $fieldMap['status'] ?? null;
         if ($statusField) {
             $record->setAttribute($statusField, 'pending');
+        }
+
+        if ($isRegionalReplacement) {
+            $record->setAttribute($fieldMap['ro_approved_at'] ?? null, null);
+            $record->setAttribute($fieldMap['ro_approved_by'] ?? null, null);
+            $record->setAttribute($fieldMap['approved_at'] ?? null, null);
+            $record->setAttribute($fieldMap['approved_by'] ?? null, null);
         }
 
         if ($uploader->isProvincialDilgAssignment() || $uploader->normalizedRole() === User::ROLE_PROVINCIAL) {

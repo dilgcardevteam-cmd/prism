@@ -28,6 +28,7 @@ class FURMovUpload extends Model
         'encoder_id',
         'mov_uploaded_at',
         'mov_encoder_id',
+        'regional_replacement_used_at',
     ];
     
     protected $casts = [
@@ -37,6 +38,7 @@ class FURMovUpload extends Model
         'approved_at_dilg_po' => 'datetime',
         'approved_at_dilg_ro' => 'datetime',
         'mov_uploaded_at' => 'datetime',
+        'regional_replacement_used_at' => 'datetime',
     ];
     
     public function encoder()

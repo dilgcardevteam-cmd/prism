@@ -43,6 +43,9 @@ class FURWrittenNotice extends Model
         'house_approved_by_dilg_po', 'house_approved_by_dilg_ro',
         'senate_status', 'senate_approved_by', 'senate_approved_at', 'senate_approved_at_dilg_po', 'senate_approved_at_dilg_ro', 'senate_remarks', 'senate_uploaded_at', 'senate_encoder_id',
         'senate_approved_by_dilg_po', 'senate_approved_by_dilg_ro',
+        'dbm_regional_replacement_used_at', 'dilg_regional_replacement_used_at',
+        'speaker_regional_replacement_used_at', 'president_regional_replacement_used_at',
+        'house_regional_replacement_used_at', 'senate_regional_replacement_used_at',
     ];
     
     protected $casts = [
@@ -75,6 +78,12 @@ class FURWrittenNotice extends Model
         'senate_approved_at_dilg_po' => 'datetime',
         'senate_approved_at_dilg_ro' => 'datetime',
         'senate_uploaded_at' => 'datetime',
+        'dbm_regional_replacement_used_at' => 'datetime',
+        'dilg_regional_replacement_used_at' => 'datetime',
+        'speaker_regional_replacement_used_at' => 'datetime',
+        'president_regional_replacement_used_at' => 'datetime',
+        'house_regional_replacement_used_at' => 'datetime',
+        'senate_regional_replacement_used_at' => 'datetime',
     ];
     
     public function encoder()

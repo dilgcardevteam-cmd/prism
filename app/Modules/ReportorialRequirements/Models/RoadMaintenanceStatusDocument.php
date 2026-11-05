@@ -30,6 +30,7 @@ class RoadMaintenanceStatusDocument extends Model
         'approved_by_dilg_ro',
         'approval_remarks',
         'user_remarks',
+        'regional_replacement_used_at',
     ];
 
     protected $casts = [
@@ -39,5 +40,6 @@ class RoadMaintenanceStatusDocument extends Model
         'approved_at_dilg_po' => 'datetime',
         'approved_at_dilg_ro' => 'datetime',
         'year' => 'integer',
+        'regional_replacement_used_at' => 'datetime',
     ];
 }

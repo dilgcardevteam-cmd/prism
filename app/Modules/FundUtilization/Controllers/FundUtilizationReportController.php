@@ -755,6 +755,65 @@ class FundUtilizationReportController extends Controller
         return $user->isLguScopedUser() || $user->isProvincialDilgAssignment() || $user->isRegionalUser();
     }
 
+    private function regionalReplacementField(string $documentType): ?string
+    {
+        return match ($documentType) {
+            'mov', 'batch-document' => 'regional_replacement_used_at',
+            'fdp' => 'fdp_regional_replacement_used_at',
+            'posting-link' => 'posting_regional_replacement_used_at',
+            'written-notice-dbm' => 'dbm_regional_replacement_used_at',
+            'written-notice-dilg' => 'dilg_regional_replacement_used_at',
+            'written-notice-speaker' => 'speaker_regional_replacement_used_at',
+            'written-notice-president' => 'president_regional_replacement_used_at',
+            'written-notice-house' => 'house_regional_replacement_used_at',
+            'written-notice-senate' => 'senate_regional_replacement_used_at',
+            default => null,
+        };
+    }
+
+    private function canReplaceFundUtilizationComponent(
+        ?User $user,
+        $report,
+        $record,
+        string $documentType,
+        string $statusField,
+        string $roTimestampField,
+        ?string $path = null
+    ): bool {
+        $trackingField = $this->regionalReplacementField($documentType);
+
+        if (!$user || !$report || !$record || !$trackingField
+            || !$this->canUploadFundUtilizationDocuments($user, $report)
+            || $this->isRegionalDilgUser($user)
+            || !empty($record->{$trackingField})
+            || ($path !== null && trim((string) $path) === '')
+            || strtolower(trim((string) ($record->{$statusField} ?? ''))) !== 'pending'
+            || !empty($record->{$roTimestampField} ?? null)) {
+            return false;
+        }
+
+        $workflow = $this->resolveFundUtilizationWorkflowMap($report->project_code)[
+            $this->fundUtilizationWorkflowSubmissionKey($documentType, $record->quarter)
+        ] ?? null;
+
+        return $workflow
+            && (int) ($workflow->current_approval_level ?? 0) === 2
+            && str_starts_with((string) $workflow->status, 'Pending Level 2');
+    }
+
+    private function replacementDeniedResponse(Request $request, string $document, string $message)
+    {
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['message' => $message], 403);
+        }
+
+        return redirect()->route('fund-utilization.show', [
+            'projectCode' => request()->route('projectCode'),
+            'quarter' => $request->quarter,
+            'document' => $document,
+        ])->withErrors([$document => $message]);
+    }
+
     private function isFundUtilizationProvincialValidator(?User $user): bool
     {
         return (bool) ($user && $user->isProvincialDilgAssignment());
@@ -3289,13 +3348,23 @@ class FundUtilizationReportController extends Controller
             $existingRecord = FURMovUpload::where('project_code', $projectCode)
                                          ->where('quarter', $request->quarter)
                                          ->first();
+            $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+                $user, $report, $existingRecord, 'mov', 'status', 'approved_at_dilg_ro', $existingRecord?->mov_file_path
+            );
+            if ($existingRecord && $existingRecord->mov_file_path && !$isRegionalReplacement
+                && strtolower((string) $existingRecord->status) === 'pending') {
+                return $this->replacementDeniedResponse($request, 'mov', 'This MOV is awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+            }
             $oldFilePath = $existingRecord?->mov_file_path;
             $file = $request->file('mov_file');
             $originalName = basename(trim((string) $file->getClientOriginalName()));
+            if ($isRegionalReplacement) {
+                $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '-replacement-' . substr(uniqid('', true), -8) . '.' . $file->getClientOriginalExtension();
+            }
             $path = $file->storeAs('fur/mov/' . $projectCode, $originalName, 'public');
 
             try {
-                $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService) {
+                $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService, $isRegionalReplacement) {
                     $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
                     $updates = [
@@ -3306,6 +3375,9 @@ class FundUtilizationReportController extends Controller
                         'mov_encoder_id' => auth()->id(),
                         'status' => 'pending',
                     ];
+                    if ($isRegionalReplacement) {
+                        $updates['regional_replacement_used_at'] = SecureTimestampService::getUploadTimestamp();
+                    }
 
                     if (!$existingRecord) {
                         $updates['created_at'] = $secureTimestamp;
@@ -3316,7 +3388,7 @@ class FundUtilizationReportController extends Controller
                         $updates
                     );
 
-                    $workflowService->submitOrResubmit($report, $request->quarter, 'mov', $record, $user);
+                    $workflowService->submitOrResubmit($report, $request->quarter, 'mov', $record, $user, $isRegionalReplacement);
                     SecureTimestampService::logUploadTimestamp('mov', $projectCode, $request->quarter, $secureTimestamp);
 
                     return $record;
@@ -3335,7 +3407,7 @@ class FundUtilizationReportController extends Controller
                 ]);
             }
 
-            if ($oldFilePath && $oldFilePath !== $record->mov_file_path && Storage::disk('public')->exists($oldFilePath)) {
+            if (!$isRegionalReplacement && $oldFilePath && $oldFilePath !== $record->mov_file_path && Storage::disk('public')->exists($oldFilePath)) {
                 Storage::disk('public')->delete($oldFilePath);
             }
         }
@@ -3734,12 +3806,22 @@ class FundUtilizationReportController extends Controller
         $existingRecord = FURMovUpload::where('project_code', $projectCode)
             ->where('quarter', $quarter)
             ->first();
+        $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+            $user, $report, $existingRecord, 'mov', 'status', 'approved_at_dilg_ro', $existingRecord?->mov_file_path
+        );
+        if ($existingRecord && $existingRecord->mov_file_path && !$isRegionalReplacement
+            && strtolower((string) $existingRecord->status) === 'pending') {
+            throw new \RuntimeException('This MOV is awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+        }
         $oldFilePath = $existingRecord?->mov_file_path;
         $originalName = basename(trim((string) $file->getClientOriginalName()));
+        if ($isRegionalReplacement) {
+            $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '-replacement-' . substr(uniqid('', true), -8) . '.' . $file->getClientOriginalExtension();
+        }
         $path = $file->storeAs('fur/mov/' . $projectCode, $originalName, 'public');
 
         try {
-            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService, $batchCode) {
+            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService, $batchCode, $isRegionalReplacement) {
                 $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
                 $updates = [
@@ -3750,6 +3832,9 @@ class FundUtilizationReportController extends Controller
                     'mov_encoder_id' => auth()->id(),
                     'status' => 'pending',
                 ];
+                if ($isRegionalReplacement) {
+                    $updates['regional_replacement_used_at'] = $secureTimestamp;
+                }
 
                 if ($batchCode) {
                     $updates['batch_code'] = $batchCode;
@@ -3764,7 +3849,7 @@ class FundUtilizationReportController extends Controller
                     $updates
                 );
 
-                $workflowService->submitOrResubmit($report, $quarter, 'mov', $record, $user);
+                $workflowService->submitOrResubmit($report, $quarter, 'mov', $record, $user, $isRegionalReplacement);
                 SecureTimestampService::logUploadTimestamp('mov', $projectCode, $quarter, $secureTimestamp);
 
                 return $record;
@@ -3778,7 +3863,7 @@ class FundUtilizationReportController extends Controller
         }
 
         return [
-            'oldFilePaths' => array_values(array_filter([$oldFilePath])),
+            'oldFilePaths' => $isRegionalReplacement ? [] : array_values(array_filter([$oldFilePath])),
             'newFilePaths' => array_values(array_filter([$record->mov_file_path ?? $path])),
         ];
     }
@@ -3795,6 +3880,7 @@ class FundUtilizationReportController extends Controller
         $replacedPaths = [];
         $newPaths = [];
         $uploadedDocumentTypes = [];
+        $regionalReplacementTypes = [];
 
         foreach ($this->writtenNoticeFieldConfigs() as $requestField => $fieldConfig) {
             if (!array_key_exists($requestField, $files) || !$files[$requestField]) {
@@ -3802,6 +3888,14 @@ class FundUtilizationReportController extends Controller
             }
 
             $oldPath = $existingRecord?->{$fieldConfig['path']};
+            $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+                $user, $report, $existingRecord, $fieldConfig['workflow_type'],
+                $fieldConfig['status'], $fieldConfig['approved_at_dilg_ro'], $oldPath
+            );
+            if ($oldPath && !$isRegionalReplacement
+                && strtolower((string) ($existingRecord?->{$fieldConfig['status']} ?? '')) === 'pending') {
+                throw new \RuntimeException('This written notice component is awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+            }
             $file = $files[$requestField];
             $originalName = basename(trim((string) $file->getClientOriginalName()));
             $path = $file->storeAs('fur/written-notice/' . $projectCode, $originalName, 'public');
@@ -3819,6 +3913,10 @@ class FundUtilizationReportController extends Controller
             if ($batchCode) {
                 $updates['batch_code'] = $batchCode;
             }
+            if ($isRegionalReplacement) {
+                $updates[$this->regionalReplacementField($fieldConfig['workflow_type'])] = $secureTimestamp;
+                $regionalReplacementTypes[] = $fieldConfig['workflow_type'];
+            }
 
             $shortFieldName = str_replace('secretary_', '', $requestField);
             SecureTimestampService::logUploadTimestamp('written-notice-' . $shortFieldName, $projectCode, $quarter, $secureTimestamp, [
@@ -3835,7 +3933,7 @@ class FundUtilizationReportController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($existingRecord, $data, $updates, $secureTimestamp, $report, $quarter, $uploadedDocumentTypes, $user, $workflowService) {
+            DB::transaction(function () use ($existingRecord, $data, $updates, $secureTimestamp, $report, $quarter, $uploadedDocumentTypes, $regionalReplacementTypes, $user, $workflowService) {
                 if (!$existingRecord) {
                     $updates['created_at'] = $secureTimestamp;
                 }
@@ -3843,7 +3941,7 @@ class FundUtilizationReportController extends Controller
                 $record = FURWrittenNotice::updateOrCreate($data, $updates);
 
                 foreach (array_unique($uploadedDocumentTypes) as $documentType) {
-                    $workflowService->submitOrResubmit($report, $quarter, $documentType, $record, $user);
+                    $workflowService->submitOrResubmit($report, $quarter, $documentType, $record, $user, in_array($documentType, $regionalReplacementTypes, true));
                 }
             });
         } catch (\Throwable $exception) {
@@ -3857,7 +3955,10 @@ class FundUtilizationReportController extends Controller
         }
 
         return [
-            'oldFilePaths' => array_values(array_filter(array_map(fn ($entry) => $entry['old'] ?? null, $replacedPaths))),
+            'oldFilePaths' => array_values(array_filter(array_map(
+                fn ($entry) => $entry['old'] ?? null,
+                array_filter($replacedPaths, fn ($entry) => !in_array($entry['type'] ?? null, $regionalReplacementTypes, true))
+            ))),
             'newFilePaths' => array_values(array_filter($newPaths)),
         ];
     }
@@ -3868,12 +3969,22 @@ class FundUtilizationReportController extends Controller
         $existingRecord = FURFDP::where('project_code', $projectCode)
             ->where('quarter', $quarter)
             ->first();
+        $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+            $user, $report, $existingRecord, 'fdp', 'fdp_status', 'approved_at_dilg_ro', $existingRecord?->fdp_file_path
+        );
+        if ($existingRecord && $existingRecord->fdp_file_path && !$isRegionalReplacement
+            && strtolower((string) $existingRecord->fdp_status) === 'pending') {
+            throw new \RuntimeException('This FDP is awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+        }
         $oldFilePath = $existingRecord?->fdp_file_path;
         $originalName = basename(trim((string) $file->getClientOriginalName()));
+        if ($isRegionalReplacement) {
+            $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '-replacement-' . substr(uniqid('', true), -8) . '.' . $file->getClientOriginalExtension();
+        }
         $path = $file->storeAs('fur/fdp/' . $projectCode, $originalName, 'public');
 
         try {
-            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService, $batchCode) {
+            $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $quarter, $report, $user, $workflowService, $batchCode, $isRegionalReplacement) {
                 $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
                 $updates = [
@@ -3885,6 +3996,9 @@ class FundUtilizationReportController extends Controller
                     'fdp_status' => 'pending',
                     'status' => 'pending',
                 ];
+                if ($isRegionalReplacement) {
+                    $updates['fdp_regional_replacement_used_at'] = $secureTimestamp;
+                }
 
                 if ($batchCode) {
                     $updates['batch_code'] = $batchCode;
@@ -3899,7 +4013,7 @@ class FundUtilizationReportController extends Controller
                     $updates
                 );
 
-                $workflowService->submitOrResubmit($report, $quarter, 'fdp', $record, $user);
+                $workflowService->submitOrResubmit($report, $quarter, 'fdp', $record, $user, $isRegionalReplacement);
                 SecureTimestampService::logUploadTimestamp('fdp', $projectCode, $quarter, $secureTimestamp);
 
                 return $record;
@@ -3913,7 +4027,7 @@ class FundUtilizationReportController extends Controller
         }
 
         return [
-            'oldFilePaths' => array_values(array_filter([$oldFilePath])),
+            'oldFilePaths' => $isRegionalReplacement ? [] : array_values(array_filter([$oldFilePath])),
             'newFilePaths' => array_values(array_filter([$record->fdp_file_path ?? $path])),
         ];
     }
@@ -3921,15 +4035,27 @@ class FundUtilizationReportController extends Controller
     private function storePostingLinkForProject(string $projectCode, string $quarter, string $postingLink, $user, FundUtilizationWorkflowService $workflowService, ?string $batchCode = null): void
     {
         $report = $this->getReportOrLfpProject($projectCode);
+        $existingRecord = FURFDP::where('project_code', $projectCode)->where('quarter', $quarter)->first();
+        $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+            $user, $report, $existingRecord, 'posting-link', 'posting_status', 'posting_approved_at_dilg_ro',
+            $existingRecord?->posting_link
+        );
+        if ($existingRecord && trim((string) $existingRecord->posting_link) !== '' && !$isRegionalReplacement
+            && strtolower((string) $existingRecord->posting_status) === 'pending') {
+            throw new \RuntimeException('This posting link is awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+        }
         $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
-        DB::transaction(function () use ($projectCode, $quarter, $postingLink, $secureTimestamp, $report, $user, $workflowService, $batchCode) {
+        DB::transaction(function () use ($projectCode, $quarter, $postingLink, $secureTimestamp, $report, $user, $workflowService, $batchCode, $isRegionalReplacement) {
             $updates = [
                 'posting_link' => $postingLink,
                 'posting_uploaded_at' => $secureTimestamp,
                 'posting_encoder_id' => auth()->id(),
                 'posting_status' => 'pending',
             ];
+            if ($isRegionalReplacement) {
+                $updates['posting_regional_replacement_used_at'] = $secureTimestamp;
+            }
             if ($batchCode) {
                 $updates['batch_code'] = $batchCode;
             }
@@ -3939,7 +4065,7 @@ class FundUtilizationReportController extends Controller
                 $updates
             );
 
-            $workflowService->submitOrResubmit($report, $quarter, 'posting-link', $record, $user);
+            $workflowService->submitOrResubmit($report, $quarter, 'posting-link', $record, $user, $isRegionalReplacement);
         });
 
         Log::channel('upload_timestamps')->info('Document uploaded', [
@@ -3960,6 +4086,14 @@ class FundUtilizationReportController extends Controller
         $existingRecord = FURBatchDocument::where('project_code', $projectCode)
             ->where('quarter', $quarter)
             ->first();
+        $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+            $user, $report, $existingRecord, 'batch-document', 'status', 'approved_at_dilg_ro',
+            $this->getBatchDocumentFilePaths($existingRecord) ? 'existing' : null
+        );
+        if ($existingRecord && $this->getBatchDocumentFilePaths($existingRecord) && !$isRegionalReplacement
+            && strtolower((string) $existingRecord->status) === 'pending') {
+            throw new \RuntimeException('These Batch Documents are awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+        }
         $oldFilePaths = $this->getBatchDocumentFilePaths($existingRecord);
         $newFilePaths = [];
         $storageDirectory = 'fur/batch-documents/' . $projectCode;
@@ -3985,7 +4119,7 @@ class FundUtilizationReportController extends Controller
             $newFilePaths[] = $file->storeAs($storageDirectory, $storedFileName, 'public');
         }
 
-        $record = DB::transaction(function () use ($existingRecord, $projectCode, $quarter, $newFilePaths, $report, $user, $workflowService, $batchCode) {
+        $record = DB::transaction(function () use ($existingRecord, $projectCode, $quarter, $newFilePaths, $report, $user, $workflowService, $batchCode, $isRegionalReplacement) {
             $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
             $updates = [
@@ -3995,6 +4129,9 @@ class FundUtilizationReportController extends Controller
                 'batch_document_encoder_id' => auth()->id(),
                 'status' => 'pending',
             ];
+            if ($isRegionalReplacement) {
+                $updates['regional_replacement_used_at'] = $secureTimestamp;
+            }
 
             if ($batchCode) {
                 $updates['batch_code'] = $batchCode;
@@ -4011,7 +4148,7 @@ class FundUtilizationReportController extends Controller
                 $updates
             );
 
-            $workflowService->submitOrResubmit($report, $quarter, 'batch-document', $record, $user);
+            $workflowService->submitOrResubmit($report, $quarter, 'batch-document', $record, $user, $isRegionalReplacement);
             SecureTimestampService::logUploadTimestamp('batch-document', $projectCode, $quarter, $secureTimestamp);
 
             // Log each uploaded file separately so we can filter history per-file
@@ -4034,7 +4171,7 @@ class FundUtilizationReportController extends Controller
         });
 
         return [
-            'oldFilePaths' => $oldFilePaths,
+            'oldFilePaths' => $isRegionalReplacement ? [] : $oldFilePaths,
             'newFilePaths' => $this->getBatchDocumentFilePaths($record),
         ];
     }
@@ -4145,14 +4282,26 @@ class FundUtilizationReportController extends Controller
         $replacedPaths = [];
         $newPaths = [];
         $uploadedDocumentTypes = [];
+        $regionalReplacementTypes = [];
 
         $fields = $this->writtenNoticeFieldConfigs();
 
         foreach ($fields as $requestField => $fieldConfig) {
             if ($request->hasFile($requestField)) {
                 $oldPath = $existingRecord?->{$fieldConfig['path']};
+                $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+                    $user, $report, $existingRecord, $fieldConfig['workflow_type'],
+                    $fieldConfig['status'], $fieldConfig['approved_at_dilg_ro'], $oldPath
+                );
+                if ($oldPath && !$isRegionalReplacement
+                    && strtolower((string) ($existingRecord?->{$fieldConfig['status']} ?? '')) === 'pending') {
+                    return $this->replacementDeniedResponse($request, 'written_notice', 'This written notice component is awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+                }
                 $file = $request->file($requestField);
                 $originalName = basename(trim((string) $file->getClientOriginalName()));
+                if ($isRegionalReplacement) {
+                    $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '-replacement-' . substr(uniqid('', true), -8) . '.' . $file->getClientOriginalExtension();
+                }
                 $path = $file->storeAs('fur/written-notice/' . $projectCode, $originalName, 'public');
                 $updates[$fieldConfig['path']] = $path;
                 if ($requestField === 'speaker_house') {
@@ -4166,6 +4315,10 @@ class FundUtilizationReportController extends Controller
                 $updates[$fieldConfig['encoder_id']] = auth()->id();
                 // Reset workflow state when a returned file is resubmitted, but retain history.
                 $updates[$fieldConfig['status']] = 'pending';
+                if ($isRegionalReplacement) {
+                    $updates[$this->regionalReplacementField($fieldConfig['workflow_type'])] = $secureTimestamp;
+                    $regionalReplacementTypes[] = $fieldConfig['workflow_type'];
+                }
                 // Also reset the shared workflow state without erasing history.
                 $updates['status'] = 'pending';
 
@@ -4177,7 +4330,7 @@ class FundUtilizationReportController extends Controller
 
         if (!empty($updates)) {
             try {
-                $record = DB::transaction(function () use ($existingRecord, $data, $updates, $secureTimestamp, $report, $request, $uploadedDocumentTypes, $user, $workflowService) {
+                $record = DB::transaction(function () use ($existingRecord, $data, $updates, $secureTimestamp, $report, $request, $uploadedDocumentTypes, $regionalReplacementTypes, $user, $workflowService) {
                     if (!$existingRecord) {
                         $updates['created_at'] = $secureTimestamp;
                     }
@@ -4185,7 +4338,7 @@ class FundUtilizationReportController extends Controller
                     $record = FURWrittenNotice::updateOrCreate($data, $updates);
 
                     foreach (array_unique($uploadedDocumentTypes) as $documentType) {
-                        $workflowService->submitOrResubmit($report, $request->quarter, $documentType, $record, $user);
+                        $workflowService->submitOrResubmit($report, $request->quarter, $documentType, $record, $user, in_array($documentType, $regionalReplacementTypes, true));
                     }
 
                     return $record;
@@ -4207,6 +4360,9 @@ class FundUtilizationReportController extends Controller
             }
 
             foreach ($replacedPaths as $replacedPath) {
+                if (!empty($regionalReplacementTypes)) {
+                    continue;
+                }
                 $oldPath = $replacedPath['old'] ?? null;
                 $newPath = $replacedPath['new'] ?? null;
 
@@ -4245,13 +4401,23 @@ class FundUtilizationReportController extends Controller
             $existingRecord = FURFDP::where('project_code', $projectCode)
                                     ->where('quarter', $request->quarter)
                                     ->first();
+            $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+                $user, $report, $existingRecord, 'fdp', 'fdp_status', 'approved_at_dilg_ro', $existingRecord?->fdp_file_path
+            );
+            if ($existingRecord && $existingRecord->fdp_file_path && !$isRegionalReplacement
+                && strtolower((string) $existingRecord->fdp_status) === 'pending') {
+                return $this->replacementDeniedResponse($request, 'fdp', 'This FDP is awaiting Regional Office validation and may only be replaced once by an authorized uploader.');
+            }
             $oldFilePath = $existingRecord?->fdp_file_path;
             $file = $request->file('fdp_file');
             $originalName = basename(trim((string) $file->getClientOriginalName()));
+            if ($isRegionalReplacement) {
+                $originalName = pathinfo($originalName, PATHINFO_FILENAME) . '-replacement-' . substr(uniqid('', true), -8) . '.' . $file->getClientOriginalExtension();
+            }
             $path = $file->storeAs('fur/fdp/' . $projectCode, $originalName, 'public');
 
             try {
-                $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService) {
+                $record = DB::transaction(function () use ($existingRecord, $path, $projectCode, $request, $report, $user, $workflowService, $isRegionalReplacement) {
                     $secureTimestamp = SecureTimestampService::getUploadTimestamp();
 
                     $updates = [
@@ -4263,6 +4429,9 @@ class FundUtilizationReportController extends Controller
                         'fdp_status' => 'pending',
                         'status' => 'pending',
                     ];
+                    if ($isRegionalReplacement) {
+                        $updates['fdp_regional_replacement_used_at'] = $secureTimestamp;
+                    }
 
                     if (!$existingRecord) {
                         $updates['created_at'] = $secureTimestamp;
@@ -4273,7 +4442,7 @@ class FundUtilizationReportController extends Controller
                         $updates
                     );
 
-                    $workflowService->submitOrResubmit($report, $request->quarter, 'fdp', $record, $user);
+                    $workflowService->submitOrResubmit($report, $request->quarter, 'fdp', $record, $user, $isRegionalReplacement);
                     SecureTimestampService::logUploadTimestamp('fdp', $projectCode, $request->quarter, $secureTimestamp);
 
                     return $record;
@@ -4292,7 +4461,7 @@ class FundUtilizationReportController extends Controller
                 ]);
             }
 
-            if ($oldFilePath && $oldFilePath !== $record->fdp_file_path && Storage::disk('public')->exists($oldFilePath)) {
+            if (!$isRegionalReplacement && $oldFilePath && $oldFilePath !== $record->fdp_file_path && Storage::disk('public')->exists($oldFilePath)) {
                 Storage::disk('public')->delete($oldFilePath);
             }
         }
@@ -4320,6 +4489,16 @@ class FundUtilizationReportController extends Controller
         }
 
         $secureTimestamp = SecureTimestampService::getUploadTimestamp();
+        $existingRecord = FURFDP::where('project_code', $projectCode)->where('quarter', $validated['quarter'])->first();
+        $isRegionalReplacement = $this->canReplaceFundUtilizationComponent(
+            $user, $report, $existingRecord, 'posting-link', 'posting_status', 'posting_approved_at_dilg_ro',
+            $existingRecord?->posting_link
+        );
+        if ($existingRecord && trim((string) $existingRecord->posting_link) !== '' && !$isRegionalReplacement
+            && strtolower((string) $existingRecord->posting_status) === 'pending') {
+            return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $validated['quarter'], 'document' => 'posting-link'])
+                ->withErrors(['posting_link' => 'This posting link is awaiting Regional Office validation and may only be replaced once by an authorized uploader.']);
+        }
 
         $postingLink = InputSanitizer::sanitizeHttpUrl($validated['posting_link']);
         if ($postingLink === null) {
@@ -4329,18 +4508,23 @@ class FundUtilizationReportController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($projectCode, $validated, $secureTimestamp, $postingLink, $report, $user, $workflowService) {
+            DB::transaction(function () use ($projectCode, $validated, $secureTimestamp, $postingLink, $report, $user, $workflowService, $isRegionalReplacement) {
+                $postingUpdates = [
+                    'posting_link' => $postingLink,
+                    'posting_uploaded_at' => $secureTimestamp,
+                    'posting_encoder_id' => auth()->id(),
+                    'posting_status' => 'pending',
+                ];
+                if ($isRegionalReplacement) {
+                    $postingUpdates['posting_regional_replacement_used_at'] = $secureTimestamp;
+                }
+
                 $record = FURFDP::updateOrCreate(
                     ['project_code' => $projectCode, 'quarter' => $validated['quarter']],
-                    [
-                        'posting_link' => $postingLink,
-                        'posting_uploaded_at' => $secureTimestamp,
-                        'posting_encoder_id' => auth()->id(),
-                        'posting_status' => 'pending',
-                    ]
+                    $postingUpdates
                 );
 
-                $workflowService->submitOrResubmit($report, $validated['quarter'], 'posting-link', $record, $user);
+                $workflowService->submitOrResubmit($report, $validated['quarter'], 'posting-link', $record, $user, $isRegionalReplacement);
             });
         } catch (\Throwable $exception) {
             return redirect()->route('fund-utilization.show', ['projectCode' => $projectCode, 'quarter' => $validated['quarter'], 'document' => 'posting-link'])
@@ -5141,10 +5325,13 @@ class FundUtilizationReportController extends Controller
             ->values()
             ->all();
 
-        $users = User::whereIn('idno', $userIds)->get()->keyBy('idno');
+        $users = User::whereIn('idno', $userIds)->get()->keyBy(
+            static fn (User $user) => (string) $user->idno
+        );
 
         foreach ($entries as &$entry) {
-            $user = $entry['user_id'] ? ($users[$entry['user_id']] ?? null) : null;
+            $userId = $entry['user_id'] !== null ? (string) $entry['user_id'] : '';
+            $user = $userId !== '' ? ($users[$userId] ?? null) : null;
             $entry['user_name'] = $user ? trim($user->fname.' '.$user->lname) : 'Unknown';
             $entry['user_agency'] = $user ? $user->agency : null;
             $entry['user_position'] = $user ? $user->position : null;

@@ -785,6 +785,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             ->where('office', $officeName)
             ->where('id', $docId)
             ->firstOrFail();
+        abort_if($document->status === 'pending_ro', 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
 
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
             Storage::disk('public')->delete($document->file_path);
@@ -829,6 +830,14 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             ->where('year', $year)
             ->where('month', $month)
             ->first();
+        $canReplaceForRegionalValidation = $existingDocument
+            && !empty($existingDocument->file_path)
+            && $existingDocument->status === 'pending_ro'
+            && empty($existingDocument->regional_replacement_used_at)
+            && $user->canAccessDilgDeliverables();
+        if ($existingDocument && !empty($existingDocument->file_path) && $existingDocument->status !== 'returned' && !$canReplaceForRegionalValidation) {
+            return redirect()->back()->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
+        }
         $oldFilePath = $existingDocument?->file_path;
 
         $file = $request->file('document');
@@ -838,7 +847,18 @@ class MonitoringEvaluationMonthlyReportController extends Controller
         $isProvincialDilgUploader = true;
 
         $document = MonitoringEvaluationMonthlyDocument::updateOrCreate(
-            [
+            $canReplaceForRegionalValidation ? [
+                'province' => $province,
+                'file_path' => $path,
+                'uploaded_by' => auth()->id(),
+                'uploaded_at' => $uploadedAt,
+                'status' => 'pending_ro',
+                'approved_at_dilg_ro' => null,
+                'approved_by_dilg_ro' => null,
+                'approval_remarks' => null,
+                'user_remarks' => null,
+                'regional_replacement_used_at' => $uploadedAt,
+            ] : [
                 'office' => $officeName,
                 'doc_type' => $docType,
                 'year' => $year,
@@ -1418,4 +1438,3 @@ class MonitoringEvaluationMonthlyReportController extends Controller
         return $this->decideDeletion($request, $office, $docId);
     }
 }
-

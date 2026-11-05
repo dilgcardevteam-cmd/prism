@@ -79,6 +79,7 @@
             @php
                 $quarterDocuments = $documentsByQuarter[$quarterCode] ?? collect();
                 $latestDocument = $quarterDocuments->first();
+                $canUploadForQuarter = $canUpload && (!$latestDocument || $latestDocument->status === 'returned' || ($latestDocument->status === 'pending_ro' && empty($latestDocument->regional_replacement_used_at)));
             @endphp
             <div class="quarterly-submission-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05);height:100%;">
                 <div style="padding:16px 18px;background:#002c76;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -90,7 +91,7 @@
                         <span style="display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;font-size:11px;font-weight:700;background:{{ $latestDocument ? '#dcfce7' : '#fef3c7' }};color:{{ $latestDocument ? '#166534' : '#92400e' }};">
                             {{ $latestDocument ? $quarterDocuments->count() . ' Upload' . ($quarterDocuments->count() === 1 ? '' : 's') : 'Pending Upload' }}
                         </span>
-                        @if ($canUpload)
+                        @if ($canUploadForQuarter)
                             <a href="{{ route('reports.quarterly.dilg-mc-2018-30.edit', ['office' => $office, 'quarter' => $quarterCode, 'year' => $reportingYear]) }}"
                                 style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;background:#eff6ff;color:#1d4ed8;text-decoration:none;border:1px solid #bfdbfe;border-radius:999px;font-size:11px;font-weight:700;">
                                 <i class="fas fa-pen"></i>
@@ -101,7 +102,7 @@
                 </div>
 
                 <div style="padding:18px;">
-                    @if ($canUpload)
+                    @if ($canUploadForQuarter)
                         <form method="POST"
                             action="{{ route('reports.quarterly.dilg-mc-2018-30.upload', ['office' => $office]) }}"
                             enctype="multipart/form-data"
@@ -275,7 +276,7 @@
                                                                 <span>View</span>
                                                             </a>
 
-                                                            @if ($canDelete)
+                                                            @if ($canDelete && $document->status !== 'pending_ro')
                                                                 <form method="POST"
                                                                     action="{{ route('reports.quarterly.dilg-mc-2018-30.delete-document', ['office' => $office, 'docId' => $document->id, 'year' => $reportingYear]) }}"
                                                                     onsubmit="return confirm('Delete this uploaded document for {{ $quarterLabel }}?');"

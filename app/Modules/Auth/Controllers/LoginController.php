@@ -124,6 +124,9 @@ class LoginController extends Controller
      */
     protected function authenticated(Request $request, $user)
     {
+        $request->session()->put('announcements_login_popup_pending', true);
+        $request->session()->forget('announcements_popup_shown_in_session');
+
         return redirect('/dashboard');
     }
 

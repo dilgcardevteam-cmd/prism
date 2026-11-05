@@ -34,6 +34,7 @@ class FURFDP extends Model
         // Posting link validation timestamps
         'posting_approved_at_dilg_po', 'posting_approved_at_dilg_ro',
         'posting_approved_by_dilg_po', 'posting_approved_by_dilg_ro',
+        'fdp_regional_replacement_used_at', 'posting_regional_replacement_used_at',
     ];
     
     protected $casts = [
@@ -48,6 +49,8 @@ class FURFDP extends Model
         'posting_uploaded_at' => 'datetime',
         'posting_approved_at_dilg_po' => 'datetime',
         'posting_approved_at_dilg_ro' => 'datetime',
+        'fdp_regional_replacement_used_at' => 'datetime',
+        'posting_regional_replacement_used_at' => 'datetime',
     ];
     
     public function encoder()

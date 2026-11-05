@@ -17,10 +17,12 @@ class LpmcDocumentFile extends Model
         'original_filename',
         'uploaded_by',
         'uploaded_at',
+        'regional_replacement_used_at',
     ];
 
     protected $casts = [
         'uploaded_at' => 'datetime',
+        'regional_replacement_used_at' => 'datetime',
     ];
 
     public function document()

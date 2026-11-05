@@ -1078,6 +1078,7 @@ class RoadMaintenanceStatusReportController extends Controller
             $document = RoadMaintenanceStatusDocument::query()
                 ->where('id', $docId)
                 ->firstOrFail();
+        abort_if($document->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO, 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
         }
 
         $isApproved = !empty($document->approved_at_dilg_ro) || strtolower((string) $document->status) === 'approved';
@@ -1134,12 +1135,17 @@ class RoadMaintenanceStatusReportController extends Controller
             ->first();
 
         $isReturned = ($existingDocument && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED);
+        $canReplaceForRegionalValidation = $existingDocument
+            && !empty($existingDocument->file_path)
+            && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO
+            && empty($existingDocument->regional_replacement_used_at)
+            && $user->canSubmitForLgu($province, $officeName);
         if ($isReturned) {
             $checkResubmit = $workflowService->canUserResubmit($user, $existingDocument);
             if (!$checkResubmit['allowed']) {
                 abort(403, $checkResubmit['reason']);
             }
-        } elseif ($existingDocument && !empty($existingDocument->file_path)) {
+        } elseif ($existingDocument && !empty($existingDocument->file_path) && !$canReplaceForRegionalValidation) {
             return redirect()
                 ->back()
                 ->with('error', 'Document already submitted. Upload is disabled until the current file is returned.');
@@ -1151,9 +1157,18 @@ class RoadMaintenanceStatusReportController extends Controller
         $path = $file->store('road-maintenance-status/' . $officeSlug, 'public');
         $uploadedAt = now();
 
-        $uploadFields = $isReturned
-            ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
-            : $workflowService->initialFieldsForUpload($user, $officeName, $province);
+        $uploadFields = $canReplaceForRegionalValidation
+            ? [
+                'status' => \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO,
+                'approved_at_dilg_ro' => null,
+                'approved_by_dilg_ro' => null,
+                'approval_remarks' => null,
+                'user_remarks' => null,
+                'regional_replacement_used_at' => $uploadedAt,
+            ]
+            : ($isReturned
+                ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
+                : $workflowService->initialFieldsForUpload($user, $officeName, $province));
 
         $document = RoadMaintenanceStatusDocument::updateOrCreate(
             [

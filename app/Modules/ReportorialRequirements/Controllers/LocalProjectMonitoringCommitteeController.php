@@ -26,9 +26,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:local_project_monitoring_committee,view')->only(['index', 'show', 'edit', 'viewDocument', 'export']);
-        $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload']);
+        $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload', 'deleteDocumentFile']);
         $this->middleware('crud_permission:local_project_monitoring_committee,update')->only(['update', 'approveDocument']);
-        $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy', 'deleteDocumentFile']);
+        $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy']);
     }
 
     private function getOffices(): array
@@ -1096,6 +1096,61 @@ class LocalProjectMonitoringCommitteeController extends Controller
         abort_unless($user && $user->isActive(), 403);
 
         $province = $this->findProvinceByOffice($officeName);
+        if (Str::lower(trim((string) $document->status)) === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO) {
+            abort_unless(
+                $user->canSubmitForLgu($province, $officeName),
+                403,
+                'You are not authorized to replace this pending Regional validation document.'
+            );
+            abort_if(
+                $document->regional_replacement_used_at !== null,
+                403,
+                'This document has already used its one-time replacement.'
+            );
+
+            $deletedAt = now();
+            DB::transaction(function () use ($document, $deletedAt, $officeName): void {
+                foreach ($document->files as $file) {
+                    if ($file->file_path && Storage::disk('public')->exists($file->file_path)) {
+                        Storage::disk('public')->delete($file->file_path);
+                    }
+                }
+                $document->files()->delete();
+
+                if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+                    Storage::disk('public')->delete($document->file_path);
+                }
+                $updatePayload = [
+                    'file_path' => null,
+                    'original_filename' => null,
+                ];
+                if (Schema::hasColumn('tblpmc_documents', 'regional_replacement_used_at')) {
+                    $updatePayload['regional_replacement_used_at'] = $deletedAt;
+                }
+                $document->update($updatePayload);
+                $this->logActivity(
+                    $officeName,
+                    'delete',
+                    'Deleted pending Regional validation document for replacement',
+                    $document,
+                    'One-time replacement used.',
+                    $deletedAt
+                );
+            });
+
+            $redirectParams = ['lpmc' => $officeName];
+            if ($document->quarter) {
+                $redirectParams['quarter'] = $document->quarter;
+            } elseif ($document->doc_type && $document->year) {
+                $redirectParams['document'] = $document->doc_type;
+                $redirectParams['year'] = $document->year;
+            }
+
+            return redirect()
+                ->route('local-project-monitoring-committee.edit', $redirectParams)
+                ->with('success', 'Document deleted. You can now select and upload a replacement.');
+        }
+
         $uploaderId = (int) ($document->uploaded_by ?? 0);
         $userId = (int) ($user->idno ?? $user->getKey());
         $isOwner = $uploaderId > 0 && $uploaderId === $userId;
@@ -1139,9 +1194,17 @@ class LocalProjectMonitoringCommitteeController extends Controller
             now()
         );
 
+        $redirectParams = ['lpmc' => $officeName];
+        if ($document->quarter) {
+            $redirectParams['quarter'] = $document->quarter;
+        } elseif ($document->doc_type && $document->year) {
+            $redirectParams['document'] = $document->doc_type;
+            $redirectParams['year'] = $document->year;
+        }
+
         return redirect()
-            ->route('local-project-monitoring-committee.edit', $officeName)
-            ->with('success', 'Returned document deleted. You can now upload a replacement.');
+            ->route('local-project-monitoring-committee.edit', $redirectParams)
+            ->with('success', 'Returned document deleted. You can now select and upload a replacement.');
     }
 
     public function upload(Request $request, $id)
@@ -1188,7 +1251,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ->first();
 
         $user = auth()->user();
-        abort_unless($user && $user->canSubmitForLgu($province, $officeName), 403);
+        abort_unless($user         && !$user->isRegionalUser()
+        && !$user->isRegionalOfficeAssignment()
+        && $user->canSubmitForLgu($province, $officeName), 403);
 
         $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
         $isReturned = ($existingDocument && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED);
@@ -1200,7 +1265,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
             }
         } elseif ($existingDocument) {
             $hasFiles = !empty($existingDocument->file_path) ||
-                LpmcDocumentFile::where('lpmc_document_id', $existingDocument->id)->exists();
+                LpmcDocumentFile::where('lpmc_document_id', $existingDocument->id)
+                    ->whereNotNull('file_path')
+                    ->exists();
             if ($hasFiles) {
                 return redirect()
                     ->back()
@@ -1210,11 +1277,27 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         $uploadedAt = now();
 
-        $uploadFields = $isReturned
-            ? $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province)
-            : $workflowService->initialFieldsForUpload($user, $officeName, $province);
+        $isReplacingRegional = $existingDocument
+            && $existingDocument->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO
+            && !empty($existingDocument->regional_replacement_used_at);
 
-        $isProvincialDilgUploader = ($uploadFields['status'] === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO);
+        if ($isReplacingRegional) {
+            $uploadFields = [
+                'status' => \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO,
+                'uploaded_by' => $user->idno ?? auth()->id(),
+                'uploaded_at' => $uploadedAt,
+                'approved_at_dilg_ro' => null,
+                'approved_by_dilg_ro' => null,
+                'approval_remarks' => null,
+                'user_remarks' => null,
+            ];
+        } elseif ($isReturned) {
+            $uploadFields = $workflowService->resubmissionFields($existingDocument, $user, $officeName, $province);
+        } else {
+            $uploadFields = $workflowService->initialFieldsForUpload($user, $officeName, $province);
+        }
+
+        $isProvincialDilgUploader = ($uploadFields['status'] === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO && !$isReplacingRegional);
         $officeSlug = Str::slug($officeName, '_');
 
         $document = LpmcDocument::updateOrCreate(
@@ -1271,8 +1354,16 @@ class LocalProjectMonitoringCommitteeController extends Controller
 
         $this->notifyWorkflowUsersOnUpload($document);
 
+        $redirectParams = ['lpmc' => $officeName];
+        if ($quarter) {
+            $redirectParams['quarter'] = $quarter;
+        } elseif ($docType && $year) {
+            $redirectParams['document'] = $docType;
+            $redirectParams['year'] = $year;
+        }
+
         return redirect()
-            ->route('local-project-monitoring-committee.edit', $officeName)
+            ->route('local-project-monitoring-committee.edit', $redirectParams)
             ->with('success', 'Document uploaded successfully.');
     }
 
@@ -1315,11 +1406,75 @@ class LocalProjectMonitoringCommitteeController extends Controller
             ->whereHas('document', fn ($q) => $q->where('office', $officeName))
             ->firstOrFail();
 
+        $document = $file->document;
+        $user = auth()->user();
+        $province = $this->findProvinceByOffice($officeName);
+        if (Str::lower(trim((string) ($document->status ?? ''))) === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO) {
+            abort_unless(
+                $user
+                    && $user->isActive()
+                    && !$user->isRegionalUser()
+                    && !$user->isRegionalOfficeAssignment()
+                    && $user->canSubmitForLgu($province, $officeName),
+                403,
+                'You are not authorized to replace this pending Regional validation file.'
+            );
+            abort_if(
+                $file->regional_replacement_used_at !== null
+                    || $document->regional_replacement_used_at !== null,
+                403,
+                'This file has already used its one-time replacement.'
+            );
+
+            $deletedAt = now();
+            DB::transaction(function () use ($document, $deletedAt, $officeName): void {
+                foreach ($document->files as $documentFile) {
+                    if ($documentFile->file_path && Storage::disk('public')->exists($documentFile->file_path)) {
+                        Storage::disk('public')->delete($documentFile->file_path);
+                    }
+                }
+                $document->files()->delete();
+
+                if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
+                    Storage::disk('public')->delete($document->file_path);
+                }
+                $updatePayload = [
+                    'file_path' => null,
+                    'original_filename' => null,
+                ];
+                if (Schema::hasColumn('tblpmc_documents', 'regional_replacement_used_at')) {
+                    $updatePayload['regional_replacement_used_at'] = $deletedAt;
+                }
+                $document->update($updatePayload);
+                $this->logActivity(
+                    $officeName,
+                    'delete',
+                    'Deleted pending Regional validation file for replacement',
+                    $document,
+                    'One-time replacement used for the entire document.',
+                    $deletedAt
+                );
+            });
+
+            $redirectParams = ['lpmc' => $officeName];
+            if ($document->quarter) {
+                $redirectParams['quarter'] = $document->quarter;
+            } elseif ($document->doc_type && $document->year) {
+                $redirectParams['document'] = $document->doc_type;
+                $redirectParams['year'] = $document->year;
+            }
+
+            return redirect()
+                ->route('local-project-monitoring-committee.edit', $redirectParams)
+                ->with('success', 'Document files deleted. You can upload one replacement.');
+        }
+
+        abort_unless($user && $user->isSuperAdmin(), 403, 'Only superadmins can delete files outside the replacement workflow.');
+
         if (Storage::disk('public')->exists($file->file_path)) {
             Storage::disk('public')->delete($file->file_path);
         }
 
-        $document = $file->document;
         $file->delete();
 
         // If no more files remain, clear the legacy file_path on the parent document

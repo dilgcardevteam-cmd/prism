@@ -200,7 +200,8 @@
                     $isReturned = $fileRecord && $fileRecord->status === 'returned';
                     $isApprovedRo = $fileRecord && $fileRecord->status === 'approved';
                     $isPendingRo = $fileRecord && $fileRecord->status === 'pending_ro';
-                    $disableUpload = !$isMultiUpload && $hasFile;
+                    $replacementUsed = $fileRecord && !empty($fileRecord->regional_replacement_used_at);
+                    $disableUpload = (!$isMultiUpload && $hasFile) || $replacementUsed;
                     $canDeleteReturnedDocument = !empty($fieldRouteConfig['delete'])
                         && !$isMultiUpload
                         && $hasFile
@@ -679,11 +680,14 @@
 
                             <form method="POST" action="{{ route($multiRouteConfig['upload_multi'], array_merge(['projectCode' => $project->project_code, 'documentType' => $multiField], $multiScopeQuery)) }}" enctype="multipart/form-data" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                                 @csrf
-                                <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: #ffffff;">
-                                <button type="submit" style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18);">
+                                <input type="file" name="document_file" accept="{{ $isPhotoMultiUpload ? '.jpg,.jpeg,image/jpeg' : '.pdf,application/pdf' }}" required @disabled($replacementUsed) class="dashboard-file-input" style="flex: 1 1 260px; min-width: 220px; font-size: 12px; padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 12px; background: {{ $replacementUsed ? '#f3f4f6' : '#ffffff' }};">
+                                <button type="submit" @disabled($replacementUsed) style="padding: 10px 16px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: #ffffff; border: none; border-radius: 10px; cursor: {{ $replacementUsed ? 'not-allowed' : 'pointer' }}; font-size: 12px; font-weight: 700; box-shadow: 0 10px 20px rgba(0, 44, 118, 0.18); opacity: {{ $replacementUsed ? '0.55' : '1' }};">
                                     Upload {{ $isPhotoMultiUpload ? 'Photo' : 'Document' }}
                                 </button>
                             </form>
+                            @if ($replacementUsed)
+                                <div style="margin-top: 8px; font-size: 11px; color: #6b7280;">The one-time replacement has already been used. Upload is disabled.</div>
+                            @endif
                         </div>
                     </div>
 
@@ -710,6 +714,12 @@
                                             && !$isRegionalDilg
                                             && $currentUser
                                             && $currentUser->hasCrudPermission($multiPermissionModule, 'add');
+                                        $canDeletePendingRegionalMultiFile = !empty($multiRouteConfig['delete_file'])
+                                            && $multiFile->status === 'pending_ro'
+                                            && empty($multiFile->regional_replacement_used_at)
+                                            && !$isRegionalDilg
+                                            && $currentUser
+                                            && $currentUser->canSubmitForLgu($project->province, $project->city_municipality);
                                         $multiValidationCheck = $currentUser
                                             ? $multiWorkflow->canUserValidate($currentUser, $multiFile, $project->city_municipality, $project->province)
                                             : ['allowed' => false];
@@ -745,13 +755,13 @@
                                                     Return
                                                 </button>
                                             @endif
-                                            @if ($canDeleteReturnedMultiFile && !empty($multiRouteConfig['delete_file']))
+                                            @if (($canDeleteReturnedMultiFile || $canDeletePendingRegionalMultiFile) && !empty($multiRouteConfig['delete_file']))
                                                 <form method="POST" action="{{ route($multiRouteConfig['delete_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $multiScopeQuery)) }}" data-confirm="Delete this returned document? You can upload and resubmit a replacement after this." style="display: inline-flex; margin-left: 6px;">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #6b7280; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700;">
                                                         <i class="fas fa-trash-alt"></i>
-                                                        Delete
+                                                        {{ $canDeletePendingRegionalMultiFile ? 'Replace once' : 'Delete' }}
                                                     </button>
                                                 </form>
                                             @endif
