@@ -5,9 +5,12 @@ namespace Tests\Feature;
 use App\Mail\LoginOtpMail;
 use App\Models\User;
 use App\Support\SystemMaintenanceState;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class LoginOtpTest extends TestCase
@@ -80,7 +83,7 @@ class LoginOtpTest extends TestCase
 
         $this->get(route('login'))
             ->assertOk()
-            ->assertSee('Remember me within the day')
+            ->assertSee('Remember me')
             ->assertDontSee('Remember this browser today and skip OTP');
     }
 
@@ -132,5 +135,71 @@ class LoginOtpTest extends TestCase
             ->assertSessionHas('otp_notice', 'A new verification code has been sent.');
         Queue::assertNothingPushed();
         $this->assertCount(2, Mail::sent(LoginOtpMail::class));
+    }
+
+    public function test_mandatory_password_change_requires_email_otp_before_sign_in(): void
+    {
+        $user = User::factory()->create();
+        Schema::table('tbusers', function (Blueprint $table): void {
+            $table->dropColumn('remember_token');
+        });
+        $user->forceFill(['must_change_password' => true])->save();
+        $oldPasswordHash = $user->password;
+
+        $this->post(route('login'), [
+            'username' => $user->username,
+            'password' => 'password',
+            'remember_today' => '1',
+        ])->assertRedirect(route('password.mandatory.show'));
+        $this->assertGuest();
+
+        $this->get(route('password.mandatory.show'))->assertOk();
+        $otpCreatedAt = now()->timestamp;
+        $this->post(route('password.mandatory.update'), [
+            'new_password' => 'NewPassword1!',
+            'new_password_confirmation' => 'NewPassword1!',
+        ])->assertRedirect(route('password.mandatory.otp'));
+        $this->assertSame($oldPasswordHash, $user->fresh()->password);
+        Mail::assertNothingSent();
+
+        $this->get(route('password.mandatory.otp'))->assertOk();
+        $mail = Mail::sent(LoginOtpMail::class)->first();
+        $this->assertSame($user->emailaddress, $mail->envelope()->to[0]->address);
+        $this->assertSame($otpCreatedAt + 300, $mail->expiresAt->timestamp);
+
+        $this->post(route('password.mandatory.otp.verify'), [
+            'otp' => $mail->otp,
+        ])->assertRedirect('/dashboard');
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertFalse($user->fresh()->must_change_password);
+        $this->assertTrue(Hash::check('NewPassword1!', $user->fresh()->password));
+    }
+
+    public function test_existing_web_session_is_logged_out_when_password_change_is_required(): void
+    {
+        $user = User::factory()->create();
+        $user->forceFill(['must_change_password' => true])->save();
+
+        $this->actingAs($user)->get('/profile')
+            ->assertRedirect(route('login'));
+
+        $this->assertGuest();
+    }
+
+    public function test_pre_reset_web_session_stays_revoked_after_password_reset_completes_elsewhere(): void
+    {
+        $user = User::factory()->create();
+        $user->forceFill([
+            'must_change_password' => false,
+            'password_security_version' => 1,
+        ])->save();
+
+        $this->actingAs($user)
+            ->withSession(['auth_password_version' => 0])
+            ->get('/profile')
+            ->assertRedirect(route('login'));
+
+        $this->assertGuest();
     }
 }

@@ -2,29 +2,40 @@
 
 namespace App\Models;
 
+use App\Mail\VerifyEmailMailable;
 use App\Notifications\VerifyEmailNotification;
+use App\Support\ProjectLocationFilterHelper;
 use App\Support\RolePermissionRegistry;
+use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     public const ROLE_SUPERADMIN = 'superadmin';
+
     public const ROLE_REGIONAL = 'user_regional';
+
     public const ROLE_PROVINCIAL = 'user_provincial';
+
     public const ROLE_MLGOO = 'user_mlgoo';
+
     public const ROLE_LGU = 'user_lgu';
 
     public const ACCESS_SCOPE_ALL = 'crud:*';
+
     public const ACCESS_SCOPE_NONE = 'crud:none';
+
     public const ACCESS_PERMISSION_PREFIX = 'crud:';
 
     protected static function booted(): void
@@ -71,6 +82,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'mobileno',
         'username',
         'password',
+        'must_change_password',
+        'password_security_version',
         'role',
         'status',
         'access',
@@ -90,6 +103,7 @@ class User extends Authenticatable implements MustVerifyEmail
     ];
 
     private array $defaultCrudPermissionsCache = [];
+
     private array $effectiveCrudPermissionsCache = [];
 
     /**
@@ -141,6 +155,8 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
+            'password_security_version' => 'integer',
             'email_verified_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
@@ -164,7 +180,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function hasVerifiedEmail()
     {
-        return !is_null($this->email_verified_at);
+        return ! is_null($this->email_verified_at);
     }
 
     /**
@@ -196,12 +212,12 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * Verify the user's email using the token.
      *
-     * @param string $token
+     * @param  string  $token
      * @return bool
      */
     public function verifyEmailWithToken($token)
     {
-        if ($this->verification_token === $token && !$this->hasVerifiedEmail()) {
+        if ($this->verification_token === $token && ! $this->hasVerifiedEmail()) {
             $this->email_verified_at = now();
             $this->verification_token = null;
 
@@ -219,19 +235,19 @@ class User extends Authenticatable implements MustVerifyEmail
     public function sendEmailVerificationNotification()
     {
         try {
-            if (!$this->verification_token) {
+            if (! $this->verification_token) {
                 $this->generateVerificationToken();
             }
 
-            \Illuminate\Support\Facades\Mail::send(new \App\Mail\VerifyEmailMailable($this));
+            Mail::send(new VerifyEmailMailable($this));
 
-            \Illuminate\Support\Facades\Log::info('Verification email sent', [
+            Log::info('Verification email sent', [
                 'user_id' => $this->id,
                 'email' => $this->emailaddress,
                 'timestamp' => now(),
             ]);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to send verification email', [
+            Log::error('Failed to send verification email', [
                 'user_id' => $this->id,
                 'email' => $this->emailaddress,
                 'error' => $e->getMessage(),
@@ -255,7 +271,7 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * Find the user by username for authentication.
      *
-     * @param string $username
+     * @param  string  $username
      * @return mixed
      */
     public static function findByUsername($username)
@@ -279,7 +295,7 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         foreach (UserRole::definitions() as $definition) {
-            if (!UserRole::isBuiltInRoleKey($definition['role_key'])) {
+            if (! UserRole::isBuiltInRoleKey($definition['role_key'])) {
                 $roleOptions[$definition['role_key']] = $definition['label'];
             }
         }
@@ -294,6 +310,7 @@ class User extends Authenticatable implements MustVerifyEmail
         foreach (UserRole::builtInOverrides() as $roleKey => $definition) {
             if (($definition['is_active'] ?? true) === false) {
                 unset($roleOptions[$roleKey]);
+
                 continue;
             }
 
@@ -383,7 +400,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return true;
         }
 
-        if (!$this->isDilgUser()) {
+        if (! $this->isDilgUser()) {
             return false;
         }
 
@@ -452,11 +469,11 @@ class User extends Authenticatable implements MustVerifyEmail
             return 'regional';
         }
 
-        if ($officeLower !== '' && !str_contains($officeLower, 'regional') && !str_contains($officeLower, 'provincial')) {
-            $hierarchy = \App\Support\ProjectLocationFilterHelper::buildConfiguredLocationHierarchy();
+        if ($officeLower !== '' && ! str_contains($officeLower, 'regional') && ! str_contains($officeLower, 'provincial')) {
+            $hierarchy = ProjectLocationFilterHelper::buildConfiguredLocationHierarchy();
             foreach ($hierarchy as $prov => $cities) {
                 foreach ($cities as $city => $brgys) {
-                    if (\App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($city) === \App\Support\ProjectLocationFilterHelper::normalizeComparableLocationLabel($officeLower)) {
+                    if (ProjectLocationFilterHelper::normalizeComparableLocationLabel($city) === ProjectLocationFilterHelper::normalizeComparableLocationLabel($officeLower)) {
                         return 'cmlgoo';
                     }
                 }
@@ -502,7 +519,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         $level = $this->approvalLevel();
         if ($level === 'cmlgoo') {
-            return ($this->office ?: 'Municipal') . ($this->province ? ', ' . $this->province : '');
+            return ($this->office ?: 'Municipal').($this->province ? ', '.$this->province : '');
         }
         if ($level === 'provincial') {
             return $this->province ?: 'Provincial';
@@ -510,6 +527,7 @@ class User extends Authenticatable implements MustVerifyEmail
         if ($level === 'regional') {
             return $this->region ?: 'CAR';
         }
+
         return '';
     }
 
@@ -594,7 +612,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return true;
         }
 
-        if (!$this->isDilgUser() || $this->isLguScopedUser()) {
+        if (! $this->isDilgUser() || $this->isLguScopedUser()) {
             return false;
         }
 
@@ -634,19 +652,21 @@ class User extends Authenticatable implements MustVerifyEmail
             if ($normalizedTargetProvince !== '') {
                 return $userProvince !== '' && $normalizedTargetProvince === $userProvince;
             }
+
             return true;
         }
 
         if ($this->isMlgooUser()) {
             if ($office !== null && $office !== '') {
                 $officeMatch = $this->matchesAssignedOffice($office);
-                if (!$officeMatch) {
+                if (! $officeMatch) {
                     return false;
                 }
             }
             if ($normalizedTargetProvince !== '' && $userProvince !== '') {
                 return $normalizedTargetProvince === $userProvince;
             }
+
             return true;
         }
 
@@ -654,6 +674,7 @@ class User extends Authenticatable implements MustVerifyEmail
             if ($office !== null && $office !== '') {
                 return $this->matchesAssignedOffice($office);
             }
+
             return true;
         }
 
@@ -689,6 +710,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
         if ($this->isProvincialUser() || $this->isProvincialDilgAssignment()) {
             $targetProvince = Str::lower(trim((string) $province));
+
             return $targetProvince === '' || $targetProvince === $this->normalizedProvince();
         }
 
@@ -738,7 +760,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return [];
         }
 
-        if (!str_starts_with($access, self::ACCESS_PERMISSION_PREFIX)) {
+        if (! str_starts_with($access, self::ACCESS_PERMISSION_PREFIX)) {
             return [];
         }
 
@@ -751,13 +773,13 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function effectiveCrudPermissions(): array
     {
-        $cacheKey = $this->normalizedRole() . "\0" . (string) $this->access;
+        $cacheKey = $this->normalizedRole()."\0".(string) $this->access;
 
         if (array_key_exists($cacheKey, $this->effectiveCrudPermissionsCache)) {
             return $this->effectiveCrudPermissionsCache[$cacheKey];
         }
 
-        if (!RolePermissionSetting::tableAvailable()) {
+        if (! RolePermissionSetting::tableAvailable()) {
             return $this->effectiveCrudPermissionsCache[$cacheKey] = $this->usesScopedCrudAccess()
                 ? $this->grantedCrudPermissions()
                 : $this->defaultCrudPermissions();
@@ -801,7 +823,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return collect($candidateAspects)
             ->flatMap(function (string $candidateAspect) use ($candidateActions) {
                 return array_map(function (string $candidateAction) use ($candidateAspect) {
-                    return $candidateAspect . '.' . $candidateAction;
+                    return $candidateAspect.'.'.$candidateAction;
                 }, $candidateActions);
             })
             ->unique()
@@ -822,7 +844,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function hasExplicitCrudPermission(string $aspect, string $action): bool
     {
-        if (!$this->usesScopedCrudAccess()) {
+        if (! $this->usesScopedCrudAccess()) {
             return false;
         }
 

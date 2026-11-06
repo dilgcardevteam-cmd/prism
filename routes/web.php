@@ -3,6 +3,8 @@
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PagasaTimeController;
 use App\Models\User;
+use App\Modules\ActivityLogs\Models\ActivityLog;
+use App\Modules\ActivityLogs\Services\ActivityLogService;
 use App\Modules\Auth\Jobs\SendLoginOtpEmail;
 use App\Services\RegionalApprovalPoolService;
 use App\Support\NotificationCenter;
@@ -214,6 +216,54 @@ Route::post('/api/mobile/login', function (Request $request) {
         ], 422);
     }
 
+    if ($user->must_change_password && ! $user->isSuperAdmin()) {
+        $resetChallenge = DB::transaction(function () use ($user): array {
+            User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
+            $existing = DB::table('mobile_password_reset_challenges')
+                ->where('user_id', $user->idno)
+                ->where('expires_at', '>', now())
+                ->orderByDesc('id')
+                ->first();
+
+            if ($existing) {
+                return [
+                    'token' => Crypt::decryptString($existing->encrypted_token),
+                    'otp_pending' => $existing->pending_password_hash !== null,
+                    'otp_sent_at' => $existing->otp_sent_at
+                        ? Carbon\Carbon::parse($existing->otp_sent_at)
+                        : null,
+                ];
+            }
+
+            $challengeToken = Str::random(80);
+            DB::table('mobile_password_reset_challenges')->insert([
+                'user_id' => $user->idno,
+                'challenge_hash' => hash('sha256', $challengeToken),
+                'encrypted_token' => Crypt::encryptString($challengeToken),
+                'attempts' => 0,
+                'expires_at' => now()->addMinutes(15),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return [
+                'token' => $challengeToken,
+                'otp_pending' => false,
+                'otp_sent_at' => null,
+            ];
+        });
+
+        return response()->json([
+            'message' => $resetChallenge['otp_pending']
+                ? 'Complete the email verification for your password change.'
+                : 'A password reset is required before you can sign in.',
+            'requires_password_change' => true,
+            'requires_password_change_otp' => $resetChallenge['otp_pending'],
+            'challenge_token' => $resetChallenge['token'],
+            'resend_available_at' => $resetChallenge['otp_sent_at']?->copy()->addMinutes(5)->toISOString(),
+        ], 202);
+    }
+
     $challenge = DB::transaction(function () use ($user): array {
         User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
 
@@ -276,6 +326,236 @@ Route::post('/api/mobile/login', function (Request $request) {
     ], 202);
 })->withoutMiddleware(VerifyCsrfToken::class)
     ->middleware('throttle:10,1');
+
+Route::post('/api/mobile/password/reset', function (Request $request) {
+    $validated = $request->validate([
+        'challenge_token' => ['required', 'string', 'size:80'],
+        'new_password' => [
+            'required',
+            'string',
+            'min:8',
+            'regex:/[A-Z]/',
+            'regex:/[a-z]/',
+            'regex:/[0-9]/',
+            'regex:/[^A-Za-z0-9]/',
+            'confirmed',
+        ],
+    ], [
+        'new_password.regex' => 'The new password must include uppercase and lowercase letters, a number, and a symbol.',
+        'new_password.confirmed' => 'The password confirmation does not match.',
+    ]);
+
+    $challengeHash = hash('sha256', $validated['challenge_token']);
+    $challenge = DB::table('mobile_password_reset_challenges')
+        ->where('challenge_hash', $challengeHash)
+        ->where('expires_at', '>', now())
+        ->first();
+    $user = $challenge ? User::query()->find($challenge->user_id) : null;
+
+    if (! $challenge || ! $user || ! $user->must_change_password || $user->isSuperAdmin() || strtolower((string) $user->status) !== 'active') {
+        return response()->json([
+            'message' => 'Your password reset request expired. Sign in again to continue.',
+        ], 422);
+    }
+
+    if (Hash::check($validated['new_password'], $user->password)) {
+        return response()->json([
+            'message' => 'Choose a password different from your current password.',
+        ], 422);
+    }
+
+    $otp = (string) random_int(100000, 999999);
+    $otpExpiresAt = now()->addMinutes(5);
+    DB::table('mobile_password_reset_challenges')
+        ->where('id', $challenge->id)
+        ->update([
+            'pending_password_hash' => Hash::make($validated['new_password']),
+            'otp_hash' => Hash::make($otp),
+            'attempts' => 0,
+            'otp_expires_at' => $otpExpiresAt,
+            'otp_sent_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+    SendLoginOtpEmail::dispatch((int) $user->idno, $otp, $otpExpiresAt)->afterResponse();
+
+    return response()->json([
+        'message' => 'A verification code is being sent to your registered email address.',
+        'requires_otp' => true,
+        'resend_available_at' => now()->addMinutes(5)->toISOString(),
+    ], 202);
+})->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('throttle:5,1');
+
+Route::post('/api/mobile/password/reset/otp/resend', function (Request $request) {
+    $validated = $request->validate([
+        'challenge_token' => ['required', 'string', 'size:80'],
+    ]);
+    $challenge = DB::table('mobile_password_reset_challenges')
+        ->where('challenge_hash', hash('sha256', $validated['challenge_token']))
+        ->where('expires_at', '>', now())
+        ->first();
+
+    if (! $challenge || ! $challenge->pending_password_hash) {
+        return response()->json([
+            'message' => 'Your password reset request expired. Sign in again to continue.',
+        ], 422);
+    }
+
+    $resendAvailableAt = $challenge->otp_sent_at
+        ? Carbon\Carbon::parse($challenge->otp_sent_at)->addMinutes(5)
+        : now();
+    if ($resendAvailableAt->isFuture()) {
+        return response()->json([
+            'message' => 'Please wait five minutes between verification code requests.',
+            'resend_available_at' => $resendAvailableAt->toISOString(),
+        ], 429);
+    }
+
+    $user = User::query()->find($challenge->user_id);
+    if (! $user || ! $user->must_change_password || $user->isSuperAdmin() || strtolower((string) $user->status) !== 'active') {
+        DB::table('mobile_password_reset_challenges')->where('id', $challenge->id)->delete();
+
+        return response()->json([
+            'message' => 'This account cannot complete the password reset.',
+        ], 422);
+    }
+
+    $otp = (string) random_int(100000, 999999);
+    $otpExpiresAt = now()->addMinutes(5);
+    DB::table('mobile_password_reset_challenges')
+        ->where('id', $challenge->id)
+        ->update([
+            'otp_hash' => Hash::make($otp),
+            'attempts' => 0,
+            'otp_expires_at' => $otpExpiresAt,
+            'otp_sent_at' => now(),
+            'updated_at' => now(),
+        ]);
+    SendLoginOtpEmail::dispatch((int) $user->idno, $otp, $otpExpiresAt)->afterResponse();
+
+    return response()->json([
+        'message' => 'A new verification code is being sent.',
+        'resend_available_at' => $otpExpiresAt->toISOString(),
+    ]);
+})->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('throttle:3,1');
+
+Route::post('/api/mobile/password/reset/otp', function (Request $request) {
+    $validated = $request->validate([
+        'challenge_token' => ['required', 'string', 'size:80'],
+        'otp' => ['required', 'digits:6'],
+    ]);
+    $challengeHash = hash('sha256', $validated['challenge_token']);
+    $challenge = DB::table('mobile_password_reset_challenges')
+        ->where('challenge_hash', $challengeHash)
+        ->where('expires_at', '>', now())
+        ->where('otp_expires_at', '>', now())
+        ->first();
+
+    if (! $challenge || ! $challenge->pending_password_hash || ! $challenge->otp_hash) {
+        return response()->json([
+            'message' => 'The verification code expired. Request a new code to continue.',
+        ], 422);
+    }
+
+    if (! Hash::check($validated['otp'], $challenge->otp_hash)) {
+        $attempts = $challenge->attempts + 1;
+        if ($attempts >= 5) {
+            DB::table('mobile_password_reset_challenges')->where('id', $challenge->id)->delete();
+
+            return response()->json([
+                'message' => 'Too many incorrect verification attempts. Sign in again to restart the password reset.',
+            ], 422);
+        }
+
+        DB::table('mobile_password_reset_challenges')
+            ->where('id', $challenge->id)
+            ->update(['attempts' => $attempts, 'updated_at' => now()]);
+
+        return response()->json([
+            'message' => 'The verification code is incorrect.',
+        ], 422);
+    }
+
+    $plainTextToken = Str::random(80);
+    $tokenExpiresAt = now()->addDays(30);
+    $updatedUser = DB::transaction(function () use ($challenge, $challengeHash, $plainTextToken, $tokenExpiresAt, $validated) {
+        $lockedChallenge = DB::table('mobile_password_reset_challenges')
+            ->where('id', $challenge->id)
+            ->where('challenge_hash', $challengeHash)
+            ->where('expires_at', '>', now())
+            ->where('otp_expires_at', '>', now())
+            ->lockForUpdate()
+            ->first();
+        if (! $lockedChallenge || ! Hash::check($validated['otp'], (string) $lockedChallenge->otp_hash)) {
+            return null;
+        }
+
+        $user = User::query()->whereKey($lockedChallenge->user_id)->lockForUpdate()->first();
+        if (
+            ! $user
+            || ! $user->must_change_password
+            || $user->isSuperAdmin()
+            || strtolower((string) $user->status) !== 'active'
+        ) {
+            return null;
+        }
+
+        $user->forceFill([
+            'password' => $lockedChallenge->pending_password_hash,
+            'must_change_password' => false,
+        ])->save();
+        DB::table('mobile_password_reset_challenges')->where('user_id', $user->idno)->delete();
+        DB::table('mobile_login_challenges')->where('user_id', $user->idno)->delete();
+        DB::table('mobile_access_tokens')->where('user_id', $user->idno)->delete();
+        DB::table('mobile_access_tokens')->insert([
+            'user_id' => $user->idno,
+            'token_hash' => hash('sha256', $plainTextToken),
+            'expires_at' => $tokenExpiresAt,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $user;
+    });
+
+    if (! $updatedUser) {
+        return response()->json([
+            'message' => 'The verification request expired. Sign in again to continue.',
+        ], 422);
+    }
+
+    app(ActivityLogService::class)->log(
+        $updatedUser,
+        ActivityLog::ACTION_PASSWORD_RESET,
+        'Completed a system-mandated password change and email verification.',
+        ['request' => $request],
+    );
+
+    return response()->json([
+        'message' => 'Password changed and verified successfully.',
+        'access_token' => $plainTextToken,
+        'token_type' => 'Bearer',
+        'expires_at' => $tokenExpiresAt->toISOString(),
+        'user' => [
+            'id' => $updatedUser->idno,
+            'username' => $updatedUser->username,
+            'first_name' => $updatedUser->fname ?? null,
+            'last_name' => $updatedUser->lname ?? null,
+            'email' => $updatedUser->emailaddress ?? null,
+            'phone' => $updatedUser->mobileno ?? null,
+            'agency' => $updatedUser->agency ?? null,
+            'position' => $updatedUser->position ?? null,
+            'region' => $updatedUser->region ?? null,
+            'province' => $updatedUser->province ?? null,
+            'office' => $updatedUser->office ?? null,
+            'role' => $updatedUser->role ?? null,
+            'status' => $updatedUser->status,
+        ],
+    ]);
+})->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('throttle:6,1');
 
 Route::post('/api/mobile/login/otp/resend', function (Request $request) {
     $validated = $request->validate([
@@ -403,6 +683,15 @@ Route::post('/api/mobile/login/otp', function (Request $request) {
         return response()->json([
             'message' => 'This account cannot sign in right now.',
         ], 422);
+    }
+
+    if ($user->must_change_password && ! $user->isSuperAdmin()) {
+        DB::table('mobile_login_challenges')->where('id', $challenge->id)->delete();
+
+        return response()->json([
+            'message' => 'A password reset is required before using the system.',
+            'requires_password_change' => true,
+        ], 423);
     }
 
     $plainTextToken = Str::random(80);

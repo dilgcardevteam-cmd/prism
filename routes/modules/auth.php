@@ -16,6 +16,16 @@ Route::post('register', [RegisterController::class, 'register']);
 Route::get('/login/otp', [LoginController::class, 'showLoginOtpForm'])->name('login.otp');
 Route::post('/login/otp', [LoginController::class, 'verifyLoginOtp'])->name('login.otp.verify');
 Route::post('/login/otp/resend', [LoginController::class, 'resendLoginOtp'])->name('login.otp.resend');
+Route::get('/password/mandatory', [LoginController::class, 'showMandatoryPasswordForm'])
+    ->name('password.mandatory.show');
+Route::post('/password/mandatory', [LoginController::class, 'updateMandatoryPassword'])
+    ->name('password.mandatory.update');
+Route::get('/password/mandatory/otp', [LoginController::class, 'showMandatoryPasswordOtpForm'])
+    ->name('password.mandatory.otp');
+Route::post('/password/mandatory/otp', [LoginController::class, 'verifyMandatoryPasswordOtp'])
+    ->name('password.mandatory.otp.verify');
+Route::post('/password/mandatory/otp/resend', [LoginController::class, 'resendMandatoryPasswordOtp'])
+    ->name('password.mandatory.otp.resend');
 
 // Email verification routes - Token route FIRST (more specific)
 Route::get('/email/verify/token/{token}', [VerificationController::class, 'verifyWithToken'])->name('verification.verify.token');

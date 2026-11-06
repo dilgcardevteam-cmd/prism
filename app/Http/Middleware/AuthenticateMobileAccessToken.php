@@ -29,6 +29,15 @@ class AuthenticateMobileAccessToken
         }
 
         $tokenHash = hash('sha256', $plainTextToken);
+        if ($user->must_change_password && ! $user->isSuperAdmin()) {
+            DB::table('mobile_access_tokens')->where('token_hash', $tokenHash)->delete();
+
+            return response()->json([
+                'message' => 'A password reset is required before using the system. Sign in again to continue.',
+                'requires_password_change' => true,
+            ], 423);
+        }
+
         if (now()->subMinutes(120)->greaterThanOrEqualTo($accessToken->updated_at)) {
             DB::table('mobile_access_tokens')->where('token_hash', $tokenHash)->delete();
 

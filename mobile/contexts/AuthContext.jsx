@@ -155,11 +155,32 @@ export function AuthProvider({ children }) {
 
         const payloadJson = await response.json().catch(() => null);
 
+        if (
+          response.status === 202 &&
+          payloadJson?.requires_password_change &&
+          payloadJson?.challenge_token
+        ) {
+          setLoginChallenge({
+            challengeToken: payloadJson.challenge_token,
+            apiBaseUrl: baseUrl,
+            username,
+            mandatoryPasswordChange: true,
+            resendAvailableAt: payloadJson.resend_available_at,
+          });
+
+          return {
+            requiresPasswordChange: true,
+            requiresOtp: Boolean(payloadJson.requires_password_change_otp),
+            resendAvailableAt: payloadJson.resend_available_at,
+          };
+        }
+
         if (response.status === 202 && payloadJson?.requires_otp && payloadJson?.challenge_token) {
           setLoginChallenge({
             challengeToken: payloadJson.challenge_token,
             apiBaseUrl: baseUrl,
             username,
+            mandatoryPasswordChange: false,
             resendAvailableAt: payloadJson.resend_available_at,
           });
 
@@ -194,13 +215,52 @@ export function AuthProvider({ children }) {
     );
   }, [completeSignIn]);
 
+  const submitMandatoryPasswordChange = useCallback(async (newPassword, confirmation) => {
+    if (!loginChallenge?.mandatoryPasswordChange) {
+      throw new Error("Your password reset request expired. Please sign in again.");
+    }
+
+    const response = await fetchWithTimeout(
+      buildApiUrl("/api/mobile/password/reset", loginChallenge.apiBaseUrl),
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          challenge_token: loginChallenge.challengeToken,
+          new_password: newPassword,
+          new_password_confirmation: confirmation,
+        }),
+      },
+      5000
+    );
+    const payloadJson = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(payloadJson?.message || "Unable to update your password.");
+    }
+
+    setLoginChallenge((current) => current
+      ? { ...current, resendAvailableAt: payloadJson?.resend_available_at ?? null }
+      : current);
+
+    return payloadJson;
+  }, [loginChallenge]);
+
   const verifyLoginOtp = useCallback(async (otp) => {
     if (!loginChallenge) {
       throw new Error("Your verification request expired. Please sign in again.");
     }
 
     const response = await fetchWithTimeout(
-      buildApiUrl("/api/mobile/login/otp", loginChallenge.apiBaseUrl),
+      buildApiUrl(
+        loginChallenge.mandatoryPasswordChange
+          ? "/api/mobile/password/reset/otp"
+          : "/api/mobile/login/otp",
+        loginChallenge.apiBaseUrl
+      ),
       {
         method: "POST",
         headers: {
@@ -229,7 +289,12 @@ export function AuthProvider({ children }) {
     }
 
     const response = await fetchWithTimeout(
-      buildApiUrl("/api/mobile/login/otp/resend", loginChallenge.apiBaseUrl),
+      buildApiUrl(
+        loginChallenge.mandatoryPasswordChange
+          ? "/api/mobile/password/reset/otp/resend"
+          : "/api/mobile/login/otp/resend",
+        loginChallenge.apiBaseUrl
+      ),
       {
         method: "POST",
         headers: {
@@ -340,13 +405,14 @@ export function AuthProvider({ children }) {
       isHydrating,
       isAuthenticated: Boolean(session),
       signIn,
+      submitMandatoryPasswordChange,
       verifyLoginOtp,
       resendLoginOtp,
       resendAvailableAt: loginChallenge?.resendAvailableAt ?? null,
       cancelLoginOtp,
       signOut,
     }),
-    [session, isHydrating, signIn, verifyLoginOtp, resendLoginOtp, loginChallenge, cancelLoginOtp, signOut]
+    [session, isHydrating, signIn, submitMandatoryPasswordChange, verifyLoginOtp, resendLoginOtp, loginChallenge, cancelLoginOtp, signOut]
   );
 
   return (

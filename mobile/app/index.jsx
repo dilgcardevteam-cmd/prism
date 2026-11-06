@@ -15,12 +15,23 @@ import { APP_COLORS } from "../constants/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, verifyLoginOtp, resendLoginOtp, resendAvailableAt, cancelLoginOtp } = useAuth();
+  const {
+    signIn,
+    submitMandatoryPasswordChange,
+    verifyLoginOtp,
+    resendLoginOtp,
+    resendAvailableAt,
+    cancelLoginOtp,
+  } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
   const [otp, setOtp] = useState("");
   const [requiresOtp, setRequiresOtp] = useState(false);
+  const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
+  const [isMandatoryPasswordOtp, setIsMandatoryPasswordOtp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const submitLock = useRef(false);
@@ -45,7 +56,12 @@ export default function LoginScreen() {
     setIsSubmitting(true);
     try {
       const result = await signIn({ username, password });
-      if (result?.requiresOtp) {
+      if (result?.requiresPasswordChange) {
+        setPassword("");
+        setIsMandatoryPasswordOtp(true);
+        setRequiresPasswordChange(!result.requiresOtp);
+        setRequiresOtp(Boolean(result.requiresOtp));
+      } else if (result?.requiresOtp) {
         setPassword("");
         setRequiresOtp(true);
       } else {
@@ -53,6 +69,30 @@ export default function LoginScreen() {
       }
     } catch (error) {
       Alert.alert("Login failed", error?.message || "Invalid credentials.");
+    } finally {
+      setIsSubmitting(false);
+      submitLock.current = false;
+    }
+  };
+
+  const handleMandatoryPasswordChange = async () => {
+    if (submitLock.current) return;
+    if (!newPassword || !newPasswordConfirmation) {
+      Alert.alert("Password required", "Enter and confirm your new password.");
+      return;
+    }
+
+    submitLock.current = true;
+    setIsSubmitting(true);
+    try {
+      await submitMandatoryPasswordChange(newPassword, newPasswordConfirmation);
+      setNewPassword("");
+      setNewPasswordConfirmation("");
+      setRequiresPasswordChange(false);
+      setIsMandatoryPasswordOtp(true);
+      setRequiresOtp(true);
+    } catch (error) {
+      Alert.alert("Unable to change password", error?.message || "Please try again.");
     } finally {
       setIsSubmitting(false);
       submitLock.current = false;
@@ -103,6 +143,8 @@ export default function LoginScreen() {
   const handleBackToLogin = () => {
     cancelLoginOtp();
     setRequiresOtp(false);
+    setRequiresPasswordChange(false);
+    setIsMandatoryPasswordOtp(false);
     setOtp("");
   };
 
@@ -132,7 +174,9 @@ export default function LoginScreen() {
           {requiresOtp ? (
             <>
               <Text className="mb-5 text-center font-sans text-base text-gray-600">
-                A six-digit code is being sent to your registered email address. It may take a moment to arrive.
+                {isMandatoryPasswordOtp
+                  ? "A six-digit code is being sent to confirm your password change. It may take a moment to arrive."
+                  : "A six-digit code is being sent to your registered email address. It may take a moment to arrive."}
               </Text>
               <TextInput
                 value={otp}
@@ -170,6 +214,27 @@ export default function LoginScreen() {
                 </Text>
               </Pressable>
             </>
+          ) : requiresPasswordChange ? (
+            <>
+              <Text className="mb-5 text-center font-sans text-base text-gray-600">
+                A system administrator requires you to change your password before continuing.
+              </Text>
+              <FloatingInput
+                label="New password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+              />
+              <FloatingInput
+                label="Confirm new password"
+                value={newPasswordConfirmation}
+                onChangeText={setNewPasswordConfirmation}
+                secureTextEntry
+              />
+              <Text className="mt-2 text-sm text-gray-500">
+                Use at least 8 characters with uppercase and lowercase letters, a number, and a symbol.
+              </Text>
+            </>
           ) : (
             <>
               <FloatingInput
@@ -197,7 +262,11 @@ export default function LoginScreen() {
           )}
 
           <Pressable
-            onPress={requiresOtp ? handleOtpPress : handleLoginPress}
+            onPress={requiresOtp
+              ? handleOtpPress
+              : requiresPasswordChange
+                ? handleMandatoryPasswordChange
+                : handleLoginPress}
             disabled={isSubmitting}
             className="mt-10 overflow-hidden rounded-full disabled:opacity-70"
           >
@@ -213,7 +282,13 @@ export default function LoginScreen() {
               }}
             >
               <Text className="font-sans text-lg font-bold text-white">
-                {isSubmitting ? "Please wait..." : requiresOtp ? "VERIFY CODE" : "SIGN IN"}
+                {isSubmitting
+                  ? "Please wait..."
+                  : requiresOtp
+                    ? "VERIFY CODE"
+                    : requiresPasswordChange
+                      ? "CHANGE PASSWORD"
+                      : "SIGN IN"}
               </Text>
             </LinearGradient>
           </Pressable>

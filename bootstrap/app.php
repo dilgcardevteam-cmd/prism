@@ -1,5 +1,16 @@
 <?php
 
+use App\Http\Middleware\AuthenticateMobileAccessToken;
+use App\Http\Middleware\EnforceMandatoryPasswordChange;
+use App\Http\Middleware\EnsureCrudPermission;
+use App\Http\Middleware\EnsureEnabledModule;
+use App\Http\Middleware\EnsureSystemMaintenanceAccess;
+use App\Http\Middleware\GzipEncodeResponse;
+use App\Http\Middleware\RecordActivityLog;
+use App\Http\Middleware\RegionalOfficeDilgMiddleware;
+use App\Http\Middleware\RoleMiddleware;
+use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SuperAdminMiddleware;
 use App\Models\ActivityLog;
 use App\Services\ActivityLogService;
 use Illuminate\Foundation\Application;
@@ -18,27 +29,28 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectUsersTo('/dashboard');
-        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
-        $middleware->append(\App\Http\Middleware\GzipEncodeResponse::class);
+        $middleware->append(SecurityHeaders::class);
+        $middleware->append(GzipEncodeResponse::class);
         $middleware->web(append: [
-            \App\Http\Middleware\EnsureSystemMaintenanceAccess::class,
-            \App\Http\Middleware\EnsureEnabledModule::class,
-            \App\Http\Middleware\RecordActivityLog::class,
+            EnsureSystemMaintenanceAccess::class,
+            EnsureEnabledModule::class,
+            EnforceMandatoryPasswordChange::class,
+            RecordActivityLog::class,
         ]);
 
         $middleware->alias([
-            'superadmin' => \App\Http\Middleware\SuperAdminMiddleware::class,
-            'regional_dilg' => \App\Http\Middleware\RegionalOfficeDilgMiddleware::class,
-            'crud_permission' => \App\Http\Middleware\EnsureCrudPermission::class,
-            'mobile.auth' => \App\Http\Middleware\AuthenticateMobileAccessToken::class,
-            'role' => \App\Http\Middleware\RoleMiddleware::class,
+            'superadmin' => SuperAdminMiddleware::class,
+            'regional_dilg' => RegionalOfficeDilgMiddleware::class,
+            'crud_permission' => EnsureCrudPermission::class,
+            'mobile.auth' => AuthenticateMobileAccessToken::class,
+            'role' => RoleMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (ValidationException $exception): void {
             $request = request();
 
-            if (!$request instanceof Request) {
+            if (! $request instanceof Request) {
                 return;
             }
 
@@ -49,14 +61,14 @@ return Application::configure(basePath: dirname(__DIR__))
             app(ActivityLogService::class)->log(
                 $request->user(),
                 ActivityLog::ACTION_VALIDATION_FAILED,
-                'Validation failed on ' . ($routeLabel !== '' ? $routeLabel : 'Form Submission') . '.',
+                'Validation failed on '.($routeLabel !== '' ? $routeLabel : 'Form Submission').'.',
                 [
                     'request' => $request,
                     'username' => $username !== '' ? $username : null,
                     'properties' => [
                         'route_name' => $request->route()?->getName(),
                         'method' => $request->method(),
-                        'path' => '/' . ltrim($request->path(), '/'),
+                        'path' => '/'.ltrim($request->path(), '/'),
                         'fields' => array_keys($exception->errors()),
                     ],
                 ],

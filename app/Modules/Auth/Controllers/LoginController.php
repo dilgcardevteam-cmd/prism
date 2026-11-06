@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -114,6 +115,14 @@ class LoginController extends Controller
 
         RateLimiter::clear($throttleKey);
 
+        if ($user->must_change_password && ! $user->isSuperAdmin()) {
+            $request->session()->forget(['login_otp_challenge', 'mandatory_password_otp']);
+            $request->session()->put('mandatory_password_user_id', $user->getKey());
+            $request->session()->put('mandatory_password_remember', $request->boolean('remember'));
+
+            return redirect()->route('password.mandatory.show');
+        }
+
         if ($this->hasDailyOtpCookie($request, $user)) {
             return $this->completeLogin($request, $user, $request->boolean('remember'));
         }
@@ -206,6 +215,239 @@ class LoginController extends Controller
         return $this->sendLoginOtp($request, $user, $challenge, true);
     }
 
+    public function showMandatoryPasswordForm(Request $request)
+    {
+        $user = $this->pendingMandatoryPasswordUser($request);
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.mandatory-password', ['user' => $user]);
+    }
+
+    public function updateMandatoryPassword(Request $request): RedirectResponse
+    {
+        $user = $this->pendingMandatoryPasswordUser($request);
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        $validated = $request->validate([
+            'new_password' => [
+                'required',
+                'string',
+                'min:8',
+                'regex:/[A-Z]/',
+                'regex:/[a-z]/',
+                'regex:/[0-9]/',
+                'regex:/[^A-Za-z0-9]/',
+                'confirmed',
+            ],
+        ], [
+            'new_password.regex' => 'The new password must include uppercase and lowercase letters, a number, and a symbol.',
+            'new_password.confirmed' => 'The password confirmation does not match.',
+        ]);
+
+        if (Hash::check($validated['new_password'], $user->password)) {
+            return back()->withErrors([
+                'new_password' => 'Choose a password different from your current password.',
+            ]);
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        $request->session()->put('mandatory_password_otp', [
+            'user_id' => $user->getKey(),
+            'password_hash' => Hash::make($validated['new_password']),
+            'otp_hash' => Hash::make($otp),
+            'encrypted_otp' => Crypt::encryptString($otp),
+            'expires_at' => now()->addMinutes(10)->timestamp,
+            'otp_expires_at' => now()->addMinutes(5)->timestamp,
+            'sent_at' => now()->timestamp,
+            'attempts' => 0,
+            'email_dispatched' => false,
+        ]);
+
+        return redirect()->route('password.mandatory.otp');
+    }
+
+    public function showMandatoryPasswordOtpForm(Request $request)
+    {
+        $challenge = $request->session()->get('mandatory_password_otp');
+        $user = $this->pendingMandatoryPasswordUser($request);
+
+        if (! $user || ! is_array($challenge) || (int) ($challenge['user_id'] ?? 0) !== (int) $user->getKey()) {
+            return redirect()->route('password.mandatory.show')->withErrors([
+                'new_password' => 'Choose your new password before verifying the code.',
+            ]);
+        }
+
+        if ((int) ($challenge['expires_at'] ?? 0) <= now()->timestamp) {
+            $request->session()->forget('mandatory_password_otp');
+
+            return redirect()->route('password.mandatory.show')->withErrors([
+                'new_password' => 'The verification code expired. Submit your new password again to request another code.',
+            ]);
+        }
+
+        if (empty($challenge['email_dispatched']) && ! empty($challenge['encrypted_otp'])) {
+            $challenge['email_dispatched'] = true;
+            $encryptedOtp = $challenge['encrypted_otp'];
+            unset($challenge['encrypted_otp']);
+            $request->session()->put('mandatory_password_otp', $challenge);
+
+            SendLoginOtpEmail::dispatch(
+                (int) $user->getKey(),
+                Crypt::decryptString($encryptedOtp),
+                now()->setTimestamp((int) $challenge['otp_expires_at']),
+            )->afterResponse();
+        }
+
+        return view('auth.mandatory-password-otp', [
+            'emailAddress' => $this->maskEmailAddress($user->emailaddress),
+            'canResendAt' => (int) $challenge['sent_at'] + 300,
+        ]);
+    }
+
+    public function verifyMandatoryPasswordOtp(Request $request): Response|RedirectResponse
+    {
+        $request->validate([
+            'otp' => ['required', 'digits:6'],
+        ]);
+
+        $challenge = $request->session()->get('mandatory_password_otp');
+        $user = $this->pendingMandatoryPasswordUser($request);
+        if (
+            ! $user
+            || ! is_array($challenge)
+            || (int) ($challenge['user_id'] ?? 0) !== (int) $user->getKey()
+            || (int) ($challenge['expires_at'] ?? 0) <= now()->timestamp
+        ) {
+            $request->session()->forget('mandatory_password_otp');
+
+            return redirect()->route('password.mandatory.show')->withErrors([
+                'new_password' => 'Your verification request expired. Submit your new password again.',
+            ]);
+        }
+
+        if ((int) ($challenge['otp_expires_at'] ?? 0) <= now()->timestamp) {
+            return back()->withErrors([
+                'otp' => 'The verification code expired. Request a new code to continue.',
+            ]);
+        }
+
+        $challenge['attempts'] = (int) ($challenge['attempts'] ?? 0) + 1;
+        if (! Hash::check((string) $request->input('otp'), (string) ($challenge['otp_hash'] ?? ''))) {
+            if ($challenge['attempts'] >= 5) {
+                $request->session()->forget('mandatory_password_otp');
+
+                return redirect()->route('password.mandatory.show')->withErrors([
+                    'new_password' => 'Too many incorrect verification attempts. Submit your new password again.',
+                ]);
+            }
+
+            $request->session()->put('mandatory_password_otp', $challenge);
+
+            return back()->withErrors(['otp' => 'The verification code is incorrect.']);
+        }
+
+        $updated = DB::transaction(function () use ($user, $challenge): ?User {
+            $lockedUser = User::query()->whereKey($user->getKey())->lockForUpdate()->first();
+            if (
+                ! $lockedUser
+                || ! $lockedUser->must_change_password
+                || $lockedUser->isSuperAdmin()
+                || strtolower((string) $lockedUser->status) !== 'active'
+            ) {
+                return null;
+            }
+
+            $lockedUser->forceFill([
+                'password' => $challenge['password_hash'],
+                'must_change_password' => false,
+            ])->save();
+            DB::table('mobile_access_tokens')->where('user_id', $lockedUser->getKey())->delete();
+
+            return $lockedUser;
+        });
+
+        if (! $updated) {
+            $request->session()->forget(['mandatory_password_user_id', 'mandatory_password_otp']);
+
+            return redirect()->route('login')->withErrors([
+                'login_error' => 'Your account cannot complete the password reset. Contact a system administrator.',
+            ]);
+        }
+
+        $remember = (bool) $request->session()->get('mandatory_password_remember', false);
+        $request->session()->forget([
+            'mandatory_password_user_id',
+            'mandatory_password_remember',
+            'mandatory_password_otp',
+        ]);
+
+        app(ActivityLogService::class)->log(
+            $updated,
+            ActivityLog::ACTION_PASSWORD_RESET,
+            'Completed a system-mandated password change and email verification.',
+            ['request' => $request],
+        );
+
+        return $this->completeLogin($request, $updated, $remember);
+    }
+
+    public function resendMandatoryPasswordOtp(Request $request): RedirectResponse
+    {
+        $user = $this->pendingMandatoryPasswordUser($request);
+        $challenge = $request->session()->get('mandatory_password_otp');
+        if (! $user || ! is_array($challenge) || (int) ($challenge['expires_at'] ?? 0) <= now()->timestamp) {
+            return redirect()->route('password.mandatory.show')->withErrors([
+                'new_password' => 'Submit your new password again to request a verification code.',
+            ]);
+        }
+
+        if ((int) ($challenge['sent_at'] ?? 0) + 300 > now()->timestamp) {
+            return back()->withErrors([
+                'otp' => 'Please wait five minutes between verification code requests.',
+            ]);
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        $challenge['otp_hash'] = Hash::make($otp);
+        $challenge['encrypted_otp'] = Crypt::encryptString($otp);
+        $challenge['expires_at'] = now()->addMinutes(10)->timestamp;
+        $challenge['otp_expires_at'] = now()->addMinutes(5)->timestamp;
+        $challenge['sent_at'] = now()->timestamp;
+        $challenge['attempts'] = 0;
+        $challenge['email_dispatched'] = false;
+        $request->session()->put('mandatory_password_otp', $challenge);
+
+        return redirect()->route('password.mandatory.otp')
+            ->with('otp_notice', 'A new verification code is being sent.');
+    }
+
+    private function pendingMandatoryPasswordUser(Request $request): ?User
+    {
+        $userId = $request->session()->get('mandatory_password_user_id');
+        $user = $userId ? User::query()->find($userId) : null;
+
+        if (
+            ! $user
+            || ! $user->must_change_password
+            || $user->isSuperAdmin()
+            || strtolower((string) $user->status) !== 'active'
+        ) {
+            $request->session()->forget([
+                'mandatory_password_user_id',
+                'mandatory_password_remember',
+                'mandatory_password_otp',
+            ]);
+
+            return null;
+        }
+
+        return $user;
+    }
+
     public function verifyLoginOtp(Request $request)
     {
         $request->validate([
@@ -249,6 +491,14 @@ class LoginController extends Controller
             return redirect()->route('login')->withErrors([
                 'login_error' => 'Your account cannot sign in right now. Please contact an administrator.',
             ]);
+        }
+
+        if ($user->must_change_password && ! $user->isSuperAdmin()) {
+            $request->session()->forget('login_otp_challenge');
+            $request->session()->put('mandatory_password_user_id', $user->getKey());
+            $request->session()->put('mandatory_password_remember', (bool) ($challenge['remember'] ?? false));
+
+            return redirect()->route('password.mandatory.show');
         }
 
         $request->session()->forget('login_otp_challenge');
@@ -336,6 +586,7 @@ class LoginController extends Controller
     {
         Auth::login($user, $remember);
         $request->session()->regenerate();
+        $request->session()->put('auth_password_version', (int) $user->password_security_version);
 
         return $this->authenticated($request, $user);
     }

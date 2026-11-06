@@ -37,6 +37,9 @@ class MobileApiSecurityTest extends TestCase
             $table->string('mobileno');
             $table->string('username')->unique();
             $table->string('password');
+            $table->boolean('must_change_password')->default(false);
+            $table->unsignedInteger('password_security_version')->default(0);
+            $table->rememberToken();
             $table->string('role')->nullable();
             $table->string('status')->default('active');
             $table->text('access')->nullable();
@@ -59,6 +62,20 @@ class MobileApiSecurityTest extends TestCase
             $table->string('otp_hash');
             $table->unsignedTinyInteger('attempts')->default(0);
             $table->timestamp('expires_at');
+            $table->timestamps();
+        });
+
+        Schema::create('mobile_password_reset_challenges', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->string('challenge_hash', 64)->unique();
+            $table->text('encrypted_token');
+            $table->string('otp_hash')->nullable();
+            $table->string('pending_password_hash')->nullable();
+            $table->unsignedTinyInteger('attempts')->default(0);
+            $table->timestamp('expires_at');
+            $table->timestamp('otp_expires_at')->nullable();
+            $table->timestamp('otp_sent_at')->nullable();
             $table->timestamps();
         });
 
@@ -237,6 +254,27 @@ class MobileApiSecurityTest extends TestCase
         $this->withToken($activeToken)->getJson('/api/mobile/user/profile')->assertUnauthorized();
     }
 
+    public function test_mobile_token_is_revoked_when_account_requires_password_reset(): void
+    {
+        $user = $this->createUser('forced-reset', 'Forced');
+        $token = str_repeat('r', 80);
+        DB::table('mobile_access_tokens')->insert([
+            'user_id' => $user->idno,
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => now()->addDay(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user->forceFill(['must_change_password' => true])->save();
+
+        $this->withToken($token)->getJson('/api/mobile/user/profile')
+            ->assertStatus(423)
+            ->assertJsonPath('requires_password_change', true);
+        $this->assertDatabaseMissing('mobile_access_tokens', [
+            'token_hash' => hash('sha256', $token),
+        ]);
+    }
+
     public function test_mobile_access_token_expires_after_two_hours_of_inactivity(): void
     {
         $user = $this->createUser('idle-user', 'Idle');
@@ -322,6 +360,69 @@ class MobileApiSecurityTest extends TestCase
         $this->assertDatabaseMissing('mobile_access_tokens', ['user_id' => $user->idno]);
     }
 
+    public function test_mandatory_mobile_password_reset_requires_email_otp_before_token_issuance(): void
+    {
+        $user = $this->createUser('password-reset-user', 'Password');
+        $user->forceFill(['must_change_password' => true])->save();
+
+        $login = $this->postJson('/api/mobile/login', [
+            'username' => $user->username,
+            'password' => 'Password1!',
+        ])->assertAccepted()
+            ->assertJsonPath('requires_password_change', true)
+            ->assertJsonPath('requires_password_change_otp', false);
+        $challengeToken = $login->json('challenge_token');
+        $this->assertDatabaseMissing('mobile_access_tokens', ['user_id' => $user->idno]);
+        Mail::assertNothingSent();
+
+        $this->postJson('/api/mobile/password/reset', [
+            'challenge_token' => $challengeToken,
+            'new_password' => 'NewPassword1!',
+            'new_password_confirmation' => 'NewPassword1!',
+        ])->assertAccepted()->assertJsonPath('requires_otp', true);
+
+        $this->assertTrue(Hash::check('Password1!', $user->fresh()->password));
+        $this->assertTrue($user->fresh()->must_change_password);
+        $mail = Mail::sent(LoginOtpMail::class)->first();
+        $this->assertSame($user->emailaddress, $mail->envelope()->to[0]->address);
+
+        $this->postJson('/api/mobile/password/reset/otp', [
+            'challenge_token' => $challengeToken,
+            'otp' => '000000',
+        ])->assertUnprocessable();
+        $this->assertDatabaseMissing('mobile_access_tokens', ['user_id' => $user->idno]);
+
+        $verified = $this->postJson('/api/mobile/password/reset/otp', [
+            'challenge_token' => $challengeToken,
+            'otp' => $mail->otp,
+        ])->assertOk()->assertJsonPath('user.id', $user->idno);
+
+        $this->assertFalse($user->fresh()->must_change_password);
+        $this->assertTrue(Hash::check('NewPassword1!', $user->fresh()->password));
+        $token = $verified->json('access_token');
+        $this->assertDatabaseHas('mobile_access_tokens', [
+            'user_id' => $user->idno,
+            'token_hash' => hash('sha256', $token),
+        ]);
+        $this->withToken($token)->getJson('/api/mobile/user/profile')->assertOk();
+    }
+
+    public function test_superadmin_is_not_forced_to_reset_password(): void
+    {
+        $user = $this->createUser('root-user', 'Root');
+        $user->forceFill([
+            'role' => User::ROLE_SUPERADMIN,
+            'must_change_password' => true,
+        ])->save();
+
+        $this->postJson('/api/mobile/login', [
+            'username' => $user->username,
+            'password' => 'Password1!',
+        ])->assertAccepted()
+            ->assertJsonPath('requires_otp', true)
+            ->assertJsonMissingPath('requires_password_change');
+    }
+
     public function test_mobile_otp_resend_is_limited_to_once_every_five_minutes(): void
     {
         $user = $this->createUser('otp-resend-user', 'OTP');
@@ -383,6 +484,31 @@ class MobileApiSecurityTest extends TestCase
         $this->assertSame(
             'tbusers',
             Schema::getForeignKeys('mobile_login_challenges')[0]['foreign_table']
+        );
+    }
+
+    public function test_mobile_password_reset_challenge_migration_creates_expected_columns_and_index(): void
+    {
+        Schema::dropIfExists('mobile_password_reset_challenges');
+        $migration = require database_path('migrations/2026_11_06_000003_create_mobile_password_reset_challenges_table.php');
+
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumns('mobile_password_reset_challenges', [
+            'user_id',
+            'challenge_hash',
+            'encrypted_token',
+            'otp_hash',
+            'pending_password_hash',
+            'attempts',
+            'expires_at',
+            'otp_expires_at',
+            'otp_sent_at',
+        ]));
+        $this->assertTrue(Schema::hasIndex('mobile_password_reset_challenges', 'mobile_password_reset_user_expiry_idx'));
+        $this->assertSame(
+            'tbusers',
+            Schema::getForeignKeys('mobile_password_reset_challenges')[0]['foreign_table']
         );
     }
 

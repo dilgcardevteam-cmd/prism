@@ -5,6 +5,7 @@ namespace App\Modules\SystemSettings\Controllers;
 use App\Http\Controllers\Controller;
 use App\Mail\AutomatedDatabaseBackupMail;
 use App\Mail\BulkNotificationMail;
+use App\Models\ModuleConfiguration;
 use App\Models\User;
 use App\Modules\ActivityLogs\Models\ActivityLog;
 use App\Modules\ActivityLogs\Services\ActivityLogService;
@@ -37,6 +38,7 @@ use Illuminate\View\View;
 class DatabaseUtilityController extends Controller
 {
     private const LOCATION_IMPORT_HISTORY_TABLE = 'location_configuration_import_histories';
+
     private const LOCATION_IMPORT_STORAGE_DIRECTORY = 'location-configuration-imports';
 
     private const LOCATION_DATASETS = [
@@ -239,7 +241,57 @@ class DatabaseUtilityController extends Controller
 
         return view('admin.utilities.system-setup', [
             'systemSetupItems' => $systemSetupItems,
+            'mandatoryPasswordChangeCount' => User::query()
+                ->where('must_change_password', true)
+                ->whereRaw("LOWER(TRIM(COALESCE(role, ''))) <> ?", [User::ROLE_SUPERADMIN])
+                ->count(),
         ]);
+    }
+
+    public function triggerMandatoryPasswordChange(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'confirm' => ['accepted'],
+        ]);
+
+        $affectedUserIds = [];
+        DB::transaction(function () use (&$affectedUserIds): void {
+            $targetUsers = DB::table('tbusers')
+                ->whereRaw("LOWER(TRIM(COALESCE(role, ''))) <> ?", [User::ROLE_SUPERADMIN]);
+            $affectedUserIds = (clone $targetUsers)->pluck('idno')->all();
+            (clone $targetUsers)->update([
+                'must_change_password' => true,
+                'password_security_version' => DB::raw('password_security_version + 1'),
+                'updated_at' => now(),
+            ]);
+
+            if ($affectedUserIds === []) {
+                return;
+            }
+
+            DB::table('mobile_access_tokens')->whereIn('user_id', $affectedUserIds)->delete();
+            DB::table('mobile_login_challenges')->whereIn('user_id', $affectedUserIds)->delete();
+            DB::table('mobile_password_reset_challenges')->whereIn('user_id', $affectedUserIds)->delete();
+        });
+
+        app(ActivityLogService::class)->log(
+            $request->user(),
+            ActivityLog::ACTION_PASSWORD_RESET,
+            'Triggered a mandatory password reset for all non-superadmin accounts.',
+            [
+                'request' => $request,
+                'properties' => [
+                    'affected_user_count' => count($affectedUserIds),
+                    'superadmins_excluded' => true,
+                    'mobile_tokens_revoked' => true,
+                ],
+            ],
+        );
+
+        return redirect()->route('utilities.system-setup.index')->with(
+            'success',
+            count($affectedUserIds).' non-superadmin accounts must change their password and verify their email before using the system.',
+        );
     }
 
     public function systemMaintenance(): View
@@ -297,11 +349,11 @@ class DatabaseUtilityController extends Controller
             ->whereRaw('LOWER(TRIM(COALESCE(status, ""))) = ?', ['active'])
             ->orderByRaw("
                 CASE LOWER(TRIM(COALESCE(role, '')))
-                    WHEN '" . User::ROLE_SUPERADMIN . "' THEN 1
-                    WHEN '" . User::ROLE_REGIONAL . "' THEN 2
-                    WHEN '" . User::ROLE_PROVINCIAL . "' THEN 3
-                    WHEN '" . User::ROLE_MLGOO . "' THEN 4
-                    WHEN '" . User::ROLE_LGU . "' THEN 5
+                    WHEN '".User::ROLE_SUPERADMIN."' THEN 1
+                    WHEN '".User::ROLE_REGIONAL."' THEN 2
+                    WHEN '".User::ROLE_PROVINCIAL."' THEN 3
+                    WHEN '".User::ROLE_MLGOO."' THEN 4
+                    WHEN '".User::ROLE_LGU."' THEN 5
                     ELSE 6
                 END
             ")
@@ -366,7 +418,7 @@ class DatabaseUtilityController extends Controller
 
     public function storeLguReportorialDeadline(Request $request): JsonResponse
     {
-        if (!Schema::hasTable('lgu_reportorial_deadlines')) {
+        if (! Schema::hasTable('lgu_reportorial_deadlines')) {
             return response()->json([
                 'message' => 'LGU reportorial deadlines table is not available yet. Run the migration first.',
             ], 409);
@@ -384,7 +436,7 @@ class DatabaseUtilityController extends Controller
 
         $aspect = strtolower(trim((string) $validated['aspect']));
         $definition = $itemsByAspect[$aspect] ?? null;
-        if (!is_array($definition)) {
+        if (! is_array($definition)) {
             return response()->json([
                 'message' => 'Invalid LGU reportorial requirement selected.',
             ], 422);
@@ -394,7 +446,7 @@ class DatabaseUtilityController extends Controller
         $allowedPeriods = $this->lguReportorialAllowedPeriods($timeline);
         $reportingPeriod = trim((string) $validated['reporting_period']);
 
-        if (!in_array($reportingPeriod, $allowedPeriods, true)) {
+        if (! in_array($reportingPeriod, $allowedPeriods, true)) {
             return response()->json([
                 'message' => 'Invalid reporting period selected for this requirement.',
                 'errors' => [
@@ -412,7 +464,7 @@ class DatabaseUtilityController extends Controller
             [
                 'timeline' => $timeline,
                 'deadline_date' => $validated['deadline_date'],
-                'deadline_time' => $validated['deadline_time'] . ':00',
+                'deadline_time' => $validated['deadline_time'].':00',
                 'updated_by' => Auth::id(),
             ]
         );
@@ -647,7 +699,7 @@ class DatabaseUtilityController extends Controller
 
     private function lguReportorialDeadlineData(): array
     {
-        if (!Schema::hasTable('lgu_reportorial_deadlines')) {
+        if (! Schema::hasTable('lgu_reportorial_deadlines')) {
             return [[], []];
         }
 
@@ -704,7 +756,7 @@ class DatabaseUtilityController extends Controller
 
             $savedDeadlines[$aspect][(string) $year][$period] = $entry;
 
-            if (!array_key_exists($aspect, $latestDeadlinesByAspect)) {
+            if (! array_key_exists($aspect, $latestDeadlinesByAspect)) {
                 $latestDeadlinesByAspect[$aspect] = [
                     ...$entry,
                     'status_text' => $this->lguReportorialDeadlineStatusText($deadlineDate, $deadlineTime, $period, $year),
@@ -718,8 +770,8 @@ class DatabaseUtilityController extends Controller
     private function lguReportorialDeadlineStatusText(string $deadlineDate, string $deadlineTime, string $period, int $year): string
     {
         return 'Saved deadline: '
-            . $this->formatLguReportorialDeadlineDisplay($deadlineDate, $deadlineTime)
-            . ' (' . $period . ', CY ' . $year . ')';
+            .$this->formatLguReportorialDeadlineDisplay($deadlineDate, $deadlineTime)
+            .' ('.$period.', CY '.$year.')';
     }
 
     private function formatLguReportorialUpdatedAt(mixed $value): string
@@ -733,7 +785,7 @@ class DatabaseUtilityController extends Controller
 
     private function formatLguReportorialUserName(?User $user): string
     {
-        if (!$user) {
+        if (! $user) {
             return '';
         }
 
@@ -781,12 +833,12 @@ class DatabaseUtilityController extends Controller
             return $formattedDate;
         }
 
-        return $formattedDate . ' ' . $formattedTime;
+        return $formattedDate.' '.$formattedTime;
     }
 
     public function sendBulkNotification(Request $request): RedirectResponse
     {
-        if (!Schema::hasTable('tbnotifications')) {
+        if (! Schema::hasTable('tbnotifications')) {
             return redirect()
                 ->route('utilities.notifications.index')
                 ->with('error', 'System notifications table is not available yet. Run the migration first.');
@@ -796,7 +848,7 @@ class DatabaseUtilityController extends Controller
             'target_scope' => ['required', 'in:selected_users,selected_role,all_users'],
             'user_ids' => ['nullable', 'array'],
             'user_ids.*' => ['integer', 'exists:tbusers,idno'],
-            'role' => ['nullable', 'in:' . implode(',', array_keys(User::roleOptions()))],
+            'role' => ['nullable', 'in:'.implode(',', array_keys(User::roleOptions()))],
             'title' => ['required', 'string', 'max:120'],
             'message' => ['required', 'string', 'max:5000'],
             'redirect_path' => ['nullable', 'string', 'max:255'],
@@ -827,7 +879,7 @@ class DatabaseUtilityController extends Controller
                 ->withInput();
         }
 
-        if ($targetScope === 'selected_role' && (!$selectedRole || !array_key_exists($selectedRole, User::roleOptions()))) {
+        if ($targetScope === 'selected_role' && (! $selectedRole || ! array_key_exists($selectedRole, User::roleOptions()))) {
             return back()
                 ->withErrors(['role' => 'Choose the user level that should receive the broadcast.'])
                 ->withInput();
@@ -890,8 +942,9 @@ class DatabaseUtilityController extends Controller
         foreach ($recipients as $recipient) {
             $emailAddress = strtolower(trim((string) $recipient->emailaddress));
 
-            if (!filter_var($emailAddress, FILTER_VALIDATE_EMAIL)) {
+            if (! filter_var($emailAddress, FILTER_VALIDATE_EMAIL)) {
                 $emailSkippedCount++;
+
                 continue;
             }
 
@@ -918,22 +971,22 @@ class DatabaseUtilityController extends Controller
         }
 
         $summaryParts = [
-            'System notifications were sent to ' . number_format($recipients->count()) . ' active recipient(s).',
+            'System notifications were sent to '.number_format($recipients->count()).' active recipient(s).',
         ];
 
         if ($emailedCount > 0) {
-            $summaryParts[] = 'Email was delivered to ' . number_format($emailedCount) . ' recipient(s).';
+            $summaryParts[] = 'Email was delivered to '.number_format($emailedCount).' recipient(s).';
         }
 
         if ($emailSkippedCount > 0) {
-            $summaryParts[] = number_format($emailSkippedCount) . ' recipient(s) were skipped because no valid email address was available.';
+            $summaryParts[] = number_format($emailSkippedCount).' recipient(s) were skipped because no valid email address was available.';
         }
 
         if ($emailFailedCount > 0) {
-            $summaryParts[] = 'Email delivery failed for ' . number_format($emailFailedCount) . ' recipient(s). Check the mail configuration or logs.';
+            $summaryParts[] = 'Email delivery failed for '.number_format($emailFailedCount).' recipient(s). Check the mail configuration or logs.';
         }
 
-        $summaryParts[] = 'Audience: ' . $this->bulkNotificationAudienceLabel($targetScope, $selectedRole) . '.';
+        $summaryParts[] = 'Audience: '.$this->bulkNotificationAudienceLabel($targetScope, $selectedRole).'.';
 
         return redirect()
             ->route('utilities.notifications.index')
@@ -971,7 +1024,7 @@ class DatabaseUtilityController extends Controller
         app(ActivityLogService::class)->log(
             $request->user(),
             ActivityLog::ACTION_ROLE_CHANGE,
-            'Created role definition "' . $roleDefinition->label . '" (' . $roleDefinition->role_key . ').',
+            'Created role definition "'.$roleDefinition->label.'" ('.$roleDefinition->role_key.').',
             [
                 'request' => $request,
                 'properties' => [
@@ -1003,7 +1056,7 @@ class DatabaseUtilityController extends Controller
             return $this->roleDefinitionRejectedResponse($request, 'Superadmin cannot be edited here.');
         }
 
-        if (!$isBuiltInRole && !UserRole::query()->where('role_key', $normalizedRole)->exists()) {
+        if (! $isBuiltInRole && ! UserRole::query()->where('role_key', $normalizedRole)->exists()) {
             abort(404);
         }
 
@@ -1028,7 +1081,7 @@ class DatabaseUtilityController extends Controller
         app(ActivityLogService::class)->log(
             $request->user(),
             ActivityLog::ACTION_ROLE_CHANGE,
-            'Updated role definition "' . $roleDefinition->label . '" (' . $roleDefinition->role_key . ').',
+            'Updated role definition "'.$roleDefinition->label.'" ('.$roleDefinition->role_key.').',
             [
                 'request' => $request,
                 'properties' => [
@@ -1068,7 +1121,7 @@ class DatabaseUtilityController extends Controller
             ->count();
 
         if ($assignedUsersCount > 0) {
-            $message = 'Reassign the ' . number_format($assignedUsersCount) . ' user(s) assigned to this role before deleting it.';
+            $message = 'Reassign the '.number_format($assignedUsersCount).' user(s) assigned to this role before deleting it.';
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -1106,7 +1159,7 @@ class DatabaseUtilityController extends Controller
         app(ActivityLogService::class)->log(
             $request->user(),
             ActivityLog::ACTION_ROLE_CHANGE,
-            'Deleted role definition "' . $normalizedRole . '".',
+            'Deleted role definition "'.$normalizedRole.'".',
             [
                 'request' => $request,
                 'properties' => [
@@ -1132,7 +1185,7 @@ class DatabaseUtilityController extends Controller
     {
         $normalizedRole = strtolower(trim($role));
 
-        if (!in_array($normalizedRole, RolePermissionRegistry::configurableRoles(), true)) {
+        if (! in_array($normalizedRole, RolePermissionRegistry::configurableRoles(), true)) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'message' => 'That role cannot be configured from Role Configuration.',
@@ -1161,7 +1214,7 @@ class DatabaseUtilityController extends Controller
         app(ActivityLogService::class)->log(
             $request->user(),
             ActivityLog::ACTION_PERMISSION_CHANGE,
-            'Updated permissions for role "' . $normalizedRole . '".',
+            'Updated permissions for role "'.$normalizedRole.'".',
             [
                 'request' => $request,
                 'properties' => [
@@ -1189,7 +1242,7 @@ class DatabaseUtilityController extends Controller
     {
         $normalizedRole = strtolower(trim($role));
 
-        if (!in_array($normalizedRole, RolePermissionRegistry::configurableRoles(), true)) {
+        if (! in_array($normalizedRole, RolePermissionRegistry::configurableRoles(), true)) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'message' => 'That role cannot be configured from Role Configuration.',
@@ -1212,7 +1265,7 @@ class DatabaseUtilityController extends Controller
         app(ActivityLogService::class)->log(
             $request->user(),
             ActivityLog::ACTION_PERMISSION_CHANGE,
-            'Reset permissions for role "' . $normalizedRole . '" to the default baseline.',
+            'Reset permissions for role "'.$normalizedRole.'" to the default baseline.',
             [
                 'request' => $request,
                 'properties' => [
@@ -1300,7 +1353,7 @@ class DatabaseUtilityController extends Controller
 
     public function locationConfiguration(): View
     {
-        $importHistoryTableMissing = !Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE);
+        $importHistoryTableMissing = ! Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE);
 
         $locationDatasets = collect(self::LOCATION_DATASETS)
             ->map(function (array $dataset, string $key) use ($importHistoryTableMissing): array {
@@ -1334,10 +1387,10 @@ class DatabaseUtilityController extends Controller
     {
         $config = $this->locationDatasetConfig($dataset);
 
-        if (!Schema::hasTable($config['table'])) {
+        if (! Schema::hasTable($config['table'])) {
             return redirect()
                 ->route('utilities.location-configuration.index')
-                ->with('error', $config['label'] . ' table is not available yet. Run the migration first.');
+                ->with('error', $config['label'].' table is not available yet. Run the migration first.');
         }
 
         $request->validate([
@@ -1345,36 +1398,36 @@ class DatabaseUtilityController extends Controller
         ]);
 
         $file = $request->file('file');
-        if (!$file instanceof UploadedFile) {
+        if (! $file instanceof UploadedFile) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'No file was uploaded.');
         }
 
         $extension = strtolower((string) $file->getClientOriginalExtension());
-        if (!in_array($extension, ['csv', 'xlsx'], true)) {
+        if (! in_array($extension, ['csv', 'xlsx'], true)) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->withErrors([
-                    'file' => 'Upload a .csv or .xlsx file for ' . $config['label'] . '.',
+                    'file' => 'Upload a .csv or .xlsx file for '.$config['label'].'.',
                 ]);
         }
 
         $originalFileName = (string) $file->getClientOriginalName();
         $storageFileName = $this->generateLocationImportStorageFileName($originalFileName, $config['key']);
         $storedPath = $file->storeAs(
-            self::LOCATION_IMPORT_STORAGE_DIRECTORY . '/' . $config['key'],
+            self::LOCATION_IMPORT_STORAGE_DIRECTORY.'/'.$config['key'],
             $storageFileName,
             'local'
         );
 
-        if (!$storedPath) {
+        if (! $storedPath) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'Unable to store the uploaded file.');
         }
 
-        if (!Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
+        if (! Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
             Storage::disk('local')->delete($storedPath);
 
             return redirect()
@@ -1397,34 +1450,34 @@ class DatabaseUtilityController extends Controller
 
         return redirect()
             ->route('utilities.location-configuration.index')
-            ->with('success', 'File added to import history. Click Load to replace the current ' . Str::lower($config['label']) . ' dataset.');
+            ->with('success', 'File added to import history. Click Load to replace the current '.Str::lower($config['label']).' dataset.');
     }
 
     public function loadLocationDatasetImport(string $dataset, $importId): RedirectResponse
     {
         $config = $this->locationDatasetConfig($dataset);
 
-        if (!Schema::hasTable($config['table'])) {
+        if (! Schema::hasTable($config['table'])) {
             return redirect()
                 ->route('utilities.location-configuration.index')
-                ->with('error', $config['label'] . ' table is not available yet. Run the migration first.');
+                ->with('error', $config['label'].' table is not available yet. Run the migration first.');
         }
 
-        if (!Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
+        if (! Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'Import history table is not available yet. Please run migration first.');
         }
 
         $record = $this->findLocationImportRecord($dataset, (int) $importId);
-        if (!$record) {
+        if (! $record) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'Selected import record was not found.');
         }
 
         $storedPath = trim((string) ($record->stored_file_path ?? ''));
-        if ($storedPath === '' || !Storage::disk('local')->exists($storedPath)) {
+        if ($storedPath === '' || ! Storage::disk('local')->exists($storedPath)) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'The selected imported file is no longer available.');
@@ -1474,21 +1527,21 @@ class DatabaseUtilityController extends Controller
     {
         $config = $this->locationDatasetConfig($dataset);
 
-        if (!Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
+        if (! Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'Import history table is not available yet. Please run migration first.');
         }
 
         $record = $this->findLocationImportRecord($dataset, (int) $importId);
-        if (!$record) {
+        if (! $record) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'Selected import record was not found.');
         }
 
         $storedPath = trim((string) ($record->stored_file_path ?? ''));
-        if ($storedPath === '' || !Storage::disk('local')->exists($storedPath)) {
+        if ($storedPath === '' || ! Storage::disk('local')->exists($storedPath)) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'The selected imported file is no longer available.');
@@ -1496,7 +1549,7 @@ class DatabaseUtilityController extends Controller
 
         $downloadName = trim((string) ($record->original_file_name ?? ''));
         if ($downloadName === '') {
-            $downloadName = $config['key'] . '.csv';
+            $downloadName = $config['key'].'.csv';
         }
 
         return response()->download(
@@ -1510,14 +1563,14 @@ class DatabaseUtilityController extends Controller
 
     public function deleteLocationDatasetImport(string $dataset, $importId): RedirectResponse
     {
-        if (!Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
+        if (! Schema::hasTable(self::LOCATION_IMPORT_HISTORY_TABLE)) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'Import history table is not available yet. Please run migration first.');
         }
 
         $record = $this->findLocationImportRecord($dataset, (int) $importId);
-        if (!$record) {
+        if (! $record) {
             return redirect()
                 ->route('utilities.location-configuration.index')
                 ->with('error', 'Selected import record was not found.');
@@ -1543,7 +1596,7 @@ class DatabaseUtilityController extends Controller
         $backup = $this->backupService->createBackup([
             'type' => 'manual',
             'directory' => 'app/backups/manual',
-            'prefix' => $this->backupService->databaseConnection()['database'] . '-backup',
+            'prefix' => $this->backupService->databaseConnection()['database'].'-backup',
         ]);
 
         return response()->download($backup['absolute_path'], $backup['filename'], [
@@ -1567,7 +1620,7 @@ class DatabaseUtilityController extends Controller
         try {
             $this->backupService->restoreFromSqlFile($uploadedFile->getRealPath());
         } catch (\Throwable $exception) {
-            return back()->with('error', 'Database restore failed. ' . $exception->getMessage());
+            return back()->with('error', 'Database restore failed. '.$exception->getMessage());
         }
 
         return redirect()
@@ -1615,7 +1668,7 @@ class DatabaseUtilityController extends Controller
             'is_enabled' => $isEnabled,
             'frequency' => $validated['frequency'],
             'weekly_day' => $validated['frequency'] === 'weekly' ? (int) $validated['weekly_day'] : null,
-            'run_time' => $validated['run_time'] . ':00',
+            'run_time' => $validated['run_time'].':00',
             'recipient_emails' => $recipientEmails,
             'retention_days' => $request->filled('retention_days') ? (int) $validated['retention_days'] : null,
             'encrypt_backup' => $encryptBackup,
@@ -1658,7 +1711,7 @@ class DatabaseUtilityController extends Controller
             $backup = $this->backupService->createBackup([
                 'type' => 'test',
                 'directory' => 'app/backups/automated',
-                'prefix' => $connection['database'] . '-test-backup',
+                'prefix' => $connection['database'].'-test-backup',
                 'encrypt' => $setting->encrypt_backup,
                 'encryption_password' => $setting->encrypt_backup ? $setting->encryption_password : null,
                 'setting_id' => $setting->id,
@@ -1688,7 +1741,7 @@ class DatabaseUtilityController extends Controller
         } catch (\Throwable $exception) {
             return redirect()
                 ->route('utilities.backup-and-restore.index', ['tab' => 'scheduler'])
-                ->with('error', 'Test backup failed. ' . $exception->getMessage());
+                ->with('error', 'Test backup failed. '.$exception->getMessage());
         }
     }
 
@@ -1780,13 +1833,13 @@ class DatabaseUtilityController extends Controller
 
     private function importLocationFileFromPath(string $path, array $config): int
     {
-        if (!is_readable($path)) {
+        if (! is_readable($path)) {
             throw new \RuntimeException('Unable to read the selected import file.');
         }
 
         $destinationTables = $this->resolveLocationDestinationTables($config);
         if ($destinationTables === []) {
-            throw new \RuntimeException($config['label'] . ' table is not available yet. Run the migration first.');
+            throw new \RuntimeException($config['label'].' table is not available yet. Run the migration first.');
         }
 
         $lookupContext = $this->buildLocationLookupContext($config);
@@ -1803,8 +1856,8 @@ class DatabaseUtilityController extends Controller
         }
 
         foreach ($config['required'] as $requiredColumn) {
-            if (!in_array($requiredColumn, $headerMap, true)) {
-                throw new \RuntimeException('The uploaded file must include a column for ' . str_replace('_', ' ', $requiredColumn) . '.');
+            if (! in_array($requiredColumn, $headerMap, true)) {
+                throw new \RuntimeException('The uploaded file must include a column for '.str_replace('_', ' ', $requiredColumn).'.');
             }
         }
 
@@ -1826,6 +1879,7 @@ class DatabaseUtilityController extends Controller
 
                 if ($this->locationRowIsEmpty($data)) {
                     $importRows->next();
+
                     continue;
                 }
 
@@ -1834,11 +1888,13 @@ class DatabaseUtilityController extends Controller
                     $value = $this->normalizeLocationValue($data[$index] ?? null);
                     if ($column === 'sort_order') {
                         $row[$column] = is_numeric($value) ? (int) $value : null;
+
                         continue;
                     }
 
                     if (in_array($column, $config['integer_columns'] ?? [], true)) {
                         $row[$column] = is_numeric($value) ? (int) $value : null;
+
                         continue;
                     }
 
@@ -1848,7 +1904,7 @@ class DatabaseUtilityController extends Controller
                 try {
                     $row = $this->prepareLocationImportRow($row, $config, $destinationTables, $lookupContext);
                 } catch (\RuntimeException $exception) {
-                    throw new \RuntimeException('Row ' . $rowNumber . ': ' . $exception->getMessage());
+                    throw new \RuntimeException('Row '.$rowNumber.': '.$exception->getMessage());
                 }
 
                 $hasRequiredValues = true;
@@ -1860,8 +1916,9 @@ class DatabaseUtilityController extends Controller
                     }
                 }
 
-                if (!$hasRequiredValues) {
+                if (! $hasRequiredValues) {
                     $importRows->next();
+
                     continue;
                 }
 
@@ -1930,7 +1987,7 @@ class DatabaseUtilityController extends Controller
 
     private function readXlsxLocationImportRows(string $path): \Generator
     {
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         if ($zip->open($path) !== true) {
             throw new \RuntimeException('Unable to open the selected Excel file.');
         }
@@ -1983,7 +2040,7 @@ class DatabaseUtilityController extends Controller
         $workbook = new \SimpleXMLElement($workbookXml);
         $relationships = new \SimpleXMLElement($relationshipsXml);
         $sheet = $workbook->xpath('//*[local-name()="sheet"]')[0] ?? null;
-        if (!$sheet) {
+        if (! $sheet) {
             return null;
         }
 
@@ -2037,7 +2094,7 @@ class DatabaseUtilityController extends Controller
 
     private function xlsxColumnReferenceToIndex(string $cellReference): ?int
     {
-        if (!preg_match('/^([A-Z]+)/i', $cellReference, $matches)) {
+        if (! preg_match('/^([A-Z]+)/i', $cellReference, $matches)) {
             return null;
         }
 
@@ -2087,9 +2144,9 @@ class DatabaseUtilityController extends Controller
 
         $timestamp = now()->format('Ymd_His');
         $randomSuffix = Str::lower(Str::random(8));
-        $fileName = $timestamp . '_' . $baseNameSlug . '_' . $randomSuffix;
+        $fileName = $timestamp.'_'.$baseNameSlug.'_'.$randomSuffix;
 
-        return $fileName . ($extension !== '' ? '.' . $extension : '.csv');
+        return $fileName.($extension !== '' ? '.'.$extension : '.csv');
     }
 
     private function buildLocationHeaderMap(array $headers, array $config): array
@@ -2109,7 +2166,7 @@ class DatabaseUtilityController extends Controller
             }
 
             $column = $aliases[$normalizedHeader] ?? $normalizedHeader;
-            if (!isset($allowedColumns[$column]) || isset($mappedColumns[$column])) {
+            if (! isset($allowedColumns[$column]) || isset($mappedColumns[$column])) {
                 continue;
             }
 
@@ -2263,10 +2320,10 @@ class DatabaseUtilityController extends Controller
         }
 
         $requiresLegacyProvinceInsert = in_array('provinces', $destinationTables, true);
-        if ($requiresLegacyProvinceInsert && (!isset($row['region_id']) || !is_numeric($row['region_id']) || (int) $row['region_id'] < 1)) {
+        if ($requiresLegacyProvinceInsert && (! isset($row['region_id']) || ! is_numeric($row['region_id']) || (int) $row['region_id'] < 1)) {
             $provinceName = $this->normalizeLocationValue($row['province_name'] ?? null);
             throw new \RuntimeException(
-                'Unable to resolve region_id for province "' . ($provinceName !== '' ? $provinceName : 'unknown') . '". ' .
+                'Unable to resolve region_id for province "'.($provinceName !== '' ? $provinceName : 'unknown').'". '.
                 'Include a valid region_id or add region_code/region_name that matches the regions table.'
             );
         }
@@ -2364,7 +2421,7 @@ class DatabaseUtilityController extends Controller
             return null;
         }
 
-        return ltrim(substr($psgcCode, 0, 2) . '00000000', '0') ?: '0';
+        return ltrim(substr($psgcCode, 0, 2).'00000000', '0') ?: '0';
     }
 
     private function deriveProvinceLookupCodeFromPsgcCode(mixed $value): ?string
@@ -2374,7 +2431,7 @@ class DatabaseUtilityController extends Controller
             return null;
         }
 
-        return ltrim(substr($psgcCode, 0, 5) . '00000', '0') ?: '0';
+        return ltrim(substr($psgcCode, 0, 5).'00000', '0') ?: '0';
     }
 
     private function normalizePsgcCode(mixed $value): ?string
@@ -2443,7 +2500,7 @@ class DatabaseUtilityController extends Controller
     {
         $singleLineMessage = preg_replace('/\s+/u', ' ', $message) ?? $message;
 
-        return Str::limit(trim($title . ': ' . $singleLineMessage), 500, '...');
+        return Str::limit(trim($title.': '.$singleLineMessage), 500, '...');
     }
 
     private function bulkNotificationAudienceLabel(string $targetScope, ?string $selectedRole = null): string
@@ -2483,20 +2540,20 @@ class DatabaseUtilityController extends Controller
         return $candidate->format('F j, Y g:i A');
     }
 
-    public function modulesConfiguration(): \Illuminate\View\View
+    public function modulesConfiguration(): View
     {
-        $modules = \App\Support\RolePermissionRegistry::modules();
-        $dbSettings = \App\Models\ModuleConfiguration::pluck('is_enabled', 'module_key')->toArray();
+        $modules = RolePermissionRegistry::modules();
+        $dbSettings = ModuleConfiguration::pluck('is_enabled', 'module_key')->toArray();
 
         return view('admin.utilities.modules-configuration', compact('modules', 'dbSettings'));
     }
 
-    public function updateModulesConfiguration(Request $request): \Illuminate\Http\RedirectResponse
+    public function updateModulesConfiguration(Request $request): RedirectResponse
     {
         $submitted = $request->input('modules', []);
 
         $allAspects = [];
-        foreach (\App\Support\RolePermissionRegistry::modules() as $mod) {
+        foreach (RolePermissionRegistry::modules() as $mod) {
             foreach ($mod['items'] ?? [] as $item) {
                 if (isset($item['aspect'])) {
                     $allAspects[] = $item['aspect'];
@@ -2506,18 +2563,18 @@ class DatabaseUtilityController extends Controller
 
         foreach ($allAspects as $aspect) {
             $isEnabled = in_array($aspect, $submitted, true);
-            \App\Models\ModuleConfiguration::updateOrCreate(
+            ModuleConfiguration::updateOrCreate(
                 ['module_key' => $aspect],
                 ['is_enabled' => $isEnabled]
             );
         }
 
-        \App\Models\ModuleConfiguration::updateOrCreate(
+        ModuleConfiguration::updateOrCreate(
             ['module_key' => 'user_registration'],
             ['is_enabled' => $request->boolean('registration_enabled')]
         );
 
-        \App\Models\ModuleConfiguration::flushCache();
+        ModuleConfiguration::flushCache();
 
         return redirect()->route('utilities.system-setup.index')
             ->with('success', 'Modules configuration has been successfully updated.');

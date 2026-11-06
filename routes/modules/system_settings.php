@@ -4,6 +4,8 @@ use App\Modules\SystemSettings\Controllers\DatabaseUtilityController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('superadmin')->group(function () {
+    Route::post('/utilities/system-setup/mandatory-password-change', [DatabaseUtilityController::class, 'triggerMandatoryPasswordChange'])
+        ->name('utilities.system-setup.mandatory-password-change');
     Route::get('/utilities/role-configuration', [DatabaseUtilityController::class, 'roleConfiguration'])
         ->name('utilities.role-configuration.index');
     Route::post('/utilities/role-configuration/role-definitions', [DatabaseUtilityController::class, 'storeRoleDefinition'])
@@ -90,4 +92,3 @@ Route::prefix('utilities')->name('utilities.')->group(function () {
         ->middleware('crud_permission:utilities_backup_restore,update')
         ->name('backup-and-restore.test-now');
 });
-
