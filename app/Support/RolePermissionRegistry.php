@@ -46,6 +46,22 @@ class RolePermissionRegistry
                         'label' => 'SGLGIF Portal',
                         'description' => 'Open the SGLGIF dashboard and table views for scoped project performance and accomplishment tracking.',
                     ],
+                    [
+                        'aspect' => 'rssa_projects',
+                        'label' => 'RSSA Projects',
+                        'description' => 'Open the RSSA project monitoring page.',
+                    ],
+                ],
+            ],
+            [
+                'module' => 'Dashboard',
+                'description' => 'Main application dashboard and its supporting data endpoints.',
+                'items' => [
+                    [
+                        'aspect' => 'dashboard',
+                        'label' => 'Dashboard',
+                        'description' => 'Open the project monitoring dashboard and related filters.',
+                    ],
                 ],
             ],
             [
@@ -210,6 +226,22 @@ class RolePermissionRegistry
                         'description' => 'Create, publish, edit, and manage announcements for users across the region.',
                         'actions' => ['view', 'add', 'update', 'delete'],
                     ],
+                    [
+                        'aspect' => 'communications',
+                        'label' => 'Messages',
+                        'description' => 'Open web and mobile messaging features.',
+                    ],
+                ],
+            ],
+            [
+                'module' => 'Account Services',
+                'description' => 'Personal profile and password management.',
+                'items' => [
+                    [
+                        'aspect' => 'user_profile',
+                        'label' => 'User Profile',
+                        'description' => 'View and update a user profile and password.',
+                    ],
                 ],
             ],
             [
@@ -282,9 +314,135 @@ class RolePermissionRegistry
         ];
     }
 
+    public static function aspectForRoute(?string $routeName, string $path): ?string
+    {
+        $routeAspects = [
+            'reports.dilg-deliverables.monitoring-evaluation.' => 'dilg_deliverables_monitoring_evaluation',
+            'reports.dilg-deliverables.rlip-lime-monthly' => 'dilg_deliverables_rlip_lime_monthly',
+            'reports.dilg-deliverables.qaar-tool-monitoring' => 'dilg_deliverables_qaar_tool_monitoring',
+            'reports.dilg-deliverables' => 'dilg_deliverables_monitoring_evaluation',
+            'reports.one-time.project-completion-reports.falgu-gef-sbdp' => 'lgsf_project_completion_reports',
+            'reports.one-time.project-completion-reports.sglgif' => 'sglgif_project_completion_reports',
+            'reports.one-time.project-completion-reports.' => 'pre_implementation_documents',
+            'reports.one-time.confirmation-of-fund-receipt.' => 'confirmation_of_fund_receipt',
+            'reports.one-time.project-initial-documents' => 'pre_implementation_documents',
+            'reports.annual.rpmes.form-4' => 'annual_rpmes_form_4',
+            'reports.annual.amwp' => 'annual_maintenance_work_program',
+            'reports.quarterly.rpmes.form-2' => 'quarterly_rpmes_form_2',
+            'reports.quarterly.rpmes.form-5' => 'quarterly_rpmes_form_5',
+            'reports.quarterly.rpmes.form-6' => 'quarterly_rpmes_form_6',
+            'reports.quarterly.dilg-mc-2018-19' => 'quarterly_dilg_mc_2018_19',
+            'reports.quarterly.dilg-mc-2018-30' => 'quarterly_dilg_mc_2018_30',
+            'reports.monthly.pd-no-pbbm-2025-1572-1573' => 'pd_no_pbbm_monthly_reports',
+            'reports.monthly.swa-annex-f' => 'swa_annex_f_monthly_reports',
+            'reports.one-time.pisat' => 'pisat_reports',
+            'rbis-annual-certification.' => 'rbis_annual_certification',
+            'fund-utilization.' => 'fund_utilization_reports',
+            'local-project-monitoring-committee.' => 'local_project_monitoring_committee',
+            'road-maintenance-status.' => 'road_maintenance_status_reports',
+            'pre-implementation-documents.' => 'pre_implementation_documents',
+            'initial-project-documents.' => 'pre_implementation_documents',
+            'nadai-management.' => 'nadai_management',
+            'task-management.' => 'approval_management',
+            'announcements.' => 'announcement_management',
+            'messages.' => 'communications',
+            'api.mobile.messages.' => 'communications',
+            'profile.' => 'user_profile',
+            'password.' => 'user_profile',
+            'system-management.upload-subaybayan' => 'subaybayan_data_uploads',
+            'system-management.upload-rssa' => 'subaybayan_data_uploads',
+            'system-management.upload-rlip-lime' => 'rlip_lime_data_uploads',
+            'system-management.upload-project-at-risk' => 'project_at_risk_data_uploads',
+            'system-management.upload-sglgif' => 'sglgif_data_uploads',
+            'projects.locally-funded' => 'locally_funded_projects',
+            'locally-funded-project.' => 'locally_funded_projects',
+            'projects.rlip-lime' => 'rlip_lime_projects',
+            'projects.at-risk' => 'project_at_risk_projects',
+            'api.mobile.project-at-risk.' => 'project_at_risk_projects',
+            'projects.sglgif' => 'sglgif_portal',
+            'projects.rssa' => 'rssa_projects',
+            'api.mobile.locally-funded.' => 'locally_funded_projects',
+            'api.mobile.dashboard.aggregate' => 'dashboard',
+            'dashboard' => 'dashboard',
+            'ticketing.' => 'ticketing_system',
+        ];
+
+        foreach ($routeAspects as $prefix => $aspect) {
+            if ($routeName === $prefix || str_starts_with((string) $routeName, $prefix)) {
+                return $aspect;
+            }
+        }
+
+        if ($routeName === 'system-management.index') {
+            return 'data_management_hub';
+        }
+
+        $path = ltrim($path, '/');
+        $pathAspects = [
+            'api/mobile/messages' => 'communications',
+            'api/mobile/notifications' => 'communications',
+            'reports/dilg-deliverables/monitoring-and-evaluation-reports/' => 'dilg_deliverables_monitoring_evaluation',
+            'reports/dilg-deliverables/rlip-lime-monthly-reports' => 'dilg_deliverables_rlip_lime_monthly',
+            'reports/dilg-deliverables/qaar-tool-and-monitoring-report' => 'dilg_deliverables_qaar_tool_monitoring',
+            'reports/dilg-deliverables' => 'dilg_deliverables_monitoring_evaluation',
+            'reports/one-time/project-completion-reports/falgu-gef-sbdp' => 'lgsf_project_completion_reports',
+            'reports/one-time/project-completion-reports/sglgif' => 'sglgif_project_completion_reports',
+            'reports/one-time/project-completion-reports' => 'pre_implementation_documents',
+            'reports/one-time/confirmation-of-fund-receipt' => 'confirmation_of_fund_receipt',
+            'reports/one-time/project-initial-documents' => 'pre_implementation_documents',
+            'reports/annual/rpmes/form-4' => 'annual_rpmes_form_4',
+            'reports/annual/amwp' => 'annual_maintenance_work_program',
+            'reports/quarterly/rpmes/form-2' => 'quarterly_rpmes_form_2',
+            'reports/quarterly/rpmes/form-5' => 'quarterly_rpmes_form_5',
+            'reports/quarterly/rpmes/form-6' => 'quarterly_rpmes_form_6',
+            'reports/quarterly/dilg-mc-2018-19' => 'quarterly_dilg_mc_2018_19',
+            'reports/quarterly/dilg-mc-2018-30' => 'quarterly_dilg_mc_2018_30',
+            'reports/monthly/pd-no-pbbm-2025-1572-1573' => 'pd_no_pbbm_monthly_reports',
+            'reports/monthly/swa-annex-f' => 'swa_annex_f_monthly_reports',
+            'reports/one-time/pisat' => 'pisat_reports',
+            'rbis-annual-certification' => 'rbis_annual_certification',
+            'fund-utilization' => 'fund_utilization_reports',
+            'local-project-monitoring-committee' => 'local_project_monitoring_committee',
+            'road-maintenance-status' => 'road_maintenance_status_reports',
+            'pre-implementation-documents' => 'pre_implementation_documents',
+            'initial-project-documents' => 'pre_implementation_documents',
+            'nadai-management' => 'nadai_management',
+            'approval-management' => 'approval_management',
+            'announcements' => 'announcement_management',
+            'messages' => 'communications',
+            'profile' => 'user_profile',
+            'change-password' => 'user_profile',
+            'system-management/upload-subaybayan' => 'subaybayan_data_uploads',
+            'system-management/upload-rssa' => 'subaybayan_data_uploads',
+            'system-management/upload-rlip-lime' => 'rlip_lime_data_uploads',
+            'system-management/upload-project-at-risk' => 'project_at_risk_data_uploads',
+            'system-management/upload-sglgif' => 'sglgif_data_uploads',
+            'projects/locally-funded' => 'locally_funded_projects',
+            'projects/rlip-lime' => 'rlip_lime_projects',
+            'projects/sglgif' => 'sglgif_portal',
+            'projects/rssa' => 'rssa_projects',
+            'project-at-risk' => 'project_at_risk_projects',
+            'dashboard' => 'dashboard',
+            'ticketing' => 'ticketing_system',
+        ];
+
+        foreach ($pathAspects as $prefix => $aspect) {
+            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                return $aspect;
+            }
+        }
+
+        if ($path === 'system-management') {
+            return 'data_management_hub';
+        }
+
+        return null;
+    }
+
     public static function aspectFallbacks(): array
     {
         return [
+            'rssa_projects' => ['locally_funded_projects'],
             'annual_maintenance_work_program' => ['rbis_annual_certification'],
             'quarterly_dilg_mc_2018_19' => ['road_maintenance_status_reports'],
             'quarterly_dilg_mc_2018_30' => ['road_maintenance_status_reports'],

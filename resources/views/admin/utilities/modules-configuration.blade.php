@@ -140,6 +140,34 @@
 
     <form method="POST" action="{{ route('utilities.modules-configuration.update') }}">
         @csrf
+
+        <div class="module-category-card">
+            <div class="module-category-header">
+                <div style="font-size: 18px; opacity: 0.95;">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+                <div>
+                    <h2 style="margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;">Public Registration</h2>
+                    <span style="font-size: 11px; opacity: 0.75; display: block; margin-top: 2px;">Control whether new users can create an account.</span>
+                </div>
+            </div>
+            <div class="module-item-card">
+                <div class="module-info">
+                    <div class="module-icon-wrapper">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0 0 4px; color: #1e293b; font-size: 14px; font-weight: 600;">Allow User Registration</h3>
+                        <p style="margin: 0; color: #64748b; font-size: 12px; line-height: 1.5;">When disabled, registration links are hidden and new registration requests are rejected.</p>
+                    </div>
+                </div>
+                <label class="switch" title="Toggle User Registration">
+                    <input type="hidden" name="registration_enabled" value="0">
+                    <input type="checkbox" name="registration_enabled" value="1" @checked($dbSettings['user_registration'] ?? true)>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
         
         @foreach ($modules as $mod)
             <div class="module-category-card">

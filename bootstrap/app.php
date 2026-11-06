@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(\App\Http\Middleware\GzipEncodeResponse::class);
         $middleware->web(append: [
             \App\Http\Middleware\EnsureSystemMaintenanceAccess::class,
+            \App\Http\Middleware\EnsureEnabledModule::class,
             \App\Http\Middleware\RecordActivityLog::class,
         ]);
 

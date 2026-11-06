@@ -3,6 +3,7 @@
 namespace App\Modules\Auth\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\ModuleConfiguration;
 use App\Models\User;
 use App\Modules\ActivityLogs\Models\ActivityLog;
 use App\Modules\ActivityLogs\Services\ActivityLogService;
@@ -61,7 +62,9 @@ class LoginController extends Controller
             return redirect()->route('maintenance.notice');
         }
 
-        return view('auth.login');
+        return view('auth.login', [
+            'registrationEnabled' => ModuleConfiguration::isModuleEnabled('user_registration'),
+        ]);
     }
 
     /**
@@ -127,7 +130,35 @@ class LoginController extends Controller
         $request->session()->put('announcements_login_popup_pending', true);
         $request->session()->forget('announcements_popup_shown_in_session');
 
-        return redirect('/dashboard');
+        if (ModuleConfiguration::isModuleEnabled('dashboard')) {
+            return redirect('/dashboard');
+        }
+
+        $landingModules = [
+            ['projects.locally-funded.modern', 'locally_funded_projects', 'locally_funded_projects'],
+            ['projects.rssa', 'rssa_projects', 'locally_funded_projects'],
+            ['projects.rlip-lime', 'rlip_lime_projects', 'rlip_lime_projects'],
+            ['projects.at-risk', 'project_at_risk_projects', 'project_at_risk_projects'],
+            ['projects.sglgif.table', 'sglgif_portal', 'sglgif_portal'],
+            ['reports.annual.amwp', 'annual_maintenance_work_program', 'annual_maintenance_work_program'],
+            ['fund-utilization.index', 'fund_utilization_reports', 'fund_utilization_reports'],
+            ['task-management.index', 'approval_management', 'approval_management'],
+            ['ticketing.dashboard', 'ticketing_system', 'ticketing_system'],
+            ['messages.index', 'communications', 'communications'],
+            ['announcements.index', 'announcement_management', 'announcement_management'],
+            ['profile.show', 'user_profile', 'user_profile'],
+        ];
+
+        foreach ($landingModules as [$route, $module, $permission]) {
+            if (
+                ModuleConfiguration::isModuleEnabled($module)
+                && $user->hasCrudPermission($permission, 'view')
+            ) {
+                return redirect()->route($route);
+            }
+        }
+
+        return redirect()->route('landing');
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Modules\Auth\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\ModuleConfiguration;
 use App\Models\User;
 use App\Support\InputSanitizer;
 use Illuminate\Foundation\Auth\RegistersUsers;
@@ -112,6 +113,12 @@ class RegisterController extends Controller
      */
     public function showRegistrationForm()
     {
+        if (!ModuleConfiguration::isModuleEnabled('user_registration')) {
+            return redirect()->route('login')->withErrors([
+                'registration' => 'Registration is currently disabled.',
+            ]);
+        }
+
         return view('auth.register', [
             'locationOptions' => $this->registrationLocationOptions(),
         ]);
@@ -125,6 +132,21 @@ class RegisterController extends Controller
      */
     public function register(Request $request)
     {
+        if (!ModuleConfiguration::isModuleEnabled('user_registration')) {
+            $message = 'Registration is currently disabled.';
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                ], 403);
+            }
+
+            return redirect()->route('login')->withErrors([
+                'registration' => $message,
+            ]);
+        }
+
         try {
             $validator = $this->validator($request->all());
 

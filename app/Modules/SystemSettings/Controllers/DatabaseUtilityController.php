@@ -2512,6 +2512,11 @@ class DatabaseUtilityController extends Controller
             );
         }
 
+        \App\Models\ModuleConfiguration::updateOrCreate(
+            ['module_key' => 'user_registration'],
+            ['is_enabled' => $request->boolean('registration_enabled')]
+        );
+
         \App\Models\ModuleConfiguration::flushCache();
 
         return redirect()->route('utilities.system-setup.index')

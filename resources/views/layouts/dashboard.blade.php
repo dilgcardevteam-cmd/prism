@@ -2290,10 +2290,17 @@
     <!-- Sidebar Navigation -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
+            @if(\App\Models\ModuleConfiguration::isModuleEnabled('dashboard'))
             <a href="{{ route('dashboard') }}" class="sidebar-brand-link" aria-label="Go to dashboard">
                 <img src="{{ asset('PRISM2.png') }}" alt="PRISM" class="sidebar-logo sidebar-logo--expanded">
                 <img src="{{ asset('DILG-Logo.png') }}" alt="DILG Logo" class="sidebar-logo sidebar-logo--collapsed">
             </a>
+            @else
+            <div class="sidebar-brand-link" aria-label="PRISM">
+                <img src="{{ asset('PRISM2.png') }}" alt="PRISM" class="sidebar-logo sidebar-logo--expanded">
+                <img src="{{ asset('DILG-Logo.png') }}" alt="DILG Logo" class="sidebar-logo sidebar-logo--collapsed">
+            </div>
+            @endif
         </div>
         
         @php
@@ -2309,7 +2316,7 @@
             $recentMessageThreads = collect();
             $messageUnreadBadgeText = '';
 
-            if ($messageSchemaAvailable && $authUserId > 0) {
+            if ($messageSchemaAvailable && $authUserId > 0 && \App\Models\ModuleConfiguration::isModuleEnabled('communications')) {
                 $messagePreviewText = function ($message, $imagePath, int $limit = 72) {
                     $text = trim((string) $message);
                     if ($text !== '') {
@@ -2503,7 +2510,11 @@
             $recentTopAnnouncements = collect();
             $loginPopupAnnouncementsPayload = [];
             try {
-                if (\Illuminate\Support\Facades\Schema::hasTable('announcements') && Auth::check()) {
+                if (
+                    \Illuminate\Support\Facades\Schema::hasTable('announcements')
+                    && Auth::check()
+                    && \App\Models\ModuleConfiguration::isModuleEnabled('announcement_management')
+                ) {
                     $announcementService = app(\App\Modules\Announcements\Services\AnnouncementService::class);
                     $topbarAnnouncementData = $announcementService->getTopBarData(Auth::user(), 5);
                     $unreadAnnouncementCount = $topbarAnnouncementData['unread_count'] ?? 0;
@@ -2549,7 +2560,11 @@
             }
         @endphp
 
+        @php
+            $moduleEnabled = fn (string $aspect): bool => \App\Models\ModuleConfiguration::isModuleEnabled($aspect);
+        @endphp
         <ul class="sidebar-menu">
+            @if($moduleEnabled('dashboard'))
             <li>
                 @php
                     $dashboardTabRouteActive = request()->routeIs('projects.rlip-lime.dashboard')
@@ -2585,6 +2600,8 @@
                     </li>
                 </ul>
             </li>
+            @endif
+            @if($moduleEnabled('approval_management'))
             <li>
                 @php
                     $sidebarUser = Auth::user();
@@ -2653,27 +2670,32 @@
                     @endif
                 </a>
             </li>
+            @endif
             @php
-                $canViewLocallyFundedProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
-                $canViewRssaProjects = Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
-                $canViewRlipLimeProjects = Auth::user()->hasCrudPermission('rlip_lime_projects', 'view');
-                $canViewProjectAtRiskProjects = Auth::user()->hasCrudPermission('project_at_risk_projects', 'view');
-                $canViewSglgifPortal = Auth::user()->hasCrudPermission('sglgif_portal', 'view');
-                $canViewPreImplementationDocuments = Auth::user()->hasCrudPermission('pre_implementation_documents', 'view');
-                $canViewRbisAnnualCertification = Auth::user()->hasCrudPermission('rbis_annual_certification', 'view');
-                $canViewAnnualAmwp = Auth::user()->hasCrudPermission('annual_maintenance_work_program', 'view');
-                $canViewAnnualRpmesForm4 = Auth::user()->hasCrudPermission('annual_rpmes_form_4', 'view');
+                $canViewLocallyFundedProjects = $moduleEnabled('locally_funded_projects') && Auth::user()->hasCrudPermission('locally_funded_projects', 'view');
+                $canViewRssaProjects = $moduleEnabled('rssa_projects')
+                    && (
+                        Auth::user()->hasCrudPermission('rssa_projects', 'view')
+                        || Auth::user()->hasCrudPermission('locally_funded_projects', 'view')
+                    );
+                $canViewRlipLimeProjects = $moduleEnabled('rlip_lime_projects') && Auth::user()->hasCrudPermission('rlip_lime_projects', 'view');
+                $canViewProjectAtRiskProjects = $moduleEnabled('project_at_risk_projects') && Auth::user()->hasCrudPermission('project_at_risk_projects', 'view');
+                $canViewSglgifPortal = $moduleEnabled('sglgif_portal') && Auth::user()->hasCrudPermission('sglgif_portal', 'view');
+                $canViewPreImplementationDocuments = $moduleEnabled('pre_implementation_documents') && Auth::user()->hasCrudPermission('pre_implementation_documents', 'view');
+                $canViewRbisAnnualCertification = $moduleEnabled('rbis_annual_certification') && Auth::user()->hasCrudPermission('rbis_annual_certification', 'view');
+                $canViewAnnualAmwp = $moduleEnabled('annual_maintenance_work_program') && Auth::user()->hasCrudPermission('annual_maintenance_work_program', 'view');
+                $canViewAnnualRpmesForm4 = $moduleEnabled('annual_rpmes_form_4') && Auth::user()->hasCrudPermission('annual_rpmes_form_4', 'view');
                 $canViewAnyAnnualRpmesForm = $canViewAnnualRpmesForm4;
-                $canViewPdNoPbbmMonthlyReports = Auth::user()->hasCrudPermission('pd_no_pbbm_monthly_reports', 'view');
-                $canViewSwaAnnexFMonthlyReports = Auth::user()->hasCrudPermission('swa_annex_f_monthly_reports', 'view');
-                $canViewFundUtilizationReports = Auth::user()->hasCrudPermission('fund_utilization_reports', 'view');
-                $canViewLpmcReports = Auth::user()->hasCrudPermission('local_project_monitoring_committee', 'view');
-                $canViewRoadMaintenanceReports = Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'view');
-                $canViewQuarterlyDilgMc201819 = Auth::user()->hasCrudPermission('quarterly_dilg_mc_2018_19', 'view');
-                $canViewQuarterlyDilgMc201830 = Auth::user()->hasCrudPermission('quarterly_dilg_mc_2018_30', 'view');
-                $canViewQuarterlyRpmesForm2 = Auth::user()->hasCrudPermission('quarterly_rpmes_form_2', 'view');
-                $canViewQuarterlyRpmesForm5 = Auth::user()->hasCrudPermission('quarterly_rpmes_form_5', 'view');
-                $canViewQuarterlyRpmesForm6 = Auth::user()->hasCrudPermission('quarterly_rpmes_form_6', 'view');
+                $canViewPdNoPbbmMonthlyReports = $moduleEnabled('pd_no_pbbm_monthly_reports') && Auth::user()->hasCrudPermission('pd_no_pbbm_monthly_reports', 'view');
+                $canViewSwaAnnexFMonthlyReports = $moduleEnabled('swa_annex_f_monthly_reports') && Auth::user()->hasCrudPermission('swa_annex_f_monthly_reports', 'view');
+                $canViewFundUtilizationReports = $moduleEnabled('fund_utilization_reports') && Auth::user()->hasCrudPermission('fund_utilization_reports', 'view');
+                $canViewLpmcReports = $moduleEnabled('local_project_monitoring_committee') && Auth::user()->hasCrudPermission('local_project_monitoring_committee', 'view');
+                $canViewRoadMaintenanceReports = $moduleEnabled('road_maintenance_status_reports') && Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'view');
+                $canViewQuarterlyDilgMc201819 = $moduleEnabled('quarterly_dilg_mc_2018_19') && Auth::user()->hasCrudPermission('quarterly_dilg_mc_2018_19', 'view');
+                $canViewQuarterlyDilgMc201830 = $moduleEnabled('quarterly_dilg_mc_2018_30') && Auth::user()->hasCrudPermission('quarterly_dilg_mc_2018_30', 'view');
+                $canViewQuarterlyRpmesForm2 = $moduleEnabled('quarterly_rpmes_form_2') && Auth::user()->hasCrudPermission('quarterly_rpmes_form_2', 'view');
+                $canViewQuarterlyRpmesForm5 = $moduleEnabled('quarterly_rpmes_form_5') && Auth::user()->hasCrudPermission('quarterly_rpmes_form_5', 'view');
+                $canViewQuarterlyRpmesForm6 = $moduleEnabled('quarterly_rpmes_form_6') && Auth::user()->hasCrudPermission('quarterly_rpmes_form_6', 'view');
                 $canViewAnyQuarterlyRpmesForm = $canViewQuarterlyRpmesForm2
                     || $canViewQuarterlyRpmesForm5
                     || $canViewQuarterlyRpmesForm6;
@@ -2683,30 +2705,31 @@
                     || $canViewQuarterlyDilgMc201819
                     || $canViewQuarterlyDilgMc201830
                     || $canViewAnyQuarterlyRpmesForm;
-                $canViewConfirmationOfFundReceipt = Auth::user()->hasCrudPermission('confirmation_of_fund_receipt', 'view');
-                $canViewPisatReports = Auth::user()->hasCrudPermission('pisat_reports', 'view');
+                $canViewConfirmationOfFundReceipt = $moduleEnabled('confirmation_of_fund_receipt') && Auth::user()->hasCrudPermission('confirmation_of_fund_receipt', 'view');
+                $canViewPisatReports = $moduleEnabled('pisat_reports') && Auth::user()->hasCrudPermission('pisat_reports', 'view');
                 $canViewAnyOneTimeReport = $canViewConfirmationOfFundReceipt
                     || $canViewPreImplementationDocuments
                     || $canViewPisatReports;
-                $canViewDilgMonitoringEvaluation = Auth::user()->hasCrudPermission('dilg_deliverables_monitoring_evaluation', 'view');
-                $canViewDilgRlipLimeMonthly = Auth::user()->hasCrudPermission('dilg_deliverables_rlip_lime_monthly', 'view');
-                $canViewDilgQaarTool = Auth::user()->hasCrudPermission('dilg_deliverables_qaar_tool_monitoring', 'view');
+                $canViewDilgMonitoringEvaluation = $moduleEnabled('dilg_deliverables_monitoring_evaluation') && Auth::user()->hasCrudPermission('dilg_deliverables_monitoring_evaluation', 'view');
+                $canViewDilgRlipLimeMonthly = $moduleEnabled('dilg_deliverables_rlip_lime_monthly') && Auth::user()->hasCrudPermission('dilg_deliverables_rlip_lime_monthly', 'view');
+                $canViewDilgQaarTool = $moduleEnabled('dilg_deliverables_qaar_tool_monitoring') && Auth::user()->hasCrudPermission('dilg_deliverables_qaar_tool_monitoring', 'view');
                 $canViewDilgDeliverables = $canViewDilgMonitoringEvaluation
                     || $canViewDilgRlipLimeMonthly
                     || $canViewDilgQaarTool;
-                $canViewTicketingSystem = Auth::user()->hasCrudPermission('ticketing_system', 'view');
-                $canViewSubaybayanUploads = Auth::user()->hasCrudPermission('subaybayan_data_uploads', 'view');
+                $canViewTicketingSystem = $moduleEnabled('ticketing_system') && Auth::user()->hasCrudPermission('ticketing_system', 'view');
+                $canViewSubaybayanUploads = $moduleEnabled('subaybayan_data_uploads') && Auth::user()->hasCrudPermission('subaybayan_data_uploads', 'view');
                 $canViewRssaLgsfUploads = $canViewSubaybayanUploads;
-                $canViewRlipLimeUploads = Auth::user()->hasCrudPermission('rlip_lime_data_uploads', 'view');
+                $canViewRlipLimeUploads = $moduleEnabled('rlip_lime_data_uploads') && Auth::user()->hasCrudPermission('rlip_lime_data_uploads', 'view');
                 $canViewRssaUploads = $canViewRssaLgsfUploads || $canViewRlipLimeUploads;
-                $canViewProjectAtRiskUploads = Auth::user()->hasCrudPermission('project_at_risk_data_uploads', 'view');
-                $canViewSglgifUploads = Auth::user()->hasCrudPermission('sglgif_data_uploads', 'view');
+                $canViewProjectAtRiskUploads = $moduleEnabled('project_at_risk_data_uploads') && Auth::user()->hasCrudPermission('project_at_risk_data_uploads', 'view');
+                $canViewSglgifUploads = $moduleEnabled('sglgif_data_uploads') && Auth::user()->hasCrudPermission('sglgif_data_uploads', 'view');
                 $canViewUtilitiesSystemSetup = Auth::user()->hasCrudPermission('utilities_system_setup', 'view');
                 $canViewUtilitiesNotifications = Auth::user()->hasCrudPermission('utilities_bulk_notifications', 'view');
                 $canViewUtilitiesDeadlines = Auth::user()->hasCrudPermission('utilities_deadlines_configuration', 'view');
                 $canViewUtilitiesLocation = Auth::user()->hasCrudPermission('utilities_location_configuration', 'view');
                 $canViewUtilitiesBackup = Auth::user()->hasCrudPermission('utilities_backup_restore', 'view');
                 $hasAnyProjectMonitoringAccess = $canViewLocallyFundedProjects
+                    || $canViewRssaProjects
                     || $canViewRlipLimeProjects
                     || $canViewProjectAtRiskProjects
                     || $canViewSglgifPortal;
@@ -2908,6 +2931,14 @@
                                     <a href="{{ route('reports.dilg-deliverables.qaar-tool-monitoring') }}" class="@if($reportsDilgQaarActive) active @endif">
                                         <i class="fas fa-clipboard-check"></i>
                                         <span>QAAR Tool and Monitoring Report</span>
+                                    </a>
+                                </li>
+                            @endif
+                            @if($canViewDilgRlipLimeMonthly)
+                                <li>
+                                    <a href="{{ route('reports.dilg-deliverables.rlip-lime-monthly') }}" class="@if($reportsDilgRlipLimeActive) active @endif">
+                                        <i class="fas fa-file-lines"></i>
+                                        <span>RLIP/LIME Monthly Reports</span>
                                     </a>
                                 </li>
                             @endif
@@ -3127,7 +3158,7 @@
                 </ul>
             </li>
             @endif
-            @if($canViewPreImplementationDocuments && config('features.nadai_management'))
+            @if($canViewPreImplementationDocuments && $moduleEnabled('nadai_management') && config('features.nadai_management'))
                 <li>
                     <a href="{{ route('nadai-management.index') }}" class="@if(request()->routeIs('nadai-management.*')) active @endif" title="Notice of Authority to Debit Account Issued">
                         <i class="fas fa-folder-tree"></i>
@@ -3199,6 +3230,7 @@
                     </ul>
                 </li>
             @endif
+            @if($moduleEnabled('communications'))
             <li>
                 <a href="{{ route('messages.index') }}" class="sidebar-float-hover @if(request()->routeIs('messages.*')) active @endif">
                     <i class="fas fa-envelope-open-text"></i>
@@ -3206,6 +3238,8 @@
                     <span class="sidebar-menu-badge" data-message-unread-badge @if($unreadMessageThreads < 1) hidden @endif>{{ $messageUnreadBadgeText }}</span>
                 </a>
             </li>
+            @endif
+            @if($moduleEnabled('announcement_management'))
             <li>
                 <a href="{{ route('announcements.index') }}" class="sidebar-float-hover @if(request()->routeIs('announcements.*')) active @endif">
                     <i class="fas fa-bullhorn"></i>
@@ -3213,6 +3247,7 @@
                     <span class="sidebar-menu-badge" id="sidebarAnnouncementBadge" @if($unreadAnnouncementCount < 1) style="display:none;" @endif>{{ $unreadAnnouncementCount > 99 ? '99+' : $unreadAnnouncementCount }}</span>
                 </a>
             </li>
+            @endif
             @php
                 $isRegionalDilg = strtoupper(trim((string) (Auth::user()->agency ?? ''))) === 'DILG'
                     && strtolower(trim((string) (Auth::user()->province ?? ''))) === 'regional office';
@@ -3631,6 +3666,7 @@
                     </div>
                 </div>
 
+                @if($moduleEnabled('announcement_management'))
                 <!-- Announcements -->
                 <div class="notification-wrap">
                     <button
@@ -3718,7 +3754,9 @@
                         </div>
                     </div>
                 </div>
+                @endif
 
+                @if($moduleEnabled('communications'))
                 <div class="notification-wrap">
                     <button
                         class="notification-bell"
@@ -3766,6 +3804,7 @@
                         </div>
                     </div>
                 </div>
+                @endif
 
                 <div class="profile-menu" id="profileMenu">
                     <div class="profile-menu-header">
@@ -3773,6 +3812,7 @@
                         <div class="profile-menu-email">{{ Auth::user()->emailaddress ?? 'user@example.com' }}</div>
                         <div class="profile-menu-role">{{ Auth::user()->roleLabel() }}</div>
                     </div>
+                    @if($moduleEnabled('user_profile'))
                     <a href="{{ route('profile.show') }}" class="profile-menu-item">
                         <i class="fas fa-user-circle"></i>
                         <span>My Profile</span>
@@ -3781,6 +3821,7 @@
                         <i class="fas fa-lock"></i>
                         <span>Change Password</span>
                     </a>
+                    @endif
                     <form id="logoutForm" action="{{ route('logout') }}" method="POST" style="display: none;">
                         @csrf
                     </form>

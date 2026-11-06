@@ -323,7 +323,7 @@
 
             <button type="submit">Login</button>
 
-            @if (!$isMaintenanceEnabled)
+            @if (!$isMaintenanceEnabled && $registrationEnabled)
                 <div class="create-row">
                     <a href="{{ route('register') }}" class="create-account">No account? Create one!</a>
                 </div>
