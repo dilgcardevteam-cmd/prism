@@ -1,10 +1,13 @@
 import * as SecureStore from "expo-secure-store";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { AppState, View } from "react-native";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { API_CANDIDATE_BASE_URLS, buildApiUrl } from "../constants/api";
 
 const AUTH_STORAGE_KEY = "pdmuoms.mobile.auth.session";
 const AUTH_STORAGE_VERSION = 3;
+const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const ACTIVITY_PERSIST_INTERVAL_MS = 30 * 1000;
 
 const AuthContext = createContext(null);
 
@@ -24,7 +27,10 @@ function fetchWithTimeout(resource, options = {}, timeoutMs = 5000) {
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
+  const [loginChallenge, setLoginChallenge] = useState(null);
   const [isHydrating, setIsHydrating] = useState(true);
+  const lastActivityAt = useRef(Date.now());
+  const lastActivityPersistedAt = useRef(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -54,7 +60,15 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        setSession(parsedSession);
+        const activityAt = Number(parsedSession.lastActivityAt || parsedSession.authenticatedAt);
+        if (!Number.isFinite(activityAt) || Date.now() - activityAt >= IDLE_TIMEOUT_MS) {
+          await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
+          setSession(null);
+          return;
+        }
+
+        lastActivityAt.current = activityAt;
+        setSession({ ...parsedSession, lastActivityAt: activityAt });
       } catch {
         if (isMounted) {
           await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
@@ -74,7 +88,46 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const signIn = async (payload) => {
+  const completeSignIn = useCallback(async (payloadJson, baseUrl, fallbackUsername) => {
+    const user = payloadJson?.user || {};
+    const accessToken = payloadJson?.access_token;
+    if (typeof accessToken !== "string" || accessToken.length === 0) {
+      throw new Error("The server did not issue a mobile access token.");
+    }
+
+    const activityAt = Date.now();
+    lastActivityAt.current = activityAt;
+    lastActivityPersistedAt.current = activityAt;
+
+    const nextSession = {
+      authVersion: AUTH_STORAGE_VERSION,
+      authenticatedAt: activityAt,
+      lastActivityAt: activityAt,
+      access_token: accessToken,
+      api_base_url: baseUrl,
+      id: user.id ?? null,
+      username: user.username || fallbackUsername,
+      first_name: user.first_name ?? null,
+      last_name: user.last_name ?? null,
+      email: user.email ?? null,
+      phone: user.phone ?? null,
+      agency: user.agency ?? null,
+      position: user.position ?? null,
+      region: user.region ?? null,
+      province: user.province ?? null,
+      office: user.office ?? null,
+      role: user.role ?? null,
+      status: user.status ?? null,
+    };
+
+    await SecureStore.setItemAsync(AUTH_STORAGE_KEY, JSON.stringify(nextSession));
+    setSession(nextSession);
+    setLoginChallenge(null);
+
+    return nextSession;
+  }, []);
+
+  const signIn = useCallback(async (payload) => {
     const username = String(payload?.username ?? "").trim();
     const password = String(payload?.password ?? "");
 
@@ -102,6 +155,20 @@ export function AuthProvider({ children }) {
 
         const payloadJson = await response.json().catch(() => null);
 
+        if (response.status === 202 && payloadJson?.requires_otp && payloadJson?.challenge_token) {
+          setLoginChallenge({
+            challengeToken: payloadJson.challenge_token,
+            apiBaseUrl: baseUrl,
+            username,
+            resendAvailableAt: payloadJson.resend_available_at,
+          });
+
+          return {
+            requiresOtp: true,
+            resendAvailableAt: payloadJson.resend_available_at,
+          };
+        }
+
         if (!response.ok) {
           const message = payloadJson?.message || "The username or password is incorrect.";
           const authError = new Error(message);
@@ -109,38 +176,7 @@ export function AuthProvider({ children }) {
           throw authError;
         }
 
-        const user = payloadJson?.user || {};
-        const accessToken = payloadJson?.access_token;
-        if (typeof accessToken !== "string" || accessToken.length === 0) {
-          throw new Error("The server did not issue a mobile access token.");
-        }
-
-        const nextSession = {
-          authVersion: AUTH_STORAGE_VERSION,
-          authenticatedAt: Date.now(),
-          access_token: accessToken,
-          api_base_url: baseUrl,
-          id: user.id ?? null,
-          username: user.username || username,
-          first_name: user.first_name ?? null,
-          last_name: user.last_name ?? null,
-          email: user.email ?? null,
-          phone: user.phone ?? null,
-          agency: user.agency ?? null,
-          position: user.position ?? null,
-          region: user.region ?? null,
-          province: user.province ?? null,
-          office: user.office ?? null,
-          role: user.role ?? null,
-          status: user.status ?? null,
-        };
-
-        await SecureStore.setItemAsync(
-          AUTH_STORAGE_KEY,
-          JSON.stringify(nextSession)
-        );
-        setSession(nextSession);
-        return nextSession;
+        return completeSignIn(payloadJson, baseUrl, username);
       } catch (error) {
         if (error?.isAuthError) {
           lastAuthError = error;
@@ -156,9 +192,72 @@ export function AuthProvider({ children }) {
       lastNetworkError ||
       new Error("Unable to verify credentials right now.")
     );
-  };
+  }, [completeSignIn]);
 
-  const signOut = async () => {
+  const verifyLoginOtp = useCallback(async (otp) => {
+    if (!loginChallenge) {
+      throw new Error("Your verification request expired. Please sign in again.");
+    }
+
+    const response = await fetchWithTimeout(
+      buildApiUrl("/api/mobile/login/otp", loginChallenge.apiBaseUrl),
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          challenge_token: loginChallenge.challengeToken,
+          otp: String(otp ?? "").trim(),
+        }),
+      },
+      5000
+    );
+    const payloadJson = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(payloadJson?.message || "Unable to verify the code. Please try again.");
+    }
+
+    return completeSignIn(payloadJson, loginChallenge.apiBaseUrl, loginChallenge.username);
+  }, [completeSignIn, loginChallenge]);
+
+  const resendLoginOtp = useCallback(async () => {
+    if (!loginChallenge) {
+      throw new Error("Your verification request expired. Please sign in again.");
+    }
+
+    const response = await fetchWithTimeout(
+      buildApiUrl("/api/mobile/login/otp/resend", loginChallenge.apiBaseUrl),
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ challenge_token: loginChallenge.challengeToken }),
+      },
+      5000
+    );
+    const payloadJson = await response.json().catch(() => null);
+
+    if (payloadJson?.resend_available_at) {
+      setLoginChallenge((current) => current
+        ? { ...current, resendAvailableAt: payloadJson.resend_available_at }
+        : current);
+    }
+
+    if (!response.ok) {
+      throw new Error(payloadJson?.message || "Unable to resend the verification code.");
+    }
+
+    return payloadJson;
+  }, [loginChallenge]);
+
+  const cancelLoginOtp = useCallback(() => setLoginChallenge(null), []);
+
+  const signOut = useCallback(async () => {
     let logoutError = null;
     const rawSession = await SecureStore.getItemAsync(AUTH_STORAGE_KEY);
     if (rawSession) {
@@ -190,7 +289,50 @@ export function AuthProvider({ children }) {
     if (logoutError) {
       throw new Error("The mobile session was cleared locally, but the server could not revoke its access token.");
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!session || isHydrating) {
+      return undefined;
+    }
+
+    const enforceIdleTimeout = async () => {
+      if (Date.now() - lastActivityAt.current >= IDLE_TIMEOUT_MS) {
+        await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
+        setSession(null);
+        return;
+      }
+
+      if (Date.now() - lastActivityPersistedAt.current >= ACTIVITY_PERSIST_INTERVAL_MS) {
+        const activityAt = lastActivityAt.current;
+        await SecureStore.setItemAsync(
+          AUTH_STORAGE_KEY,
+          JSON.stringify({ ...session, lastActivityAt: activityAt })
+        );
+        lastActivityPersistedAt.current = Date.now();
+      }
+    };
+
+    const timer = setInterval(() => {
+      void enforceIdleTimeout();
+    }, 15 * 1000);
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void enforceIdleTimeout();
+      }
+    });
+
+    return () => {
+      clearInterval(timer);
+      appStateSubscription.remove();
+    };
+  }, [session, isHydrating]);
+
+  const recordActivity = useCallback(() => {
+    if (session) {
+      lastActivityAt.current = Date.now();
+    }
+  }, [session]);
 
   const value = useMemo(
     () => ({
@@ -198,12 +340,22 @@ export function AuthProvider({ children }) {
       isHydrating,
       isAuthenticated: Boolean(session),
       signIn,
+      verifyLoginOtp,
+      resendLoginOtp,
+      resendAvailableAt: loginChallenge?.resendAvailableAt ?? null,
+      cancelLoginOtp,
       signOut,
     }),
-    [session, isHydrating]
+    [session, isHydrating, signIn, verifyLoginOtp, resendLoginOtp, loginChallenge, cancelLoginOtp, signOut]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <View style={{ flex: 1 }} onTouchStart={recordActivity}>
+        {children}
+      </View>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

@@ -300,7 +300,7 @@
             </div>
         @endif
         
-        <form action="{{ route('login') }}" method="POST">
+        <form action="{{ route('login') }}" method="POST" id="loginForm">
             @csrf
             <div class="field">
                 <input type="text" id="username" name="username" value="{{ old('username') }}" placeholder="Username" autocomplete="username" required>
@@ -315,13 +315,17 @@
                     </div>
                 </div>
             </div>
+            <label style="display:flex;align-items:flex-start;gap:8px;margin:0 0 14px;font-size:13px;color:#374151;">
+                <input type="checkbox" name="remember_today" value="1" {{ old('remember_today') ? 'checked' : '' }} style="width:auto;margin-top:2px;">
+                <span>Remember me</span>
+            </label>
             @if (!$isMaintenanceEnabled)
                 <div class="forgot-row">
                     <a href="{{ route('forgot-password') }}">Forgot password?</a>
                 </div>
             @endif
 
-            <button type="submit">Login</button>
+            <button type="submit" id="loginButton">Login</button>
 
             @if (!$isMaintenanceEnabled && $registrationEnabled)
                 <div class="create-row">
@@ -334,6 +338,19 @@
     <div id="toast" class="toast"></div>
 
     <script>
+        let isSubmittingLogin = false;
+        document.getElementById('loginForm').addEventListener('submit', function (event) {
+            if (isSubmittingLogin) {
+                event.preventDefault();
+                return;
+            }
+
+            isSubmittingLogin = true;
+            const button = document.getElementById('loginButton');
+            button.disabled = true;
+            button.textContent = 'Signing in...';
+        });
+
         function showToast(message, type = 'info') {
             const toast = document.getElementById('toast');
             toast.textContent = message;

@@ -13,6 +13,10 @@ Auth::routes(['reset' => false, 'register' => false]); // Disable default regist
 Route::get('register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('register', [RegisterController::class, 'register']);
 
+Route::get('/login/otp', [LoginController::class, 'showLoginOtpForm'])->name('login.otp');
+Route::post('/login/otp', [LoginController::class, 'verifyLoginOtp'])->name('login.otp.verify');
+Route::post('/login/otp/resend', [LoginController::class, 'resendLoginOtp'])->name('login.otp.resend');
+
 // Email verification routes - Token route FIRST (more specific)
 Route::get('/email/verify/token/{token}', [VerificationController::class, 'verifyWithToken'])->name('verification.verify.token');
 // Then general verification routes
@@ -29,4 +33,3 @@ Route::post('/reset-password', [ForgotPasswordController::class, 'resetPassword'
 
 Route::get('/admin/login', [LoginController::class, 'showMaintenanceLoginForm'])
     ->name('maintenance.superadmin-login');
-

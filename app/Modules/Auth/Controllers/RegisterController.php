@@ -5,6 +5,7 @@ namespace App\Modules\Auth\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\ModuleConfiguration;
 use App\Models\User;
+use App\Rules\NotDisposableEmail;
 use App\Support\InputSanitizer;
 use Illuminate\Foundation\Auth\RegistersUsers;
 use Illuminate\Support\Facades\Hash;
@@ -70,7 +71,14 @@ class RegisterController extends Controller
                 'string',
                 'max:255',
             ],
-            'emailaddress' => ['required', 'string', 'email', 'max:255', 'unique:tbusers'],
+            'emailaddress' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                'unique:tbusers',
+                new NotDisposableEmail(),
+            ],
             'mobileno' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:255', 'unique:tbusers'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],

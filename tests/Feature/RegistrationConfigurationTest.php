@@ -77,6 +77,28 @@ class RegistrationConfigurationTest extends TestCase
         ]);
     }
 
+    public function test_registration_rejects_disposable_email_addresses(): void
+    {
+        $this->postJson('/register', [
+            'fname' => 'Test',
+            'lname' => 'User',
+            'agency' => 'DILG',
+            'position' => 'Staff',
+            'region' => 'Cordillera Administrative Region',
+            'province' => 'Benguet',
+            'emailaddress' => 'user@sub.mailinator.com',
+            'mobileno' => '09123456789',
+            'username' => 'disposable-email-user',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['emailaddress']);
+
+        $this->assertDatabaseMissing('tbusers', [
+            'username' => 'disposable-email-user',
+        ]);
+    }
+
     public function test_disabled_modules_are_hidden_and_direct_routes_are_blocked(): void
     {
         $superAdmin = User::factory()->create([

@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Mail\LoginOtpMail;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -16,6 +19,7 @@ class MobileApiSecurityTest extends TestCase
         parent::setUp();
 
         Schema::dropIfExists('mobile_access_tokens');
+        Schema::dropIfExists('mobile_login_challenges');
         Schema::dropIfExists('tbnotifications');
         Schema::dropIfExists('locally_funded_projects');
         Schema::dropIfExists('tbusers');
@@ -47,6 +51,17 @@ class MobileApiSecurityTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('mobile_login_challenges', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('user_id');
+            $table->string('challenge_hash', 64)->unique();
+            $table->text('encrypted_token')->nullable();
+            $table->string('otp_hash');
+            $table->unsignedTinyInteger('attempts')->default(0);
+            $table->timestamp('expires_at');
+            $table->timestamps();
+        });
+
         Schema::create('tbnotifications', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('user_id');
@@ -64,6 +79,8 @@ class MobileApiSecurityTest extends TestCase
         Schema::create('locally_funded_projects', function (Blueprint $table): void {
             $table->id();
         });
+        Mail::fake();
+        Queue::fake();
     }
 
     public function test_mobile_profile_and_notifications_require_a_bearer_token(): void
@@ -103,9 +120,34 @@ class MobileApiSecurityTest extends TestCase
         $login = $this->postJson('/api/mobile/login', [
             'username' => 'owner',
             'password' => 'Password1!',
+        ])->assertAccepted()
+            ->assertJsonPath('requires_otp', true);
+
+        $challengeToken = $login->json('challenge_token');
+        $this->assertIsString($challengeToken);
+        $this->assertDatabaseHas('mobile_login_challenges', [
+            'user_id' => $owner->idno,
+            'challenge_hash' => hash('sha256', $challengeToken),
+        ]);
+        $this->assertDatabaseMissing('mobile_access_tokens', ['user_id' => $owner->idno]);
+        Queue::assertNothingPushed();
+        $this->assertCount(1, Mail::sent(LoginOtpMail::class));
+
+        $repeatedLogin = $this->postJson('/api/mobile/login', [
+            'username' => 'owner',
+            'password' => 'Password1!',
+        ])->assertAccepted();
+        $this->assertSame($challengeToken, $repeatedLogin->json('challenge_token'));
+        Queue::assertNothingPushed();
+        $this->assertCount(1, Mail::sent(LoginOtpMail::class));
+
+        $mail = Mail::sent(LoginOtpMail::class)->first();
+        $tokenResponse = $this->postJson('/api/mobile/login/otp', [
+            'challenge_token' => $challengeToken,
+            'otp' => $mail->otp,
         ])->assertOk()->assertJsonPath('user.id', $owner->idno);
 
-        $token = $login->json('access_token');
+        $token = $tokenResponse->json('access_token');
         $this->assertIsString($token);
         $this->assertDatabaseHas('mobile_access_tokens', [
             'user_id' => $owner->idno,
@@ -118,7 +160,7 @@ class MobileApiSecurityTest extends TestCase
             ->assertJsonPath('user.id', $owner->idno);
         $this->withToken($token)->getJson('/api/mobile/messages')->assertOk();
 
-        $this->withToken($token)->getJson('/api/mobile/notifications?user_id=' . $other->idno)
+        $this->withToken($token)->getJson('/api/mobile/notifications?user_id='.$other->idno)
             ->assertOk()
             ->assertJsonCount(1, 'notifications')
             ->assertJsonPath('notifications.0.message', 'Owner notification');
@@ -195,6 +237,49 @@ class MobileApiSecurityTest extends TestCase
         $this->withToken($activeToken)->getJson('/api/mobile/user/profile')->assertUnauthorized();
     }
 
+    public function test_mobile_access_token_expires_after_two_hours_of_inactivity(): void
+    {
+        $user = $this->createUser('idle-user', 'Idle');
+        $token = str_repeat('i', 80);
+        DB::table('mobile_access_tokens')->insert([
+            'user_id' => $user->idno,
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now()->subHours(2)->subMinute(),
+            'updated_at' => now()->subHours(2)->subMinute(),
+        ]);
+
+        $this->withToken($token)->getJson('/api/mobile/user/profile')
+            ->assertUnauthorized()
+            ->assertJsonPath('message', 'Your session expired due to inactivity. Please sign in again.');
+
+        $this->assertDatabaseMissing('mobile_access_tokens', [
+            'token_hash' => hash('sha256', $token),
+        ]);
+    }
+
+    public function test_mobile_activity_refreshes_the_idle_timeout(): void
+    {
+        $user = $this->createUser('active-user', 'Active');
+        $token = str_repeat('a', 80);
+        DB::table('mobile_access_tokens')->insert([
+            'user_id' => $user->idno,
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now()->subMinutes(119),
+            'updated_at' => now()->subMinutes(119),
+        ]);
+
+        $this->withToken($token)->getJson('/api/mobile/user/profile')->assertOk();
+
+        $this->assertSame(
+            now()->toDateTimeString(),
+            DB::table('mobile_access_tokens')
+                ->where('token_hash', hash('sha256', $token))
+                ->value('updated_at')
+        );
+    }
+
     public function test_password_change_uses_authenticated_user_and_revokes_all_mobile_tokens(): void
     {
         $owner = $this->createUser('password-owner', 'Owner');
@@ -220,6 +305,46 @@ class MobileApiSecurityTest extends TestCase
         $this->assertDatabaseMissing('mobile_access_tokens', ['user_id' => $owner->idno]);
     }
 
+    public function test_mobile_login_does_not_issue_a_token_for_an_incorrect_otp(): void
+    {
+        $user = $this->createUser('otp-user', 'OTP');
+        $login = $this->postJson('/api/mobile/login', [
+            'username' => $user->username,
+            'password' => 'Password1!',
+        ])->assertAccepted();
+
+        $this->postJson('/api/mobile/login/otp', [
+            'challenge_token' => $login->json('challenge_token'),
+            'otp' => '000000',
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', 'The verification code is incorrect.');
+
+        $this->assertDatabaseMissing('mobile_access_tokens', ['user_id' => $user->idno]);
+    }
+
+    public function test_mobile_otp_resend_is_limited_to_once_every_five_minutes(): void
+    {
+        $user = $this->createUser('otp-resend-user', 'OTP');
+        $login = $this->postJson('/api/mobile/login', [
+            'username' => $user->username,
+            'password' => 'Password1!',
+        ])->assertAccepted();
+        $challengeToken = $login->json('challenge_token');
+
+        $this->postJson('/api/mobile/login/otp/resend', [
+            'challenge_token' => $challengeToken,
+        ])->assertStatus(429);
+        Queue::assertNothingPushed();
+        $this->assertCount(1, Mail::sent(LoginOtpMail::class));
+
+        $this->travel(5)->minutes();
+        $this->postJson('/api/mobile/login/otp/resend', [
+            'challenge_token' => $challengeToken,
+        ])->assertOk();
+        Queue::assertNothingPushed();
+        $this->assertCount(2, Mail::sent(LoginOtpMail::class));
+    }
+
     public function test_token_migration_creates_token_expiry_index_and_user_foreign_key(): void
     {
         Schema::dropIfExists('mobile_access_tokens');
@@ -239,6 +364,28 @@ class MobileApiSecurityTest extends TestCase
         );
     }
 
+    public function test_mobile_login_challenge_migration_creates_expiry_index_and_user_foreign_key(): void
+    {
+        Schema::dropIfExists('mobile_login_challenges');
+        $migration = require database_path('migrations/2026_11_06_000000_create_mobile_login_challenges_table.php');
+
+        $migration->up();
+
+        $this->assertTrue(Schema::hasColumns('mobile_login_challenges', [
+            'user_id',
+            'challenge_hash',
+            'encrypted_token',
+            'otp_hash',
+            'attempts',
+            'expires_at',
+        ]));
+        $this->assertTrue(Schema::hasIndex('mobile_login_challenges', 'mobile_login_challenges_user_expiry_idx'));
+        $this->assertSame(
+            'tbusers',
+            Schema::getForeignKeys('mobile_login_challenges')[0]['foreign_table']
+        );
+    }
+
     private function createUser(string $username, string $firstName): User
     {
         return User::query()->create([
@@ -248,7 +395,7 @@ class MobileApiSecurityTest extends TestCase
             'position' => 'Position',
             'region' => 'Region',
             'province' => 'Province',
-            'emailaddress' => $username . '@example.test',
+            'emailaddress' => $username.'@example.test',
             'mobileno' => '09123456789',
             'username' => $username,
             'password' => Hash::make('Password1!'),

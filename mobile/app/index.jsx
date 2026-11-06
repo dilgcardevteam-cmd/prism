@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View} from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -15,27 +15,95 @@ import { APP_COLORS } from "../constants/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, verifyLoginOtp, resendLoginOtp, resendAvailableAt, cancelLoginOtp } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [requiresOtp, setRequiresOtp] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [clock, setClock] = useState(Date.now());
+  const submitLock = useRef(false);
+
+  useEffect(() => {
+    if (!requiresOtp) {
+      return undefined;
+    }
+
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [requiresOtp]);
 
   const handleLoginPress = async () => {
+    if (submitLock.current) return;
     if (!username.trim() || !password.trim()) {
       Alert.alert("Login required", "Please enter your credentials.");
       return;
     }
 
+    submitLock.current = true;
     setIsSubmitting(true);
     try {
-      await signIn({ username, password });
-      router.replace(APP_ROUTES.homeTab);
+      const result = await signIn({ username, password });
+      if (result?.requiresOtp) {
+        setPassword("");
+        setRequiresOtp(true);
+      } else {
+        router.replace(APP_ROUTES.homeTab);
+      }
     } catch (error) {
       Alert.alert("Login failed", error?.message || "Invalid credentials.");
     } finally {
       setIsSubmitting(false);
+      submitLock.current = false;
     }
+  };
+
+  const handleOtpPress = async () => {
+    if (submitLock.current) return;
+    if (!/^\d{6}$/.test(otp)) {
+      Alert.alert("Verification required", "Enter the six-digit code sent to your email.");
+      return;
+    }
+
+    submitLock.current = true;
+    setIsSubmitting(true);
+    try {
+      await verifyLoginOtp(otp);
+      router.replace(APP_ROUTES.homeTab);
+    } catch (error) {
+      Alert.alert("Verification failed", error?.message || "The code could not be verified.");
+    } finally {
+      setIsSubmitting(false);
+      submitLock.current = false;
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setIsSubmitting(true);
+
+    try {
+      await resendLoginOtp();
+      setOtp("");
+      Alert.alert("Code sent", "A new verification code has been sent to your registered email.");
+    } catch (error) {
+      Alert.alert("Unable to resend", error?.message || "Please try again later.");
+    } finally {
+      setIsSubmitting(false);
+      submitLock.current = false;
+    }
+  };
+
+  const resendSeconds = resendAvailableAt
+    ? Math.max(0, Math.ceil((new Date(resendAvailableAt).getTime() - clock) / 1000))
+    : 0;
+
+  const handleBackToLogin = () => {
+    cancelLoginOtp();
+    setRequiresOtp(false);
+    setOtp("");
   };
 
   return (
@@ -61,30 +129,75 @@ export default function LoginScreen() {
         </LinearGradient>
 
         <View className="relative -mt-16 flex-1 rounded-t-[30px] bg-white px-6 pt-8">
-          <FloatingInput
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
-          />
-          
-          <FloatingInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          {requiresOtp ? (
+            <>
+              <Text className="mb-5 text-center font-sans text-base text-gray-600">
+                A six-digit code is being sent to your registered email address. It may take a moment to arrive.
+              </Text>
+              <TextInput
+                value={otp}
+                onChangeText={(value) => setOtp(value.replace(/\D/g, "").slice(0, 6))}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
+                maxLength={6}
+                placeholder="000000"
+                accessibilityLabel="Six-digit verification code"
+                style={{
+                  borderBottomWidth: 1,
+                  borderBottomColor: APP_COLORS.primaryBlue,
+                  color: APP_COLORS.primaryBlue,
+                  fontSize: 24,
+                  letterSpacing: 8,
+                  paddingVertical: 12,
+                  textAlign: "center",
+                }}
+              />
+              <Pressable className="mt-4 self-center" onPress={handleBackToLogin}>
+                <Text className="font-sans text-sm font-semibold" style={{ color: APP_COLORS.primaryBlue }}>
+                  Back to sign in
+                </Text>
+              </Pressable>
+              <Pressable
+                className="mt-4 self-center"
+                onPress={handleResendOtp}
+                disabled={isSubmitting || resendSeconds > 0}
+              >
+                <Text className="font-sans text-sm font-semibold" style={{ color: resendSeconds > 0 ? "#64748b" : APP_COLORS.primaryBlue }}>
+                  {resendSeconds > 0
+                    ? `Resend code in ${Math.floor(resendSeconds / 60)}:${String(resendSeconds % 60).padStart(2, "0")}`
+                    : "Resend code"}
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <FloatingInput
+                label="Username"
+                value={username}
+                onChangeText={setUsername}
+              />
 
-          <Pressable className="mt-3 self-end">
-            <Text
-              className="font-sans text-base font-semibold"
-              style={{ color: APP_COLORS.primaryBlue }}
-            >
-              Forgot password?
-            </Text>
-          </Pressable>
+              <FloatingInput
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <Pressable className="mt-3 self-end">
+                <Text
+                  className="font-sans text-base font-semibold"
+                  style={{ color: APP_COLORS.primaryBlue }}
+                >
+                  Forgot password?
+                </Text>
+              </Pressable>
+            </>
+          )}
 
           <Pressable
-            onPress={handleLoginPress}
+            onPress={requiresOtp ? handleOtpPress : handleLoginPress}
             disabled={isSubmitting}
             className="mt-10 overflow-hidden rounded-full disabled:opacity-70"
           >
@@ -100,7 +213,7 @@ export default function LoginScreen() {
               }}
             >
               <Text className="font-sans text-lg font-bold text-white">
-                {isSubmitting ? "Signing in..." : "SIGN IN"}
+                {isSubmitting ? "Please wait..." : requiresOtp ? "VERIFY CODE" : "SIGN IN"}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -112,7 +225,7 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
 
       {/* LOADER */}
-      <LoginLoading visible={isSubmitting} message="Signing you in...">
+      <LoginLoading visible={isSubmitting} message={requiresOtp ? "Verifying code..." : "Signing you in..."}>
         <LottieView
           source={require("../assets/animations/loading-rocketman.json")}
           autoPlay

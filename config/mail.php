@@ -114,4 +114,20 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Reply-To Address
+    |--------------------------------------------------------------------------
+    |
+    | Set MAIL_REPLY_TO_ADDRESS to a no-reply address hosted or rejected by
+    | your mail provider. This controls where email replies are addressed;
+    | SMTP provider settings are still required to reject incoming mail.
+    |
+    */
+
+    'reply_to' => [
+        'address' => env('MAIL_REPLY_TO_ADDRESS', 'no-reply@example.com'),
+        'name' => env('MAIL_REPLY_TO_NAME', 'PRISM No Reply'),
+    ],
+
 ];

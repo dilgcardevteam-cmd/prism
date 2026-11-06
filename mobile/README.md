@@ -25,6 +25,12 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Sign-in verification
+
+Signing in on mobile requires the user to enter the email OTP sent after their password is accepted. OTP email delivery starts after the login response, so it does not require a separate queue worker. The app submits the code to `/api/mobile/login/otp`; the server issues a 30-day bearer token only after the code is verified. Mobile sessions expire after two hours without activity. Deploy the `mobile_login_challenges` database migrations before enabling this flow.
+
+For browser sign-in, users can choose **Remember me within the day** to skip further OTP prompts on that browser until midnight in the application timezone. Set `MAIL_REPLY_TO_ADDRESS` to your provider-approved no-reply address. The SMTP provider must separately reject or discard incoming mail if replies must not be accepted.
+
 ## Get a fresh project
 
 When you're ready, run:

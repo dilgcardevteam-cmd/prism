@@ -1,21 +1,25 @@
 <?php
 
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\PagasaTimeController;
+use App\Models\User;
+use App\Modules\Auth\Jobs\SendLoginOtpEmail;
+use App\Services\RegionalApprovalPoolService;
+use App\Support\NotificationCenter;
+use App\Support\NotificationUrl;
+use App\Support\SystemMaintenanceState;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-use App\Models\LocallyFundedProject;
-use App\Models\User;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use App\Http\Controllers\RlipLimeProjectController;
-use App\Http\Controllers\SglgifProjectController;
-use App\Http\Controllers\SystemManagementController;
 
 // Authentication Module
 require base_path('routes/modules/auth.php');
@@ -30,8 +34,8 @@ Route::get('/', function () {
     return view('landing');
 })->name('landing');
 
-Route::get('/system-under-maintenance', function (\App\Support\SystemMaintenanceState $systemMaintenanceState) {
-    if (!$systemMaintenanceState->isEnabled()) {
+Route::get('/system-under-maintenance', function (SystemMaintenanceState $systemMaintenanceState) {
+    if (! $systemMaintenanceState->isEnabled()) {
         return redirect()->route('landing');
     }
 
@@ -47,7 +51,7 @@ Route::get('/system-under-maintenance', function (\App\Support\SystemMaintenance
 // Public API endpoint for municipality projects
 Route::get('/api/municipality-projects', function () {
     try {
-        if (!Schema::hasTable('subay_project_profiles')) {
+        if (! Schema::hasTable('subay_project_profiles')) {
             return response()->json(['features' => [], 'maxCount' => 0]);
         }
 
@@ -137,7 +141,7 @@ Route::get('/api/municipality-projects', function () {
             'Sadanga' => ['lat' => 16.7, 'lng' => 121.3167],
             'Sagada' => ['lat' => 16.7333, 'lng' => 121.2167],
             'Tadian' => ['lat' => 16.7667, 'lng' => 121.3167],
-            'Tineg' => ['lat' => 16.7333, 'lng' => 121.35]
+            'Tineg' => ['lat' => 16.7333, 'lng' => 121.35],
         ];
 
         // Get all municipalities with subay project counts
@@ -153,7 +157,7 @@ Route::get('/api/municipality-projects', function () {
 
         $maxCount = 0;
         $features = [];
-        
+
         // Create a lowercase version of coords for matching
         $coordsLowercase = [];
         foreach ($municipalityCoords as $name => $coord) {
@@ -175,12 +179,12 @@ Route::get('/api/municipality-projects', function () {
                     'type' => 'Feature',
                     'properties' => [
                         'name' => $displayName,
-                        'project_count' => $count
+                        'project_count' => $count,
                     ],
                     'geometry' => [
                         'type' => 'Point',
-                        'coordinates' => [$coords['lng'], $coords['lat']]
-                    ]
+                        'coordinates' => [$coords['lng'], $coords['lat']],
+                    ],
                 ];
             }
         }
@@ -188,14 +192,14 @@ Route::get('/api/municipality-projects', function () {
         return response()->json([
             'type' => 'FeatureCollection',
             'features' => $features,
-            'maxCount' => $maxCount
+            'maxCount' => $maxCount,
         ]);
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         return response()->json(['error' => $e->getMessage()], 500);
     }
 })->name('api.municipality-projects');
 
-//======================MOBILE ENDPOINTS=================
+// ======================MOBILE ENDPOINTS=================
 Route::post('/api/mobile/login', function (Request $request) {
     $credentials = $request->validate([
         'username' => ['required', 'string'],
@@ -204,27 +208,239 @@ Route::post('/api/mobile/login', function (Request $request) {
 
     $user = User::where('username', $credentials['username'])->first();
 
-    if (!$user || strtolower((string) $user->status) !== 'active' || !Hash::check($credentials['password'], $user->password)) {
+    if (! $user || strtolower((string) $user->status) !== 'active' || ! Hash::check($credentials['password'], $user->password)) {
         return response()->json([
             'message' => 'The username or password is incorrect.',
         ], 422);
     }
 
-    $plainTextToken = Str::random(80);
-    $expiresAt = now()->addDays(30);
-    DB::table('mobile_access_tokens')->insert([
-        'user_id' => $user->idno,
-        'token_hash' => hash('sha256', $plainTextToken),
-        'expires_at' => $expiresAt,
-        'created_at' => now(),
-        'updated_at' => now(),
+    $challenge = DB::transaction(function () use ($user): array {
+        User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
+
+        $existing = DB::table('mobile_login_challenges')
+            ->where('user_id', $user->idno)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($existing) {
+            if (! $existing->encrypted_token) {
+                DB::table('mobile_login_challenges')->where('id', $existing->id)->delete();
+            } else {
+                return [
+                    'token' => $existing->encrypted_token
+                        ? Crypt::decryptString($existing->encrypted_token)
+                        : null,
+                    'otp' => null,
+                    'expires_at' => Carbon\Carbon::parse($existing->expires_at),
+                    'sent_at' => Carbon\Carbon::parse($existing->created_at),
+                    'existing' => true,
+                ];
+            }
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        $challengeToken = Str::random(80);
+        $expiresAt = now()->addMinutes(5);
+        DB::table('mobile_login_challenges')->insert([
+            'user_id' => $user->idno,
+            'challenge_hash' => hash('sha256', $challengeToken),
+            'encrypted_token' => Crypt::encryptString($challengeToken),
+            'otp_hash' => Hash::make($otp),
+            'attempts' => 0,
+            'expires_at' => $expiresAt,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [
+            'token' => $challengeToken,
+            'otp' => $otp,
+            'expires_at' => $expiresAt,
+            'sent_at' => now(),
+            'existing' => false,
+        ];
+    });
+
+    if (! $challenge['existing']) {
+        SendLoginOtpEmail::dispatch((int) $user->idno, $challenge['otp'], $challenge['expires_at'])->afterResponse();
+    }
+
+    return response()->json([
+        'message' => $challenge['existing']
+            ? 'A verification code is already active. Use the existing code or resend after five minutes.'
+            : 'A verification code has been sent to your registered email address.',
+        'requires_otp' => true,
+        'challenge_token' => $challenge['token'],
+        'expires_at' => $challenge['expires_at']->toISOString(),
+        'resend_available_at' => $challenge['sent_at']->copy()->addMinutes(5)->toISOString(),
+    ], 202);
+})->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('throttle:10,1');
+
+Route::post('/api/mobile/login/otp/resend', function (Request $request) {
+    $validated = $request->validate([
+        'challenge_token' => ['required', 'string', 'size:80'],
     ]);
+
+    $challengeHash = hash('sha256', $validated['challenge_token']);
+    $challenge = DB::table('mobile_login_challenges')
+        ->where('challenge_hash', $challengeHash)
+        ->first();
+
+    if (! $challenge) {
+        return response()->json([
+            'message' => 'Your verification request expired. Please sign in again.',
+        ], 422);
+    }
+
+    $resend = DB::transaction(function () use ($challenge): ?array {
+        $lockedChallenge = DB::table('mobile_login_challenges')
+            ->where('id', $challenge->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $lockedChallenge) {
+            return null;
+        }
+
+        $sentAt = Carbon\Carbon::parse($lockedChallenge->created_at);
+        if ($sentAt->copy()->addMinutes(5)->isFuture()) {
+            return [
+                'available_at' => $sentAt->copy()->addMinutes(5),
+            ];
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        $expiresAt = now()->addMinutes(5);
+        DB::table('mobile_login_challenges')
+            ->where('id', $lockedChallenge->id)
+            ->update([
+                'otp_hash' => Hash::make($otp),
+                'attempts' => 0,
+                'expires_at' => $expiresAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        return [
+            'otp' => $otp,
+            'expires_at' => $expiresAt,
+        ];
+    });
+
+    if (! $resend) {
+        return response()->json([
+            'message' => 'Your verification request expired. Please sign in again.',
+        ], 422);
+    }
+
+    if (isset($resend['available_at'])) {
+        return response()->json([
+            'message' => 'Please wait five minutes between verification code requests.',
+            'resend_available_at' => $resend['available_at']->toISOString(),
+        ], 429);
+    }
+
+    $user = User::find($challenge->user_id);
+    if (! $user || strtolower((string) $user->status) !== 'active') {
+        DB::table('mobile_login_challenges')->where('id', $challenge->id)->delete();
+
+        return response()->json([
+            'message' => 'This account cannot sign in right now.',
+        ], 422);
+    }
+
+    SendLoginOtpEmail::dispatch((int) $user->idno, $resend['otp'], $resend['expires_at'])->afterResponse();
+
+    return response()->json([
+        'message' => 'A new verification code has been sent.',
+        'expires_at' => $resend['expires_at']->toISOString(),
+        'resend_available_at' => $resend['expires_at']->toISOString(),
+    ]);
+})->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('throttle:3,1');
+
+Route::post('/api/mobile/login/otp', function (Request $request) {
+    $validated = $request->validate([
+        'challenge_token' => ['required', 'string', 'size:80'],
+        'otp' => ['required', 'digits:6'],
+    ]);
+
+    $challengeHash = hash('sha256', $validated['challenge_token']);
+    $challenge = DB::table('mobile_login_challenges')
+        ->where('challenge_hash', $challengeHash)
+        ->first();
+
+    if (! $challenge || Carbon\Carbon::parse($challenge->expires_at)->isPast()) {
+        return response()->json([
+            'message' => 'The verification code expired. Request a new code to continue.',
+        ], 422);
+    }
+
+    if (! Hash::check($validated['otp'], $challenge->otp_hash)) {
+        $attempts = $challenge->attempts + 1;
+        if ($attempts >= 5) {
+            DB::table('mobile_login_challenges')->where('id', $challenge->id)->delete();
+
+            return response()->json([
+                'message' => 'Too many incorrect verification attempts. Please sign in again.',
+            ], 422);
+        }
+
+        DB::table('mobile_login_challenges')
+            ->where('id', $challenge->id)
+            ->update(['attempts' => $attempts, 'updated_at' => now()]);
+
+        return response()->json([
+            'message' => 'The verification code is incorrect.',
+        ], 422);
+    }
+
+    $user = User::find($challenge->user_id);
+    if (! $user || strtolower((string) $user->status) !== 'active') {
+        DB::table('mobile_login_challenges')->where('id', $challenge->id)->delete();
+
+        return response()->json([
+            'message' => 'This account cannot sign in right now.',
+        ], 422);
+    }
+
+    $plainTextToken = Str::random(80);
+    $tokenExpiresAt = now()->addDays(30);
+    $issued = DB::transaction(function () use ($challenge, $challengeHash, $user, $plainTextToken, $tokenExpiresAt): bool {
+        $deleted = DB::table('mobile_login_challenges')
+            ->where('id', $challenge->id)
+            ->where('challenge_hash', $challengeHash)
+            ->where('expires_at', '>', now())
+            ->where('attempts', '<', 5)
+            ->delete();
+
+        if ($deleted !== 1) {
+            return false;
+        }
+
+        DB::table('mobile_access_tokens')->insert([
+            'user_id' => $user->idno,
+            'token_hash' => hash('sha256', $plainTextToken),
+            'expires_at' => $tokenExpiresAt,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return true;
+    });
+
+    if (! $issued) {
+        return response()->json([
+            'message' => 'The verification code is invalid or expired. Please sign in again.',
+        ], 422);
+    }
 
     return response()->json([
         'message' => 'Login successful.',
         'access_token' => $plainTextToken,
         'token_type' => 'Bearer',
-        'expires_at' => $expiresAt->toISOString(),
+        'expires_at' => $tokenExpiresAt->toISOString(),
         'user' => [
             'id' => $user->idno,
             'username' => $user->username,
@@ -241,8 +457,8 @@ Route::post('/api/mobile/login', function (Request $request) {
             'status' => $user->status,
         ],
     ]);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
-    ->middleware('throttle:10,1');
+})->withoutMiddleware(VerifyCsrfToken::class)
+    ->middleware('throttle:6,1');
 
 Route::post('/api/mobile/logout', function (Request $request) {
     DB::table('mobile_access_tokens')
@@ -250,7 +466,7 @@ Route::post('/api/mobile/logout', function (Request $request) {
         ->delete();
 
     return response()->json(['message' => 'Logged out successfully.']);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+})->withoutMiddleware(VerifyCsrfToken::class)
     ->middleware('mobile.auth');
 
 Route::get('/api/mobile/user/profile', function (Request $request) {
@@ -285,7 +501,7 @@ Route::post('/api/mobile/user/profile/update', function (Request $request) {
 
     $sanitizedPhone = preg_replace('/\D+/', '', (string) $validated['phone']);
 
-    if (!preg_match('/^09\d{9}$/', $sanitizedPhone)) {
+    if (! preg_match('/^09\d{9}$/', $sanitizedPhone)) {
         return response()->json([
             'message' => 'Mobile number must be 11 digits and start with 09.',
         ], 422);
@@ -317,7 +533,7 @@ Route::post('/api/mobile/user/profile/update', function (Request $request) {
             'status' => $user->status,
         ],
     ]);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+})->withoutMiddleware(VerifyCsrfToken::class)
     ->middleware('mobile.auth');
 
 Route::post('/api/mobile/user/password/update', function (Request $request) {
@@ -343,7 +559,7 @@ Route::post('/api/mobile/user/password/update', function (Request $request) {
 
     $user = Auth::user();
 
-    if (!Hash::check($validated['current_password'], $user->password)) {
+    if (! Hash::check($validated['current_password'], $user->password)) {
         return response()->json([
             'message' => 'Current password is incorrect.',
         ], 422);
@@ -356,37 +572,35 @@ Route::post('/api/mobile/user/password/update', function (Request $request) {
     return response()->json([
         'message' => 'Password updated successfully.',
     ]);
-})->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class)
+})->withoutMiddleware(VerifyCsrfToken::class)
     ->middleware('mobile.auth');
-
-
 
 Route::middleware(['auth'])->group(function () {
     // PAGASA time endpoint for live clock display
-    Route::get('/api/pagasa-time/current', [App\Http\Controllers\PagasaTimeController::class, 'current'])->name('pagasa-time.current');
+    Route::get('/api/pagasa-time/current', [PagasaTimeController::class, 'current'])->name('pagasa-time.current');
 
     Route::get('/notifications/{id}/read', function ($id) {
-        $notificationQuery = \Illuminate\Support\Facades\DB::table('tbnotifications')->where('id', $id);
-        $authUser = \Illuminate\Support\Facades\Auth::user();
+        $notificationQuery = DB::table('tbnotifications')->where('id', $id);
+        $authUser = Auth::user();
 
-        if ($authUser instanceof \App\Models\User && $authUser->isRegionalUser()) {
-            $notificationQuery->whereIn('user_id', \App\Support\NotificationCenter::regionalPoolUserIds($authUser));
+        if ($authUser instanceof User && $authUser->isRegionalUser()) {
+            $notificationQuery->whereIn('user_id', NotificationCenter::regionalPoolUserIds($authUser));
         } else {
-            $notificationQuery->where('user_id', \Illuminate\Support\Facades\Auth::id());
+            $notificationQuery->where('user_id', Auth::id());
         }
 
         $notification = $notificationQuery->first();
 
-        if (!$notification) {
+        if (! $notification) {
             if (is_string($id) && str_starts_with($id, 'returned-fund-utilization-')) {
-                $workflowId = (int) \Illuminate\Support\Str::after($id, 'returned-fund-utilization-');
-                $workflow = \Illuminate\Support\Facades\DB::table('fund_utilization_approval_workflows')->where('id', $workflowId)->first();
+                $workflowId = (int) Str::after($id, 'returned-fund-utilization-');
+                $workflow = DB::table('fund_utilization_approval_workflows')->where('id', $workflowId)->first();
                 if ($workflow) {
-                    \Illuminate\Support\Facades\DB::table('tbnotifications')
-                        ->where('user_id', \Illuminate\Support\Facades\Auth::id())
+                    DB::table('tbnotifications')
+                        ->where('user_id', Auth::id())
                         ->where(function ($q) use ($workflow) {
-                            $q->where('url', 'like', '%' . $workflow->project_code . '%')
-                              ->orWhere('message', 'like', '%' . $workflow->project_code . '%');
+                            $q->where('url', 'like', '%'.$workflow->project_code.'%')
+                                ->orWhere('message', 'like', '%'.$workflow->project_code.'%');
                         })
                         ->update(['read_at' => now(), 'updated_at' => now()]);
 
@@ -397,16 +611,16 @@ Route::middleware(['auth'])->group(function () {
                     ]);
                 }
             } elseif (is_string($id) && str_starts_with($id, 'returned-')) {
-                $remainder = \Illuminate\Support\Str::after($id, 'returned-');
+                $remainder = Str::after($id, 'returned-');
                 $lastDashPos = strrpos($remainder, '-');
                 if ($lastDashPos !== false) {
                     $table = substr($remainder, 0, $lastDashPos);
                     $recordId = (int) substr($remainder, $lastDashPos + 1);
-                    if (\Illuminate\Support\Facades\Schema::hasTable($table)) {
-                        $record = \Illuminate\Support\Facades\DB::table($table)->where('id', $recordId)->first();
+                    if (Schema::hasTable($table)) {
+                        $record = DB::table($table)->where('id', $recordId)->first();
                         if ($record) {
-                            $poolService = app(\App\Services\RegionalApprovalPoolService::class);
-                            $refClass = new \ReflectionClass($poolService);
+                            $poolService = app(RegionalApprovalPoolService::class);
+                            $refClass = new ReflectionClass($poolService);
                             $docSourcesMethod = $refClass->getMethod('documentSources');
                             $docSourcesMethod->setAccessible(true);
                             $sources = $docSourcesMethod->invoke($poolService);
@@ -422,9 +636,9 @@ Route::middleware(['auth'])->group(function () {
                                     $buildMethod->setAccessible(true);
                                     $targetUrl = $buildMethod->invoke($poolService, $source, $record, $officeOrProject, $year, $period, $label);
 
-                                    \Illuminate\Support\Facades\DB::table('tbnotifications')
-                                        ->where('user_id', \Illuminate\Support\Facades\Auth::id())
-                                        ->where('url', 'like', '%' . $officeOrProject . '%')
+                                    DB::table('tbnotifications')
+                                        ->where('user_id', Auth::id())
+                                        ->where('url', 'like', '%'.$officeOrProject.'%')
                                         ->update(['read_at' => now(), 'updated_at' => now()]);
 
                                     return redirect($targetUrl);
@@ -438,7 +652,7 @@ Route::middleware(['auth'])->group(function () {
             return redirect()->back();
         }
 
-        $sharedReadQuery = \Illuminate\Support\Facades\DB::table('tbnotifications')
+        $sharedReadQuery = DB::table('tbnotifications')
             ->where('url', $notification->url)
             ->where('document_type', $notification->document_type);
 
@@ -448,15 +662,15 @@ Route::middleware(['auth'])->group(function () {
             $sharedReadQuery->where('quarter', $notification->quarter);
         }
 
-        if ($authUser instanceof \App\Models\User && $authUser->isRegionalUser()) {
-            $sharedReadQuery->whereIn('user_id', \App\Support\NotificationCenter::regionalPoolUserIds($authUser));
+        if ($authUser instanceof User && $authUser->isRegionalUser()) {
+            $sharedReadQuery->whereIn('user_id', NotificationCenter::regionalPoolUserIds($authUser));
         } else {
-            $sharedReadQuery->where('user_id', \Illuminate\Support\Facades\Auth::id());
+            $sharedReadQuery->where('user_id', Auth::id());
         }
 
         $sharedReadQuery->update(['read_at' => now(), 'updated_at' => now()]);
 
-        $notificationUrl = \App\Support\NotificationUrl::normalizeForRedirect($notification->url);
+        $notificationUrl = NotificationUrl::normalizeForRedirect($notification->url);
         $documentType = trim((string) ($notification->document_type ?? ''));
         $quarter = trim((string) ($notification->quarter ?? ''));
 
@@ -486,13 +700,13 @@ Route::middleware(['auth'])->group(function () {
             $redirectParameters = ['projectCode' => urldecode((string) $notificationSegments[1])];
             $actionSegment = (string) ($notificationSegments[2] ?? '');
 
-            if (in_array($actionSegment, ['approve', 'save-remarks', 'delete-document'], true) && $documentType === '' && !empty($notificationSegments[3] ?? null)) {
+            if (in_array($actionSegment, ['approve', 'save-remarks', 'delete-document'], true) && $documentType === '' && ! empty($notificationSegments[3] ?? null)) {
                 $documentType = urldecode((string) $notificationSegments[3]);
             }
 
             if ($quarter !== '') {
                 $redirectParameters['quarter'] = $quarter;
-            } elseif (in_array($actionSegment, ['approve', 'save-remarks', 'delete-document'], true) && !empty($notificationSegments[4] ?? null)) {
+            } elseif (in_array($actionSegment, ['approve', 'save-remarks', 'delete-document'], true) && ! empty($notificationSegments[4] ?? null)) {
                 $redirectParameters['quarter'] = urldecode((string) $notificationSegments[4]);
             }
 
@@ -515,9 +729,9 @@ Route::middleware(['auth'])->group(function () {
     })->name('notifications.read');
 
     Route::post('/notifications/reset-counter', function () {
-        $userId = \Illuminate\Support\Facades\Auth::id();
+        $userId = Auth::id();
         if ($userId) {
-            \Illuminate\Support\Facades\Cache::forever('notifications.bell-counter-reset.' . $userId, now()->toIso8601String());
+            Cache::forever('notifications.bell-counter-reset.'.$userId, now()->toIso8601String());
         }
 
         return response()->json([
@@ -525,7 +739,7 @@ Route::middleware(['auth'])->group(function () {
         ]);
     })->name('notifications.reset-counter');
 
-    Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+    Route::get('/home', [HomeController::class, 'index'])->name('home');
 
     // Project Dashboard Module
     require base_path('routes/modules/dashboard.php');
