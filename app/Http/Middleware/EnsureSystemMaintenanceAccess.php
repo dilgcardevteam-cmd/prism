@@ -12,6 +12,9 @@ class EnsureSystemMaintenanceAccess
     private const ALLOWED_ROUTE_NAMES = [
         'landing',
         'login',
+        'login.otp',
+        'login.otp.verify',
+        'login.otp.resend',
         'logout',
         'maintenance.notice',
         'maintenance.superadmin-login',

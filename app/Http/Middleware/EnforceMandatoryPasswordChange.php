@@ -11,12 +11,19 @@ class EnforceMandatoryPasswordChange
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
-        $sessionPasswordVersion = (int) $request->session()->get('auth_password_version', 0);
-        $passwordVersionIsStale = $user
-            && $sessionPasswordVersion < (int) $user->password_security_version;
+        if (! $request->hasSession()) {
+            return $next($request);
+        }
 
-        if (! $user || $user->isSuperAdmin() || (! $user->must_change_password && ! $passwordVersionIsStale)) {
+        $user = $request->user();
+        if (! $user) {
+            return $next($request);
+        }
+
+        $sessionPasswordVersion = (int) $request->session()->get('auth_password_version', 0);
+        $passwordVersionIsStale = $sessionPasswordVersion < (int) $user->password_security_version;
+
+        if ($user->isSuperAdmin() || (! $user->must_change_password && ! $passwordVersionIsStale)) {
             return $next($request);
         }
 

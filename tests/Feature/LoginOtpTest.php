@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\SystemMaintenanceState;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -51,6 +52,36 @@ class LoginOtpTest extends TestCase
             'otp' => $mail->otp,
         ])->assertRedirect('/dashboard')
             ->assertCookie('daily_otp_verified');
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_superadmin_can_complete_otp_login_during_maintenance(): void
+    {
+        $maintenanceState = $this->createMock(SystemMaintenanceState::class);
+        $maintenanceState->method('isEnabled')->willReturn(true);
+        $this->instance(SystemMaintenanceState::class, $maintenanceState);
+
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+        ]);
+
+        $this->get(route('maintenance.superadmin-login'))->assertOk();
+
+        $this->post(route('login'), [
+            'username' => $user->username,
+            'password' => 'password',
+        ])->assertRedirect(route('login.otp'));
+
+        $challenge = session('login_otp_challenge');
+        $this->assertIsArray($challenge);
+        $otp = Crypt::decryptString($challenge['encrypted_otp']);
+
+        $this->get(route('login.otp'))->assertOk();
+
+        $this->post(route('login.otp.verify'), [
+            'otp' => $otp,
+        ])->assertRedirect('/dashboard');
+
         $this->assertAuthenticatedAs($user);
     }
 
