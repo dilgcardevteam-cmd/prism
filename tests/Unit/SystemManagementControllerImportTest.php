@@ -74,4 +74,15 @@ class SystemManagementControllerImportTest extends TestCase
         $this->assertSame('project_title', $result['headerMap'][2] ?? null);
         $this->assertSame('status', $result['headerMap'][3] ?? null);
     }
+
+    public function test_imported_numeric_values_have_thousands_separators_removed_but_text_commas_are_preserved(): void
+    {
+        $controller = new SystemManagementController();
+        $method = (new ReflectionClass($controller))->getMethod('normalizeImportedCell');
+
+        $this->assertSame('7000000.00', $method->invoke($controller, '7,000,000.00'));
+        $this->assertSame('-1234', $method->invoke($controller, '-1,234'));
+        $this->assertSame('ABRA, BANGUED', $method->invoke($controller, 'ABRA, BANGUED'));
+        $this->assertSame('Road, Phase 1', $method->invoke($controller, 'Road, Phase 1'));
+    }
 }

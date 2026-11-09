@@ -994,6 +994,8 @@ class SystemManagementController extends Controller
             $now = now();
             $processed = 0;
             $projectRows = [];
+            $projectCodeRows = [];
+            $missingProjectCodeRows = [];
             $rowDefaults = $uploadPage['rowDefaults'] ?? [];
 
             for ($rowIndex = $dataStartRow; $rowIndex < count($rows); $rowIndex++) {
@@ -1022,7 +1024,12 @@ class SystemManagementController extends Controller
                 $projectCode = $this->normalizeProjectCode($row['project_code'] ?? null);
                 if ($projectCode !== '') {
                     $row['project_code'] = trim((string) $row['project_code']);
+                    if ($dataTable === 'subay_project_profiles') {
+                        $projectCodeRows[$projectCode][] = $rowIndex + 1;
+                    }
                     $projectRows[$projectCode] = $row;
+                } elseif ($dataTable === 'subay_project_profiles') {
+                    $missingProjectCodeRows[] = $rowIndex + 1;
                 } else {
                     $row['created_at'] = $now;
                     $row['updated_at'] = $now;
@@ -1030,6 +1037,33 @@ class SystemManagementController extends Controller
                 }
 
                 $processed++;
+            }
+
+            if ($dataTable === 'subay_project_profiles') {
+                $duplicateProjectCodes = array_filter(
+                    $projectCodeRows,
+                    static fn (array $rowNumbers): bool => count($rowNumbers) > 1
+                );
+
+                if ($missingProjectCodeRows !== [] || $duplicateProjectCodes !== []) {
+                    $issues = [];
+                    if ($missingProjectCodeRows !== []) {
+                        $issues[] = 'Project Code is missing on row(s): ' . implode(', ', $missingProjectCodeRows) . '.';
+                    }
+                    if ($duplicateProjectCodes !== []) {
+                        $duplicates = [];
+                        foreach (array_slice($duplicateProjectCodes, 0, 10, true) as $projectCode => $rowNumbers) {
+                            $duplicates[] = '"' . $projectCode . '" (rows ' . implode(', ', $rowNumbers) . ')';
+                        }
+                        $remainingDuplicates = count($duplicateProjectCodes) - count($duplicates);
+                        $issues[] = 'Duplicate Project Code(s): ' . implode('; ', $duplicates)
+                            . ($remainingDuplicates > 0 ? "; and {$remainingDuplicates} more" : '') . '.';
+                    }
+
+                    throw new \RuntimeException(
+                        implode(' ', $issues) . ' No project data was changed.'
+                    );
+                }
             }
 
             foreach ($projectRows as $projectCode => $row) {
@@ -1341,6 +1375,11 @@ class SystemManagementController extends Controller
                 'project_status' => $sourceRow['status'] ?? 'Ongoing',
                 'updated_at' => $now,
             ];
+            foreach (['allocation', 'contract_amount'] as $amountColumn) {
+                if (isset($payload[$amountColumn])) {
+                    $payload[$amountColumn] = str_replace(',', '', (string) $payload[$amountColumn]);
+                }
+            }
             $payload = array_intersect_key($payload, array_fill_keys($columns, true));
 
             $existingQuery = DB::table('tbfur')
@@ -1671,6 +1710,10 @@ class SystemManagementController extends Controller
         $value = trim((string) $value);
         if ($value === '') {
             return null;
+        }
+
+        if (preg_match('/^[+-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/D', $value) === 1) {
+            $value = str_replace(',', '', $value);
         }
 
         return $this->sanitizeValue($value);

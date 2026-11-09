@@ -16,6 +16,7 @@
     $canAddUpload = Auth::user()->hasCrudPermission($uploadAspect, 'add');
     $canUpdateUpload = Auth::user()->hasCrudPermission($uploadAspect, 'update');
     $canDeleteUpload = Auth::user()->hasCrudPermission($uploadAspect, 'delete');
+    $loadRemovesMissingProjects = ($uploadPage['dataTable'] ?? 'subay_project_profiles') === 'subay_project_profiles';
 @endphp
 
 @extends('layouts.dashboard')
@@ -106,7 +107,7 @@
                                     <td style="padding: 10px; color: #374151; vertical-align: top;">
                                         <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
                                             @if($canUpdateUpload)
-                                                <form method="POST" action="{{ route($uploadPage['routeBase'] . '.load', ['importId' => $historyRow->id]) }}">
+                                                <form method="POST" action="{{ route($uploadPage['routeBase'] . '.load', ['importId' => $historyRow->id]) }}" onsubmit="return confirm(@js($loadRemovesMissingProjects ? 'Load this file? Projects are matched by Project Code, matching records are updated, and projects missing from the file are removed from this dataset.' : 'Load this file? Existing records with matching Project Codes will be updated.'));">
                                                     @csrf
                                                     <button type="submit" style="padding: 6px 10px; background-color: #002C76; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;">
                                                         Load

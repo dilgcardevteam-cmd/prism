@@ -62,6 +62,92 @@ class SystemManagementImportSyncTest extends TestCase
         );
     }
 
+    public function test_snapshot_import_rejects_missing_and_duplicate_project_codes_without_changing_data(): void
+    {
+        $existingId = $this->insertProject('SBDP-KEEP', 'SBDP', null, 'Existing title');
+        $path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'subay-import-' . bin2hex(random_bytes(8)) . '.csv';
+        file_put_contents($path, implode("\n", [
+            'project_code,project_title,funding_year',
+            'SBDP-NEW,First title,2020',
+            'sbdp-new,Second title,2020',
+            ',Missing code,2020',
+        ]));
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Project Code is missing on row(s): 4. Duplicate Project Code(s): "sbdp-new" (rows 2, 3)');
+
+            $this->invokeControllerMethod('importSnapshot', [
+                $path,
+                ['snapshotScope' => 'subaybayan', 'yearRange' => ['max' => 2024]],
+            ]);
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+
+            $this->assertSame(
+                ['SBDP-KEEP'],
+                DB::table('subay_project_profiles')->pluck('project_code')->all()
+            );
+            $this->assertSame(
+                'Existing title',
+                DB::table('subay_project_profiles')->where('id', $existingId)->value('project_title')
+            );
+        }
+    }
+
+    public function test_fund_utilization_sync_removes_thousand_separators_from_amounts(): void
+    {
+        $this->invokeControllerMethod('synchronizeFundUtilizationProjects', [
+            [
+                'cbd-21-14-01-01-000-1' => [
+                    'project_code' => 'CBD-21-14-01-01-000-1',
+                    'program' => 'DILG-BLDGS',
+                    'province' => 'ABRA',
+                    'implementing_unit' => 'DILG RO',
+                    'funding_year' => '2021',
+                    'project_title' => 'DILG TWO STOREY PROVINCIAL BUILDING',
+                    'national_subsidy_original_allocation' => '7,000,000.00',
+                    'contract_price' => '6,500,000.00',
+                    'status' => 'CANCELLED',
+                ],
+            ],
+        ]);
+
+        $project = DB::table('tbfur')
+            ->where('project_code', 'cbd-21-14-01-01-000-1')
+            ->first();
+
+        $this->assertNotNull($project);
+        $this->assertSame(7000000.0, (float) $project->allocation);
+        $this->assertSame(6500000.0, (float) $project->contract_amount);
+    }
+
+    public function test_fund_utilization_project_code_can_be_inserted_without_other_fields(): void
+    {
+        DB::table('tbfur')->insert([
+            'project_code' => 'PROJECT-CODE-ONLY',
+        ]);
+
+        $project = DB::table('tbfur')
+            ->where('project_code', 'PROJECT-CODE-ONLY')
+            ->first();
+
+        $this->assertNotNull($project);
+        $this->assertNull($project->province);
+        $this->assertNull($project->implementing_unit);
+        $this->assertNull($project->fund_source);
+        $this->assertNull($project->funding_year);
+        $this->assertNull($project->project_title);
+        $this->assertNull($project->allocation);
+        $this->assertNull($project->contract_amount);
+        $this->assertNull($project->project_status);
+        $this->assertNull($project->barangay);
+        $this->assertNull($project->created_at);
+        $this->assertNull($project->updated_at);
+    }
+
     private function insertProject(
         string $projectCode,
         string $program = 'SBDP',
