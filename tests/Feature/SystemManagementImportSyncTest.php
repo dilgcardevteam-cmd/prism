@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\SystemManagementController;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class SystemManagementImportSyncTest extends TestCase
@@ -146,6 +147,24 @@ class SystemManagementImportSyncTest extends TestCase
         $this->assertNull($project->barangay);
         $this->assertNull($project->created_at);
         $this->assertNull($project->updated_at);
+    }
+
+    public function test_project_barangay_columns_use_long_text_for_both_project_datasets(): void
+    {
+        $longTextType = DB::connection()->getDriverName() === 'sqlite' ? 'text' : 'longText';
+
+        $this->assertSame(
+            $longTextType,
+            Schema::getColumnType('locally_funded_projects', 'barangay')
+        );
+        $this->assertSame(
+            $longTextType,
+            Schema::getColumnType('tbfur', 'barangay')
+        );
+        $this->assertSame(
+            'text',
+            Schema::getColumnType('subay_project_profiles', 'barangay')
+        );
     }
 
     private function insertProject(
