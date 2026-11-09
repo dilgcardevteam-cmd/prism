@@ -656,6 +656,13 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
                 ->withErrors(['report_file' => 'No uploaded ' . $this->reportShortName() . ' report was found for the selected submission period.']);
         }
 
+        $isSuperAdmin = $user->isSuperAdmin();
+        $canDeleteReturned = (string) $upload->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED
+            && $user->hasCrudPermission($this->permissionAspect(), 'add')
+            && $user->canSubmitForLgu($project->province, $project->city_municipality)
+            && app(\App\Services\LguReportorialWorkflowService::class)->canUserResubmit($user, $upload)['allowed'];
+        abort_unless($isSuperAdmin || $canDeleteReturned, 403, 'Only the originating submitter can delete a returned report.');
+
         if (in_array((string) $upload->status, ['pending_ro', 'approved'], true)) {
             return redirect()
                 ->route($this->showRouteName(), [

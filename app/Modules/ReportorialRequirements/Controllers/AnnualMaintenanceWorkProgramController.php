@@ -23,7 +23,6 @@ class AnnualMaintenanceWorkProgramController extends Controller
         $this->middleware('crud_permission:annual_maintenance_work_program,view')->only(['index', 'edit', 'viewDocument']);
         $this->middleware('crud_permission:annual_maintenance_work_program,add')->only(['upload']);
         $this->middleware('crud_permission:annual_maintenance_work_program,update')->only(['approveDocument']);
-        $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
     private function reportConfig(): array
@@ -38,6 +37,7 @@ class AnnualMaintenanceWorkProgramController extends Controller
             'uploadRoute' => 'reports.annual.amwp.upload',
             'documentRoute' => 'reports.annual.amwp.document',
             'deleteRoute' => 'reports.annual.amwp.delete-document',
+            'uploadPermissionAspect' => 'annual_maintenance_work_program',
             'approveRoute' => 'reports.annual.amwp.approve',
             'documentTitleShort' => 'Annual Maintenance Work Program (AMWP)',
             'uploadSectionTitle' => 'Annual Maintenance Work Program (AMWP) Upload',
@@ -427,10 +427,22 @@ class AnnualMaintenanceWorkProgramController extends Controller
     public function deleteDocument($id, $docId)
     {
         $officeName = (string) $id;
+        $province = $this->findProvinceByOffice($officeName);
+        abort_if(!$province, 404);
+
         $document = AnnualMaintenanceWorkProgramDocument::query()
             ->where('office', $officeName)
             ->where('id', $docId)
             ->firstOrFail();
+        $user = auth()->user();
+        $isSuperAdmin = $user && $user->isSuperAdmin();
+        $canDeleteReturned = $user
+            && $document->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED
+            && $user->hasCrudPermission('annual_maintenance_work_program', 'add')
+            && $user->canSubmitForLgu($province, $officeName)
+            && app(\App\Services\LguReportorialWorkflowService::class)->canUserResubmit($user, $document)['allowed'];
+
+        abort_unless($isSuperAdmin || $canDeleteReturned, 403, 'Only the originating submitter can delete a returned report.');
         abort_if($document->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO, 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
 
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {

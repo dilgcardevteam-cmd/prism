@@ -238,7 +238,7 @@
                                                 {{ $submissionTimeliness['label'] }}
                                             </span>
                                         @endif
-                                        @if (Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro')
+                                        @if ((Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro') || ($isReturned && $canResubmitDoc && $canUploadForLgu && Auth::user()->hasCrudPermission('swa_annex_f_monthly_reports', 'add')))
                                             <form method="POST" action="{{ route('reports.monthly.swa-annex-f.delete-document', ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                                 @csrf
                                                 @method('DELETE')
@@ -506,5 +506,3 @@
         </style>
     </div>
 @endsection
-
-

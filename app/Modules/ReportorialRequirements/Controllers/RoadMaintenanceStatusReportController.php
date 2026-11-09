@@ -27,7 +27,7 @@ class RoadMaintenanceStatusReportController extends Controller
         $this->middleware('crud_permission:road_maintenance_status_reports,view')->only(['index', 'show', 'edit', 'viewDocument', 'export']);
         $this->middleware('crud_permission:road_maintenance_status_reports,add')->only(['create', 'store', 'upload']);
         $this->middleware('crud_permission:road_maintenance_status_reports,update')->only(['update', 'approveDocument']);
-        $this->middleware('crud_permission:road_maintenance_status_reports,delete')->only(['destroy', 'deleteDocument']);
+        $this->middleware('crud_permission:road_maintenance_status_reports,delete')->only(['destroy']);
     }
 
     private function legacyOffices(): array
@@ -1065,24 +1065,26 @@ class RoadMaintenanceStatusReportController extends Controller
     public function deleteDocument($id, $docId)
     {
         $officeName = (string) $id;
-        $province = $this->findProvinceByOffice($officeName) ?? 'Unknown';
+        $province = $this->findProvinceByOffice($officeName);
+        abort_if(!$province, 404);
         $user = auth()->user();
         abort_unless($user && ($user->isSuperAdmin() || $user->canAccessLguScope($province, $officeName)), 403);
 
         $document = RoadMaintenanceStatusDocument::query()
             ->where('id', $docId)
             ->where('office', $officeName)
-            ->first();
+            ->firstOrFail();
 
-        if (!$document) {
-            $document = RoadMaintenanceStatusDocument::query()
-                ->where('id', $docId)
-                ->firstOrFail();
-        abort_if($document->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO, 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
-        }
+        $isSuperAdmin = $user->isSuperAdmin();
+        $hasDeletePermission = $user->hasCrudPermission('road_maintenance_status_reports', 'delete');
+        $canDeleteReturned = $document->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED
+            && $user->hasCrudPermission('road_maintenance_status_reports', 'add')
+            && $user->canSubmitForLgu($province, $officeName)
+            && app(\App\Services\LguReportorialWorkflowService::class)->canUserResubmit($user, $document)['allowed'];
+        abort_unless($isSuperAdmin || $hasDeletePermission || $canDeleteReturned, 403, 'Only the originating submitter can delete a returned report.');
 
         $isApproved = !empty($document->approved_at_dilg_ro) || strtolower((string) $document->status) === 'approved';
-        if ($isApproved && !$user->isSuperAdmin()) {
+        if ($isApproved && !$isSuperAdmin) {
             abort(403, 'Approved documents can only be deleted by a SuperAdmin.');
         }
 

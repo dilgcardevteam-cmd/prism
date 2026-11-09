@@ -26,7 +26,6 @@ class PdNoPbbmMonthlyReportController extends Controller
         $this->middleware('crud_permission:pd_no_pbbm_monthly_reports,view')->only(['index', 'edit', 'viewDocument']);
         $this->middleware('crud_permission:pd_no_pbbm_monthly_reports,add')->only(['upload']);
         $this->middleware('crud_permission:pd_no_pbbm_monthly_reports,update')->only(['approveDocument']);
-        $this->middleware('superadmin')->only(['deleteDocument']);
     }
 
     private function getOffices(): array
@@ -750,10 +749,22 @@ class PdNoPbbmMonthlyReportController extends Controller
     public function deleteDocument($office, $docId)
     {
         $officeName = (string) $office;
+        $province = $this->findProvinceByOffice($officeName);
+        abort_if(!$province, 404);
+
         $document = PdNoPbbmMonthlyDocument::query()
             ->where('office', $officeName)
             ->where('id', $docId)
             ->firstOrFail();
+        $user = auth()->user();
+        $isSuperAdmin = $user && $user->isSuperAdmin();
+        $canDeleteReturned = $user
+            && $document->status === \App\Services\LguReportorialWorkflowService::STATUS_RETURNED
+            && $user->hasCrudPermission('pd_no_pbbm_monthly_reports', 'add')
+            && $user->canSubmitForLgu($province, $officeName)
+            && app(\App\Services\LguReportorialWorkflowService::class)->canUserResubmit($user, $document)['allowed'];
+
+        abort_unless($isSuperAdmin || $canDeleteReturned, 403, 'Only the originating submitter can delete a returned report.');
         abort_if($document->status === \App\Services\LguReportorialWorkflowService::STATUS_PENDING_RO, 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
 
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {

@@ -24,7 +24,6 @@ class QuarterlyDilgMc201830Controller extends Controller
         $this->middleware('crud_permission:quarterly_dilg_mc_2018_30,view')->only(['index', 'show', 'viewDocument']);
         $this->middleware('crud_permission:quarterly_dilg_mc_2018_30,add')->only(['edit', 'saveEncoding', 'exportEncoding', 'upload']);
         $this->middleware('crud_permission:quarterly_dilg_mc_2018_30,update')->only(['approveDocument']);
-        $this->middleware('crud_permission:quarterly_dilg_mc_2018_30,delete')->only(['deleteDocument']);
     }
 
     public function index(Request $request)
@@ -554,6 +553,19 @@ class QuarterlyDilgMc201830Controller extends Controller
             ->where('office', $office)
             ->where('id', $docId)
             ->firstOrFail();
+        $user = auth()->user();
+        $canDeleteAsReviewer = $user
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_30', 'delete')
+            && $user->isDilgUser();
+        $province = $this->findProvinceByOffice($office);
+        $canDeleteReturned = $user
+            && $document->status === 'returned'
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_30', 'add')
+            && !$user->isRegionalOfficeAssignment()
+            && $province
+            && $user->canSubmitForLgu($province, $office)
+            && app(\App\Services\LguReportorialWorkflowService::class)->canUserResubmit($user, $document)['allowed'];
+        abort_unless($canDeleteAsReviewer || $canDeleteReturned, 403, 'Only the originating submitter can delete a returned document.');
 
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
             Storage::disk('public')->delete($document->file_path);
@@ -692,12 +704,19 @@ class QuarterlyDilgMc201830Controller extends Controller
         $canDelete = (bool) ($user
             && $user->hasCrudPermission('quarterly_dilg_mc_2018_30', 'delete')
             && $user->isDilgUser());
+        $province = $this->findProvinceByOffice($office);
+        $canDeleteReturned = (bool) ($user
+            && $user->hasCrudPermission('quarterly_dilg_mc_2018_30', 'add')
+            && !$user->isRegionalOfficeAssignment()
+            && $province
+            && $user->canSubmitForLgu($province, $office));
         $canValidate = (bool) ($user
             && $user->hasCrudPermission('quarterly_dilg_mc_2018_30', 'update')
             && $user->isDilgUser());
 
         return view('reports.quarterly.dilg-mc-2018-30.show', compact(
             'canDelete',
+            'canDeleteReturned',
             'canUpload',
             'canValidate',
             'documentsByQuarter',

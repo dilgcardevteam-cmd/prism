@@ -205,6 +205,12 @@
                                                     ($isProvincialDilgUser && in_array($status, ['pending', 'returned'], true))
                                                     || ($isRegionalOfficeUser && $status === 'pending_ro')
                                                 );
+                                                $canDeleteThisDocument = ($canDelete && $status !== 'pending_ro')
+                                                    || (($canDeleteReturned ?? false)
+                                                        && $isLguUser
+                                                        && $status === 'returned'
+                                                        && auth()->user()->hasCrudPermission('quarterly_dilg_mc_2018_19', 'add')
+                                                        && app(\App\Services\LguReportorialWorkflowService::class)->canUserResubmit(auth()->user(), $document)['allowed']);
                                             @endphp
                                             <tr style="border-bottom:1px solid #eef2f7;vertical-align:top;">
                                                 <td style="padding:10px 8px;text-align:center;">
@@ -276,7 +282,7 @@
                                                                 <span>View</span>
                                                             </a>
 
-                                                            @if ($canDelete && $document->status !== 'pending_ro')
+                                                            @if ($canDeleteThisDocument)
                                                                 <form method="POST"
                                                                     action="{{ route('reports.quarterly.dilg-mc-2018-19.delete-document', ['office' => $office, 'docId' => $document->id, 'year' => $reportingYear]) }}"
                                                                     onsubmit="return confirm('Delete this uploaded document for {{ $quarterLabel }}?');"

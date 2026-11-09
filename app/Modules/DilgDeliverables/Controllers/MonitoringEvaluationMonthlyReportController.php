@@ -38,9 +38,6 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             'requestDeletion', 'requestDeletionLfp', 'requestDeletionRlipLime',
             'decideDeletion', 'decideDeletionLfp', 'decideDeletionRlipLime'
         ]);
-        $this->middleware('superadmin')->only([
-            'deleteDocument', 'deleteDocumentLfp', 'deleteDocumentRlipLime'
-        ]);
     }
 
     private function getOffices(): array
@@ -781,10 +778,25 @@ class MonitoringEvaluationMonthlyReportController extends Controller
     public function deleteDocument($office, $docId)
     {
         $officeName = (string) $office;
+        $province = $this->findProvinceByOffice($officeName);
+        abort_if(!$province, 404);
+        abort_unless($this->canAccessOffice($officeName, $province), 403);
+
         $document = MonitoringEvaluationMonthlyDocument::query()
             ->where('office', $officeName)
             ->where('id', $docId)
             ->firstOrFail();
+        $user = auth()->user();
+        $isSuperAdmin = $user && $user->isSuperAdmin();
+        $userId = $user ? (string) ($user->idno ?? $user->getKey()) : '';
+        $canDeleteReturned = $user
+            && $user->canAccessDilgDeliverables()
+            && $user->hasCrudPermission('dilg_deliverables_monitoring_evaluation', 'add')
+            && $document->status === 'returned'
+            && $userId !== ''
+            && $userId === (string) $document->uploaded_by;
+
+        abort_unless($isSuperAdmin || $canDeleteReturned, 403, 'Only the originating submitter can delete a returned document.');
         abort_if($document->status === 'pending_ro', 403, 'Pending Regional Office validation reports must be replaced through the upload form.');
 
         if ($document->file_path && Storage::disk('public')->exists($document->file_path)) {
@@ -1017,9 +1029,15 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             abort(403);
         }
 
-        $isUploader = (string) $user->idno === (string) $document->uploaded_by || $user->isSuperAdmin();
-        if (!$isUploader) {
-            abort(403, 'Only the uploader can request deletion.');
+        $province = $this->findProvinceByOffice($officeName);
+        abort_if(!$province, 404);
+        abort_unless($this->canAccessOffice($officeName, $province), 403);
+
+        $isUploader = (string) ($user->idno ?? $user->getKey()) === (string) $document->uploaded_by;
+        $canRequestAsProvincial = $user->isProvincialDilgAssignment()
+            && $user->canAccessLguScope($province, $officeName);
+        if (!$isUploader && !$user->isSuperAdmin() && !$canRequestAsProvincial) {
+            abort(403, 'Only the uploader or an authorized provincial user can request deletion.');
         }
 
         if ($document->status !== 'approved') {

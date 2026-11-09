@@ -136,6 +136,8 @@
                     $isApprovedRo = $doc && $doc->status === 'approved';
                     $isPendingRo = $doc && $doc->status === 'pending_ro';
                     $isPendingDeletion = $doc && $doc->status === 'pending_deletion';
+                    $canRequestDeletionAsProvincial = Auth::user()->isProvincialDilgAssignment()
+                        && Auth::user()->canAccessLguScope($province, $officeName);
                     $requestedMonth = strtoupper(trim((string) request()->query('month', '')));
                     $isExpandedByDefault = $requestedMonth !== ''
                         ? $requestedMonth === $monthCode
@@ -333,7 +335,7 @@
                                             <i class="fas fa-history"></i> History
                                         </button>
 
-                                        @if (Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro')
+                                        @if ((Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro') || ($doc->status === 'returned' && Auth::user()->hasCrudPermission('dilg_deliverables_monitoring_evaluation', 'add') && (string) (Auth::user()->idno ?? Auth::id()) === (string) $doc->uploaded_by))
                                             <form method="POST" action="{{ route($deleteRoute, ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Are you sure you want to delete this document?');" style="display: inline-block;">
                                                 @csrf
                                                 @method('DELETE')
@@ -346,7 +348,7 @@
                                             </form>
                                         @endif
 
-                                        @if ($doc->status === 'approved' && ((string) Auth::id() === (string) $doc->uploaded_by || Auth::user()->isSuperAdmin()))
+                                        @if ($doc->status === 'approved' && ((string) (Auth::user()->idno ?? Auth::id()) === (string) $doc->uploaded_by || Auth::user()->isSuperAdmin() || $canRequestDeletionAsProvincial))
                                             <button
                                                 type="button"
                                                 onclick="openMonitoringEvaluationDeletionRequestModal({{ $doc->id }})"

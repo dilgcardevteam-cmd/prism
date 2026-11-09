@@ -149,7 +149,12 @@
                 || $isReturned
                 || ($isPendingRo && empty($upload->regional_replacement_used_at))
             );
-            $canDelete = Auth::user()->isSuperAdmin() && $hasUpload;
+            $canDeleteReturned = $hasUpload
+                && $isReturned
+                && $canUploadForLgu
+                && Auth::user()->hasCrudPermission($formMeta['permission_aspect'], 'add')
+                && $workflowService->canUserResubmit(Auth::user(), $upload)['allowed'];
+            $canDelete = ($hasUpload && Auth::user()->isSuperAdmin()) || $canDeleteReturned;
             $canUserValidateCheck = ($hasUpload && $upload)
                 ? $workflowService->canUserValidate(Auth::user(), $upload, $project->city_municipality, $project->province)
                 : ['allowed' => false];

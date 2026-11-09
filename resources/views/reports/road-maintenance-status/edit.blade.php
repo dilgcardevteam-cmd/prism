@@ -320,6 +320,7 @@
                                 $canDeleteDoc = $hasFile && $doc && (
                                     Auth::user()->isSuperAdmin()
                                     || (!$isApprovedDoc && $doc->status !== 'pending_ro' && Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'delete') && Auth::user()->canAccessLguScope($province, $officeName))
+                                    || ($isReturned && $canResubmitDoc && $canUploadForLgu && Auth::user()->hasCrudPermission('road_maintenance_status_reports', 'add'))
                                 );
                             @endphp
                             @if ($doc && $doc->file_path)

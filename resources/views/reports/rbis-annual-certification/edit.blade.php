@@ -9,6 +9,7 @@
         'uploadRoute' => 'rbis-annual-certification.upload',
         'documentRoute' => 'rbis-annual-certification.document',
         'deleteRoute' => 'rbis-annual-certification.delete-document',
+        'uploadPermissionAspect' => 'rbis_annual_certification',
         'approveRoute' => 'rbis-annual-certification.approve',
         'documentTitleShort' => 'RBIS Annual Certification',
         'uploadSectionTitle' => 'RBIS Annual Certification Upload',
@@ -366,7 +367,7 @@
                                             {{ $submissionTimeliness['label'] }}
                                         </span>
                                     @endif
-                                    @if (Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro')
+                                    @if ((Auth::user()->isSuperAdmin() && $doc->status !== 'pending_ro') || ($isReturned && $canResubmitDoc && $canUploadForLgu && Auth::user()->hasCrudPermission($reportConfig['uploadPermissionAspect'], 'add')))
                                         <form method="POST" action="{{ route($reportConfig['deleteRoute'], ['office' => $officeName, 'docId' => $doc->id]) }}" onsubmit="return confirm('Delete this uploaded document? This action cannot be undone.');" style="display: inline;">
                                             @csrf
                                         @method('DELETE')
