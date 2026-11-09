@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ActivityLog;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -107,6 +108,34 @@ class ActivityLogModuleTest extends TestCase
         ]);
     }
 
+    public function test_activity_log_rows_show_the_users_full_name_and_profile_location(): void
+    {
+        $user = User::factory()->create([
+            'fname' => 'Maria',
+            'lname' => 'Santos',
+            'agency' => 'Municipal Government',
+            'office' => 'Office of the Mayor',
+            'province' => 'Abra',
+            'region' => 'CAR',
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+
+        ActivityLog::query()->create([
+            'user_id' => $user->idno,
+            'username' => $user->username,
+            'action' => ActivityLog::ACTION_LOGIN,
+            'description' => 'User signed in.',
+            'created_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('utilities.activity-logs.index'));
+
+        $response->assertOk()
+            ->assertSee('Maria Santos')
+            ->assertSee('Office of the Mayor, Municipal Government, Abra, CAR');
+    }
+
     public function test_export_route_streams_csv_and_records_export_event(): void
     {
         $user = User::factory()->create([
@@ -181,6 +210,40 @@ class ActivityLogModuleTest extends TestCase
             ->assertSee('Included on the end date.')
             ->assertDontSee('Before selected dates.')
             ->assertDontSee('After selected dates.');
+    }
+
+    public function test_activity_logs_page_shows_current_and_total_pages(): void
+    {
+        $user = User::factory()->create([
+            'role' => User::ROLE_SUPERADMIN,
+            'status' => 'active',
+        ]);
+
+        foreach (range(1, 11) as $index) {
+            ActivityLog::query()->create([
+                'username' => 'user-' . $index,
+                'action' => ActivityLog::ACTION_LOGIN,
+                'description' => 'Activity ' . $index,
+                'created_at' => now()->subMinutes($index),
+            ]);
+        }
+
+        $activityLogSelects = [];
+        DB::listen(static function ($query) use (&$activityLogSelects): void {
+            $sql = strtolower(ltrim($query->sql));
+            if (str_starts_with($sql, 'select') && preg_match('/\bfrom\s+[`"]?activity_logs\b/', $sql)) {
+                $activityLogSelects[] = $sql;
+            }
+        });
+
+        $response = $this->actingAs($user)->get(route('utilities.activity-logs.index'));
+
+        $response->assertOk()
+            ->assertSee('10 entries on this page')
+            ->assertSee('Page 1 of 2')
+            ->assertSee('Next');
+        $this->assertCount(3, $activityLogSelects);
+        $this->assertStringContainsString('count(', $activityLogSelects[0]);
     }
 
     public function test_filter_index_migration_adds_indexed_user_keys_and_log_timestamp(): void
