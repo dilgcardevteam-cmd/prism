@@ -269,416 +269,6 @@
                 font-size: 24px;
             }
         }
-
-        .activity-logs-shell {
-            gap: 18px;
-            max-width: 1800px;
-            margin: 0 auto;
-            color: #172b4d;
-        }
-
-        .activity-logs-card {
-            overflow: hidden;
-            border-color: #dce5f1;
-            border-radius: 18px;
-            box-shadow: 0 14px 40px rgba(15, 41, 77, 0.08);
-        }
-
-        .activity-logs-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 24px;
-            padding: 28px 30px 22px;
-        }
-
-        .activity-logs-heading {
-            min-width: 0;
-        }
-
-        .activity-logs-eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            margin-bottom: 10px;
-            color: #4771a7;
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 0.13em;
-            text-transform: uppercase;
-        }
-
-        .activity-logs-eyebrow i {
-            color: #1d4ed8;
-        }
-
-        .activity-logs-header h1 {
-            color: #102b57;
-            font-size: clamp(24px, 2vw, 32px);
-            letter-spacing: -0.035em;
-            line-height: 1.15;
-        }
-
-        .activity-logs-header p {
-            max-width: 780px;
-            margin-top: 9px;
-            color: #64748b;
-            font-size: 13px;
-            line-height: 1.65;
-        }
-
-        .activity-logs-filter-form {
-            grid-template-columns: repeat(12, minmax(0, 1fr));
-            gap: 14px 12px;
-            padding: 22px 30px 24px;
-            border-top: 1px solid #edf2f8;
-            background: #fbfcfe;
-        }
-
-        .activity-logs-field {
-            grid-column: span 2;
-            gap: 7px;
-            min-width: 0;
-        }
-
-        .activity-logs-field label {
-            color: #5b6d84;
-            font-size: 10px;
-            letter-spacing: 0.09em;
-        }
-
-        .activity-logs-field input,
-        .activity-logs-field select {
-            height: 42px;
-            border-color: #d5dfeb;
-            border-radius: 9px;
-            padding: 0 12px;
-            outline: none;
-            font-family: inherit;
-            font-size: 12px;
-            transition: border-color 150ms ease, box-shadow 150ms ease;
-        }
-
-        .activity-logs-field input::placeholder {
-            color: #9aa8bb;
-        }
-
-        .activity-logs-field input:focus,
-        .activity-logs-field select:focus {
-            border-color: #4b79c7;
-            box-shadow: 0 0 0 3px rgba(59, 111, 190, 0.12);
-        }
-
-        .activity-logs-actions {
-            grid-column: 1 / -1;
-            justify-content: flex-end;
-            gap: 9px;
-        }
-
-        .activity-logs-btn {
-            min-width: 112px;
-            min-height: 40px;
-            border-radius: 9px;
-            padding: 9px 14px;
-            font-family: inherit;
-            font-size: 12px;
-            transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
-        }
-
-        .activity-logs-btn:hover {
-            transform: translateY(-1px);
-        }
-
-        .activity-logs-btn--primary {
-            background: #103f88;
-            box-shadow: 0 4px 10px rgba(16, 63, 136, 0.16);
-        }
-
-        .activity-logs-btn--primary:hover {
-            background: #0b3474;
-            box-shadow: 0 6px 14px rgba(16, 63, 136, 0.22);
-        }
-
-        .activity-logs-btn--secondary {
-            border-color: #d5dfeb;
-            color: #40536b;
-        }
-
-        .activity-logs-btn--secondary:hover {
-            border-color: #a9bad0;
-            background: #f7f9fc;
-        }
-
-        .activity-logs-header > .activity-logs-btn {
-            flex-shrink: 0;
-            margin-top: 14px;
-        }
-
-        .activity-logs-meta {
-            min-height: 54px;
-            padding: 12px 30px;
-            border-top: 1px solid #e8eef5;
-            border-bottom: 1px solid #e8eef5;
-            background: #f5f8fc;
-            color: #50627a;
-            font-size: 12px;
-        }
-
-        .activity-logs-meta > div:first-child {
-            display: inline-flex;
-            align-items: center;
-            gap: 9px;
-            color: #334a66;
-            font-weight: 700;
-        }
-
-        .activity-logs-meta > div:first-child i {
-            color: #5279ad;
-        }
-
-        .activity-logs-meta > div:last-child {
-            color: #718198;
-        }
-
-        .activity-logs-table-wrap {
-            overflow: auto;
-            scrollbar-color: #b7c5d8 #f1f5f9;
-            scrollbar-width: thin;
-        }
-
-        .activity-logs-table {
-            min-width: 1180px;
-            table-layout: fixed;
-        }
-
-        .activity-logs-table th:nth-child(1) { width: 12%; }
-        .activity-logs-table th:nth-child(2) { width: 16%; }
-        .activity-logs-table th:nth-child(3) { width: 16%; }
-        .activity-logs-table th:nth-child(4) { width: 9%; }
-        .activity-logs-table th:nth-child(5) { width: 27%; }
-        .activity-logs-table th:nth-child(6) { width: 9%; }
-        .activity-logs-table th:nth-child(7) { width: 11%; }
-
-        .activity-logs-table thead th {
-            position: sticky;
-            top: 0;
-            z-index: 1;
-            padding: 13px 16px;
-            border-bottom-color: #e2e9f2;
-            background: #f8fafc;
-            color: #65768d;
-            font-size: 10px;
-            letter-spacing: 0.1em;
-        }
-
-        .activity-logs-table tbody td {
-            padding: 15px 16px;
-            border-bottom-color: #edf1f6;
-            color: #40516a;
-            font-size: 12px;
-            line-height: 1.55;
-            vertical-align: middle;
-            overflow-wrap: break-word;
-            word-break: normal;
-        }
-
-        .activity-logs-table tbody tr {
-            transition: background-color 140ms ease;
-        }
-
-        .activity-logs-table tbody tr:nth-child(even) {
-            background: #fbfcfe;
-        }
-
-        .activity-logs-table tbody tr:hover {
-            background: #f7faff;
-        }
-
-        .activity-logs-table tbody tr.activity-logs-row--critical,
-        .activity-logs-table tbody tr.activity-logs-row--critical:hover {
-            background: #fff7f6;
-        }
-
-        .activity-logs-table tbody tr.activity-logs-row--warning,
-        .activity-logs-table tbody tr.activity-logs-row--warning:hover {
-            background: #fffbf2;
-        }
-
-        .activity-logs-title {
-            color: #1b2f4d;
-            font-size: 12px;
-            font-weight: 700;
-            line-height: 1.5;
-        }
-
-        .activity-logs-subtle {
-            margin-top: 3px;
-            color: #8290a4;
-            font-size: 10px;
-            line-height: 1.5;
-        }
-
-        .activity-logs-user-link {
-            color: #2459a6;
-            font-size: 12px;
-            font-weight: 700;
-        }
-
-        .activity-logs-user-link:hover {
-            color: #123b7d;
-            text-decoration: underline;
-        }
-
-        .activity-logs-badge {
-            padding: 5px 9px;
-            font-size: 9px;
-            letter-spacing: 0.07em;
-        }
-
-        .activity-logs-badge--neutral {
-            background: #e8f0fd;
-            color: #2459a6;
-        }
-
-        .activity-logs-table tbody td:first-child,
-        .activity-logs-table tbody td:nth-child(6) {
-            white-space: nowrap;
-        }
-
-        .activity-logs-table tbody td:nth-child(6) .activity-logs-title {
-            color: #334e70;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: 11px;
-        }
-
-        .activity-logs-page-indicator {
-            display: inline-flex;
-            align-items: center;
-            min-height: 36px;
-            padding: 0 12px;
-            border: 1px solid #e1e8f1;
-            border-radius: 8px;
-            background: #f7f9fc;
-            color: #536780;
-            font-size: 11px;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .activity-logs-pagination {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            padding: 16px 30px 20px;
-            background: #fff;
-        }
-
-        .activity-logs-pagination nav {
-            gap: 7px;
-        }
-
-        .activity-logs-pagination a,
-        .activity-logs-pagination span {
-            min-width: 38px;
-            height: 36px;
-            border-color: #dbe3ed;
-            border-radius: 8px;
-            color: #40536b;
-            font-size: 11px;
-        }
-
-        .activity-logs-pagination a:hover {
-            border-color: #9fb3d0;
-            background: #f6f9fd;
-        }
-
-        .activity-logs-empty {
-            padding: 64px 24px;
-            background: #fff;
-        }
-
-        .activity-logs-empty h3 {
-            color: #263d5b;
-        }
-
-        .activity-logs-empty p {
-            margin: 0;
-            color: #7a8aa0;
-            font-size: 13px;
-        }
-
-        @media (max-width: 1100px) {
-            .activity-logs-field {
-                grid-column: span 4;
-            }
-        }
-
-        @media (max-width: 700px) {
-            .activity-logs-header {
-                align-items: flex-start;
-                flex-direction: column;
-                gap: 14px;
-                padding: 24px 20px 20px;
-            }
-
-            .activity-logs-header > .activity-logs-btn {
-                margin-top: 0;
-            }
-
-            .activity-logs-filter-form {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 13px 10px;
-                padding: 18px 20px 20px;
-            }
-
-            .activity-logs-field {
-                grid-column: span 1;
-            }
-
-            .activity-logs-actions {
-                justify-content: stretch;
-            }
-
-            .activity-logs-actions .activity-logs-btn {
-                flex: 1 1 0;
-                min-width: 0;
-                padding-right: 9px;
-                padding-left: 9px;
-            }
-
-            .activity-logs-meta {
-                align-items: flex-start;
-                flex-direction: column;
-                padding: 13px 20px;
-            }
-
-            .activity-logs-pagination {
-                justify-content: center;
-                padding: 16px 20px 20px;
-            }
-        }
-
-        @media (max-width: 420px) {
-            .activity-logs-field {
-                grid-column: 1 / -1;
-            }
-
-            .activity-logs-actions {
-                flex-wrap: wrap;
-            }
-
-            .activity-logs-actions .activity-logs-btn {
-                flex-basis: calc(50% - 5px);
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .activity-logs-btn,
-            .activity-logs-table tbody tr {
-                transition: none;
-            }
-        }
     </style>
 
     <div class="activity-logs-shell">
@@ -706,19 +296,12 @@
 
         <section class="activity-logs-card">
             <div class="activity-logs-header">
-                <div class="activity-logs-heading">
-                    <div class="activity-logs-eyebrow"><i class="fas fa-shield-halved"></i> Security &amp; compliance</div>
-                    <h1>Activity Logs</h1>
-                    <p>
-                        Review authentication, user, and system events in one place. Sensitive values are masked before log entries are stored.
-                    </p>
-                </div>
-                @if ($tableReady)
-                    <a href="{{ route('utilities.activity-logs.export', $filters) }}" class="activity-logs-btn activity-logs-btn--secondary">
-                        <i class="fas fa-file-csv"></i>
-                        <span>Export CSV</span>
-                    </a>
-                @endif
+                <h1>Activity Logs</h1>
+                <p>
+                    Central audit trail for authentication events, CRUD activity, role and permission changes, password operations,
+                    uploads, maintenance mode changes, and failed validations. Sensitive request data such as passwords, tokens, and OTP values
+                    is masked before any log entry is stored.
+                </p>
             </div>
 
             <form method="GET" action="{{ route('utilities.activity-logs.index') }}" class="activity-logs-filter-form">
@@ -769,24 +352,25 @@
                         <i class="fas fa-rotate-left"></i>
                         <span>Reset</span>
                     </a>
+                    @if ($tableReady)
+                        <a href="{{ route('utilities.activity-logs.export', $filters) }}" class="activity-logs-btn activity-logs-btn--secondary">
+                            <i class="fas fa-file-csv"></i>
+                            <span>Export CSV</span>
+                        </a>
+                    @endif
                 </div>
             </form>
 
             <div class="activity-logs-meta">
                 <div>
                     @if ($tableReady)
-                        <i class="fas fa-list-check"></i>
-                        <span>
-                            {{ $logs->count() }} entr{{ $logs->count() === 1 ? 'y' : 'ies' }} on this page
-                            <span aria-hidden="true">·</span>
-                            Page {{ $logs->currentPage() }} of {{ $logs->lastPage() }}
-                        </span>
+                        Showing {{ number_format($logs->total()) }} log entr{{ $logs->total() === 1 ? 'y' : 'ies' }}.
                     @else
                         The activity logs table is not available yet.
                     @endif
                 </div>
                 <div>
-                    <i class="fas fa-circle-info"></i> Latest events first <span aria-hidden="true">·</span> Critical events highlighted
+                    Default sort: latest first. Critical events are highlighted.
                 </div>
             </div>
 
@@ -805,13 +389,12 @@
                     <table class="activity-logs-table">
                         <thead>
                             <tr>
-                                <th scope="col">Timestamp</th>
-                                <th scope="col">User</th>
-                                <th scope="col">Location</th>
-                                <th scope="col">Action</th>
-                                <th scope="col">Description</th>
-                                <th scope="col">IP Address</th>
-                                <th scope="col">Device / Browser</th>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Description</th>
+                                <th>IP Address</th>
+                                <th>Device / Browser</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -834,16 +417,7 @@
                                         <div class="activity-logs-subtle">{{ optional($log->created_at)->format('h:i:s A') }} {{ $log->timezone ?: config('app.timezone') }}</div>
                                     </td>
                                     <td>
-                                        @if ($log->user)
-                                            <div class="activity-logs-title">
-                                                {{ trim($log->user->fname . ' ' . $log->user->lname) ?: ($log->username ?: 'Unknown user') }}
-                                            </div>
-                                            @if ($log->username)
-                                                <a href="{{ route('utilities.activity-logs.index', array_merge($filters, ['user' => $log->username])) }}" class="activity-logs-user-link">
-                                                    {{ $log->username }}
-                                                </a>
-                                            @endif
-                                        @elseif ($log->username)
+                                        @if ($log->username)
                                             <a href="{{ route('utilities.activity-logs.index', array_merge($filters, ['user' => $log->username])) }}" class="activity-logs-user-link">
                                                 {{ $log->username }}
                                             </a>
@@ -851,21 +425,6 @@
                                             <span class="activity-logs-title">System</span>
                                         @endif
                                         <div class="activity-logs-subtle">ID: {{ $log->user_id ?: 'N/A' }}</div>
-                                    </td>
-                                    <td>
-                                        @php
-                                            $location = array_values(array_unique(array_filter([
-                                                $log->user?->office,
-                                                $log->user?->agency,
-                                                $log->user?->province,
-                                                $log->user?->region,
-                                            ], static fn ($value) => filled($value))));
-                                        @endphp
-                                        @if ($location !== [])
-                                            <div class="activity-logs-title">{{ implode(', ', $location) }}</div>
-                                        @else
-                                            <span class="activity-logs-subtle">Not available</span>
-                                        @endif
                                     </td>
                                     <td>
                                         <span class="activity-logs-badge {{ $badgeClass }}">{{ $log->action }}</span>
@@ -898,15 +457,41 @@
                 </div>
 
                 <div class="activity-logs-pagination">
-                    <span class="activity-logs-page-indicator">
-                        Page {{ $logs->currentPage() }} of {{ $logs->lastPage() }}
-                    </span>
+                    @php
+                        $currentPage = $logs->currentPage();
+                        $lastPage = $logs->lastPage();
+                        $windowStart = max(1, $currentPage - 2);
+                        $windowEnd = min($lastPage, $currentPage + 2);
+                    @endphp
+
                     @if ($logs->hasPages())
                         <nav aria-label="Activity logs pagination">
                             @if ($logs->onFirstPage())
                                 <span aria-disabled="true">Previous</span>
                             @else
                                 <a href="{{ $logs->previousPageUrl() }}" rel="prev">Previous</a>
+                            @endif
+
+                            @if ($windowStart > 1)
+                                <a href="{{ $logs->url(1) }}">1</a>
+                                @if ($windowStart > 2)
+                                    <span>...</span>
+                                @endif
+                            @endif
+
+                            @for ($page = $windowStart; $page <= $windowEnd; $page++)
+                                @if ($page === $currentPage)
+                                    <span class="active"><span>{{ $page }}</span></span>
+                                @else
+                                    <a href="{{ $logs->url($page) }}">{{ $page }}</a>
+                                @endif
+                            @endfor
+
+                            @if ($windowEnd < $lastPage)
+                                @if ($windowEnd < $lastPage - 1)
+                                    <span>...</span>
+                                @endif
+                                <a href="{{ $logs->url($lastPage) }}">{{ $lastPage }}</a>
                             @endif
 
                             @if ($logs->hasMorePages())

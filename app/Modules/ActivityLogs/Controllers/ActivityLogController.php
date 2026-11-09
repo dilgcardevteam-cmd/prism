@@ -28,18 +28,18 @@ class ActivityLogController extends Controller
     {
         $filters = $this->validatedFilters($request);
         $tableReady = Schema::hasTable('activity_logs');
-        $query = ActivityLog::query()->with('user:idno,fname,lname,agency,office,province,region');
+        $query = ActivityLog::query()->with('user:idno,fname,lname,role');
 
         if ($tableReady) {
             $query = $this->applyFilters($query, $filters);
         }
 
         $logs = $tableReady
-            ? $query->paginate(10)->withQueryString()
+            ? $query->paginate(25)->withQueryString()
             : new LengthAwarePaginator(
                 items: collect(),
                 total: 0,
-                perPage: 10,
+                perPage: 25,
                 currentPage: $request->integer('page', 1),
                 options: [
                     'path' => $request->url(),
@@ -67,7 +67,7 @@ class ActivityLogController extends Controller
 
         $filters = $this->validatedFilters($request);
         $query = $this->applyFilters(
-            ActivityLog::query(),
+            ActivityLog::query()->with('user:idno,fname,lname,role'),
             $filters,
         );
 
