@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Models\LpmcDocument;
 use App\Models\LpmcDocumentFile;
+use App\Modules\ReportorialRequirements\Models\LpmcDocumentFileWorkflowLog;
 use App\Support\InputSanitizer;
 use App\Models\User;
 
@@ -26,8 +27,8 @@ class LocalProjectMonitoringCommitteeController extends Controller
     {
         $this->middleware('auth');
         $this->middleware('crud_permission:local_project_monitoring_committee,view')->only(['index', 'show', 'edit', 'viewDocument', 'export']);
-        $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload', 'deleteDocumentFile']);
-        $this->middleware('crud_permission:local_project_monitoring_committee,update')->only(['update', 'approveDocument']);
+        $this->middleware('crud_permission:local_project_monitoring_committee,add')->only(['create', 'store', 'upload', 'deleteDocumentFile', 'replaceDocumentFile']);
+        $this->middleware('crud_permission:local_project_monitoring_committee,update')->only(['update', 'approveDocument', 'validateDocumentFile']);
         $this->middleware('crud_permission:local_project_monitoring_committee,delete')->only(['destroy']);
     }
 
@@ -1042,7 +1043,9 @@ class LocalProjectMonitoringCommitteeController extends Controller
         $user = auth()->user();
         abort_unless($user && $user->canAccessLguScope($province, $officeName), 403);
 
-        $documents = LpmcDocument::where('office', $officeName)->with('files')->get();
+        $documents = LpmcDocument::where('office', $officeName)
+            ->with(['files.workflowLogs.actor'])
+            ->get();
         $documentsByKey = $this->indexDocumentsByKey($documents);
         $activityLogs = $this->buildActivityLogs($documents, $officeName);
 
@@ -1397,6 +1400,160 @@ class LocalProjectMonitoringCommitteeController extends Controller
         }
 
         return response()->file($filePath, $headers);
+    }
+
+    public function validateDocumentFile(Request $request, $id, $fileId)
+    {
+        $officeName = (string) $id;
+        $user = auth()->user();
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless($user && $this->isRegionalFileWorkflowUser($user), 403);
+        abort_unless($user->canAccessLguScope($province, $officeName), 403);
+
+        $validated = $request->validate([
+            'action' => ['required', 'in:approve,return'],
+            'remarks' => ['required_if:action,return', 'nullable', 'string', 'max:1000'],
+        ]);
+        $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
+        if ($validated['action'] === 'return' && $remarks === null) {
+            return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
+        }
+
+        $file = LpmcDocumentFile::query()
+            ->where('id', $fileId)
+            ->whereHas('document', fn ($query) => $query->where('office', $officeName))
+            ->with('document')
+            ->firstOrFail();
+
+        $resultingStatus = $validated['action'] === 'return' ? 'returned' : 'approved';
+        DB::transaction(function () use ($file, $user, $validated, $remarks, $resultingStatus): void {
+            $lockedFile = LpmcDocumentFile::query()->lockForUpdate()->findOrFail($file->id);
+            $document = $lockedFile->document()->lockForUpdate()->firstOrFail();
+            $currentStatus = (string) ($lockedFile->workflow_status ?? $document->status ?? 'pending');
+
+            abort_unless($document->status === 'approved', 403, 'Only files in an approved report can be returned individually.');
+            abort_unless(
+                ($validated['action'] === 'return' && $currentStatus === 'approved')
+                || ($validated['action'] === 'approve' && $currentStatus === 'pending_ro'),
+                403,
+                'This file is not at a state that can be validated.'
+            );
+
+            if ($validated['action'] === 'return') {
+                abort_unless((int) $lockedFile->uploaded_by !== (int) ($user->idno ?? $user->getKey()), 403, 'Users cannot return their own files.');
+            }
+
+            $now = now();
+            $lockedFile->update([
+                'workflow_status' => $resultingStatus,
+                'workflow_actor_id' => $user->idno ?? $user->getKey(),
+                'workflow_updated_at' => $now,
+                'workflow_previous_status' => $currentStatus,
+                'workflow_remarks' => $remarks,
+            ]);
+            LpmcDocumentFileWorkflowLog::query()->create([
+                'lpmc_document_file_id' => $lockedFile->id,
+                'actor_id' => $user->idno ?? $user->getKey(),
+                'action' => $validated['action'] === 'return' ? 'returned' : 'approved',
+                'previous_status' => $currentStatus,
+                'resulting_status' => $resultingStatus,
+                'remarks' => $remarks,
+            ]);
+        });
+
+        return redirect()
+            ->route('local-project-monitoring-committee.edit', ['lpmc' => $officeName])
+            ->with('success', $resultingStatus === 'returned' ? 'File returned for revision.' : 'Resubmitted file approved.');
+    }
+
+    public function replaceDocumentFile(Request $request, $id, $fileId)
+    {
+        $officeName = (string) $id;
+        $request->validate([
+            'replacement_document' => ['required', 'file', 'mimes:pdf', 'max:25600'],
+        ]);
+
+        $user = auth()->user();
+        $province = $this->findProvinceByOffice($officeName);
+        abort_unless(
+            $user
+                && $user->isActive()
+                && !$user->isRegionalUser()
+                && !$user->isRegionalOfficeAssignment()
+                && $user->canSubmitForLgu($province, $officeName),
+            403
+        );
+
+        $file = LpmcDocumentFile::query()
+            ->where('id', $fileId)
+            ->whereHas('document', fn ($query) => $query->where('office', $officeName))
+            ->with('document')
+            ->firstOrFail();
+        abort_unless(
+            (int) $file->uploaded_by === (int) ($user->idno ?? $user->getKey())
+                && $file->effective_workflow_status === 'returned'
+                && $file->document?->status === 'approved',
+            403,
+            'Only the originating submitter can replace a returned file while its parent report remains approved.'
+        );
+
+        $replacement = $request->file('replacement_document');
+        abort_unless($replacement && $replacement->isValid(), 422, 'The replacement file is invalid.');
+        $officeSlug = Str::slug($officeName, '_');
+        $newPath = $replacement->storeAs(
+            'lpmc/' . $officeSlug,
+            Str::uuid()->toString() . '.' . strtolower($replacement->getClientOriginalExtension()),
+            'public'
+        );
+        abort_unless($newPath !== false, 500, 'The replacement file could not be stored.');
+
+        $oldPath = $file->file_path;
+        $oldFilename = $file->original_filename;
+        $now = now();
+
+        DB::transaction(function () use ($file, $user, $replacement, $newPath, $oldPath, $oldFilename, $now): void {
+            $lockedFile = LpmcDocumentFile::query()->lockForUpdate()->findOrFail($file->id);
+            abort_unless($lockedFile->effective_workflow_status === 'returned', 409, 'This file is no longer returned.');
+
+            $document = $lockedFile->document()->lockForUpdate()->firstOrFail();
+            $lockedFile->update([
+                'file_path' => $newPath,
+                'original_filename' => $replacement->getClientOriginalName(),
+                'uploaded_by' => $user->idno ?? $user->getKey(),
+                'uploaded_at' => $now,
+                'workflow_status' => 'pending_ro',
+                'workflow_actor_id' => $user->idno ?? $user->getKey(),
+                'workflow_updated_at' => $now,
+                'workflow_previous_status' => 'returned',
+                'workflow_remarks' => null,
+            ]);
+            if ($document->file_path === $oldPath) {
+                $document->update([
+                    'file_path' => $newPath,
+                    'original_filename' => $replacement->getClientOriginalName(),
+                ]);
+            }
+            LpmcDocumentFileWorkflowLog::query()->create([
+                'lpmc_document_file_id' => $lockedFile->id,
+                'actor_id' => $user->idno ?? $user->getKey(),
+                'action' => 'resubmitted',
+                'previous_status' => 'returned',
+                'resulting_status' => 'pending_ro',
+                'previous_file_path' => $oldPath,
+                'previous_filename' => $oldFilename,
+            ]);
+        });
+
+        return redirect()
+            ->route('local-project-monitoring-committee.edit', ['lpmc' => $officeName])
+            ->with('success', 'Replacement file submitted for Regional review.');
+    }
+
+    private function isRegionalFileWorkflowUser(User $user): bool
+    {
+        return $user->isActive()
+            && $user->isDilgUser()
+            && ($user->matchesRoleAlias('regional') || $user->isRegionalOfficeAssignment());
     }
 
     public function deleteDocumentFile($id, $fileId)

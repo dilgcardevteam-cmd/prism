@@ -327,6 +327,21 @@
                                             <i class="fas fa-eye"></i> View PDF
                                         </button>
 
+                                        @php
+                                            $approvedReturnCheck = $doc->status === 'approved'
+                                                ? app(\App\Services\LguReportorialWorkflowService::class)->canUserReturnApproved(Auth::user(), $doc, $officeName, $province)
+                                                : ['allowed' => false];
+                                        @endphp
+                                        @if ($approvedReturnCheck['allowed'])
+                                            <button
+                                                type="button"
+                                                onclick="openMonitoringEvaluationApprovalModal({{ $doc->id }}, 'return')"
+                                                style="padding: 8px 14px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;"
+                                            >
+                                                <i class="fas fa-undo"></i> Return
+                                            </button>
+                                        @endif
+
                                         <button
                                             type="button"
                                             onclick="openMonitoringEvaluationHistoryModal('{{ $monthCode }}', '{{ $label }}')"
@@ -1367,6 +1382,10 @@
                     html += '<div class="timeline-title" style="margin-top: 8px; text-align: left;">';
                     html += '<span class="action-pill action-' + escapeHtml(actionKey) + '">' + escapeHtml(actionLabel) + '</span>';
                     html += '</div>';
+                    if (log.previous_status || log.resulting_status) {
+                        html += '<div style="margin-top: 8px; color: #475569; font-size: 12px;"><strong>Status:</strong> '
+                            + escapeHtml(log.previous_status || '—') + ' → ' + escapeHtml(log.resulting_status || '—') + '</div>';
+                    }
                     html += '<div class="timeline-remarks" style="margin-top: 8px; text-align: left;"><strong>Remarks :</strong> ' + escapeHtml(log.remarks || '—') + '</div>';
                     html += '</div>';
                     html += '</div>';

@@ -536,6 +536,130 @@ class LguReportorialWorkflowService
     }
 
     /**
+     * Determine whether a Regional User can return a document after final approval.
+     *
+     * @return array{allowed: bool, reason: ?string, current_stage: string, target_stage: ?string}
+     */
+    public function canUserReturnApproved(User $user, $document, ?string $officeName = null, ?string $province = null): array
+    {
+        $officeName = $officeName ?? ($document->office ?? null);
+        $province = $province ?? ($document->province ?? null);
+        $currentStage = $this->currentStage($document, $officeName);
+        $result = [
+            'allowed' => false,
+            'reason' => null,
+            'current_stage' => $currentStage,
+            'target_stage' => null,
+        ];
+
+        if (!$document || !$this->hasUploadedDocument($document)) {
+            $result['reason'] = 'Cannot return a submission with no uploaded document or file.';
+            return $result;
+        }
+
+        if ($currentStage !== self::STATUS_APPROVED) {
+            $result['reason'] = 'Only approved documents can be returned with this action.';
+            return $result;
+        }
+
+        if (!$user->isActive()) {
+            $result['reason'] = 'User account is inactive.';
+            return $result;
+        }
+
+        if (!$user->isDilgUser() || (!$user->matchesRoleAlias('regional') && !$user->isRegionalOfficeAssignment())) {
+            $result['reason'] = 'Only Regional Users can return approved documents.';
+            return $result;
+        }
+
+        $uploaderId = (int) ($document->uploaded_by ?? 0);
+        $userId = (int) ($user->idno ?? $user->getKey());
+        if ($uploaderId > 0 && $uploaderId === $userId) {
+            $result['reason'] = 'Users cannot return their own submissions.';
+            return $result;
+        }
+
+        if (!$user->canAccessLguScope($province, $officeName)) {
+            $result['reason'] = 'You are not authorized to return documents in this jurisdiction.';
+            return $result;
+        }
+
+        $result['allowed'] = true;
+        $result['target_stage'] = self::STATUS_RETURNED;
+
+        return $result;
+    }
+
+    /**
+     * Return an approved document, preserving its previous approval in the audit trail.
+     *
+     * @return array{success: bool, action: string, status: string, message: string}
+     */
+    public function returnApprovedDocument(
+        User $user,
+        Model $document,
+        ?string $remarks = null,
+        ?string $officeName = null,
+        ?string $province = null
+    ): array {
+        $officeName = $officeName ?? ($document->office ?? null);
+        $province = $province ?? ($document->province ?? null);
+        $sanitizedRemarks = InputSanitizer::sanitizeNullablePlainText($remarks, true);
+        if ($sanitizedRemarks === null || trim($sanitizedRemarks) === '') {
+            throw new InvalidArgumentException('Return remarks must contain plain text.');
+        }
+
+        return DB::transaction(function () use ($user, $document, $sanitizedRemarks, $officeName, $province): array {
+            $lockedDocument = $document->newQuery()->lockForUpdate()->find($document->getKey());
+            if (!$lockedDocument) {
+                throw new RuntimeException('Document not found.');
+            }
+
+            $check = $this->canUserReturnApproved($user, $lockedDocument, $officeName, $province);
+            if (!$check['allowed']) {
+                throw new RuntimeException($check['reason'] ?? 'Unauthorized return action.');
+            }
+
+            $now = now();
+            $actorId = (int) ($user->idno ?? $user->getKey());
+            $updates = [
+                'status' => self::STATUS_RETURNED,
+                'approval_remarks' => $sanitizedRemarks,
+                'user_remarks' => $sanitizedRemarks,
+                'approved_by_dilg_ro' => $actorId,
+                'approved_at_dilg_ro' => null,
+                'approved_at' => null,
+            ];
+            $filteredUpdates = [];
+            foreach ($updates as $column => $value) {
+                if (Schema::hasColumn($lockedDocument->getTable(), $column)) {
+                    $filteredUpdates[$column] = $value;
+                }
+            }
+
+            $lockedDocument->update($filteredUpdates);
+
+            $this->recordAuditLog(
+                user: $user,
+                document: $lockedDocument,
+                action: 'REPORT_RETURNED',
+                description: 'Approved document returned for revision by Regional Office.',
+                previousStatus: self::STATUS_APPROVED,
+                resultingStatus: self::STATUS_RETURNED,
+                remarks: $sanitizedRemarks,
+                timestamp: $now
+            );
+
+            return [
+                'success' => true,
+                'action' => 'return',
+                'status' => self::STATUS_RETURNED,
+                'message' => 'Approved document returned for revision.',
+            ];
+        });
+    }
+
+    /**
      * Process an approve or return action on a document with pessimistic row locking and database transactions.
      *
      * @return array{success: bool, action: string, status: string, message: string}
@@ -554,6 +678,10 @@ class LguReportorialWorkflowService
 
         $officeName = $officeName ?? ($document->office ?? null);
         $province = $province ?? ($document->province ?? null);
+
+        if ($action === 'return' && $this->currentStage($document, $officeName) === self::STATUS_APPROVED) {
+            return $this->returnApprovedDocument($user, $document, $remarks, $officeName, $province);
+        }
 
         $check = $this->canUserValidate($user, $document, $officeName, $province);
         if (!$check['allowed']) {

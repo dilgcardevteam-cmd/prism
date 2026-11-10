@@ -399,6 +399,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         $defaultPeriod = array_key_first($quarters) ?? 'Q1';
         $selectedQuarter = $this->normalizeQuarter($request->query('quarter', $defaultPeriod), $defaultPeriod);
         $uploadsByQuarter = array_fill_keys(array_keys($quarters), null);
+        $validationHistoryByQuarter = array_fill_keys(array_keys($quarters), []);
         $isProvincialDilgViewer = $this->isProvincialDilgUser($user);
         $isRegionalDilgViewer = (bool) ($user && $user->isRegionalOfficeAssignment());
         $deadlineReportingYear = $this->deadlineReportingYear();
@@ -424,6 +425,10 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
 
             foreach ($uploadsByQuarter as $quarterCode => $value) {
                 $uploadsByQuarter[$quarterCode] = $uploads->get($quarterCode);
+                if ($uploadsByQuarter[$quarterCode]) {
+                    $validationHistoryByQuarter[$quarterCode] = app(\App\Services\LguReportorialWorkflowService::class)
+                        ->getValidationHistory($uploadsByQuarter[$quarterCode]);
+                }
             }
         }
 
@@ -432,6 +437,7 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
             'quarters' => $quarters,
             'selectedQuarter' => $selectedQuarter,
             'uploadsByQuarter' => $uploadsByQuarter,
+            'validationHistoryByQuarter' => $validationHistoryByQuarter,
             'isProvincialDilgViewer' => $isProvincialDilgViewer,
             'isRegionalDilgViewer' => $isRegionalDilgViewer,
             'deadlineReportingYear' => $deadlineReportingYear,
@@ -572,6 +578,27 @@ abstract class AbstractQuarterlyRpmesFormController extends Controller
         }
 
         $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+        if ($action === 'return' && (string) $upload->status === \App\Services\LguReportorialWorkflowService::STATUS_APPROVED) {
+            $returnCheck = $workflowService->canUserReturnApproved($user, $upload, $project->city_municipality, $project->province);
+            if (!$returnCheck['allowed']) {
+                return redirect()
+                    ->route($this->showRouteName(), [
+                        'projectCode' => $project->project_code,
+                        'quarter' => $quarter,
+                    ])
+                    ->withErrors(['approval' => $returnCheck['reason'] ?? 'Unauthorized return action.']);
+            }
+
+            $result = $workflowService->processValidation($user, $upload, $action, $remarks, $project->city_municipality, $project->province);
+
+            return redirect()
+                ->route($this->showRouteName(), [
+                    'projectCode' => $project->project_code,
+                    'quarter' => $quarter,
+                ])
+                ->with('success', $result['message']);
+        }
+
         $check = $workflowService->canUserValidate($user, $upload, $project->city_municipality, $project->province);
         if (!$check['allowed']) {
             return redirect()

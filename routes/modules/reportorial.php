@@ -86,6 +86,10 @@ Route::middleware(['auth'])->group(function () {
         ->name('local-project-monitoring-committee.delete-document');
     Route::get('local-project-monitoring-committee/{lpmc}/file/{fileId}', [App\Modules\ReportorialRequirements\Controllers\LocalProjectMonitoringCommitteeController::class, 'viewDocumentFile'])
         ->name('local-project-monitoring-committee.view-file');
+    Route::post('local-project-monitoring-committee/{lpmc}/file/{fileId}/validate', [App\Modules\ReportorialRequirements\Controllers\LocalProjectMonitoringCommitteeController::class, 'validateDocumentFile'])
+        ->name('local-project-monitoring-committee.validate-file');
+    Route::post('local-project-monitoring-committee/{lpmc}/file/{fileId}/replace', [App\Modules\ReportorialRequirements\Controllers\LocalProjectMonitoringCommitteeController::class, 'replaceDocumentFile'])
+        ->name('local-project-monitoring-committee.replace-file');
     Route::delete('local-project-monitoring-committee/{lpmc}/file/{fileId}', [App\Modules\ReportorialRequirements\Controllers\LocalProjectMonitoringCommitteeController::class, 'deleteDocumentFile'])
         ->name('local-project-monitoring-committee.delete-file');
     Route::resource('local-project-monitoring-committee', App\Modules\ReportorialRequirements\Controllers\LocalProjectMonitoringCommitteeController::class)

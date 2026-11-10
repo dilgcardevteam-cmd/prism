@@ -205,6 +205,9 @@
                                                     ($isProvincialDilgUser && in_array($status, ['pending', 'returned'], true))
                                                     || ($isRegionalOfficeUser && $status === 'pending_ro')
                                                 );
+                                                $canReturnApprovedDocument = ($canValidate ?? false)
+                                                    && auth()->user()
+                                                    && app(\App\Services\LguReportorialWorkflowService::class)->canUserReturnApproved(auth()->user(), $document, $office, $province)['allowed'];
                                                 $canDeleteThisDocument = ($canDelete && $status !== 'pending_ro')
                                                     || (($canDeleteReturned ?? false)
                                                         && $isLguUser
@@ -281,6 +284,17 @@
                                                                 <i class="fas fa-eye"></i>
                                                                 <span>View</span>
                                                             </a>
+
+                                                            @if ($canReturnApprovedDocument)
+                                                                <button type="button"
+                                                                    class="quarterly-action-item quarterly-action-item-return"
+                                                                    data-decision-action="return"
+                                                                    data-decision-url="{{ route('reports.quarterly.dilg-mc-2018-30.approve', ['office' => $office, 'docId' => $document->id, 'year' => $reportingYear]) }}"
+                                                                    data-decision-subject="{{ $quarterLabel }} · {{ $document->original_name ?: ('Upload #' . $loop->iteration) }}">
+                                                                    <i class="fas fa-undo"></i>
+                                                                    <span>Return</span>
+                                                                </button>
+                                                            @endif
 
                                                             @if ($canDeleteThisDocument)
                                                                 <form method="POST"

@@ -159,6 +159,10 @@
                 ? $workflowService->canUserValidate(Auth::user(), $upload, $project->city_municipality, $project->province)
                 : ['allowed' => false];
             $canValidate = $canUserValidateCheck['allowed'];
+            $canReturnApprovedCheck = ($hasUpload && $isApproved && $upload)
+                ? $workflowService->canUserReturnApproved(Auth::user(), $upload, $project->city_municipality, $project->province)
+                : ['allowed' => false];
+            $canReturnApproved = $canReturnApprovedCheck['allowed'];
         @endphp
 
         <div style="background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(15,23,42,.09);margin-bottom:24px;border:1px solid #e5e7eb;overflow:hidden;">
@@ -244,6 +248,14 @@
                             <a href="{{ route($formMeta['document_route'], ['projectCode' => $project->project_code, 'quarter' => $quarterCode]) }}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:#2563eb;color:white;border-radius:8px;text-decoration:none;font-size:12px;font-weight:700;"><i class="fas fa-eye"></i> View Report</a>
                         @endif
 
+                        @if($canReturnApproved)
+                            <button type="button" onclick='openRpmesApprovalModal(@json($project->project_code), @json($quarterCode), "return", @json($quarterLabel))' style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:#dc2626;color:white;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;"><i class="fas fa-undo"></i> Return</button>
+                        @endif
+
+                        @if($hasUpload)
+                            <button type="button" onclick='openRpmesHistoryModal(@json($quarterCode), @json($quarterLabel))' style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;background:#4b5563;color:white;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;"><i class="fas fa-history"></i> History</button>
+                        @endif
+
                         @if($canDelete)
                             <form action="{{ route($formMeta['delete_route'], ['projectCode' => $project->project_code, 'quarter' => $quarterCode]) }}" method="POST" style="margin:0;" onsubmit="return confirm('Delete the uploaded {{ $formMeta['report_short_name'] }} report for {{ $quarterLabel }}?');">
                                 @csrf
@@ -288,12 +300,26 @@
             </form>
         </div>
     </div>
+
+    <div id="rpmesHistoryModal" class="rpmes-modal-backdrop" onclick="closeRpmesHistoryModal(event)">
+        <div class="rpmes-modal-card" onclick="event.stopPropagation()">
+            <div style="padding:18px 20px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                <div>
+                    <div id="rpmesHistoryTitle" style="font-size:18px;font-weight:700;color:#111827;">Submission History</div>
+                    <div style="font-size:12px;color:#6b7280;margin-top:4px;">{{ $formMeta['report_short_name'] }}</div>
+                </div>
+                <button type="button" onclick="closeRpmesHistoryModal()" style="background:transparent;border:none;color:#6b7280;font-size:18px;cursor:pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="rpmesHistoryBody" style="padding:20px;max-height:60vh;overflow:auto;"></div>
+        </div>
+    </div>
 </div>
 
 <script>
     const rpmesApprovalBaseUrl = @json(route($formMeta['index_route']));
     const rpmesReportShortName = @json($formMeta['report_short_name']);
     const rpmesAccordionStorageKey = 'rpmes_stage_' + encodeURIComponent(@json($project->project_code));
+    const rpmesValidationHistoryByQuarter = @json($validationHistoryByQuarter);
 
     function saveRpmesAccordionState(elementId = null) {
         try {
@@ -429,6 +455,40 @@
     function closeRpmesApprovalModal(event) {
         if (event && event.target && event.target.id !== 'rpmesApprovalModal') return;
         const modal = document.getElementById('rpmesApprovalModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function openRpmesHistoryModal(quarter, label) {
+        const modal = document.getElementById('rpmesHistoryModal');
+        const body = document.getElementById('rpmesHistoryBody');
+        document.getElementById('rpmesHistoryTitle').textContent = `${label} History`;
+        const history = rpmesValidationHistoryByQuarter[quarter] || [];
+
+        if (!history.length) {
+            body.innerHTML = '<div style="padding:16px;text-align:center;color:#64748b;">No validation history recorded yet.</div>';
+        } else {
+            body.innerHTML = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:640px;"><thead><tr style="background:#eff6ff;"><th style="padding:9px;text-align:left;">Date/Time</th><th style="padding:9px;text-align:left;">Action</th><th style="padding:9px;text-align:left;">By</th><th style="padding:9px;text-align:left;">Status</th><th style="padding:9px;text-align:left;">Remarks</th></tr></thead><tbody>'
+                + history.map((entry) => {
+                    const timestamp = entry.created_at ? new Date(entry.created_at).toLocaleString() : '—';
+                    const transition = `${entry.previous_status || '—'} → ${entry.resulting_status || '—'}`;
+                    const actor = entry.username || entry.user_id || '—';
+                    return `<tr style="border-top:1px solid #e5e7eb;"><td style="padding:9px;">${escapeRpmesHistory(timestamp)}</td><td style="padding:9px;">${escapeRpmesHistory(entry.action || '')}</td><td style="padding:9px;">${escapeRpmesHistory(actor)}</td><td style="padding:9px;">${escapeRpmesHistory(transition)}</td><td style="padding:9px;">${escapeRpmesHistory(entry.remarks || '—')}</td></tr>`;
+                }).join('')
+                + '</tbody></table></div>';
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    function escapeRpmesHistory(value) {
+        return String(value).replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+        })[character]);
+    }
+
+    function closeRpmesHistoryModal(event) {
+        if (event && event.target && event.target.id !== 'rpmesHistoryModal') return;
+        const modal = document.getElementById('rpmesHistoryModal');
         if (modal) modal.style.display = 'none';
     }
 

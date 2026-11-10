@@ -27,7 +27,35 @@ class SglgifProjectCompletionReportController extends Controller
         $this->middleware('auth');
         $this->middleware('crud_permission:sglgif_project_completion_reports,view')->only(['index', 'show']);
         $this->middleware('crud_permission:sglgif_project_completion_reports,add')->only(['save', 'uploadMultiDocument', 'deleteDocument', 'deleteDocumentFile']);
-        $this->middleware('crud_permission:sglgif_project_completion_reports,update')->only(['validateDocument', 'validateDocumentFile']);
+        $this->middleware(function ($request, $next) {
+            if (
+                \App\Models\ModuleConfiguration::isModuleEnabled('sglgif_project_completion_reports')
+                && $this->isApprovedReturnRequest($request)
+            ) {
+                return $next($request);
+            }
+
+            return app(\App\Http\Middleware\EnsureCrudPermission::class)
+                ->handle($request, $next, 'sglgif_project_completion_reports', 'update');
+        })->only(['validateDocument', 'validateDocumentFile']);
+    }
+
+    private function isApprovedReturnRequest(Request $request): bool
+    {
+        if ($request->input('action') !== 'return') {
+            return false;
+        }
+
+        $query = SglgifProjectCompletionReportFile::where('project_code', $request->route('projectCode'));
+        if ($fileId = $request->route('fileId')) {
+            $query->whereKey($fileId);
+        } elseif ($documentType = $request->route('documentType')) {
+            $query->where('document_type', $documentType);
+        } else {
+            return false;
+        }
+
+        return $query->where('status', LguReportorialWorkflowService::STATUS_APPROVED)->exists();
     }
 
     public function index(Request $request)
@@ -874,22 +902,27 @@ class SglgifProjectCompletionReportController extends Controller
         }
 
         $workflowService = app(LguReportorialWorkflowService::class);
-        $check = $workflowService->canUserValidate($user, $fileRecord, $project->city_municipality, $project->province);
+        $isApprovedReturn = $action === 'return'
+            && strtolower(trim((string) $fileRecord->status)) === LguReportorialWorkflowService::STATUS_APPROVED;
+        $check = $isApprovedReturn
+            ? $workflowService->canUserReturnApproved($user, $fileRecord, $project->city_municipality, $project->province)
+            : $workflowService->canUserValidate($user, $fileRecord, $project->city_municipality, $project->province);
         if (!$check['allowed']) {
             abort(403, $check['reason'] ?? 'Unauthorized validation action.');
         }
 
+        $currentStage = $check['current_stage'] ?? ($isApprovedReturn ? LguReportorialWorkflowService::STATUS_PENDING_RO : null);
         $now = now();
         $result = $workflowService->processValidation($user, $fileRecord, $action, $remarks, $project->city_municipality, $project->province);
         $fileRecord->refresh();
 
-        $logAction = match ($check['current_stage']) {
+        $logAction = match ($currentStage) {
             LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'validate_mlgoo' : 'return'),
             LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'validate_po' : 'return'),
             default => ($action === 'approve' ? 'validate_ro' : 'return'),
         };
 
-        $logDesc = match ($check['current_stage']) {
+        $logDesc = match ($currentStage) {
             LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'Validated (C/MLGOO)' : 'Returned (C/MLGOO)'),
             LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'Validated (DILG PO)' : 'Returned (DILG PO)'),
             default => ($action === 'approve' ? 'Validated (DILG RO)' : 'Returned (DILG RO)'),
@@ -909,7 +942,7 @@ class SglgifProjectCompletionReportController extends Controller
             $documentType,
             $fileRecord,
             $action,
-            $check['current_stage'] === LguReportorialWorkflowService::STATUS_PENDING_RO,
+            $currentStage === LguReportorialWorkflowService::STATUS_PENDING_RO,
             $routeConfig,
             $scopeQuery,
             $remarks
@@ -1095,6 +1128,7 @@ class SglgifProjectCompletionReportController extends Controller
                     'timestamp' => $fileRecord->uploaded_at,
                     'action' => 'Uploaded',
                     'document' => $documentLabel,
+                    'record_id' => $fileRecord->id,
                     'user_id' => $fileRecord->uploaded_by,
                     'remarks' => null,
                 ];
@@ -1105,6 +1139,7 @@ class SglgifProjectCompletionReportController extends Controller
                     'timestamp' => $fileRecord->approved_at_dilg_po,
                     'action' => 'Validated (DILG PO)',
                     'document' => $documentLabel,
+                    'record_id' => $fileRecord->id,
                     'user_id' => $fileRecord->approved_by_dilg_po,
                     'remarks' => null,
                 ];
@@ -1115,6 +1150,7 @@ class SglgifProjectCompletionReportController extends Controller
                     'timestamp' => $fileRecord->approved_at_dilg_ro,
                     'action' => 'Validated (DILG RO)',
                     'document' => $documentLabel,
+                    'record_id' => $fileRecord->id,
                     'user_id' => $fileRecord->approved_by_dilg_ro,
                     'remarks' => null,
                 ];
@@ -1125,6 +1161,7 @@ class SglgifProjectCompletionReportController extends Controller
                     'timestamp' => $fileRecord->approved_at ?? $fileRecord->updated_at ?? $fileRecord->uploaded_at,
                     'action' => 'Returned',
                     'document' => $documentLabel,
+                    'record_id' => $fileRecord->id,
                     'user_id' => $fileRecord->approved_by_dilg_ro ?: ($fileRecord->approved_by_dilg_po ?: $fileRecord->approved_by),
                     'remarks' => $fileRecord->approval_remarks,
                 ];
@@ -1167,6 +1204,7 @@ class SglgifProjectCompletionReportController extends Controller
             'timestamp' => $timestamp,
             'action' => $context['action_label'] ?? 'Updated',
             'document' => $context['document_label'] ?? 'Document',
+            'record_id' => $context['record_id'] ?? null,
             'user_id' => $context['user_id'] ?? null,
             'remarks' => $context['remarks'] ?? null,
         ];
@@ -1266,6 +1304,7 @@ class SglgifProjectCompletionReportController extends Controller
             'action' => $action,
             'action_label' => $actionLabel,
             'action_timestamp' => $timestamp->format('Y-m-d H:i:s'),
+            'record_id' => $documentFile->getKey(),
             'user_id' => Auth::id(),
             'remarks' => $remarks,
         ]);

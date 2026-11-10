@@ -214,6 +214,11 @@
                         : null;
 
                     $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+                    $canReturnApproved = $hasFile
+                        && $fileRecord
+                        && $fileRecord->status === 'approved'
+                        && $currentUser
+                        && $workflowService->canUserReturnApproved($currentUser, $fileRecord, $project->city_municipality, $project->province)['allowed'];
                     if ($hasFile && $fileRecord) {
                         $badge = $workflowService->resolveStatusBadge($fileRecord, $project->city_municipality);
                         $statusLabel = $badge['label'];
@@ -513,6 +518,12 @@
                                     </span>
                                 </a>
                                 <div style="display: flex; gap: 6px; width: 100%;">
+                                    @if ($canReturnApproved && !empty($fieldRouteConfig['validate_file']))
+                                        <button type="button" onclick="openPreImplementationApprovalModal('{{ route($fieldRouteConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $fileRecord->id], $fieldScopeQuery)) }}', 'return')" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; background: #dc2626; color: #ffffff; border: none; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700;">
+                                            <i class="fas fa-times"></i>
+                                            <span>Return</span>
+                                        </button>
+                                    @endif
                                     <button type="button" onclick="openPreImplementationItemHistory('{{ e($label) }}')" class="btn-history" style="flex: 1; justify-content: center; padding: 10px 14px; border-radius: 10px; font-size: 12px;" title="View history for {{ $label }}">
                                         <i class="fas fa-clock-rotate-left"></i>
                                         <span style="margin-left: 6px;">History</span>
@@ -724,6 +735,9 @@
                                             ? $multiWorkflow->canUserValidate($currentUser, $multiFile, $project->city_municipality, $project->province)
                                             : ['allowed' => false];
                                         $canValidateMulti = $multiValidationCheck['allowed'];
+                                        $canReturnApprovedMulti = $multiFile->status === 'approved'
+                                            && $currentUser
+                                            && $multiWorkflow->canUserReturnApproved($currentUser, $multiFile, $project->city_municipality, $project->province)['allowed'];
                                     @endphp
                                     <tr style="border-top: 1px solid #e5e7eb; background-color: {{ $loop->odd ? '#ffffff' : '#f8fafc' }};">
                                         <td style="padding: 12px 14px; font-size: 12px; color: #374151; white-space: nowrap;">{{ $uploadedAt ? $uploadedAt->format('M d, Y h:i A') : '-' }}</td>
@@ -739,6 +753,12 @@
                                                 <i class="fas fa-eye"></i>
                                                 View
                                             </a>
+                                            @if ($canReturnApprovedMulti && !empty($multiRouteConfig['validate_file']))
+                                                <button type="button" onclick="openPreImplementationApprovalModal('{{ route($multiRouteConfig['validate_file'], array_merge(['projectCode' => $project->project_code, 'fileId' => $multiFile->id], $multiScopeQuery)) }}', 'return')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #dc2626; color: #ffffff; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;">
+                                                    <i class="fas fa-times"></i>
+                                                    Return
+                                                </button>
+                                            @endif
                                             <button type="button" onclick="openPreImplementationItemHistory('{{ e($multiLabel) }}')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; margin-left: 6px;" class="btn-history">
                                                 <i class="fas fa-clock-rotate-left"></i>
                                                 History
@@ -846,7 +866,7 @@
                                         <td style="padding: 10px 12px; font-size: 12px;">
                                             <span style="display: inline-block; padding: 2px 8px; background-color: {{ $pillBg }}; color: {{ $pillColor }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">{{ $log['action'] }}</span>
                                         </td>
-                                        <td style="padding: 10px 12px; color: #374151; font-size: 12px;">{{ $log['document'] }}</td>
+                                        <td style="padding: 10px 12px; color: #374151; font-size: 12px;">{{ $log['document'] }}@if (!empty($log['record_id'])) <span style="color: #6b7280;">(File #{{ $log['record_id'] }})</span>@endif</td>
                                         <td style="padding: 10px 12px; color: #374151; font-size: 12px; white-space: nowrap;">
                                             {{ $logUser ? trim($logUser->fname . ' ' . $logUser->lname) : 'Unknown' }}
                                         </td>
@@ -1719,7 +1739,7 @@
                                         <div style="font-size:12px;color:#6b7280">${timestamp}</div>
                                         <div style="font-weight:700;color:#0f172a">${userName}</div>
                                     </div>
-                                    <span class="doc-chip">${documentLabel}</span>
+                                    <span class="doc-chip">${documentLabel}${log.record_id ? ' · File #' + log.record_id : ''}</span>
                                 </div>
                                 <div class="timeline-title">
                                     <span class="action-pill ${actionPillClass}">${actionText}</span>

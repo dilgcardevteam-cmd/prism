@@ -815,7 +815,11 @@ class SwaAnnexFReportController extends Controller
         }
 
         $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
-        $check = $workflowService->canUserValidate($user, $document, $officeName, $province);
+        $isApprovedRegionalReturn = $action === 'return'
+            && strtolower(trim((string) $document->status)) === \App\Services\LguReportorialWorkflowService::STATUS_APPROVED;
+        $check = $isApprovedRegionalReturn
+            ? $workflowService->canUserReturnApproved($user, $document, $officeName, $province)
+            : $workflowService->canUserValidate($user, $document, $officeName, $province);
         if (!$check['allowed']) {
             abort(403, $check['reason'] ?? 'Unauthorized validation action.');
         }

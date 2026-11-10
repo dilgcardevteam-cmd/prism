@@ -675,7 +675,11 @@ class AnnualMaintenanceWorkProgramController extends Controller
         }
 
         $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
-        $check = $workflowService->canUserValidate($user, $document, $officeName, $province);
+        $isApprovedRegionalReturn = $action === 'return'
+            && strtolower(trim((string) $document->status)) === \App\Services\LguReportorialWorkflowService::STATUS_APPROVED;
+        $check = $isApprovedRegionalReturn
+            ? $workflowService->canUserReturnApproved($user, $document, $officeName, $province)
+            : $workflowService->canUserValidate($user, $document, $officeName, $province);
         if (!$check['allowed']) {
             abort(403, $check['reason'] ?? 'Unauthorized validation action.');
         }
@@ -684,13 +688,13 @@ class AnnualMaintenanceWorkProgramController extends Controller
         $result = $workflowService->processValidation($user, $document, $action, $remarks, $officeName, $province);
         $document->refresh();
 
-        $logAction = match ($check['current_stage']) {
+        $logAction = $isApprovedRegionalReturn ? 'return' : match ($check['current_stage']) {
             \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'validate_mlgoo' : 'return'),
             \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'validate_po' : 'return'),
             default => ($action === 'approve' ? 'validate_ro' : 'return'),
         };
 
-        $logDesc = match ($check['current_stage']) {
+        $logDesc = $isApprovedRegionalReturn ? 'Returned (DILG RO)' : match ($check['current_stage']) {
             \App\Services\LguReportorialWorkflowService::STATUS_PENDING_MLGOO => ($action === 'approve' ? 'Validated (C/MLGOO)' : 'Returned (C/MLGOO)'),
             \App\Services\LguReportorialWorkflowService::STATUS_PENDING_PO => ($action === 'approve' ? 'Validated (DILG PO)' : 'Returned (DILG PO)'),
             default => ($action === 'approve' ? 'Validated (DILG RO)' : 'Returned (DILG RO)'),

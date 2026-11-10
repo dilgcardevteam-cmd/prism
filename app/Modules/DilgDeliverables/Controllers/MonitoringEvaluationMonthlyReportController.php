@@ -218,6 +218,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                     'timestamp' => $doc->uploaded_at,
                     'action' => 'Uploaded',
                     'document' => $docLabel,
+                    'document_id' => $doc->id,
+                    'doc_type' => $doc->doc_type,
                     'user_id' => $doc->uploaded_by,
                     'remarks' => null,
                 ];
@@ -228,6 +230,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                     'timestamp' => $doc->approved_at_dilg_po,
                     'action' => 'Validated (DILG PO)',
                     'document' => $docLabel,
+                    'document_id' => $doc->id,
+                    'doc_type' => $doc->doc_type,
                     'user_id' => $doc->approved_by_dilg_po,
                     'remarks' => null,
                 ];
@@ -238,6 +242,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                     'timestamp' => $doc->approved_at_dilg_ro,
                     'action' => 'Validated (DILG RO)',
                     'document' => $docLabel,
+                    'document_id' => $doc->id,
+                    'doc_type' => $doc->doc_type,
                     'user_id' => $doc->approved_by_dilg_ro,
                     'remarks' => null,
                 ];
@@ -248,6 +254,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
                     'timestamp' => $doc->approved_at ?? $doc->updated_at ?? $doc->uploaded_at,
                     'action' => 'Returned',
                     'document' => $docLabel,
+                    'document_id' => $doc->id,
+                    'doc_type' => $doc->doc_type,
                     'user_id' => $doc->approved_by_dilg_ro ?: $doc->approved_by_dilg_po,
                     'remarks' => $doc->approval_remarks,
                 ];
@@ -276,6 +284,10 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             return null;
         }
 
+        if (($context['doc_type'] ?? null) !== $this->reportDocType()) {
+            return null;
+        }
+
         if (trim((string) ($context['office'] ?? '')) !== trim($officeName)) {
             return null;
         }
@@ -291,8 +303,12 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             'timestamp' => $timestamp,
             'action' => $context['action_label'] ?? 'Updated',
             'document' => $context['document_label'] ?? 'Monthly Monitoring & Evaluation Report',
+            'document_id' => $context['document_id'] ?? null,
+            'doc_type' => $context['doc_type'] ?? null,
             'user_id' => $context['user_id'] ?? null,
             'remarks' => $context['remarks'] ?? null,
+            'previous_status' => $context['previous_status'] ?? null,
+            'resulting_status' => $context['resulting_status'] ?? null,
         ];
     }
 
@@ -378,7 +394,9 @@ class MonitoringEvaluationMonthlyReportController extends Controller
         string $actionLabel,
         MonitoringEvaluationMonthlyDocument $document,
         ?string $remarks = null,
-        ?Carbon $timestamp = null
+        ?Carbon $timestamp = null,
+        ?string $previousStatus = null,
+        ?string $resultingStatus = null
     ): void {
         $timestamp = $timestamp ?: now();
 
@@ -386,6 +404,7 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             'module' => 'monitoring_evaluation_monthly',
             'office' => $officeName,
             'doc_type' => $document->doc_type,
+            'document_id' => $document->getKey(),
             'year' => $document->year,
             'month' => $document->month,
             'document_label' => $this->formatDocumentLabel($document),
@@ -394,6 +413,8 @@ class MonitoringEvaluationMonthlyReportController extends Controller
             'action_timestamp' => $timestamp->format('Y-m-d H:i:s'),
             'user_id' => auth()->id(),
             'remarks' => $remarks,
+            'previous_status' => $previousStatus,
+            'resulting_status' => $resultingStatus,
         ]);
     }
 
@@ -965,6 +986,32 @@ class MonitoringEvaluationMonthlyReportController extends Controller
 
         if ($action === 'return' && $remarks === null) {
             return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
+        }
+
+        if ($action === 'return' && $document->status === 'approved') {
+            $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+            $returnCheck = $workflowService->canUserReturnApproved($user, $document, $officeName, (string) $document->province);
+            if (!$returnCheck['allowed']) {
+                abort(403, $returnCheck['reason'] ?? 'Unauthorized return action.');
+            }
+
+            $result = $workflowService->returnApprovedDocument($user, $document, $remarks, $officeName, (string) $document->province);
+            $document->refresh();
+            $this->logActivity(
+                $officeName,
+                'return',
+                'Returned',
+                $document,
+                $remarks,
+                $document->updated_at ?: now(),
+                'approved',
+                'returned'
+            );
+            $this->notifyLguUsersAfterRegionalApproval($document, $action, true, $remarks);
+
+            return redirect()
+                ->route($this->getCategoryInfo()['editRoute'], ['office' => $officeName, 'year' => $document->year])
+                ->with('success', $result['message']);
         }
 
         $isRegionalOffice = (bool) ($user && ($user->isRegionalUser() || $user->isSuperAdmin() || $user->isRegionalOfficeAssignment()));

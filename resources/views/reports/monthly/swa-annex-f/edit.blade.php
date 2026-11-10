@@ -229,10 +229,22 @@
                                     @endforelse
                                 </div>
                                 @if ($doc && $doc->file_path)
+                                    @php
+                                        $reportHistory = $workflowService->getValidationHistory($doc);
+                                        $historyPanelId = 'swa-annex-f-history-' . $doc->id;
+                                    @endphp
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
                                         <a href="{{ route('reports.monthly.swa-annex-f.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                             <i class="fas fa-eye"></i> View
                                         </a>
+                                        @if ($workflowService->canUserReturnApproved(Auth::user(), $doc, $officeName, $province)['allowed'])
+                                            <button type="button" onclick="openSwaAnnexFApprovalModal({{ $doc->id }}, 'return')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                                <i class="fas fa-undo"></i> Return
+                                            </button>
+                                        @endif
+                                        <button type="button" onclick="toggleSwaAnnexFHistory('{{ $historyPanelId }}')" aria-controls="{{ $historyPanelId }}" aria-expanded="false" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #6b7280; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                            <i class="fas fa-history"></i> History
+                                        </button>
                                         @if ($submissionTimeliness)
                                             <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
                                                 {{ $submissionTimeliness['label'] }}
@@ -247,6 +259,34 @@
                                                     <span>Delete</span>
                                                 </button>
                                             </form>
+                                        @endif
+                                    </div>
+                                    <div id="{{ $historyPanelId }}" style="display: none; margin-bottom: 12px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
+                                        <strong style="display: block; margin-bottom: 8px; color: #374151; font-size: 12px;">Document History</strong>
+                                        @if (empty($reportHistory))
+                                            <div style="color: #6b7280; font-size: 12px;">No activity recorded for this document.</div>
+                                        @else
+                                            <div style="display: grid; gap: 8px;">
+                                                @foreach ($reportHistory as $historyEntry)
+                                                    @php
+                                                        $historyUser = $historyEntry['user_id'] && isset($usersById[$historyEntry['user_id']])
+                                                            ? $usersById[$historyEntry['user_id']]
+                                                            : null;
+                                                    @endphp
+                                                    <div style="padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; font-size: 11px;">
+                                                        <div style="font-weight: 700; color: #374151;">
+                                                            {{ $historyEntry['description'] ?: $historyEntry['action'] }}
+                                                            <span style="font-weight: 400; color: #6b7280;"> · {{ $historyEntry['created_at'] ? \Illuminate\Support\Carbon::parse($historyEntry['created_at'])->format('M d, Y h:i A') : '—' }}</span>
+                                                        </div>
+                                                        <div style="color: #6b7280;">
+                                                            {{ $historyUser ? trim($historyUser->fname . ' ' . $historyUser->lname) : ($historyEntry['username'] ?: 'Unknown') }}
+                                                            @if ($historyEntry['remarks'])
+                                                                — {{ $historyEntry['remarks'] }}
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
                                         @endif
                                     </div>
                                 @endif
@@ -398,6 +438,16 @@
                     filenameDiv.style.display = 'none';
                     filenameDiv.classList.remove('has-file');
                 }
+            }
+
+            function toggleSwaAnnexFHistory(panelId) {
+                const panel = document.getElementById(panelId);
+                const button = document.querySelector('[aria-controls="' + panelId + '"]');
+                if (!panel || !button) return;
+
+                const isVisible = panel.style.display === 'block';
+                panel.style.display = isVisible ? 'none' : 'block';
+                button.setAttribute('aria-expanded', isVisible ? 'false' : 'true');
             }
 
             function openSwaAnnexFApprovalModal(docId, action) {

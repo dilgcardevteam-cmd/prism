@@ -328,6 +328,14 @@
                                     <a href="{{ route('road-maintenance-status.document', [$officeName, $doc->id]) }}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                         <i class="fas fa-eye"></i> View
                                     </a>
+                                    @if ($workflowService->canUserReturnApproved(Auth::user(), $doc, $officeName, $province)['allowed'])
+                                        <button type="button" onclick="openRoadMaintenanceApprovalModal({{ $doc->id }}, 'return')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                            <i class="fas fa-undo"></i> Return
+                                        </button>
+                                    @endif
+                                    <button type="button" onclick="setRoadMaintenanceActivityLogVisibility(true)" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background-color: #6b7280; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 11px; line-height: 1;">
+                                        <i class="fas fa-history"></i> History
+                                    </button>
                                     @if ($submissionTimeliness)
                                         <span title="{{ $submissionTimeliness['title'] }}" style="display: inline-flex; align-items: center; padding: 4px 10px; background-color: {{ $submissionTimeliness['background'] }}; color: {{ $submissionTimeliness['color'] }}; border: 1px solid {{ $submissionTimeliness['border'] }}; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;">
                                             {{ $submissionTimeliness['label'] }}

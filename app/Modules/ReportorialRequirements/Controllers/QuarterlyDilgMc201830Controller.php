@@ -485,14 +485,32 @@ class QuarterlyDilgMc201830Controller extends Controller
             ->where('id', $docId)
             ->firstOrFail();
 
+        $action = $validated['action'];
+        $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
+        $workflowService = app(\App\Services\LguReportorialWorkflowService::class);
+
+        if ($action === 'return' && $this->normalizeDocumentStatus($document) === 'approved') {
+            $returnCheck = $workflowService->canUserReturnApproved($user, $document, $office, $document->province);
+            abort_unless($returnCheck['allowed'], 403, $returnCheck['reason'] ?? 'Unauthorized return action.');
+
+            if ($remarks === null) {
+                return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
+            }
+
+            $result = $workflowService->processValidation($user, $document, $action, $remarks, $office, $document->province);
+            $document->refresh();
+            $this->logDocumentActivity($request, 'RETURN', $document, $remarks);
+
+            return redirect()
+                ->route('reports.quarterly.dilg-mc-2018-30.show', ['office' => $office, 'year' => $this->resolveReportingYear($request)])
+                ->with('success', $result['message']);
+        }
+
         $status = $this->normalizeDocumentStatus($document);
         $isRegionalOffice = $user->isRegionalOfficeAssignment();
         $canProvincialValidate = !$isRegionalOffice && in_array($status, ['pending', 'returned'], true);
         $canRegionalValidate = $isRegionalOffice && $status === 'pending_ro';
         abort_unless($canProvincialValidate || $canRegionalValidate, 403);
-
-        $action = $validated['action'];
-        $remarks = InputSanitizer::sanitizeNullablePlainText($validated['remarks'] ?? null, true);
 
         if ($action === 'return' && $remarks === null) {
             return back()->withErrors(['remarks' => 'Return remarks must contain plain text.']);
