@@ -91,6 +91,92 @@ class FundUtilizationWorkflowServiceTest extends TestCase
         );
     }
 
+    public function test_regional_user_can_return_one_approved_document_with_audit_history(): void
+    {
+        $service = app(FundUtilizationWorkflowService::class);
+        $uploader = $this->createUser([
+            'agency' => 'LGU',
+            'role' => User::ROLE_LGU,
+            'region' => 'CAR',
+            'province' => 'Abra',
+            'office' => 'Municipality of Bangued',
+        ]);
+        $provincial = $this->createUser([
+            'agency' => 'DILG',
+            'role' => User::ROLE_PROVINCIAL,
+            'region' => 'CAR',
+            'province' => 'Abra',
+            'office' => 'Provincial Office',
+        ]);
+        $regional = $this->createUser([
+            'agency' => 'DILG',
+            'role' => User::ROLE_REGIONAL,
+            'region' => 'CAR',
+            'province' => 'Regional Office',
+            'office' => 'Regional Office',
+        ]);
+        $otherRegionRegional = $this->createUser([
+            'agency' => 'DILG',
+            'role' => User::ROLE_REGIONAL,
+            'region' => 'NCR',
+            'province' => 'Regional Office',
+            'office' => 'Regional Office',
+        ]);
+        $regionalRoleAlias = $this->createUser([
+            'agency' => 'DILG',
+            'role' => 'regional',
+            'region' => 'CAR',
+            'province' => 'Regional Office',
+            'office' => 'Regional Office',
+        ]);
+
+        $report = $this->createReport('LGU-RETURN-001', 'Abra', 'Municipality of Bangued');
+        $selectedDocument = $this->createMovRecord($report->project_code, 'Q1', $uploader);
+        $otherDocument = $this->createMovRecord($report->project_code, 'Q2', $uploader);
+
+        foreach (['Q1' => $selectedDocument, 'Q2' => $otherDocument] as $quarter => $record) {
+            $service->submitOrResubmit($report, $quarter, 'mov', $record, $uploader);
+            $service->approve($report, $quarter, 'mov', $record->fresh(), $provincial);
+            $service->approve($report, $quarter, 'mov', $record->fresh(), $regional);
+        }
+
+        $selectedWorkflow = $service->workflowFor($report->project_code, 'Q1', 'mov');
+        $this->assertNotNull($selectedWorkflow);
+        $this->assertFalse($service->canActorReturnApproved($selectedWorkflow, $otherRegionRegional));
+        $this->assertTrue($service->canActorReturnApproved($selectedWorkflow, $regionalRoleAlias));
+        $this->assertTrue(Gate::forUser($regional)->allows('fund-utilization.returnApprovedWorkflow', $selectedWorkflow));
+
+        $updatedWorkflow = $service->returnApprovedDocument(
+            $report,
+            'Q1',
+            'mov',
+            $selectedDocument->fresh(),
+            $regional,
+            'Please correct the approved file.'
+        );
+
+        $selectedDocument->refresh();
+        $otherDocument->refresh();
+        $otherWorkflow = $service->workflowFor($report->project_code, 'Q2', 'mov');
+        $returnLog = ApprovalLog::query()
+            ->where('submission_id', $updatedWorkflow->getKey())
+            ->latest('id')
+            ->first();
+
+        $this->assertSame('Returned by Regional Officer', $updatedWorkflow->status);
+        $this->assertSame('returned', $selectedDocument->status);
+        $this->assertNull($selectedDocument->approved_at);
+        $this->assertNull($selectedDocument->approved_at_dilg_ro);
+        $this->assertSame('Approved', $otherWorkflow->status);
+        $this->assertSame('approved', $otherDocument->status);
+        $this->assertSame('Returned', $returnLog->action);
+        $this->assertSame($regional->idno, $returnLog->approver_id);
+        $this->assertSame('Approved', $returnLog->previous_status);
+        $this->assertSame('Returned by Regional Officer', $returnLog->new_status);
+        $this->assertSame('Please correct the approved file.', $returnLog->remarks);
+        $this->assertNotNull($returnLog->created_at);
+    }
+
     public function test_provincial_uploader_skips_level_one_and_goes_directly_to_regional(): void
     {
         $service = app(FundUtilizationWorkflowService::class);

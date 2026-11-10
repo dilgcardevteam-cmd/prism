@@ -4795,14 +4795,25 @@ class FundUtilizationReportController extends Controller
             }
         }
 
-        if (!Gate::forUser($user)->allows('fund-utilization.validateWorkflow', $workflow)) {
-            return $errorResponse('Only the currently assigned validator can perform this action.', 403);
+        $returningApprovedDocument = $action === 'return' && $workflow->status === 'Approved';
+        $canPerformAction = $returningApprovedDocument
+            ? Gate::forUser($user)->allows('fund-utilization.returnApprovedWorkflow', $workflow)
+            : Gate::forUser($user)->allows('fund-utilization.validateWorkflow', $workflow);
+        if (!$canPerformAction) {
+            return $errorResponse(
+                $returningApprovedDocument
+                    ? 'Only an authorized Regional User can return an approved document.'
+                    : 'Only the currently assigned validator can perform this action.',
+                403
+            );
         }
 
         try {
-            $updatedWorkflow = $action === 'approve'
-                ? $workflowService->approve($report, $quarter, $uploadType, $record, $user)
-                : $workflowService->returnForRevision($report, $quarter, $uploadType, $record, $user, (string) $remarks);
+            $updatedWorkflow = match (true) {
+                $action === 'approve' => $workflowService->approve($report, $quarter, $uploadType, $record, $user),
+                $returningApprovedDocument => $workflowService->returnApprovedDocument($report, $quarter, $uploadType, $record, $user, (string) $remarks),
+                default => $workflowService->returnForRevision($report, $quarter, $uploadType, $record, $user, (string) $remarks),
+            };
         } catch (\Throwable $exception) {
             return $errorResponse($exception->getMessage());
         }

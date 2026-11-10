@@ -238,6 +238,11 @@
                                             <button type="button" data-document-url="{{ $uploadedDocumentUrl }}" data-document-title="{{ $uploadedDocumentTitle }}" onclick="openBatchDocumentViewerModal(this.dataset.documentUrl, this.dataset.documentTitle)" style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: #eff6ff; color: #2563eb; text-decoration: none; border: 1px solid #bfdbfe; cursor: pointer;" title="View document">
                                                 <i class="fas fa-eye"></i>
                                             </button>
+                                            @if($isRegionalValidator && ($batchDocumentValidationState['is_approved'] ?? false))
+                                                <button type="button" onclick="openRemarksModal('batch-document', '{{ $quarter }}', 'return')" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 700; white-space: nowrap;" title="Return approved batch documents">
+                                                    <i class="fas fa-undo"></i> Return
+                                                </button>
+                                            @endif
                                             <button type="button" onclick="openFieldHistoryModal('batch-document','{{ $quarter }}','Batch Documents','{{ $uploadedBatchDocumentPath }}','{{ $uploadedDocumentTitle }}')" style="display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; text-decoration: none; border: 1px solid #bfdbfe; cursor: pointer;" title="View item history">
                                                 <i class="fas fa-clock-rotate-left"></i>
                                             </button>

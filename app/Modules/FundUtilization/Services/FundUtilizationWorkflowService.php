@@ -533,6 +533,108 @@ class FundUtilizationWorkflowService
         });
     }
 
+    public function canActorReturnApproved(
+        FundUtilizationApprovalWorkflow $workflow,
+        User $actor,
+    ): bool {
+        if (
+            $workflow->status !== 'Approved'
+            || !$actor->isActive()
+            || !$actor->isDilgUser()
+            || !($actor->matchesRoleAlias('regional') || $actor->isRegionalOfficeAssignment())
+            || (int) $workflow->uploader_id === (int) $actor->getKey()
+        ) {
+            return false;
+        }
+
+        $workflow->loadMissing('uploader');
+        $uploader = $workflow->uploader;
+        if (!$uploader instanceof User) {
+            return false;
+        }
+
+        $actorRegion = $actor->normalizedRegionComparable();
+        $uploaderRegion = $uploader->normalizedRegionComparable();
+
+        return $actorRegion !== '' && $actorRegion === $uploaderRegion;
+    }
+
+    public function returnApprovedDocument(
+        FundUtilizationReport $report,
+        string $quarter,
+        string $documentType,
+        Model $record,
+        User $actor,
+        string $remarks,
+    ): FundUtilizationApprovalWorkflow {
+        return DB::transaction(function () use ($report, $quarter, $documentType, $record, $actor, $remarks): FundUtilizationApprovalWorkflow {
+            $remarks = trim($remarks);
+            if ($remarks === '') {
+                throw new RuntimeException('Remarks are mandatory when returning a submission for revision.');
+            }
+
+            $workflow = $this->workflowFor($report->project_code, $quarter, $documentType);
+            if (!$workflow) {
+                throw new RuntimeException('Workflow not found for this submission.');
+            }
+
+            $workflow = FundUtilizationApprovalWorkflow::query()
+                ->whereKey($workflow->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (!$this->canActorReturnApproved($workflow, $actor)) {
+                throw new RuntimeException('Only an authorized Regional User can return an approved document.');
+            }
+
+            $statusField = $this->documentFieldMap($documentType)['status'] ?? null;
+            if (!$statusField || strtolower(trim((string) $record->getAttribute($statusField))) !== 'approved') {
+                throw new RuntimeException('The selected document is not approved.');
+            }
+
+            $previousStatus = $workflow->status;
+            $workflow->status = 'Returned by Regional Officer';
+            $workflow->current_approval_level = null;
+            $workflow->current_approver_id = null;
+            $workflow->current_approver_role = null;
+            $workflow->returned_from_level = 2;
+            $workflow->completed_at = null;
+            $workflow->save();
+
+            $this->logWorkflowAction(
+                workflow: $workflow,
+                actor: $actor,
+                action: self::ACTION_RETURNED,
+                approvalLevel: (int) ($workflow->last_approved_level ?: 2),
+                previousStatus: $previousStatus,
+                newStatus: $workflow->status,
+                remarks: $remarks,
+                returnedToId: $workflow->uploader_id,
+            );
+
+            $this->syncRecordAfterReturn($record, $documentType, 2, $actor, $remarks);
+
+            DB::afterCommit(function () use ($workflow, $report, $quarter, $documentType, $actor, $remarks): void {
+                $this->notifyUser(
+                    $workflow->uploader,
+                    sprintf(
+                        'Your approved fund utilization %s for %s (%s) was returned by the Regional Office with remarks: "%s".',
+                        str_replace('-', ' ', $documentType),
+                        $report->project_code,
+                        $quarter,
+                        $remarks
+                    ),
+                    $report,
+                    $quarter,
+                    $documentType,
+                    $actor
+                );
+            });
+
+            return $workflow->fresh(['uploader', 'currentApprover', 'logs']);
+        });
+    }
+
     public function resolveResubmissionRequest(
         FundUtilizationReport $report,
         string $quarter,
@@ -872,6 +974,7 @@ class FundUtilizationWorkflowService
             'returned_to_id' => $returnedToId,
             'forwarded_to_id' => $forwardedToId,
             'revision_number' => $workflow->revision_number,
+            'created_at' => now(),
         ]);
     }
 

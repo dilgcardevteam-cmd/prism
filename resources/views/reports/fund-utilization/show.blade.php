@@ -190,7 +190,7 @@
         $currentUser = Auth::user();
         $userLookupCache = [];
         $isProvincialValidator = $currentUser && $currentUser->isProvincialDilgAssignment();
-        $isRegionalValidator = $currentUser && ($currentUser->normalizedRole() === \App\Models\User::ROLE_REGIONAL || $currentUser->isRegionalOfficeAssignment());
+        $isRegionalValidator = $currentUser && ($currentUser->matchesRoleAlias('regional') || $currentUser->isRegionalOfficeAssignment());
         $isWorkflowValidator = $isProvincialValidator || $isRegionalValidator || ($currentUser && $currentUser->isSuperAdmin());
         $isLguWorkflowUser = $currentUser && $currentUser->isLguScopedUser();
         $canUploadFundUtilizationDocuments = $currentUser
@@ -422,6 +422,17 @@
             }
 
             return implode(' ', $buttons);
+        };
+        $renderApprovedReturnButton = function (string $documentType, string $quarter, array $validationState) use ($isRegionalValidator): string {
+            if (!$isRegionalValidator || !($validationState['is_approved'] ?? false)) {
+                return '';
+            }
+
+            return sprintf(
+                '<button type="button" onclick="openRemarksModal(\'%s\', \'%s\', \'return\')" style="padding: 6px 12px; background-color: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap;"><i class="fas fa-undo"></i> Return</button>',
+                e($documentType),
+                e($quarter)
+            );
         };
         $shouldHideLguDeleteUntilProvincialReturn = function (array $validationState) {
             return ($validationState['uploader_level'] ?? null) === 'lgu'
@@ -781,6 +792,7 @@
                                 <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'mov', 'quarter' => $quarter]) }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
+                                {!! $renderApprovedReturnButton('mov', $quarter, $movValidationState) !!}
                                 <button type="button" onclick="openFieldHistoryModal('mov', '{{ $quarter }}', 'MOV', '{{ $movUploads[$quarter]->mov_file_path }}', '{{ basename($movUploads[$quarter]->mov_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                                     <i class="fas fa-clock-rotate-left"></i> History
                                 </button>
@@ -984,6 +996,7 @@
             <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dbm', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
+            {!! $renderApprovedReturnButton('written-notice-dbm', $quarter, $dbmValidationState) !!}
             <button type="button" onclick="openFieldHistoryModal('written-notice-dbm', '{{ $quarter }}', 'Written Notice (DBM)', '{{ $writtenNotices[$quarter]->secretary_dbm_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dbm_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fas fa-clock-rotate-left"></i> History
             </button>
@@ -1141,6 +1154,7 @@
             <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-dilg', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
+            {!! $renderApprovedReturnButton('written-notice-dilg', $quarter, $dilgValidationState) !!}
             <button type="button" onclick="openFieldHistoryModal('written-notice-dilg', '{{ $quarter }}', 'Written Notice (DILG)', '{{ $writtenNotices[$quarter]->secretary_dilg_path }}', '{{ basename($writtenNotices[$quarter]->secretary_dilg_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fas fa-clock-rotate-left"></i> History
             </button>
@@ -1294,6 +1308,7 @@
             <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-speaker', 'quarter' => $quarter]) }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
+            {!! $renderApprovedReturnButton('written-notice-speaker', $quarter, $speakerValidationState) !!}
             <button type="button" onclick="openFieldHistoryModal('written-notice-speaker', '{{ $quarter }}', 'Written Notice (Speaker)', '{{ $writtenNotices[$quarter]->speaker_house_path }}', '{{ $speakerOriginalName }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fas fa-clock-rotate-left"></i> History
             </button>
@@ -1438,6 +1453,7 @@
             <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-president', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
+            {!! $renderApprovedReturnButton('written-notice-president', $quarter, $presidentValidationState) !!}
             <button type="button" onclick="openFieldHistoryModal('written-notice-president', '{{ $quarter }}', 'Written Notice (President)', '{{ $writtenNotices[$quarter]->president_senate_path }}', '{{ basename($writtenNotices[$quarter]->president_senate_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fas fa-clock-rotate-left"></i> History
             </button>
@@ -1581,6 +1597,7 @@
             <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-house', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
+            {!! $renderApprovedReturnButton('written-notice-house', $quarter, $houseValidationState) !!}
             <button type="button" onclick="openFieldHistoryModal('written-notice-house', '{{ $quarter }}', 'Written Notice (House)', '{{ $writtenNotices[$quarter]->house_committee_path }}', '{{ basename($writtenNotices[$quarter]->house_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fas fa-clock-rotate-left"></i> History
             </button>
@@ -1725,6 +1742,7 @@
             <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'written-notice-senate', 'quarter' => $quarter]) }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                 <i class="fas fa-eye"></i> View
             </a>
+            {!! $renderApprovedReturnButton('written-notice-senate', $quarter, $senateValidationState) !!}
             <button type="button" onclick="openFieldHistoryModal('written-notice-senate', '{{ $quarter }}', 'Written Notice (Senate)', '{{ $writtenNotices[$quarter]->senate_committee_path }}', '{{ basename($writtenNotices[$quarter]->senate_committee_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fas fa-clock-rotate-left"></i> History
             </button>
@@ -1917,6 +1935,7 @@
                                 <a href="javascript:void(0)" onclick="openBatchDocumentViewerModal('{{ route('fund-utilization.view-document', ['projectCode' => $report->project_code, 'docType' => 'fdp', 'quarter' => $quarter]) }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 4px; text-align: center; text-decoration: none; font-weight: 600; font-size: 11px; white-space: nowrap;">
                                     <i class="fas fa-eye"></i> View
                                 </a>
+                                {!! $renderApprovedReturnButton('fdp', $quarter, $fdpValidationState) !!}
                                 <button type="button" onclick="openFieldHistoryModal('fdp', '{{ $quarter }}', 'FDP', '{{ $fdpDocuments[$quarter]->fdp_file_path }}', '{{ basename($fdpDocuments[$quarter]->fdp_file_path) }}')" style="padding: 6px 12px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;">
                                     <i class="fas fa-clock-rotate-left"></i> History
                                 </button>

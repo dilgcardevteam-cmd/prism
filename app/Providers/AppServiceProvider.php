@@ -87,6 +87,14 @@ class AppServiceProvider extends ServiceProvider
             return app(FundUtilizationWorkflowService::class)->canActorValidate($workflow, $user);
         });
 
+        Gate::define('fund-utilization.returnApprovedWorkflow', function ($user, FundUtilizationApprovalWorkflow $workflow): bool {
+            if (!$user instanceof User) {
+                return false;
+            }
+
+            return app(FundUtilizationWorkflowService::class)->canActorReturnApproved($workflow, $user);
+        });
+
         Gate::define('impersonate-user', function ($user, User $target): bool {
             return $user instanceof User
                 && app(UserImpersonationPolicy::class)->start($user, $target);
