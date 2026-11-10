@@ -64,6 +64,12 @@ class LpmcPerFileApprovedReturnTest extends TestCase
             ->get(route('local-project-monitoring-committee.edit', ['lpmc' => $document->office]))
             ->assertOk()
             ->assertSee('Please correct the date on this file.')
+            ->assertSee('Mixed File Statuses')
+            ->assertSee('File status: Returned')
+            ->assertSee('File status: Approved')
+            ->assertSee('background-color: #d97706; color: #ffffff;', false)
+            ->assertSee('openLpmcFileHistoryModal(')
+            ->assertSee('id="lpmcFileHistoryModal"', false)
             ->assertSeeInOrder(['View', 'History']);
     }
 
@@ -87,6 +93,27 @@ class LpmcPerFileApprovedReturnTest extends TestCase
 
         $this->assertSame('approved', $file->fresh()->effective_workflow_status);
         $this->assertDatabaseCount('tblpmc_document_file_workflow_logs', 0);
+    }
+
+    public function test_report_badge_is_red_when_all_lpmc_files_are_returned(): void
+    {
+        $regionalUser = $this->createRegionalUser();
+        $document = $this->createApprovedDocument($this->createLguUser());
+        $file = $this->createFile($document, 'lpmc/only-file.pdf');
+
+        $this->actingAs($regionalUser)
+            ->post(route('local-project-monitoring-committee.validate-file', [
+                'lpmc' => $document->office,
+                'fileId' => $file->id,
+            ]), [
+                'action' => 'return',
+                'remarks' => 'Please update this file.',
+            ])
+            ->assertRedirect();
+
+        $this->get(route('local-project-monitoring-committee.edit', ['lpmc' => $document->office]))
+            ->assertOk()
+            ->assertSee('background-color: #dc2626; color: #ffffff;', false);
     }
 
     public function test_originating_submitter_can_replace_and_resubmit_only_the_returned_file(): void

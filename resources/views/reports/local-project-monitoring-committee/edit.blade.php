@@ -132,10 +132,23 @@
                     }
 
                     $badge = app(\App\Services\LguReportorialWorkflowService::class)->resolveStatusBadge($doc, $officeName);
+                    $fileStatuses = $doc->files
+                        ? $doc->files->filter(fn ($file) => !empty($file->file_path))->map(fn ($file) => $file->effective_workflow_status)->values()
+                        : collect();
+                    if ($fileStatuses->contains('returned')) {
+                        $allFilesReturned = $fileStatuses->every(fn ($status) => $status === 'returned');
+                        $badge['stage'] = $allFilesReturned ? 'returned' : 'mixed';
+                        $badge['label'] = $allFilesReturned ? 'Returned' : 'Mixed File Statuses';
+                        $badge['badgeBg'] = $allFilesReturned ? '#dc2626' : '#d97706';
+                        $badge['badgeColor'] = '#ffffff';
+                        $badge['color'] = $allFilesReturned ? '#dc2626' : '#d97706';
+                        $badge['icon'] = $allFilesReturned ? 'fa-undo' : 'fa-code-branch';
+                    }
 
                     $colorMap = [
                         'approved' => ['cardBg' => '#f0fdf4', 'cardBorder' => '#a7f3d0', 'fileBg' => '#ecfdf5', 'fileBorder' => '#a7f3d0', 'fileColor' => '#047857'],
                         'returned' => ['cardBg' => '#fef2f2', 'cardBorder' => '#fecaca', 'fileBg' => '#fff1f1', 'fileBorder' => '#fca5a5', 'fileColor' => '#991b1b'],
+                        'mixed' => ['cardBg' => '#fffbeb', 'cardBorder' => '#fcd34d', 'fileBg' => '#fef9c3', 'fileBorder' => '#fde047', 'fileColor' => '#713f12'],
                         'pending_ro' => ['cardBg' => '#fefce8', 'cardBorder' => '#fef08a', 'fileBg' => '#fef9c3', 'fileBorder' => '#fde047', 'fileColor' => '#713f12'],
                         'pending_po' => ['cardBg' => '#eff6ff', 'cardBorder' => '#bfdbfe', 'fileBg' => '#dbeafe', 'fileBorder' => '#93c5fd', 'fileColor' => '#1e40af'],
                         'pending_mlgoo' => ['cardBg' => '#faf5ff', 'cardBorder' => '#e9d5ff', 'fileBg' => '#f3e8ff', 'fileBorder' => '#d8b4fe', 'fileColor' => '#6b21a8'],
@@ -144,6 +157,15 @@
                     $theme = $colorMap[$badge['stage']] ?? $colorMap['pending_mlgoo'];
 
                     return array_merge($badge, $theme);
+                };
+                $resolveFileStatusTheme = function (string $status): array {
+                    return match ($status) {
+                        'approved' => ['label' => 'Approved', 'background' => '#ecfdf5', 'border' => '#a7f3d0', 'color' => '#047857'],
+                        'returned' => ['label' => 'Returned', 'background' => '#fef2f2', 'border' => '#fecaca', 'color' => '#b91c1c'],
+                        'pending_ro' => ['label' => 'Pending Regional Review', 'background' => '#fefce8', 'border' => '#fde047', 'color' => '#854d0e'],
+                        'pending_po' => ['label' => 'Pending Provincial Review', 'background' => '#eff6ff', 'border' => '#bfdbfe', 'color' => '#1d4ed8'],
+                        default => ['label' => 'Pending', 'background' => '#f9fafb', 'border' => '#e5e7eb', 'color' => '#4b5563'],
+                    };
                 };
             @endphp
             @foreach ($docBlocks as $docBlock)
@@ -332,23 +354,25 @@
                         @if ($docFiles->isNotEmpty())
                             <div style="margin-bottom: 10px;">
                                 @foreach ($docFiles as $docFile)
-                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
-                                        @php
-                                            $fileWorkflowStatus = $docFile->effective_workflow_status;
-                                            $canRegionalFileWorkflow = Auth::user()->isActive()
-                                                && Auth::user()->isDilgUser()
-                                                && (Auth::user()->matchesRoleAlias('regional') || Auth::user()->isRegionalOfficeAssignment());
-                                            $canReplaceReturnedFile = $canUploadForLgu
-                                                && $fileWorkflowStatus === 'returned'
-                                                && (int) $docFile->uploaded_by === (int) (Auth::user()->idno ?? Auth::id());
-                                        @endphp
+                                    @php
+                                        $fileWorkflowStatus = $docFile->effective_workflow_status;
+                                        $fileStatusTheme = $resolveFileStatusTheme($fileWorkflowStatus);
+                                        $canRegionalFileWorkflow = Auth::user()->isActive()
+                                            && Auth::user()->isDilgUser()
+                                            && (Auth::user()->matchesRoleAlias('regional') || Auth::user()->isRegionalOfficeAssignment());
+                                        $canReplaceReturnedFile = $canUploadForLgu
+                                            && $fileWorkflowStatus === 'returned'
+                                            && (int) $docFile->uploaded_by === (int) (Auth::user()->idno ?? Auth::id());
+                                    @endphp
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 10px; background-color: {{ $fileStatusTheme['background'] }}; border: 1px solid {{ $fileStatusTheme['border'] }}; border-radius: 6px; font-size: 11px; color: {{ $fileStatusTheme['color'] }};">
                                         <i class="fas fa-file-pdf" style="flex-shrink: 0; color: #dc2626;"></i>
                                         <span style="flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ $docFile->original_filename ?: basename($docFile->file_path) }}">{{ $docFile->original_filename ?: basename($docFile->file_path) }}</span>
+                                        <span aria-label="File status: {{ $fileStatusTheme['label'] }}" style="flex-shrink: 0; padding: 2px 6px; background: {{ $fileStatusTheme['background'] }}; border: 1px solid {{ $fileStatusTheme['border'] }}; border-radius: 999px; color: {{ $fileStatusTheme['color'] }}; font-size: 9px; font-weight: 700;">{{ $fileStatusTheme['label'] }}</span>
                                         <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route('local-project-monitoring-committee.view-file', [$officeName, $docFile->id]) }}', '{{ addslashes($docFile->original_filename ?: basename($docFile->file_path)) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #3b82f6; color: white; border-radius: 4px; font-size: 10px; font-weight: 600; text-decoration: none;">
                                             <i class="fas fa-eye"></i> View
                                         </a>
                                         @if ($canRegionalFileWorkflow && $doc->status === 'approved' && $fileWorkflowStatus === 'approved')
-                                            <button type="submit" form="lpmc-file-return-{{ $docFile->id }}" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#dc2626;color:white;border:0;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">
+                                            <button type="button" onclick="openLpmcFileReturnModal({{ $docFile->id }})" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#dc2626;color:white;border:0;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">
                                                 <i class="fas fa-undo"></i> Return
                                             </button>
                                         @elseif ($canRegionalFileWorkflow && $doc->status === 'approved' && $fileWorkflowStatus === 'pending_ro')
@@ -356,28 +380,26 @@
                                                 <i class="fas fa-check"></i> Approve
                                             </button>
                                         @endif
-                                        <details style="position:relative;flex-shrink:0;">
-                                            <summary style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;list-style:none;">
-                                                <i class="fas fa-clock-rotate-left"></i> History
-                                            </summary>
-                                            <div style="position:absolute;z-index:20;right:0;top:100%;width:300px;max-height:260px;overflow:auto;padding:10px;background:white;border:1px solid #d1d5db;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.15);">
-                                                @forelse ($docFile->workflowLogs as $fileLog)
-                                                    <div style="padding:6px 0;border-bottom:1px solid #e5e7eb;">
-                                                        <strong>{{ ucfirst($fileLog->action) }}</strong>
-                                                        <span>{{ $fileLog->previous_status ?? '—' }} → {{ $fileLog->resulting_status }}</span>
-                                                        <div>{{ $fileLog->actor?->fullName() ?? ('User #' . $fileLog->actor_id) }} · {{ $fileLog->created_at?->setTimezone(config('app.timezone'))->format('M d, Y h:i A') }}</div>
-                                                        @if ($fileLog->previous_filename)
-                                                            <div>Replaced: {{ $fileLog->previous_filename }}</div>
-                                                        @endif
-                                                        @if ($fileLog->remarks)
-                                                            <div>Remarks: {{ $fileLog->remarks }}</div>
-                                                        @endif
-                                                    </div>
-                                                @empty
-                                                    <div>No file-specific workflow actions. Current state: {{ $fileWorkflowStatus }}.</div>
-                                                @endforelse
-                                            </div>
-                                        </details>
+                                        <button type="button" onclick="openLpmcFileHistoryModal({{ $docFile->id }})" style="flex-shrink:0;display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">
+                                            <i class="fas fa-clock-rotate-left"></i> History
+                                        </button>
+                                        <div id="lpmc-file-history-template-{{ $docFile->id }}" data-file-name="{{ $docFile->original_filename ?: basename($docFile->file_path) }}" style="display:none;">
+                                            @forelse ($docFile->workflowLogs as $fileLog)
+                                                <div style="padding:12px 0;border-bottom:1px solid #e5e7eb;">
+                                                    <strong>{{ ucfirst($fileLog->action) }}</strong>
+                                                    <span>{{ $fileLog->previous_status ?? '—' }} → {{ $fileLog->resulting_status }}</span>
+                                                    <div>{{ $fileLog->actor?->fullName() ?? ('User #' . $fileLog->actor_id) }} · {{ $fileLog->created_at?->setTimezone(config('app.timezone'))->format('M d, Y h:i A') }}</div>
+                                                    @if ($fileLog->previous_filename)
+                                                        <div>Replaced: {{ $fileLog->previous_filename }}</div>
+                                                    @endif
+                                                    @if ($fileLog->remarks)
+                                                        <div>Remarks: {{ $fileLog->remarks }}</div>
+                                                    @endif
+                                                </div>
+                                            @empty
+                                                <div>No file-specific workflow actions. Current status: {{ $fileWorkflowStatus }}.</div>
+                                            @endforelse
+                                        </div>
                                         @if ($canReplaceReturnedFile)
                                             <input type="file" name="replacement_document" form="lpmc-file-replace-{{ $docFile->id }}" accept="application/pdf" required style="max-width:145px;font-size:10px;">
                                             <button type="submit" form="lpmc-file-replace-{{ $docFile->id }}" style="padding:3px 7px;background:#002c76;color:white;border:0;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">Resubmit</button>
@@ -477,7 +499,7 @@
                         @endforeach
                     @endif
                     @foreach ($docFiles as $docFile)
-                        <form id="lpmc-file-return-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.validate-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" onsubmit="return submitLpmcFileReturn(this)" style="display:none;">
+                        <form id="lpmc-file-return-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.validate-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display:none;">
                             @csrf
                             <input type="hidden" name="action" value="return">
                             <input type="hidden" name="remarks" value="">
@@ -737,23 +759,25 @@
                                         @if ($docFiles->isNotEmpty())
                                             <div style="margin-bottom: 10px;">
                                                 @foreach ($docFiles as $docFile)
-                                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 10px; background-color: {{ $statusTheme['fileBg'] }}; border: 1px solid {{ $statusTheme['fileBorder'] }}; border-radius: 6px; font-size: 11px; color: {{ $statusTheme['fileColor'] }};">
-                                                        @php
-                                                            $fileWorkflowStatus = $docFile->effective_workflow_status;
-                                                            $canRegionalFileWorkflow = Auth::user()->isActive()
-                                                                && Auth::user()->isDilgUser()
-                                                                && (Auth::user()->matchesRoleAlias('regional') || Auth::user()->isRegionalOfficeAssignment());
-                                                            $canReplaceReturnedFile = $canUploadForLgu
-                                                                && $fileWorkflowStatus === 'returned'
-                                                                && (int) $docFile->uploaded_by === (int) (Auth::user()->idno ?? Auth::id());
-                                                        @endphp
+                                                    @php
+                                                        $fileWorkflowStatus = $docFile->effective_workflow_status;
+                                                        $fileStatusTheme = $resolveFileStatusTheme($fileWorkflowStatus);
+                                                        $canRegionalFileWorkflow = Auth::user()->isActive()
+                                                            && Auth::user()->isDilgUser()
+                                                            && (Auth::user()->matchesRoleAlias('regional') || Auth::user()->isRegionalOfficeAssignment());
+                                                        $canReplaceReturnedFile = $canUploadForLgu
+                                                            && $fileWorkflowStatus === 'returned'
+                                                            && (int) $docFile->uploaded_by === (int) (Auth::user()->idno ?? Auth::id());
+                                                    @endphp
+                                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 10px; background-color: {{ $fileStatusTheme['background'] }}; border: 1px solid {{ $fileStatusTheme['border'] }}; border-radius: 6px; font-size: 11px; color: {{ $fileStatusTheme['color'] }};">
                                                         <i class="fas fa-file-pdf" style="flex-shrink: 0; color: #dc2626;"></i>
                                                         <span style="flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ $docFile->original_filename ?: basename($docFile->file_path) }}">{{ $docFile->original_filename ?: basename($docFile->file_path) }}</span>
+                                                        <span aria-label="File status: {{ $fileStatusTheme['label'] }}" style="flex-shrink: 0; padding: 2px 6px; background: {{ $fileStatusTheme['background'] }}; border: 1px solid {{ $fileStatusTheme['border'] }}; border-radius: 999px; color: {{ $fileStatusTheme['color'] }}; font-size: 9px; font-weight: 700;">{{ $fileStatusTheme['label'] }}</span>
                                                         <a href="javascript:void(0)" onclick="openGlobalDocPreviewModal('{{ route('local-project-monitoring-committee.view-file', [$officeName, $docFile->id]) }}', '{{ addslashes($docFile->original_filename ?: basename($docFile->file_path)) }}')" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; background-color: #3b82f6; color: white; border-radius: 4px; font-size: 10px; font-weight: 600; text-decoration: none;">
                                                             <i class="fas fa-eye"></i> View
                                                         </a>
                                                         @if ($canRegionalFileWorkflow && $doc->status === 'approved' && $fileWorkflowStatus === 'approved')
-                                                            <button type="submit" form="lpmc-file-return-{{ $docFile->id }}" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#dc2626;color:white;border:0;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">
+                                                            <button type="button" onclick="openLpmcFileReturnModal({{ $docFile->id }})" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#dc2626;color:white;border:0;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">
                                                                 <i class="fas fa-undo"></i> Return
                                                             </button>
                                                         @elseif ($canRegionalFileWorkflow && $doc->status === 'approved' && $fileWorkflowStatus === 'pending_ro')
@@ -761,28 +785,26 @@
                                                                 <i class="fas fa-check"></i> Approve
                                                             </button>
                                                         @endif
-                                                        <details style="position:relative;flex-shrink:0;">
-                                                            <summary style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;list-style:none;">
-                                                                <i class="fas fa-clock-rotate-left"></i> History
-                                                            </summary>
-                                                            <div style="position:absolute;z-index:20;right:0;top:100%;width:300px;max-height:260px;overflow:auto;padding:10px;background:white;border:1px solid #d1d5db;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.15);">
-                                                                @forelse ($docFile->workflowLogs as $fileLog)
-                                                                    <div style="padding:6px 0;border-bottom:1px solid #e5e7eb;">
-                                                                        <strong>{{ ucfirst($fileLog->action) }}</strong>
-                                                                        <span>{{ $fileLog->previous_status ?? '—' }} → {{ $fileLog->resulting_status }}</span>
-                                                                        <div>{{ $fileLog->actor?->fullName() ?? ('User #' . $fileLog->actor_id) }} · {{ $fileLog->created_at?->setTimezone(config('app.timezone'))->format('M d, Y h:i A') }}</div>
-                                                                        @if ($fileLog->previous_filename)
-                                                                            <div>Replaced: {{ $fileLog->previous_filename }}</div>
-                                                                        @endif
-                                                                        @if ($fileLog->remarks)
-                                                                            <div>Remarks: {{ $fileLog->remarks }}</div>
-                                                                        @endif
-                                                                    </div>
-                                                                @empty
-                                                                    <div>No file-specific workflow actions. Current state: {{ $fileWorkflowStatus }}.</div>
-                                                                @endforelse
-                                                            </div>
-                                                        </details>
+                                                        <button type="button" onclick="openLpmcFileHistoryModal({{ $docFile->id }})" style="flex-shrink:0;display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">
+                                                            <i class="fas fa-clock-rotate-left"></i> History
+                                                        </button>
+                                                        <div id="lpmc-file-history-template-{{ $docFile->id }}" data-file-name="{{ $docFile->original_filename ?: basename($docFile->file_path) }}" style="display:none;">
+                                                            @forelse ($docFile->workflowLogs as $fileLog)
+                                                                <div style="padding:12px 0;border-bottom:1px solid #e5e7eb;">
+                                                                    <strong>{{ ucfirst($fileLog->action) }}</strong>
+                                                                    <span>{{ $fileLog->previous_status ?? '—' }} → {{ $fileLog->resulting_status }}</span>
+                                                                    <div>{{ $fileLog->actor?->fullName() ?? ('User #' . $fileLog->actor_id) }} · {{ $fileLog->created_at?->setTimezone(config('app.timezone'))->format('M d, Y h:i A') }}</div>
+                                                                    @if ($fileLog->previous_filename)
+                                                                        <div>Replaced: {{ $fileLog->previous_filename }}</div>
+                                                                    @endif
+                                                                    @if ($fileLog->remarks)
+                                                                        <div>Remarks: {{ $fileLog->remarks }}</div>
+                                                                    @endif
+                                                                </div>
+                                                            @empty
+                                                                <div>No file-specific workflow actions. Current status: {{ $fileWorkflowStatus }}.</div>
+                                                            @endforelse
+                                                        </div>
                                                         @if ($canReplaceReturnedFile)
                                                             <input type="file" name="replacement_document" form="lpmc-file-replace-{{ $docFile->id }}" accept="application/pdf" required style="max-width:145px;font-size:10px;">
                                                             <button type="submit" form="lpmc-file-replace-{{ $docFile->id }}" style="padding:3px 7px;background:#002c76;color:white;border:0;border-radius:4px;font-size:10px;font-weight:600;cursor:pointer;">Resubmit</button>
@@ -884,7 +906,7 @@
                                         @endforeach
                                     @endif
                                     @foreach ($docFiles as $docFile)
-                                        <form id="lpmc-file-return-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.validate-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" onsubmit="return submitLpmcFileReturn(this)" style="display:none;">
+                                        <form id="lpmc-file-return-{{ $docFile->id }}" method="POST" action="{{ route('local-project-monitoring-committee.validate-file', ['lpmc' => $officeName, 'fileId' => $docFile->id]) }}" style="display:none;">
                                             @csrf
                                             <input type="hidden" name="action" value="return">
                                             <input type="hidden" name="remarks" value="">
@@ -909,6 +931,19 @@
                     </div>
                 </div>
             @endforeach
+        </div>
+    </div>
+
+    <div id="lpmcFileHistoryModal" role="dialog" aria-modal="true" aria-labelledby="lpmcFileHistoryTitle" aria-hidden="true" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 1270; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: white; border-radius: 12px; width: min(620px, 94vw); max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #002C76 0%, #003d9e 100%); color: white; flex-shrink: 0;">
+                <div style="min-width: 0;">
+                    <h2 id="lpmcFileHistoryTitle" style="margin: 0; font-size: 16px; font-weight: 700; color: white;">File History</h2>
+                    <div id="lpmcFileHistoryName" style="margin-top: 3px; font-size: 12px; opacity: .9; overflow-wrap: anywhere;"></div>
+                </div>
+                <button type="button" id="lpmcFileHistoryClose" aria-label="Close file history" style="border: none; background: rgba(255,255,255,0.15); color: white; width: 30px; height: 30px; border-radius: 999px; cursor: pointer; font-size: 22px; display: inline-flex; align-items: center; justify-content: center;">&times;</button>
+            </div>
+            <div id="lpmcFileHistoryBody" style="padding: 20px 24px; overflow-y: auto;"></div>
         </div>
     </div>
 
@@ -1626,6 +1661,46 @@
             modal.style.display = 'flex';
         }
 
+        let lpmcFileHistoryOpener = null;
+
+        function openLpmcFileHistoryModal(fileId) {
+            const template = document.getElementById('lpmc-file-history-template-' + fileId);
+            const modal = document.getElementById('lpmcFileHistoryModal');
+            const title = document.getElementById('lpmcFileHistoryTitle');
+            const name = document.getElementById('lpmcFileHistoryName');
+            const body = document.getElementById('lpmcFileHistoryBody');
+            if (!template || !modal || !title || !name || !body) return;
+
+            lpmcFileHistoryOpener = document.activeElement;
+            title.textContent = 'File History';
+            name.textContent = template.dataset.fileName || '';
+            body.innerHTML = template.innerHTML;
+            modal.style.display = 'flex';
+            modal.setAttribute('aria-hidden', 'false');
+            document.getElementById('lpmcFileHistoryClose')?.focus();
+        }
+
+        function closeLpmcFileHistoryModal() {
+            const modal = document.getElementById('lpmcFileHistoryModal');
+            if (!modal) return;
+
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+            lpmcFileHistoryOpener?.focus();
+            lpmcFileHistoryOpener = null;
+        }
+
+        document.getElementById('lpmcFileHistoryClose')?.addEventListener('click', closeLpmcFileHistoryModal);
+        document.getElementById('lpmcFileHistoryModal')?.addEventListener('click', function (event) {
+            if (event.target === this) closeLpmcFileHistoryModal();
+        });
+        document.addEventListener('keydown', function (event) {
+            const modal = document.getElementById('lpmcFileHistoryModal');
+            if (event.key === 'Escape' && modal?.getAttribute('aria-hidden') === 'false') {
+                closeLpmcFileHistoryModal();
+            }
+        });
+
         function closeLpmcItemHistoryModal() {
             const modal = document.getElementById('lpmcItemHistoryModal');
             if (modal) modal.style.display = 'none';
@@ -1685,6 +1760,21 @@
         });
     </script>
 
+    <div id="lpmcFileReturnModal" style="display: none; position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.5); z-index: 1100; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: white; padding: 24px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); max-width: 420px; width: 90%;">
+            <h3 style="margin: 0 0 8px; color: #111827; font-size: 18px; font-weight: 600;">Return approved file</h3>
+            <p style="margin: 0 0 12px; color: #4b5563; font-size: 13px;">Enter the reason for returning this file.</p>
+            <form id="lpmcFileReturnRemarksForm">
+                <textarea id="lpmcFileReturnRemarks" required maxlength="1000" placeholder="Return reason or remarks (required)" style="box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 120px;"></textarea>
+                <div id="lpmcFileReturnError" role="alert" style="display: none; margin-top: 6px; color: #b91c1c; font-size: 12px;">Please enter a return reason.</div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
+                    <button type="button" onclick="closeLpmcFileReturnModal()" style="padding: 10px 16px; background-color: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">Cancel</button>
+                    <button type="submit" style="padding: 10px 16px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">Return file</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="lpmcApprovalModal" style="display: none; position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.5); z-index: 1000;">
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); max-width: 420px; width: 90%;">
             <h3 id="lpmcApprovalTitle" style="margin: 0 0 12px 0; color: #111827; font-size: 18px; font-weight: 600;">Approve Document</h3>
@@ -1701,15 +1791,45 @@
     </div>
 
     <script>
-        function submitLpmcFileReturn(form) {
-            const remarks = window.prompt('Please enter the reason for returning this file:');
-            if (remarks === null || remarks.trim() === '') {
-                return false;
+        let pendingLpmcFileReturnForm = null;
+
+        function openLpmcFileReturnModal(fileId) {
+            pendingLpmcFileReturnForm = document.getElementById('lpmc-file-return-' + fileId);
+            document.getElementById('lpmcFileReturnRemarks').value = '';
+            document.getElementById('lpmcFileReturnError').style.display = 'none';
+            document.getElementById('lpmcFileReturnModal').style.display = 'flex';
+            document.getElementById('lpmcFileReturnRemarks').focus();
+        }
+
+        function closeLpmcFileReturnModal() {
+            document.getElementById('lpmcFileReturnModal').style.display = 'none';
+            pendingLpmcFileReturnForm = null;
+        }
+
+        document.getElementById('lpmcFileReturnRemarksForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+            const remarks = document.getElementById('lpmcFileReturnRemarks').value.trim();
+            if (!remarks) {
+                document.getElementById('lpmcFileReturnError').style.display = 'block';
+                document.getElementById('lpmcFileReturnRemarks').focus();
+                return;
             }
 
-            form.querySelector('input[name="remarks"]').value = remarks.trim();
-            return true;
-        }
+            if (!pendingLpmcFileReturnForm) {
+                return;
+            }
+
+            pendingLpmcFileReturnForm.querySelector('input[name="remarks"]').value = remarks;
+            const formToSubmit = pendingLpmcFileReturnForm;
+            closeLpmcFileReturnModal();
+            HTMLFormElement.prototype.submit.call(formToSubmit);
+        });
+
+        document.getElementById('lpmcFileReturnModal').addEventListener('click', function (event) {
+            if (event.target === this) {
+                closeLpmcFileReturnModal();
+            }
+        });
 
         function openLpmcApprovalModal(docId, action) {
             const modal = document.getElementById('lpmcApprovalModal');
