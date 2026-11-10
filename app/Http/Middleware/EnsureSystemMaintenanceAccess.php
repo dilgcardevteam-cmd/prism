@@ -16,6 +16,7 @@ class EnsureSystemMaintenanceAccess
         'login.otp.verify',
         'login.otp.resend',
         'logout',
+        'users.impersonate.stop',
         'maintenance.notice',
         'maintenance.superadmin-login',
     ];

@@ -227,6 +227,14 @@
                                     <a href="{{ route('users.show', $user->idno) }}" style="padding: 6px 12px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; text-decoration: none; margin-right: 5px; transition: all 0.3s ease;">
                                         <i class="fas fa-eye"></i> View
                                     </a>
+                                    @if(Auth::user()->can('impersonate-user', $user))
+                                        <form action="{{ route('users.impersonate.start', $user->idno) }}" method="POST" style="display: inline;" onsubmit="return confirm(@js('Start impersonating ' . $user->fullName() . '?'));">
+                                            @csrf
+                                            <button type="submit" style="padding: 6px 12px; background-color: #7f1d1d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.3s ease;">
+                                                <i class="fas fa-user-secret"></i> Impersonate
+                                            </button>
+                                        </form>
+                                    @endif
                                     @if($user->idno !== Auth::id())
                                         <form action="{{ route('users.block', $user->idno) }}" method="POST" data-user-status-form style="display: inline;" onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
                                             @csrf
@@ -305,6 +313,14 @@
                                 <a href="{{ route('users.show', $user->idno) }}" class="user-mobile-card__action user-mobile-card__action--view">
                                     <i class="fas fa-eye"></i> View
                                 </a>
+                                @if(Auth::user()->can('impersonate-user', $user))
+                                    <form action="{{ route('users.impersonate.start', $user->idno) }}" method="POST" class="user-mobile-card__form" onsubmit="return confirm(@js('Start impersonating ' . $user->fullName() . '?'));">
+                                        @csrf
+                                        <button type="submit" class="user-mobile-card__action" style="background: #7f1d1d; color: #fff;">
+                                            <i class="fas fa-user-secret"></i> Impersonate
+                                        </button>
+                                    </form>
+                                @endif
                                 @if($user->idno !== Auth::id())
                                     <form action="{{ route('users.block', $user->idno) }}" method="POST" class="user-mobile-card__form" data-user-status-form onsubmit="return confirm('{{ !$user->isActive() ? 'Activate this user? They will be able to log in again.' : 'Deactivate this user? They will no longer be able to log in.' }}');">
                                         @csrf

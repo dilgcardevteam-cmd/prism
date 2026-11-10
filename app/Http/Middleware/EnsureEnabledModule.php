@@ -14,6 +14,10 @@ class EnsureEnabledModule
     {
         $route = $request->route();
         $routeName = $route?->getName();
+        if ($routeName === 'users.impersonate.stop') {
+            return $next($request);
+        }
+
         $path = $route?->uri() ?? $request->path();
         $aspect = RolePermissionRegistry::aspectForRoute($routeName, $path);
 

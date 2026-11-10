@@ -4,6 +4,7 @@ use App\Http\Middleware\AuthenticateMobileAccessToken;
 use App\Http\Middleware\EnforceMandatoryPasswordChange;
 use App\Http\Middleware\EnsureCrudPermission;
 use App\Http\Middleware\EnsureEnabledModule;
+use App\Http\Middleware\EnsureValidImpersonationSession;
 use App\Http\Middleware\EnsureSystemMaintenanceAccess;
 use App\Http\Middleware\GzipEncodeResponse;
 use App\Http\Middleware\RecordActivityLog;
@@ -34,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             EnsureSystemMaintenanceAccess::class,
             EnsureEnabledModule::class,
+            EnsureValidImpersonationSession::class,
             EnforceMandatoryPasswordChange::class,
             RecordActivityLog::class,
         ]);

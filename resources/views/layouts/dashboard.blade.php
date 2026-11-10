@@ -3836,6 +3836,31 @@
     
     <!-- Main Content Area -->
     <main class="main-content with-sidebar" id="mainContent">
+        @if (session()->has('impersonation_audit_id') && Auth::check() && (string) Auth::id() === (string) session('impersonated_user_id'))
+            <section
+                role="status"
+                aria-live="polite"
+                style="position: sticky; top: -30px; z-index: 20; margin: -30px -30px 24px; padding: 14px 30px; background: #7f1d1d; color: #fff; box-shadow: 0 4px 14px rgba(15, 23, 42, .25); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;"
+            >
+                <div>
+                    <strong style="display: block; font-size: 14px; letter-spacing: .04em;">
+                        <i class="fas fa-user-secret" aria-hidden="true"></i>
+                        YOU ARE CURRENTLY IMPERSONATING: {{ Auth::user()->fullName() }}
+                    </strong>
+                    <span style="font-size: 12px;">
+                        Username: {{ Auth::user()->username }}
+                        &middot; Original administrator: {{ session('impersonator_name') }}
+                    </span>
+                </div>
+                <form action="{{ route('users.impersonate.stop') }}" method="POST">
+                    @csrf
+                    <button type="submit" style="border: 0; border-radius: 7px; padding: 10px 14px; background: #fff; color: #7f1d1d; font-weight: 700; cursor: pointer;">
+                        <i class="fas fa-stop-circle" aria-hidden="true"></i>
+                        Stop Impersonating
+                    </button>
+                </form>
+            </section>
+        @endif
         @yield('content')
     </main>
 

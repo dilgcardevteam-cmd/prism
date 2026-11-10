@@ -8,6 +8,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Models\ActivityLog;
 use App\Observers\LocallyFundedProjectObserver;
+use App\Policies\UserImpersonationPolicy;
 use App\Services\ActivityLogService;
 use App\Services\FundUtilizationWorkflowService;
 use Illuminate\Auth\Events\Login;
@@ -84,6 +85,11 @@ class AppServiceProvider extends ServiceProvider
             }
             
             return app(FundUtilizationWorkflowService::class)->canActorValidate($workflow, $user);
+        });
+
+        Gate::define('impersonate-user', function ($user, User $target): bool {
+            return $user instanceof User
+                && app(UserImpersonationPolicy::class)->start($user, $target);
         });
     }
 }

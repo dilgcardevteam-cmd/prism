@@ -29,6 +29,8 @@ class ActivityLogService
         'users.store',
         'users.update',
         'users.destroy',
+        'users.impersonate.start',
+        'users.impersonate.stop',
         'users.block',
         'utilities.role-configuration.role-definitions.store',
         'utilities.role-configuration.role-definitions.update',
@@ -58,6 +60,18 @@ class ActivityLogService
             $createdAt = $context['created_at'] ?? now();
             $createdAt = $createdAt instanceof Carbon ? $createdAt : Carbon::parse((string) $createdAt);
             $timezone = trim((string) ($context['timezone'] ?? config('app.timezone', 'UTC')));
+            $properties = $context['properties'] ?? [];
+
+            if ($request instanceof Request && $request->hasSession()) {
+                $auditId = $request->session()->get('impersonation_audit_id');
+                $administratorId = $request->session()->get('impersonator_user_id');
+
+                if ($auditId && $administratorId) {
+                    $properties['impersonation_audit_id'] = $auditId;
+                    $properties['impersonator_user_id'] = $administratorId;
+                    $properties['impersonator_name'] = $request->session()->get('impersonator_name');
+                }
+            }
 
             ActivityLog::query()->create([
                 'user_id' => $context['user_id'] ?? $user?->getKey(),
@@ -68,7 +82,7 @@ class ActivityLogService
                 'ip_address' => $context['ip_address'] ?? $this->resolveIpAddress($request),
                 'user_agent' => $userAgent,
                 'device' => $context['device'] ?? $this->summarizeDevice($userAgent),
-                'properties' => $this->sanitizeContextProperties($context['properties'] ?? []),
+                'properties' => $this->sanitizeContextProperties($properties),
                 'created_at' => $createdAt->copy()->setTimezone(config('app.timezone')),
             ]);
         } catch (\Throwable $exception) {
