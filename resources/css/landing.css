@@ -235,6 +235,10 @@
 }
 
 @media (max-width: 991.98px) {
+    .landing-page .navbar-collapse {
+        visibility: visible;
+    }
+
     .landing-page .navbar-logo {
         height: 64px;
     }
