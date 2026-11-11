@@ -7,6 +7,7 @@ use App\Http\Middleware\EnsureEnabledModule;
 use App\Http\Middleware\EnsureValidImpersonationSession;
 use App\Http\Middleware\EnsureSystemMaintenanceAccess;
 use App\Http\Middleware\GzipEncodeResponse;
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RecordActivityLog;
 use App\Http\Middleware\RegionalOfficeDilgMiddleware;
 use App\Http\Middleware\RoleMiddleware;
@@ -38,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureValidImpersonationSession::class,
             EnforceMandatoryPasswordChange::class,
             RecordActivityLog::class,
+            HandleInertiaRequests::class,
         ]);
 
         $middleware->alias([

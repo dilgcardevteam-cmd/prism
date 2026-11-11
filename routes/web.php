@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Inertia\Inertia;
 
 // Authentication Module
 require base_path('routes/modules/auth.php');
@@ -33,7 +34,7 @@ require base_path('routes/modules/projects.php');
 require base_path('routes/modules/communications.php');
 
 Route::get('/', function () {
-    return view('landing');
+    return Inertia::render('Landing');
 })->name('landing');
 
 Route::get('/system-under-maintenance', function (SystemMaintenanceState $systemMaintenanceState) {
