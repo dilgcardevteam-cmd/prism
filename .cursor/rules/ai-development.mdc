@@ -1,0 +1,6 @@
+---
+description: Shared project workflow, safety requirements, and skill selection for this Laravel repository.
+alwaysApply: true
+---
+
+Follow the repository-root `AGENTS.md`. Before coding, inspect `SKILLS-INDEX.md`, identify the relevant skills, and read their complete canonical `skills/<name>/SKILL.md` files. Canonical skills live under `skills/`; `.cursor/skills/` and `.agents/skills/` are synchronized copies. Do not edit generated copies independently or claim runtime discovery without testing it.
